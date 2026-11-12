@@ -40,9 +40,7 @@ from .cashflow_v14_tax import (
 from .cashflow_v14_utils import as_float, get_nested
 from .import_levies import capex_uplift_from_config
 from .tariff_indexation import (
-    NonEscalableAdjustment,
     OmIndexation,
-    resolve_non_escalable_adjustment,
     resolve_om_indexation,
     tariff_lkr_per_kwh_for_year,
 )
@@ -138,29 +136,6 @@ def _resolve_tariff_om_indexation(
     return indexation
 
 
-def _resolve_tariff_non_escalable_adjustment(
-    config: Dict[str, Any], params_dict: Dict[str, Any]
-) -> Optional[NonEscalableAdjustment]:
-    """Resolve ``tariff.non_escalable_adjustment`` and check BESS specs riding it.
-
-    Returns ``None`` when the scenario declares no block. A ``type: bess`` energy-tariff
-    block that declares a ``non_escalable_lkr_per_kwh`` needs the scenario's adjustment, so
-    without the block it is refused rather than silently held flat (FRAMEWORK-02).
-    """
-    adjustment = resolve_non_escalable_adjustment(
-        config, base_tariff_lkr_per_kwh=float(params_dict["tariff_lkr_per_kwh"])
-    )
-    if adjustment is None:
-        for spec in params_dict.get("bess_revenue_specs") or []:
-            if float(spec.get("non_escalable_lkr_per_kwh", 0.0)) > 0.0:
-                raise ValueError(
-                    f"generation.technologies['{spec.get('technology')}'].revenue declares "
-                    "non_escalable_lkr_per_kwh, but the scenario has no "
-                    "tariff.non_escalable_adjustment block to adjust it on"
-                )
-    return adjustment
-
-
 def _prepare_cashflow_context(
     config: Dict[str, Any],
     fx_curve: Optional[List[float]],
@@ -232,12 +207,6 @@ def _prepare_cashflow_context(
     # tariff is flat and every run is byte-identical.
     params_dict["tariff_om_indexation"] = _resolve_tariff_om_indexation(
         config, params_dict
-    )
-
-    # PUCSL 2026 s.3.1 item 1: one-off adjustment of the tariff's non-escalable component
-    # 365 days after SPPA signing. None without tariff.non_escalable_adjustment.
-    params_dict["tariff_non_escalable_adjustment"] = (
-        _resolve_tariff_non_escalable_adjustment(config, params_dict)
     )
 
     # BESS-3 / CESSPIT: reject a storage asset booked as free revenue — a revenue-
@@ -571,24 +540,16 @@ def calculate_single_year_cfads(
 
     # L-9: the escalable O&M part of the tariff is indexed yearly when the scenario
     # declares tariff.om_indexation; otherwise this is the flat tariff (byte-identical).
-    # PUCSL 2026 s.3.1 item 1: non-escalable adjustment step 365 days after SPPA signing.
     om_indexation = params.get("tariff_om_indexation")
-    non_escalable_adjustment = params.get("tariff_non_escalable_adjustment")
     tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
-        float(params["tariff_lkr_per_kwh"]),
-        om_indexation,
-        year_index,
-        non_escalable_adjustment=non_escalable_adjustment,
+        float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
     )
     generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
 
     # BESS capacity-charge revenue (availability tolling), additive to generation
     # revenue. 0.0 when no `type: bess` block -> byte-identical wind/solar behaviour.
     bess_revenue_lkr = bess_revenue_lkr_for_year(
-        params.get("bess_revenue_specs"),
-        year_index,
-        om_indexation,
-        non_escalable_adjustment=non_escalable_adjustment,
+        params.get("bess_revenue_specs"), year_index, om_indexation
     )
     revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
@@ -952,21 +913,13 @@ def build_annual_rows_efficient(
 
         # L-9 tariff indexation and BESS revenue — mirror calculate_single_year_cfads
         # so the two builders stay identical (flat without tariff.om_indexation).
-        # PUCSL 2026 s.3.1 item 1: non-escalable adjustment step 365 days after SPPA signing.
         om_indexation = params.get("tariff_om_indexation")
-        non_escalable_adjustment = params.get("tariff_non_escalable_adjustment")
         tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
-            float(params["tariff_lkr_per_kwh"]),
-            om_indexation,
-            year_index,
-            non_escalable_adjustment=non_escalable_adjustment,
+            float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
         )
         generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
         bess_revenue_lkr = bess_revenue_lkr_for_year(
-            params.get("bess_revenue_specs"),
-            year_index,
-            om_indexation,
-            non_escalable_adjustment=non_escalable_adjustment,
+            params.get("bess_revenue_specs"), year_index, om_indexation
         )
         revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
