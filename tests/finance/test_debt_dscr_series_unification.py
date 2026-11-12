@@ -598,14 +598,11 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
 @pytest.mark.parametrize(
     ("scenario_name", "years_below", "first_year", "last_year", "status"),
     [
-        # Re-baselined by #1577 (14 turbines). Before: lendercase (0, None, None, PASS).
-        # Year 1 is a real sub-target year (folded coverage 1.2961 < 1.30). Year 5 reads
-        # 1.2999999999999996, one ULP under the threshold: the strict `<` comparison in
-        # _build_debt_covenant_snapshot counts it, a pre-existing boundary fragility that
-        # tests/api/test_debt_construction_idc_regression_v14.py already documents (#1588).
-        # This is the bare plan_debt view; the published pipeline snapshot, on the
-        # pipeline's own debt result, is FAIL both before and after #1577 (3 -> 4 years).
-        ("dutchbay_lendercase_2025Q4.yaml", 2, 1, 5, "REVIEW"),
+        # Re-baselined by #1588: DSCR_COVENANT_EPSILON (1e-6) absorbs sub-ULP float noise
+        # on sculpt-at-target years. Year 1 remains a real sub-target breach (folded
+        # coverage 1.2961 < 1.30). Year 5 (1.2999999999999996) is on target and no longer
+        # falsely counted as a breach.
+        ("dutchbay_lendercase_2025Q4.yaml", 1, 1, 1, "REVIEW"),
         # Re-baselined in v15.24.0 (#1570: one construction period, as the timeline
         # declares). Before: CEB (1, 1, 1, REVIEW) unchanged, solar+BESS (4, 1, 9, FAIL).
         # Re-baselined in v15.11.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
@@ -751,12 +748,15 @@ def test_real_covenant_rejects_incomplete_or_contradictory_observations(
     """
     cfg, original = _plan_for_ceb_fixture()
     before = _build_debt_covenant_snapshot(cfg, original)
+    # Re-baselined by #1588: DSCR_COVENANT_EPSILON (1e-6) absorbs sub-ULP float noise
+    # on sculpt-at-target years 2 and 7 (1.2999999999999998). Only year 1 (0.9069 < 1.30)
+    # remains a genuine breach.
     assert (
         before.years_below_threshold,
         before.first_breach_year,
         before.last_breach_year,
         before.audit_status,
-    ) == (3, 1, 7, "FAIL")
+    ) == (1, 1, 1, "REVIEW")
     debt = copy.deepcopy(original)
     first = debt["first_operating_period"]
     entry = debt["dscr_periods"][first]
@@ -902,3 +902,67 @@ def test_fold_headline_responds_to_cashflow_driver() -> None:
     assert perturbed["min_dscr"] != baseline["min_dscr"]
     assert perturbed["min_dscr"] == _fold_minimum(perturbed)
     assert perturbed["min_dscr"] < baseline["min_dscr"]
+
+
+def test_covenant_snapshot_absorbs_sculpt_at_target_float_noise() -> None:
+    """#1588: Float noise within DSCR_COVENANT_EPSILON (1e-6) must not count as breach.
+
+    Sculpt-at-target solutions produce operating years with coverage ratios like
+    1.2999999999999996 or 1.2999999999999998 due to machine floating-point rounding.
+    These must be classified as meeting covenant, while true financial shortfalls
+    (> 1e-6 below target) must still be counted as breaches.
+    """
+
+    def _snapshot_at(coverage: float) -> Any:
+        debt_data = {
+            "dscr_periods": [
+                {
+                    "period": 0,
+                    "dscr": coverage,
+                    "operating_year": 1,
+                    "annual_row_index": 0,
+                    "covenant_dscr": coverage,
+                }
+            ],
+            "dscr_series": [coverage],
+            "annual_row_debt_period_map": [
+                {"debt_period": 0, "annual_row_index": 0, "year": 1}
+            ],
+            "dscr_by_year": {1: coverage},
+            "timeline_periods": 1,
+            "min_dscr": coverage,
+            "balloon_remaining": 0.0,
+        }
+        return _build_debt_covenant_snapshot(_covenant_config(), debt_data)
+
+    # 1. Exact target (1.30): PASS
+    snap_exact = _snapshot_at(1.30)
+    assert snap_exact.years_below_threshold == 0
+    assert snap_exact.audit_status == "PASS"
+
+    # 2. Sub-ULP float noise (1.2999999999999996): PASS
+    snap_ulp = _snapshot_at(1.2999999999999996)
+    assert snap_ulp.years_below_threshold == 0
+    assert snap_ulp.audit_status == "PASS"
+
+    # 3. Sub-ULP float noise (1.2999999999999998): PASS
+    snap_ulp2 = _snapshot_at(1.2999999999999998)
+    assert snap_ulp2.years_below_threshold == 0
+    assert snap_ulp2.audit_status == "PASS"
+
+    # 4. Small delta within 1e-6 epsilon (1.30 - 5e-7): PASS
+    snap_sub_eps = _snapshot_at(1.30 - 5e-7)
+    assert snap_sub_eps.years_below_threshold == 0
+    assert snap_sub_eps.audit_status == "PASS"
+
+    # 5. True breach outside 1e-6 epsilon (1.30 - 2e-6): BREACH
+    snap_breach = _snapshot_at(1.30 - 2e-6)
+    assert snap_breach.years_below_threshold == 1
+    assert snap_breach.first_breach_year == 1
+    assert snap_breach.audit_status == "REVIEW"
+
+    # 6. Material breach (1.20): BREACH
+    snap_material = _snapshot_at(1.20)
+    assert snap_material.years_below_threshold == 1
+    assert snap_material.first_breach_year == 1
+    assert snap_material.audit_status == "REVIEW"
