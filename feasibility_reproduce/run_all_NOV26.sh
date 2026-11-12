@@ -12,13 +12,14 @@ KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO="$(cd "$KIT/.." && pwd -P)"
 PROFILE=full; JOBS=4; REQUIRE_PRIVATE=0; ONLINE_SECURITY=0; STUDY=0; PLAN=0; OUT=""
 MIN_FREE_GIB="${DUTCHBAY_NOV26_MIN_FREE_GIB:-8}"
+MIN_INTERNAL_GIB="${DUTCHBAY_NOV26_MIN_INTERNAL_GIB:-8}"
 
 usage() {
   cat <<'HELP'
 Usage: bash feasibility_reproduce/run_all_NOV26.sh [options]
  --profile full|quick      full default; quick focused smoke
  --jobs N                  pytest workers; default 4, never auto
- --out DIR                 output outside the Git checkout
+ --out DIR                 output outside the Git checkout; may be an external drive
  --require-private         missing confidential inputs cause exit 3
  --online-security         run network-dependent make security (otherwise offline)
  --study                   run current full analytical-study extensions (very costly)
@@ -55,6 +56,7 @@ done
 [[ "$PROFILE" == full || "$PROFILE" == quick ]] || die "profile must be full or quick"
 [[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || die "jobs must be a positive integer"
 [[ "$MIN_FREE_GIB" =~ ^[1-9][0-9]*$ ]] || die "MIN_FREE_GIB must be a positive integer"
+[[ "$MIN_INTERNAL_GIB" =~ ^[1-9][0-9]*$ ]] || die "MIN_INTERNAL_GIB must be a positive integer"
 if ((STUDY == 1 && MIN_FREE_GIB < 20)); then MIN_FREE_GIB=20; fi
 if ((PLAN)); then
   cat <<'PLAN'
@@ -91,15 +93,33 @@ VENV="${DUTCHBAY_VENV:-$REPO/.venv}"
 PY="$VENV/bin/python"
 export DUTCHBAY_VENV="$VENV"
 export DUTCHBAY_FLOW_RULESET_CSV="$REPO/go_with_the_flow_rules_v3_0_clean.csv"
-export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
+# Bind imports ONLY to this checkout. Never carry a prior checkout from an
+# already-activated shell; ENV-01 rejects foreign worktree paths by design.
+export PYTHONPATH="$REPO"
 export PYTHONDONTWRITEBYTECODE=1
 export PATH="$VENV/bin:$PATH"
 export COVERAGE_FILE="$OUT/.coverage"
+# Worker scratch and numerical-library caches follow the selected output volume.
+# Without this, a large --study run can exhaust the internal macOS /private/var/tmp
+# even when --out points at a spacious external disk.
+mkdir -p "$OUT/tmp" "$OUT/cache/matplotlib" "$OUT/cache/numba"
+export TMPDIR="$OUT/tmp/"
+export TMP="$TMPDIR" TEMP="$TMPDIR"
+export MPLCONFIGDIR="$OUT/cache/matplotlib"
+export NUMBA_CACHE_DIR="$OUT/cache/numba"
 "$PY" -c 'import sys; assert sys.version_info[:2] == (3, 12)' ||
   die "Python 3.12 required"
-FREE_KIB="$(df -Pk "$OUT" | awk 'END {print $4}')"
-((FREE_KIB >= MIN_FREE_GIB * 1024 * 1024)) ||
-  die "free space below ${MIN_FREE_GIB} GiB: do not run large simulations"
+OUT_FREE_KIB="$(df -Pk "$OUT" | awk 'END {print $4}')"
+INTERNAL_FREE_KIB="$(df -Pk "$HOME" | awk 'END {print $4}')"
+((OUT_FREE_KIB >= MIN_FREE_GIB * 1024 * 1024)) ||
+  die "output volume free space below ${MIN_FREE_GIB} GiB: $OUT"
+((INTERNAL_FREE_KIB >= MIN_INTERNAL_GIB * 1024 * 1024)) ||
+  die "internal SSD free space below ${MIN_INTERNAL_GIB} GiB; refuse even with external --out"
+printf 'Destination volume: %s (free %.1f GiB)\nInternal SSD: %s (free %.1f GiB)\n' \
+  "$(df -Pk "$OUT" | awk 'END {print $1}')" \
+  "$(awk -v kb="$OUT_FREE_KIB" 'BEGIN {print kb/1048576}')" \
+  "$(df -Pk "$HOME" | awk 'END {print $1}')" \
+  "$(awk -v kb="$INTERNAL_FREE_KIB" 'BEGIN {print kb/1048576}')"
 if ((REQUIRE_PRIVATE)); then
   [[ -f "${BLUE_WHALE_POWER_CURVE_CSV:-/nonexistent}" ]] ||
     die "--require-private needs BLUE_WHALE_POWER_CURVE_CSV"
@@ -117,6 +137,8 @@ printf 'repo=%s\ncommit=%s\nbranch=%s\nlocal_origin_main=%s\nprofile=%s\njobs=%s
   "$REPO" "$SHA" "${BRANCH:-detached}" "$TRACKING" "$PROFILE" "$JOBS" "$VENV" "$OUT" \
   > "$OUT/manifest.txt"
 printf 'scope=software_only_not_external_bankability\n' >> "$OUT/manifest.txt"
+printf 'internal_free_kib=%s\noutput_free_kib=%s\nwork_tmpdir=%s\n' \
+  "$INTERNAL_FREE_KIB" "$OUT_FREE_KIB" "$TMPDIR" >> "$OUT/manifest.txt"
 printf 'validation_profile=%s\n' "$PROFILE" >> "$OUT/manifest.txt"
 git ls-files '*.py' | LC_ALL=C sort > "$OUT/python_source_inventory.txt"
 printf 'tracked_python_files=%s\n' "$(wc -l < "$OUT/python_source_inventory.txt" | tr -d ' ')" >> "$OUT/manifest.txt"
