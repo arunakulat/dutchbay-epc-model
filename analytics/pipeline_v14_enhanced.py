@@ -230,6 +230,7 @@ def _period_value(series: Sequence[Any], period_idx: int) -> float:
 def _enrich_annual_rows_with_debt(
     annual_rows: list[dict[str, Any]],
     debt_result: dict[str, Any],
+    config: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Overlay lender-facing debt columns onto annual rows."""
     debt_service = list(debt_result.get("debt_service_total") or [])
@@ -264,6 +265,19 @@ def _enrich_annual_rows_with_debt(
         except (KeyError, TypeError, ValueError):
             continue
 
+    # Resolve bridge-period treatment (#1564). Defaults to "historical_fold"
+    # for exact backward-compatible baseline scenario reproducibility.
+    treatment = "historical_fold"
+    if config is not None:
+        try:
+            from finance.debt_v14 import resolve_bridge_period_treatment
+
+            treatment = resolve_bridge_period_treatment(config)
+        except Exception:
+            treatment = "historical_fold"
+    elif "bridge_period_treatment" in debt_result:
+        treatment = str(debt_result["bridge_period_treatment"]).lower().strip()
+
     # The "bridge" lead-in period carries real scheduled debt service but maps to no
     # operating row, so without this it was ORPHANED from the equity waterfall: ~$8.5M
     # of debt service never reduced equity distributions, flattering equity IRR (audit
@@ -295,6 +309,24 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             bridge_extra_interest = 0.0
 
+    # Bridge-period CFADS: in _build_cfads_timeline, bridge period CFADS is defined as
+    # 0.5 * year-1 CFADS.
+    bridge_extra_cfads = 0.0
+    if (
+        bridge_period is not None
+        and int(bridge_period) not in mapped_periods
+        and annual_rows
+    ):
+        try:
+            bridge_extra_cfads = float(debt_result.get("cfads_bridge_usd") or 0.0)
+            if bridge_extra_cfads == 0.0:
+                first_row_cf = annual_rows[0].get(
+                    "cfads_usd", annual_rows[0].get("cf_pre_debt", 0.0)
+                )
+                bridge_extra_cfads = float(first_row_cf or 0.0) * 0.5
+        except (TypeError, ValueError):
+            bridge_extra_cfads = 0.0
+
     enriched: list[dict[str, Any]] = []
 
     for idx, row in enumerate(annual_rows):
@@ -314,9 +346,29 @@ def _enrich_annual_rows_with_debt(
         except (TypeError, ValueError):
             debt_service_value = 0.0
 
-        # Operating year 1 also bears the orphaned bridge-period service (finding 2.1).
-        if idx == 0 and bridge_extra_service > 0.0:
-            debt_service_value += bridge_extra_service
+        # Bridge period folding logic (#1564):
+        # - "historical_fold" (default): folds bridge service & interest into operating year 1
+        #   without matching bridge CFADS (exact existing behavior, zero KPI change).
+        # - "equity_cfads_match": folds bridge service & interest into operating year 1 AND
+        #   credits matching bridge CFADS to year-1 cashflow, curing synthetic shortfalls.
+        # - "construction_capitalized": treats bridge debt service as capitalized
+        #   construction financing cost; operating year 1 bears only its own debt service.
+        if idx == 0:
+            if treatment in ("historical_fold", "equity_cfads_match"):
+                if bridge_extra_service > 0.0:
+                    debt_service_value += bridge_extra_service
+                if bridge_extra_interest > 0.0:
+                    interest_value_bridge = bridge_extra_interest
+                else:
+                    interest_value_bridge = 0.0
+            else:
+                interest_value_bridge = 0.0
+
+            if treatment == "equity_cfads_match":
+                if bridge_extra_cfads > 0.0:
+                    cf_pre_debt += bridge_extra_cfads
+        else:
+            interest_value_bridge = 0.0
 
         resolution = (
             balloon_resolution[period_idx]
@@ -337,8 +389,8 @@ def _enrich_annual_rows_with_debt(
             interest_value = float(interest or 0.0)
         except (TypeError, ValueError):
             interest_value = 0.0
-        if idx == 0 and bridge_extra_interest > 0.0:
-            interest_value += bridge_extra_interest
+        if idx == 0 and interest_value_bridge > 0.0:
+            interest_value += interest_value_bridge
 
         out["cf_pre_debt"] = cf_pre_debt
         out["debt_service_total"] = debt_service_value
@@ -352,6 +404,17 @@ def _enrich_annual_rows_with_debt(
         )
         out["cf_after_debt"] = (
             cf_pre_debt - debt_service_value - balloon_resolution_value
+        )
+        out["bridge_period_treatment"] = treatment
+        out["bridge_debt_service_usd"] = (
+            bridge_extra_service
+            if (idx == 0 and treatment in ("historical_fold", "equity_cfads_match"))
+            else 0.0
+        )
+        out["bridge_cfads_usd"] = (
+            bridge_extra_cfads
+            if (idx == 0 and treatment == "equity_cfads_match")
+            else 0.0
         )
         enriched.append(out)
 
@@ -441,7 +504,7 @@ def _size_debt_on_levered_cfads(
                 gearing_hints=gearing_hints,
             )
         )
-        enriched = _enrich_annual_rows_with_debt(rows, debt_result)
+        enriched = _enrich_annual_rows_with_debt(rows, debt_result, config=cfg)
         cfads = [float(row.get("cfads_usd") or 0.0) for row in enriched]
 
         if (
@@ -1156,7 +1219,9 @@ def run_v14_pipeline_enhanced(
         annual_rows = _validate_annual_rows_structure(
             build_annual_rows(cfg, senior_fee_lkr_series=senior_fee_lkr_series)
         )
-        annual_rows_enriched = _enrich_annual_rows_with_debt(annual_rows, debt_result)
+        annual_rows_enriched = _enrich_annual_rows_with_debt(
+            annual_rows, debt_result, config=cfg
+        )
 
         # Publish both bases on the row, so a reader can see which CFADS carries which
         # claim instead of inferring it. `cfads_usd` stays the project basis every
@@ -1281,6 +1346,7 @@ def run_v14_pipeline_enhanced(
                     senior_fee_lkr_series=senior_fee_lkr_series,
                 ),
                 debt_result,
+                config=cfg,
             )
         else:
             equity_rows = annual_rows_enriched

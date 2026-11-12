@@ -425,6 +425,22 @@ def _validate_refinance_terms(raw_config: Mapping[str, Any], errors: list[str]) 
         errors.append(str(exc))
 
 
+def _validate_bridge_period_treatment(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse an unknown bridge_period_treatment (#1564).
+
+    Opt-in: absent defaults to 'historical_fold'. Delegates to
+    :func:`finance.debt_v14.resolve_bridge_period_treatment`, the engine's own resolver.
+    """
+    from finance.debt_v14 import resolve_bridge_period_treatment
+
+    try:
+        resolve_bridge_period_treatment(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_project_discount_rate(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -585,6 +601,10 @@ def validate_config_for_v14(
     # 1g. Refuse Financing_Terms receivables_guarantee_months, which nothing in the
     # engine reads (P3-COV-05, #1399 part A). Present-only: an absent key is no error.
     _validate_no_receivables_guarantee(raw_config, errors)
+
+    # 1h. Validate any declared Financing_Terms.bridge_period_treatment (#1564).
+    # Opt-in: absent defaults to "historical_fold" (byte-identical baseline).
+    _validate_bridge_period_treatment(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
