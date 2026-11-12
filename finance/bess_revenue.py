@@ -98,7 +98,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from analytics.storage_sizing import BessSizing
 
-from .tariff_indexation import OmIndexation
+from .tariff_indexation import NonEscalableAdjustment, OmIndexation
 
 #: The explicit per-technology type discriminator value marking a storage block.
 BESS_TYPE = "bess"
@@ -647,6 +647,23 @@ def resolve_bess_specs(
                     f"{tariff}] (the indexed O&M part of the tariff)."
                 )
             spec["escalable_om_lkr_per_kwh"] = escalable
+
+            non_esc_raw = revenue.get("non_escalable_lkr_per_kwh")
+            if non_esc_raw is None:
+                non_esc_raw = revenue.get("adjusted_component_lkr_per_kwh")
+            non_escalable = 0.0 if non_esc_raw is None else _as_float(non_esc_raw)
+            if non_escalable is None or not 0.0 <= non_escalable <= tariff:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.non_escalable_lkr_per_kwh="
+                    f"{non_esc_raw!r} must be a number in [0, tariff_lkr_per_kwh="
+                    f"{tariff}] (the non-escalable part of the tariff)."
+                )
+            if escalable + non_escalable > tariff + 1e-9:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue sum of escalable ({escalable}) and "
+                    f"non-escalable ({non_escalable}) exceeds tariff_lkr_per_kwh={tariff}."
+                )
+            spec["non_escalable_lkr_per_kwh"] = non_escalable
         else:  # pragma: no cover - guarded by the SUPPORTED_BESS_REVENUE_MODELS check
             raise AssertionError(f"unhandled BESS revenue model {model!r}")
 
@@ -778,6 +795,7 @@ def bess_revenue_lkr_for_year(
     specs: Optional[List[Dict[str, Any]]],
     year_index: int,
     om_indexation: Optional[OmIndexation] = None,
+    non_escalable_adjustment: Optional[NonEscalableAdjustment] = None,
 ) -> float:
     """Total BESS revenue (LKR) for one operating year, summed over every spec.
 
@@ -785,13 +803,16 @@ def bess_revenue_lkr_for_year(
     pays each only while the operating year is within its ``contract_years`` window (a
     spec with ``contract_years is None`` is paid every year). ``year_index`` is 0-based
     (operating year 1 → 0). The per-spec revenue is flat except for an ``energy_tariff``
-    spec's ``escalable_om_lkr_per_kwh``, which moves with ``om_indexation`` (L-9).
+    spec's ``escalable_om_lkr_per_kwh``, which moves with ``om_indexation`` (L-9), and
+    ``non_escalable_lkr_per_kwh``, which steps with ``non_escalable_adjustment``.
 
     Args:
         specs: Resolved BESS specs from :func:`resolve_bess_specs`, or ``None``.
         year_index: Zero-based operating-year index.
         om_indexation: The scenario's resolved ``tariff.om_indexation``, or ``None``
             (flat; byte-identical).
+        non_escalable_adjustment: The scenario's resolved
+            ``tariff.non_escalable_adjustment``, or ``None`` (flat; byte-identical).
 
     Returns:
         The combined BESS revenue in LKR (``0.0`` when ``specs`` is empty or every BESS
@@ -807,11 +828,15 @@ def bess_revenue_lkr_for_year(
         # Flat per-spec revenue, derated by the year-indexed state-of-health (1.0 when
         # the spec declares no MDSC fade -> byte-identical to the prior flat behaviour).
         escalable = float(spec.get("escalable_om_lkr_per_kwh", 0.0))
-        uplift = (
-            escalable * (om_indexation.index(year_index) - 1.0)
-            if om_indexation is not None and escalable > 0.0
-            else 0.0
-        )
+        non_escalable = float(spec.get("non_escalable_lkr_per_kwh", 0.0))
+        uplift = 0.0
+        if om_indexation is not None and escalable > 0.0:
+            uplift += escalable * (om_indexation.index(year_index) - 1.0)
+        if non_escalable_adjustment is not None and non_escalable > 0.0:
+            if year_index >= non_escalable_adjustment.start_year_index:
+                uplift += non_escalable * (
+                    non_escalable_adjustment.adjustment_multiplier - 1.0
+                )
         total += _spec_annual_revenue_lkr(spec, uplift) * mdsc_soh_for_year(
             spec, year_index
         )

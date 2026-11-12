@@ -337,6 +337,7 @@ def apply_debt_layer(
         "total_idc_capitalized": sum(total_idc_by_tranche.values()),
         "timeline_periods": timeline_periods,
         "tenor_years": tenor,
+        "tenor_outruns_operating_life": bool(annual_rows and tenor > len(annual_rows)),
         "cfads_extended": cfads_ext,
         "cfads_bridge_debt_period": bridge_debt_period,
         "annual_row_debt_period_map": annual_row_debt_period_map,
