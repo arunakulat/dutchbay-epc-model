@@ -97,13 +97,35 @@ export DUTCHBAY_FLOW_RULESET_CSV="$REPO/go_with_the_flow_rules_v3_0_clean.csv"
 # already-activated shell; ENV-01 rejects foreign worktree paths by design.
 export PYTHONPATH="$REPO"
 export PYTHONDONTWRITEBYTECODE=1
-export PATH="$VENV/bin:$PATH"
+# The security negative controls exercise .ONESHELL and GNUMAKEFLAGS, both
+# unavailable in Apple's GNU Make 3.81. Prepend a runner-local gmake alias
+# (without changing users' shell PATH, homebrew links, or origin/main).
+if command -v gmake >/dev/null 2>&1; then
+  mkdir -p "$OUT/tool_bin"
+  ln -sfn "$(command -v gmake)" "$OUT/tool_bin/make"
+  export PATH="$OUT/tool_bin:$VENV/bin:$PATH"
+else
+  export PATH="$VENV/bin:$PATH"
+fi
+MAKE_VERSION="$(make --version | head -n 1)"
+MAKE_MAJOR="$(printf '%s\n' "$MAKE_VERSION" | sed -n 's/.* \([0-9][0-9]*\)\..*/\1/p')"
+if [[ "$PROFILE" == full ]]; then
+  [[ "$MAKE_MAJOR" =~ ^[0-9]+$ ]] && ((MAKE_MAJOR >= 4)) ||
+    die "full security regression requires GNU Make 4+; found $MAKE_VERSION (brew install make)"
+fi
 export COVERAGE_FILE="$OUT/.coverage"
-# Worker scratch and numerical-library caches follow the selected output volume.
-# Without this, a large --study run can exhaust the internal macOS /private/var/tmp
-# even when --out points at a spacious external disk.
-mkdir -p "$OUT/tmp" "$OUT/cache/matplotlib" "$OUT/cache/numba"
-export TMPDIR="$OUT/tmp/"
+# A space in TMPDIR breaks shell-scripted security watchdog fixtures and
+# sshd Include-token tests. Keep large artifacts/caches external, but use a
+# small, local, whitespace-free pytest/subprocess scratch directory when
+# the external volume is named with spaces (e.g. /Volumes/Data backup).
+if [[ "$OUT" == *[[:space:]]* ]]; then
+  TMP_WORK="$HOME/Library/Caches/DutchBayNOV26/tmp"
+else
+  TMP_WORK="$OUT/tmp"
+fi
+[[ "$TMP_WORK" != *[[:space:]]* ]] || die "TMP_WORK must not contain whitespace"
+mkdir -p "$TMP_WORK" "$OUT/cache/matplotlib" "$OUT/cache/numba"
+export TMPDIR="$(cd "$TMP_WORK" && pwd -P)/"
 export TMP="$TMPDIR" TEMP="$TMPDIR"
 export MPLCONFIGDIR="$OUT/cache/matplotlib"
 export NUMBA_CACHE_DIR="$OUT/cache/numba"
@@ -137,8 +159,8 @@ printf 'repo=%s\ncommit=%s\nbranch=%s\nlocal_origin_main=%s\nprofile=%s\njobs=%s
   "$REPO" "$SHA" "${BRANCH:-detached}" "$TRACKING" "$PROFILE" "$JOBS" "$VENV" "$OUT" \
   > "$OUT/manifest.txt"
 printf 'scope=software_only_not_external_bankability\n' >> "$OUT/manifest.txt"
-printf 'internal_free_kib=%s\noutput_free_kib=%s\nwork_tmpdir=%s\n' \
-  "$INTERNAL_FREE_KIB" "$OUT_FREE_KIB" "$TMPDIR" >> "$OUT/manifest.txt"
+printf 'internal_free_kib=%s\noutput_free_kib=%s\nwork_tmpdir=%s\nmake_version=%s\n' \
+  "$INTERNAL_FREE_KIB" "$OUT_FREE_KIB" "$TMPDIR" "$MAKE_VERSION" >> "$OUT/manifest.txt"
 printf 'validation_profile=%s\n' "$PROFILE" >> "$OUT/manifest.txt"
 git ls-files '*.py' | LC_ALL=C sort > "$OUT/python_source_inventory.txt"
 printf 'tracked_python_files=%s\n' "$(wc -l < "$OUT/python_source_inventory.txt" | tr -d ' ')" >> "$OUT/manifest.txt"
