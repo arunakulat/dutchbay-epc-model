@@ -11,6 +11,9 @@ and `AGENTS.md`, and where they disagree with this file, they win.
 
 Load the ruleset and the three framework principles before acting. `CLAUDE.md` "Rules and
 formats that govern this repository" has the command and the rule IDs.
+Run the commands below from the active checkout root. Set `DUTCHBAY_VENV` to the absolute
+environment verified for your host. For local Codex tasks, `AGENTS.md` specifies
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
 
 ## Tracker-first intake (`INTAKE-01`)
 
@@ -76,7 +79,7 @@ Green means every *required* check reports success on the exact current head wit
 
   ```bash
   PR=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq '.base.sha + " " + .head.sha')
-  .venv/bin/python - "$PR" <<'PY'
+  PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" - "$PR" <<'PY'
   import re, subprocess, sys
   from scripts.ci.classify_grid_study_paths import requires_grid_study
   parts = sys.argv[1].split()
@@ -105,7 +108,8 @@ Green means every *required* check reports success on the exact current head wit
   the command and its result into the body's receipts table (`VERIFY-01`).
 - **Changelog.** Add one fragment, `changelog.d/<id-or-slug>.<category>.md` (use `.changed.md`
   for governance and practice changes), whose body has no Markdown headings. Never edit
-  `CHANGELOG.md` directly. Validate with `.venv/bin/python scripts/compile_changelog.py --dry-run`.
+  `CHANGELOG.md` directly. Validate with
+  `PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" scripts/compile_changelog.py --dry-run`.
 - **Commits.** Follow `R18`, which admits only the eleven Conventional Commits types.
 - **Corpus and manifests.** Work through `AGENTS.md` "Four ways a corpus commit goes wrong".
   `sha256sum -c MANIFEST.sha256` must exit 0. Refresh parent manifests with
@@ -146,9 +150,9 @@ changelog erratum records what happens when that goes wrong.
 The lane count follows the risk class. The three bounded low-risk classes in module 1 §3.1
 are `R1` and take one lane: presentation-only code, test-only guard tightening, and record
 corrections. Everything else takes the domain and assurance pair. When unsure, it is `R2`.
-Before recruiting reviewers or starting work, run a same-package search across open pull
-requests and active writer leases (`docs/governance/recruit_01/02_writer_lease_and_recovery.md`)
-to verify no overlapping change touches the same package or surface. Dispositions must be
+Before recruiting reviewers or starting work, search open issues and open pull requests for the
+same package and check active writer leases for overlapping work on that package or surface
+(`docs/governance/recruit_01/02_writer_lease_and_recovery.md`). Dispositions must be
 posted as issue comments; pull-request review objects show no edit time in REST and cannot
 support merge verification (S-A5-08(b)).
 
@@ -177,21 +181,21 @@ support merge verification (S-A5-08(b)).
      names only a role, such as "the #1231 review thread", is attributed through a coordinator
      record that binds that role to a session. Name your own session in every record you post.
      An author-less record cannot attribute itself; attribute it from another record on which the
-     party is named (S-D5-01). A record cannot attribute text that is not on record; cite the
-     record that holds it (S-D5-02).
+     party is named (S-D5-01). Cite the record that contains the text being attributed.
    - The owner posts without a session. Take an owner decision from a record in which a session on
      record quotes it and says where the owner gave it, or ask the owner. Where the owner's
      words answer a question, quote the question with them; the waiver names what the question
      names (S-D5-03).
    - A coordinator that attributes a block to itself, to the writer, or to a session it
-     succeeded cites a record from the time of posting that shows who posted it. Without one,
-     only the owner can clear the block (S-A5-03).
+     succeeded cites a record from the time of posting that shows who posted it. Without that
+     evidence, the block remains unattributed (S-A5-03).
    - **Attribution decides what can clear a condition, never what can raise one.** A record you
      cannot attribute can never withdraw, discharge or waive a condition, and can never supply a
-     disposition, a §7 proof or a rebind. It never removes a block: a veto, `HOLD`, condition or
-     stated blocker in it stands until a coordinator on record attributes it, after which the
-     next rule applies, or until the owner withdraws it. State it on the pull request as a
-     blocker.
+     disposition, a §7 proof or a rebind. State every veto, `HOLD`, condition or stated blocker
+     it raises on the pull request. If a coordinator on record establishes attribution, apply
+     the next rule. While the author is unknown, only the owner may withdraw the block. An
+     independent reviewer who did not make the fix may discharge a satisfied condition by
+     citing the unattributed record and the evidence of fulfillment (S-D5-02).
    - Drop a condition that a later record withdrew or discharged, citing that record. Only the
      party whose finding it is, or the owner, can withdraw it, and only the party whose finding
      it is, or a reviewer other than whoever made the fix, can discharge it. A reviewer's record
@@ -228,8 +232,10 @@ support merge verification (S-A5-08(b)).
      other push that changes no file, such as a reworded commit message. For such a push, also
      show `git range-diff <old-base>..<old-head> <new-base>..<new-head>` in full, as §7's third
      proof does for a base update (S-D5-04). Any change to a subject byte restarts both reviews.
-   - If security audit receipts are stale (> 24 hours) or the lockfile moved, re-run `make audit`
-     on the exact head before merge (D1340-A-04).
+   - Before merging each dependency pull request, re-run `make audit` on the exact head
+     (D1340-A-04). Advisory data can change after CI passes even when the lockfile is unchanged.
+     For a local run, verify `"$DUTCHBAY_VENV/bin/pip-audit"` is executable, then run
+     `PATH="$DUTCHBAY_VENV/bin:$PATH" PYTHONPATH="$PWD" make audit` from that checkout.
    - At merge, re-verify every disposition the merge relies on, whether a rebind or a review
      bound directly to the final head (module 3 §6). All of these must hold:
      - the comment you cite still exists at the URL or ID you recorded;
@@ -243,12 +249,14 @@ support merge verification (S-A5-08(b)).
        the whole comment body does not match;
      - it names the reviewer, the exact commit, tree and base, and the subject-manifest digest.
 
-     An edit, deletion or mismatch invalidates the disposition until the reviewer issues a new
-     one, or a fresh review by a new reviewer is conducted, or merge is performed from the
-     container holding the durable file (S-A5-07(d)). So does a comment that states no content
-     digest, and a durable record you cannot read: ask the reviewer to reissue the record, or
-     merge from where the durable record is kept. Name in every record you post where its durable
-     record is kept.
+     An edited or deleted comment, a missing content digest or a mismatch invalidates the
+     disposition. Require a replacement on the exact merge head from the original reviewer
+     or from a new independent reviewer after a fresh review.
+
+     If the only obstacle is access to the named durable file, the merger may perform all
+     the checks above in the container holding that file and merge there once they pass.
+     Otherwise obtain a replacement disposition as above (S-A5-07(d)). Name the durable
+     file's location in each record you post.
    - A condition set by a review overrides the defaults in step 2, except the restricted-material
      rule. Publishing restricted material is the owner's decision (`AGENTS.md` "Four ways a
      corpus commit goes wrong", item 2), so a review condition cannot authorise it. If a
@@ -378,6 +386,7 @@ support merge verification (S-A5-08(b)).
        [[ $CAR_HEAD =~ ^[0-9a-f]{40}$ && $TRAIN_PR =~ ^[1-9][0-9]*$ ]] || exit 1
      fi
      test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.ref')" = "$BRANCH"
+     test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.repo.full_name')" = "$repo"
      if [ -z "$CAR_HEAD" ]; then
        test -n "$(gh api "repos/$repo/pulls/$PR" --jq '.merged_at // ""')"
        want=$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')
