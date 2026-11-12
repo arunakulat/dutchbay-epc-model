@@ -36,9 +36,9 @@ def test_codex_project_config_tracks_the_recorded_defaults() -> None:
 
     These settings let a local Codex task run without approval prompts and outside
     the sandbox, so a change to them is an agent-permission change and must arrive
-    as a reviewed diff. The digest is the one H02, H05, H06 and H08 recorded for the
-    copy that sat untracked in the primary checkout, so tracking the file moved its
-    bytes into review without changing them.
+    as a reviewed diff. H02, H05, H06 and H08 recorded the earlier config before
+    the shell environment policy was added. The digest below pins this reviewed
+    configuration, including that policy, rather than the historical bytes.
     """
 
     with PROJECT_CONFIG.open("rb") as stream:
