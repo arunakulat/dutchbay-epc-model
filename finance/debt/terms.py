@@ -338,7 +338,7 @@ def _build_cfads_timeline(
 
     timeline_periods = max(construction_periods + tenor, len(cfads_ext))
     while len(cfads_ext) < timeline_periods:
-        cfads_ext.append(float(cfads[-1]) if cfads else 0.0)
+        cfads_ext.append(0.0)
 
     return cfads_ext, annual_row_debt_period_map, timeline_periods, bridge_debt_period
 

@@ -1,0 +1,1 @@
+Pad post-operating debt timeline periods with `0.0` in `finance/debt/terms.py:_build_cfads_timeline` instead of repeating the last operating year's CFADS, and record `tenor_outruns_operating_life` in `plan_debt` output (#1509). Prevents senior debt sizing and cash sweep from drawing on phantom cash beyond asset operating life.

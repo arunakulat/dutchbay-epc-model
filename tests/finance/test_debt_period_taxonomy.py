@@ -537,3 +537,37 @@ def test_dscr_index_space_collision_is_resolved() -> None:
     # the fix — not merely two lists that happen to be equal.
     assert public[period] == debt_result["dscr_periods"][period]["dscr"]
     assert public[period] == pytest.approx(2.5922041122119635)  # #1577 (was 2.6047)
+
+
+def test_cfads_timeline_pads_zero_when_tenor_outruns_operating_life() -> None:
+    """#1509: _build_cfads_timeline must pad post-operating timeline with 0.0, not repeat CFADS.
+
+    Previously, _build_cfads_timeline repeated float(cfads[-1]) to pad the timeline to
+    construction_periods + tenor, allowing debt sizing and cash sweep to invent cash
+    flows beyond asset life. Post-tenor padding must pad strictly with 0.0, eliminating
+    phantom cash, and plan_debt marks tenor_outruns_operating_life in the result.
+    """
+    # 1. Reproduction from #1509: tenor 6 with 2 operating rows pads with 0.0, not 8.0
+    cfads_ext, row_map, timeline, bridge = _build_cfads_timeline(
+        [{"year": 1}, {"year": 2}], [10.0, 8.0], 1, 6
+    )
+    assert bridge == 1
+    assert len(row_map) == 2
+    assert cfads_ext == [0.0, 5.0, 10.0, 8.0, 0.0, 0.0, 0.0]
+    assert timeline == 7
+
+    # 2. Tenor within operating rows succeeds without padded periods
+    cfads_ext2, row_map2, timeline2, bridge2 = _build_cfads_timeline(
+        [{"year": 1}, {"year": 2}], [10.0, 8.0], 1, 2
+    )
+    assert bridge2 == 1
+    assert len(row_map2) == 2
+    assert cfads_ext2 == [0.0, 5.0, 10.0, 8.0]
+    assert timeline2 == 4
+
+    # 3. Post-tenor padding pads with 0.0 when operating rows is empty
+    ext_empty, _row_map, timeline_empty, _bridge = _build_cfads_timeline(
+        annual_rows=[], cfads=[], construction_periods=3, tenor=5
+    )
+    assert ext_empty == [0.0] * 8
+    assert timeline_empty == 8
