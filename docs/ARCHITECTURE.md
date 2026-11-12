@@ -222,8 +222,10 @@ non-reconciling app/integration scenarios were given explicit audited tolerance 
 or aligned to the real 159.6 MW nameplate.) The remaining off-path control is the
 **wind-interface schema** (`'wind'`/`'era5'` validation modules, still passed by no
 production caller); the rest of the AEP-analytics cluster (summary builder / parallel
-pipeline / MC-AEP / tornado) is a decision to wire or retire so `wind_resource/` is the
-single AEP engine.
+pipeline / MC-AEP / tornado) is formally deprecated under
+[`AEP_ANALYTICS_CLUSTER_DEPRECATION_DECISION.md`](AEP_ANALYTICS_CLUSTER_DEPRECATION_DECISION.md)
+(Issue #1551), with `wind_resource/` affirmed as the single canonical wind AEP producer
+and boundary-frozen via `tests/lint/test_aep_analytics_cluster_boundary.py`.
 
 ### Orphaned multi-tech generation scaffold
 
