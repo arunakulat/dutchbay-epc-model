@@ -117,7 +117,9 @@ dolphin's own branch and worktree (`git worktree remove`, `git worktree prune`, 
 NEVER touching the protected persistent environment at
 `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Cleanup never closes a
 pull request: closing an unmerged one needs a cited owner decision, posted as a comment on it
-before it is closed. A `Work item:` line that names a #1353 comment closes nothing, and cleanup
+before it is closed. The one exception is a `TRAIN-01` car, closed only after the train's
+post-landing check proves its commit is on `origin/main`, with the pointer comment posted first.
+A `Work item:` line that names a #1353 comment closes nothing, and cleanup
 never closes tracker #1353. A branch is deleted only when its pull request's `merged_at` is set and
 every ref still present (remote and local) equals the merged head, read from the GitHub API
 immediately before deleting, as the steward skill's step 4 block checks.
