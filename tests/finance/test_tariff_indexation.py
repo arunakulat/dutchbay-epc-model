@@ -22,6 +22,7 @@ from finance.bess_revenue import bess_revenue_lkr_for_year, resolve_bess_specs
 from finance.cashflow_v14 import build_annual_rows, build_annual_rows_efficient
 from finance.tariff_indexation import (
     OmIndexation,
+    resolve_non_escalable_adjustment,
     resolve_om_indexation,
     tariff_lkr_per_kwh_for_year,
 )
@@ -282,3 +283,138 @@ def test_blue_whale_escalable_parts_match_the_annex_2_components() -> None:
     assert {k: wind["tariff"]["om_indexation"][k] for k in keys} == {
         k: _BLOCK[k] for k in keys
     }
+
+
+_NON_ESC_BLOCK: Dict[str, Any] = {
+    "adjusted_component_lkr_per_kwh": 20.80,
+    "ccpi_weight": 0.30,
+    "lkr_usd_weight": 0.70,
+    "ccpi_inflation_pct": 5.0,
+    "lkr_usd_depreciation_pct": "relative_ppp",
+    "usd_inflation_pct": 2.5,
+    "sppa_signing_offset_months": -12,
+}
+
+
+def test_non_escalable_adjustment_closed_form() -> None:
+    """Check formula against closed form: 30% CCPI + 70% FX (relative PPP)."""
+    cfg = {"tariff": {"non_escalable_adjustment": dict(_NON_ESC_BLOCK)}}
+    adj = resolve_non_escalable_adjustment(cfg)
+    assert adj is not None
+    assert adj.adjusted_component_lkr_per_kwh == 20.80
+
+    # Closed form: CCPI move = 5.0%, FX move = (1 + 0.05)/(1 + 0.025) - 1 = 2.439024%
+    ccpi_move = 0.05
+    fx_move = 1.05 / 1.025 - 1.0
+    expected_mult = 0.30 * (1.0 + ccpi_move) + 0.70 * (1.0 + fx_move)
+    assert adj.adjustment_multiplier == pytest.approx(expected_mult)
+    assert adj.start_year_index == 0
+    expected_uplift = 20.80 * (expected_mult - 1.0)
+    assert adj.uplift_lkr_per_kwh(0) == pytest.approx(expected_uplift)
+
+    # Offset 0 months (signed at COD) -> starts at operating year 2 (year_index 1)
+    cfg_cod = {
+        "tariff": {
+            "non_escalable_adjustment": dict(
+                _NON_ESC_BLOCK, sppa_signing_offset_months=0
+            )
+        }
+    }
+    adj_cod = resolve_non_escalable_adjustment(cfg_cod)
+    assert adj_cod is not None
+    assert adj_cod.start_year_index == 1
+    assert adj_cod.uplift_lkr_per_kwh(0) == 0.0
+    assert adj_cod.uplift_lkr_per_kwh(1) == pytest.approx(expected_uplift)
+
+
+def test_non_escalable_adjustment_refuses_malformed_blocks() -> None:
+    """Validation checks: unknown keys, weights, component bounds."""
+    # Unknown key
+    bad = dict(_NON_ESC_BLOCK, bogus_key=123)
+    with pytest.raises(ValueError, match="unknown keys"):
+        resolve_non_escalable_adjustment({"tariff": {"non_escalable_adjustment": bad}})
+
+    # Component exceeds base tariff
+    with pytest.raises(ValueError, match="exceeds tariff.lkr_per_kwh"):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": _NON_ESC_BLOCK}},
+            base_tariff_lkr_per_kwh=15.0,
+        )
+
+    # Weights don't sum to 1
+    bad_weights = dict(_NON_ESC_BLOCK, ccpi_weight=0.50, lkr_usd_weight=0.70)
+    with pytest.raises(ValueError, match="must equal 1"):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": bad_weights}}
+        )
+
+    # Missing both start year indicators
+    missing_timing = {
+        k: v for k, v in _NON_ESC_BLOCK.items() if k != "sppa_signing_offset_months"
+    }
+    with pytest.raises(ValueError, match="requires either 'start_operating_year'"):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": missing_timing}}
+        )
+
+
+def test_engine_applies_non_escalable_step_in_both_builders() -> None:
+    """Verify both build_annual_rows and build_annual_rows_efficient apply step."""
+    cfg = _cfg(_WIND)
+    cfg["tariff"]["non_escalable_adjustment"] = dict(
+        _NON_ESC_BLOCK, sppa_signing_offset_months=0
+    )
+    rows_std = build_annual_rows(cfg)
+    rows_eff = build_annual_rows_efficient(cfg)
+
+    assert len(rows_std) == len(rows_eff) == 20
+    for t, (r, e) in enumerate(zip(rows_std, rows_eff, strict=True)):
+        assert e["generation_revenue_lkr"] == pytest.approx(
+            r["generation_revenue_lkr"], rel=1e-12
+        ), t
+        assert e["cfads_final_lkr"] == pytest.approx(r["cfads_final_lkr"], rel=1e-12), t
+
+    # Year 1 (year_index 0): no adjustment (signed at COD, offset 0 -> year 2 start)
+    # Year 2 (year_index 1): generation revenue has the non-escalable step applied
+    base_cfg = _cfg(_WIND)
+    base_rows = build_annual_rows_efficient(base_cfg)
+    assert rows_eff[0]["generation_revenue_lkr"] == pytest.approx(
+        base_rows[0]["generation_revenue_lkr"], rel=1e-12
+    )
+    assert (
+        rows_eff[1]["generation_revenue_lkr"] > base_rows[1]["generation_revenue_lkr"]
+    )
+
+
+def test_bess_revenue_applies_non_escalable_adjustment() -> None:
+    """Check energy_tariff BESS revenue uplift with non_escalable_lkr_per_kwh."""
+    cfg = _cfg(_SOLAR_BESS)
+    # Add non_escalable_adjustment to tariff
+    cfg["tariff"]["non_escalable_adjustment"] = dict(
+        _NON_ESC_BLOCK,
+        adjusted_component_lkr_per_kwh=18.00,
+        sppa_signing_offset_months=-12,
+    )
+    # bess_1 priority premium has non_escalable_lkr_per_kwh = 29.08
+    cfg["generation"]["technologies"]["bess_1"]["revenue"][
+        "non_escalable_lkr_per_kwh"
+    ] = 29.08
+
+    rows = build_annual_rows_efficient(cfg)
+    # Revenue is higher with non_escalable_adjustment
+    cfg_base = _cfg(_SOLAR_BESS)
+    rows_base = build_annual_rows_efficient(cfg_base)
+    assert rows[0]["revenue_lkr"] > rows_base[0]["revenue_lkr"]
+
+
+def test_non_escalable_adjustment_responsiveness() -> None:
+    """Changing non-escalable adjustment inputs moves NPV monotonically."""
+    cfg = _cfg(_WIND)
+    cfg["tariff"]["non_escalable_adjustment"] = dict(_NON_ESC_BLOCK)
+
+    r_base = evaluate_with_overrides(raw_config=cfg, overrides={})
+    # Higher CCPI inflation -> higher multiplier -> higher NPV
+    cfg_high = copy.deepcopy(cfg)
+    cfg_high["tariff"]["non_escalable_adjustment"]["ccpi_inflation_pct"] = 10.0
+    r_high = evaluate_with_overrides(raw_config=cfg_high, overrides={})
+    assert r_high["project_npv"] > r_base["project_npv"]
