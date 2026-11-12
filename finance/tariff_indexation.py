@@ -32,11 +32,13 @@ out-of-range value raise ``ValueError`` (FRAMEWORK-02 fail-loud).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Optional
 
 #: The block's path in a scenario.
 OM_INDEXATION_PATH = ("tariff", "om_indexation")
+NON_ESCALABLE_ADJUSTMENT_PATH = ("tariff", "non_escalable_adjustment")
 
 #: Supported index bases.
 BASIS_CCPI_FX_WEIGHTED = "ccpi_fx_weighted"
@@ -228,10 +230,153 @@ def resolve_om_indexation(
     )
 
 
+_NON_ESCALABLE_ALLOWED_KEYS = frozenset(
+    {
+        "adjusted_component_lkr_per_kwh",
+        "non_escalable_lkr_per_kwh",
+        "ccpi_weight",
+        "lkr_usd_weight",
+        "ccpi_inflation_pct",
+        "lkr_usd_depreciation_pct",
+        "usd_inflation_pct",
+        "sppa_signing_offset_months",
+        "start_operating_year",
+        "sppa_signing_date",
+        "cod_date",
+        "cod_year",
+        "source",
+    }
+)
+
+
+@dataclass(frozen=True)
+class NonEscalableAdjustment:
+    """A resolved ``tariff.non_escalable_adjustment`` block (PUCSL s.3.1 item 1).
+
+    Attributes:
+        adjusted_component_lkr_per_kwh: The non-escalable component in SPPA (LKR/kWh).
+        adjustment_multiplier: The one-off multiplier (70% * FX2/FX1 + 30% * CCPI2/CCPI1).
+        start_year_index: 0-based operating year from which the adjustment applies (0 = year 1).
+        sppa_signing_offset_months: Optional offset relative to COD in months.
+    """
+
+    adjusted_component_lkr_per_kwh: float
+    adjustment_multiplier: float
+    start_year_index: int
+    sppa_signing_offset_months: Optional[int] = None
+
+    def uplift_lkr_per_kwh(self, year_index: int) -> float:
+        """The non-escalable tariff uplift over the base for one operating year (LKR/kWh)."""
+        if year_index < self.start_year_index:
+            return 0.0
+        return self.adjusted_component_lkr_per_kwh * (self.adjustment_multiplier - 1.0)
+
+
+def _resolve_start_year_index(block: Mapping[str, Any]) -> int:
+    """Derive 0-based operating start year from offset or explicit start year."""
+    if "start_operating_year" in block:
+        val = block["start_operating_year"]
+        if isinstance(val, bool) or not isinstance(val, int) or val < 1:
+            raise ValueError(
+                f"tariff.non_escalable_adjustment.start_operating_year must be an integer >= 1, got {val!r}"
+            )
+        return int(val) - 1
+
+    if "sppa_signing_offset_months" in block:
+        offset = block["sppa_signing_offset_months"]
+        if isinstance(offset, bool) or not isinstance(offset, int):
+            raise ValueError(
+                f"tariff.non_escalable_adjustment.sppa_signing_offset_months must be an integer, got {offset!r}"
+            )
+        months_after_cod = offset + 12
+        if months_after_cod <= 0:
+            return 0
+        return int(math.ceil(months_after_cod / 12.0))
+
+    raise ValueError(
+        "tariff.non_escalable_adjustment requires either 'start_operating_year' or 'sppa_signing_offset_months'"
+    )
+
+
+def resolve_non_escalable_adjustment(
+    config: Mapping[str, Any], *, base_tariff_lkr_per_kwh: Optional[float] = None
+) -> Optional[NonEscalableAdjustment]:
+    """Resolve a scenario's ``tariff.non_escalable_adjustment`` block."""
+    tariff = config.get("tariff")
+    if not isinstance(tariff, Mapping):
+        return None
+    block = tariff.get("non_escalable_adjustment")
+    if block is None:
+        return None
+    if not isinstance(block, Mapping):
+        raise ValueError("tariff.non_escalable_adjustment must be a mapping")
+
+    unknown = sorted(set(block) - _NON_ESCALABLE_ALLOWED_KEYS)
+    if unknown:
+        raise ValueError(
+            f"tariff.non_escalable_adjustment has unknown keys {unknown}; allowed: {sorted(_NON_ESCALABLE_ALLOWED_KEYS)}"
+        )
+
+    if "adjusted_component_lkr_per_kwh" in block:
+        adjusted_comp = _number(block, "adjusted_component_lkr_per_kwh")
+    elif "non_escalable_lkr_per_kwh" in block:
+        adjusted_comp = _number(block, "non_escalable_lkr_per_kwh")
+    else:
+        raise ValueError(
+            "tariff.non_escalable_adjustment requires 'adjusted_component_lkr_per_kwh' (or 'non_escalable_lkr_per_kwh')"
+        )
+
+    if adjusted_comp < 0.0:
+        raise ValueError(
+            f"tariff.non_escalable_adjustment component must be >= 0, got {adjusted_comp}"
+        )
+    if base_tariff_lkr_per_kwh is not None and adjusted_comp > base_tariff_lkr_per_kwh:
+        raise ValueError(
+            f"tariff.non_escalable_adjustment component={adjusted_comp} exceeds tariff.lkr_per_kwh={base_tariff_lkr_per_kwh}"
+        )
+
+    ccpi_weight = _weight(block, "ccpi_weight")
+    fx_weight = _weight(block, "lkr_usd_weight")
+    if abs(ccpi_weight + fx_weight - 1.0) > _WEIGHT_SUM_TOLERANCE:
+        raise ValueError(
+            f"tariff.non_escalable_adjustment ccpi_weight + lkr_usd_weight must equal 1, got {ccpi_weight} + {fx_weight}"
+        )
+
+    ccpi_move = _rate_pct(block, "ccpi_inflation_pct") / 100.0
+    deprec_raw = block.get("lkr_usd_depreciation_pct")
+    if deprec_raw == RELATIVE_PPP:
+        usd_move = _rate_pct(block, "usd_inflation_pct") / 100.0
+        fx_move = (1.0 + ccpi_move) / (1.0 + usd_move) - 1.0
+    else:
+        if "usd_inflation_pct" in block:
+            raise ValueError(
+                "tariff.non_escalable_adjustment.usd_inflation_pct is read only when "
+                f"lkr_usd_depreciation_pct is {RELATIVE_PPP!r}"
+            )
+        fx_move = _rate_pct(block, "lkr_usd_depreciation_pct") / 100.0
+
+    multiplier = ccpi_weight * (1.0 + ccpi_move) + fx_weight * (1.0 + fx_move)
+    start_year_index = _resolve_start_year_index(block)
+    offset_raw = block.get("sppa_signing_offset_months")
+    offset_months = (
+        int(offset_raw)
+        if isinstance(offset_raw, int) and not isinstance(offset_raw, bool)
+        else None
+    )
+
+    return NonEscalableAdjustment(
+        adjusted_component_lkr_per_kwh=adjusted_comp,
+        adjustment_multiplier=multiplier,
+        start_year_index=start_year_index,
+        sppa_signing_offset_months=offset_months,
+    )
+
+
 def tariff_lkr_per_kwh_for_year(
     base_tariff_lkr_per_kwh: float,
     indexation: Optional[OmIndexation],
     year_index: int,
+    non_escalable_adjustment: Optional[NonEscalableAdjustment] = None,
 ) -> float:
     """The generation tariff for one 0-based operating year (LKR/kWh).
 
@@ -239,23 +384,31 @@ def tariff_lkr_per_kwh_for_year(
         base_tariff_lkr_per_kwh: The resolved ``tariff.lkr_per_kwh``.
         indexation: The resolved block, or ``None``.
         year_index: Zero-based operating-year index.
+        non_escalable_adjustment: The resolved one-off adjustment block, or ``None``.
 
     Returns:
-        The base tariff unchanged when ``indexation`` is ``None`` (byte-identical),
-        otherwise the base plus the indexed uplift of the escalable component.
+        The base tariff unchanged when both adjustments are ``None`` (byte-identical),
+        otherwise the base plus the indexed uplift of the escalable component and the
+        one-off uplift of the adjusted non-escalable component.
     """
-    if indexation is None:
-        return base_tariff_lkr_per_kwh
-    return base_tariff_lkr_per_kwh + indexation.uplift_lkr_per_kwh(year_index)
+    uplift = 0.0
+    if indexation is not None:
+        uplift += indexation.uplift_lkr_per_kwh(year_index)
+    if non_escalable_adjustment is not None:
+        uplift += non_escalable_adjustment.uplift_lkr_per_kwh(year_index)
+    return base_tariff_lkr_per_kwh + uplift
 
 
 __all__ = [
     "BASIS_CCPI_FX_WEIGHTED",
     "BASIS_FIXED_RATE",
+    "NON_ESCALABLE_ADJUSTMENT_PATH",
+    "NonEscalableAdjustment",
     "OM_INDEXATION_PATH",
     "OmIndexation",
     "RELATIVE_PPP",
     "SUPPORTED_BASES",
+    "resolve_non_escalable_adjustment",
     "resolve_om_indexation",
     "tariff_lkr_per_kwh_for_year",
 ]
