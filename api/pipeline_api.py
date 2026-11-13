@@ -126,6 +126,9 @@ class DebtScheduleRow(BaseModel):
     dscr: Optional[float] = None
     debt_outstanding_usd: Optional[float] = None
     debt_service_usd: Optional[float] = None
+    debt_period: Optional[int] = None
+    operating_year: Optional[int] = None
+    phase: Optional[str] = None
 
 
 class DebtBlock(BaseModel):
@@ -368,6 +371,33 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
     )
     outstanding = debt.get("debt_outstanding") or []
     service = debt.get("debt_service_total") or debt.get("total_service") or []
+    row_period_map = debt.get("annual_row_debt_period_map") or []
+    period_to_operating_year: Dict[int, int] = {}
+    for mapping in row_period_map:
+        if isinstance(mapping, Mapping) and mapping.get("debt_period") is not None:
+            op_year = mapping.get("year")
+            if op_year is None and mapping.get("annual_row_index") is not None:
+                op_year = int(mapping["annual_row_index"]) + 1
+            if op_year is not None:
+                period_to_operating_year[int(mapping["debt_period"])] = int(op_year)
+    construction_raw = debt.get("construction_years")
+    if construction_raw is None:
+        construction_raw = debt.get("construction_periods")
+    construction_count = int(construction_raw) if construction_raw is not None else None
+    bridge_raw = debt.get("cfads_bridge_debt_period")
+    bridge_period = int(bridge_raw) if bridge_raw is not None else None
+
+    def _row_phase(period_idx: int) -> Optional[str]:
+        if period_idx in period_to_operating_year:
+            return "operating"
+        if bridge_period is not None and period_idx == bridge_period:
+            return "bridge"
+        if construction_count is not None and period_idx < construction_count:
+            return "construction"
+        if period_to_operating_year:
+            return "post_operating"
+        return None
+
     n_rows = max(len(dscr_series), len(outstanding), len(service))
     schedule = [
         DebtScheduleRow(
@@ -375,6 +405,9 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
             dscr=_at(dscr_series, i),
             debt_outstanding_usd=_at(outstanding, i),
             debt_service_usd=_at(service, i),
+            debt_period=i,
+            operating_year=period_to_operating_year.get(i),
+            phase=_row_phase(i),
         )
         for i in range(n_rows)
     ]
