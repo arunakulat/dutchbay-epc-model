@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 
 def _number(value: Any, path: str) -> float:
+    """Read a strictly positive finite monetary amount or FX rate."""
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
@@ -20,6 +21,7 @@ def _number(value: Any, path: str) -> float:
 
 
 def _date(value: Any, path: str) -> str:
+    """Require an explicitly supplied canonical ISO calendar date."""
     if not isinstance(value, str):
         raise ValueError(f"{path} must be an ISO date YYYY-MM-DD")
     try:
@@ -32,6 +34,7 @@ def _date(value: Any, path: str) -> str:
 
 
 def _unique(mapping: Mapping[str, Any], path: str) -> None:
+    """Refuse case-colliding names before choosing any monetary input."""
     keys = [k.lower() for k in mapping if isinstance(k, str)]
     if len(keys) != len(set(keys)):
         raise ValueError(f"{path} contains duplicate case variants")
@@ -42,6 +45,17 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
 
     Conversion FX must be explicitly declared as the financial-close rate, dated
     at that close, and equal the model's close spot. No source is authenticated.
+
+    Args:
+        config: Authored or already resolved scenario. ``capex.input`` contains
+            currency, amount, price_date, financial_close_date and conversion;
+            conversion contains rate_lkr_per_usd, date, source and basis.
+
+    Returns:
+        A copied configuration with one USD amount and original-input provenance.
+
+    Raises:
+        ValueError: An amount, date, FX basis, alias or saved provenance conflicts.
     """
     cap_names = [k for k in config if isinstance(k, str) and k.lower() == "capex"]
     if not cap_names:
@@ -102,7 +116,10 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
     if isinstance(project, Mapping) and project.get("cod_year") is not None:
         from finance.debt_v14 import _resolve_construction_periods
 
-        if int(close_date[:4]) != project["cod_year"] - _resolve_construction_periods(
+        cod_year = _number(project["cod_year"], "project.cod_year")
+        if cod_year != int(cod_year):
+            raise ValueError("project.cod_year must be a whole calendar year")
+        if int(close_date[:4]) != cod_year - _resolve_construction_periods(
             dict(config)
         ):
             raise ValueError(

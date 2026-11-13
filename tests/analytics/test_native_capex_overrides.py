@@ -2,16 +2,18 @@
 
 import copy
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides, evaluated_scenario_config
-from analytics.run_manifest import config_sha256
+from analytics.run_manifest import build_run_manifest, config_sha256
 from finance.native_cost_inputs import normalize_native_capex
 
 
-def cases():
+def cases() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Author equivalent flat USD and LKR cases from existing public inputs."""
     path = (
         Path(__file__).resolve().parents[2]
         / "scenarios/blue_whale_wind_lot5b_2026.yaml"
@@ -39,7 +41,8 @@ def cases():
     return usd, native
 
 
-def test_usd_lkr_parity_reload_manifest_and_override():
+def test_usd_lkr_parity_reload_manifest_and_override() -> None:
+    """Preserve financial parity, single escalation and live override provenance."""
     usd, native = cases()
     baseline = evaluate_with_overrides(raw_config=usd, return_full_result=True)
     actual = evaluate_with_overrides(raw_config=native, return_full_result=True)
@@ -77,16 +80,19 @@ def test_usd_lkr_parity_reload_manifest_and_override():
         normalize_native_capex(altered)
 
 
-def test_mc_perturbs_native_amount_and_records_each_trial(monkeypatch):
+def test_mc_perturbs_native_amount_and_records_each_trial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Native Monte Carlo samples the source amount rather than a stale USD alias."""
     import analytics.pipeline_v14_enhanced as pipeline
     from analytics.cost.mc_capex import run_capex_mc
 
     _, native = cases()
     before = copy.deepcopy(native)
-    manifests = []
+    manifests: list[dict[str, Any]] = []
     real_run = pipeline.run_v14_pipeline
 
-    def capture(*args, **kwargs):
+    def capture(*args: Any, **kwargs: Any) -> Any:
         result = real_run(*args, **kwargs)
         manifests.append(result["run_manifest"]["native_capex"])
         return result
@@ -104,10 +110,11 @@ def test_mc_perturbs_native_amount_and_records_each_trial(monkeypatch):
         )
     assert native == before
     with pytest.raises(ValueError, match="authored"):
-        run_capex_mc(normalize_native_capex(native), n_samples=1)
+        run_capex_mc(normalize_native_capex(native), n_samples=1, sigma_pct=15)
 
 
-def test_fx_perturbation_matches_equivalent_usd_ledger():
+def test_fx_perturbation_matches_equivalent_usd_ledger() -> None:
+    """A changed close FX reconciles to the corresponding independent USD case."""
     usd, native = cases()
     rate = native["fx"]["start_lkr_per_usd"] * 1.2
     native["fx"]["start_lkr_per_usd"] = rate
@@ -121,3 +128,17 @@ def test_fx_perturbation_matches_equivalent_usd_ledger():
     assert left["annual_rows"] == right["annual_rows"]
     assert left["debt_result"] == right["debt_result"]
     assert left["kpis"] == right["kpis"]
+
+
+def test_manifest_freezes_native_provenance_and_declares_its_schema() -> None:
+    """Later input mutation must not detach provenance from its original hash."""
+    usd, native = cases()
+    resolved = normalize_native_capex(native)
+    manifest = build_run_manifest(resolved)
+    before = manifest.as_dict()
+    resolved["capex"]["native_input_applied"]["input"]["amount"] = 1.0
+    assert manifest.as_dict() == before
+    assert before["manifest_schema_version"] == "1.1"
+    legacy = build_run_manifest(usd).as_dict()
+    assert legacy["manifest_schema_version"] == "1.0"
+    assert "native_capex" not in legacy
