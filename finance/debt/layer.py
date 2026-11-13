@@ -340,6 +340,12 @@ def apply_debt_layer(
         "tenor_outruns_operating_life": bool(annual_rows and tenor > len(annual_rows)),
         "cfads_extended": cfads_ext,
         "cfads_bridge_debt_period": bridge_debt_period,
+        "cfads_bridge_usd": (
+            float(cfads_ext[bridge_debt_period])
+            if bridge_debt_period is not None
+            and 0 <= bridge_debt_period < len(cfads_ext)
+            else 0.0
+        ),
         "annual_row_debt_period_map": annual_row_debt_period_map,
         "debt_schedules": schedules,
         "audit_status": "PASS" if dscr_min >= target_dscr else "REVIEW",

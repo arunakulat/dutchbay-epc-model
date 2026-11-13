@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from finance.debt.constants import (
+    _BRIDGE_DEFAULT_TREATMENT,
+    _BRIDGE_VALID_TREATMENTS,
+)
 from finance.debt.helpers import _as_float, _rate_decimal, _section_case_insensitive
 from finance.debt.placeholders import _warn_placeholder_once
 
@@ -408,3 +412,47 @@ def _warn_if_decorative_tranches(config: Dict[str, Any]) -> None:
             "at Financing_Terms.rates. Edit mix + rates instead (the realised "
             "per-tranche principals are in debt_result.principal_by_tranche)."
         )
+
+
+def resolve_bridge_period_treatment(config: Mapping[str, Any]) -> str:
+    """Resolve the bridge-period debt/equity waterfall treatment (#1564).
+
+    Reads ``Financing_Terms.bridge_period_treatment`` (or ``debt.bridge_period_treatment``,
+    ``finance.debt.bridge_period_treatment``, or ``financing.bridge_period_treatment``).
+
+    Returns:
+        One of ``'historical_fold'``, ``'equity_cfads_match'``, or
+        ``'construction_capitalized'``. Defaults to ``'historical_fold'`` for
+        complete backward compatibility.
+
+    Raises:
+        ValueError: If an unknown treatment string is provided (CESSPIT fail-loud).
+    """
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    debt_cfg = _section_case_insensitive(config, "debt") or {}
+    financing = _section_case_insensitive(config, "financing") or {}
+    finance_sec = _section_case_insensitive(config, "finance") or {}
+    finance_debt = (
+        _section_case_insensitive(finance_sec, "debt")
+        if isinstance(finance_sec, Mapping)
+        else {}
+    )
+
+    treatment_raw = (
+        fin.get("bridge_period_treatment")
+        or debt_cfg.get("bridge_period_treatment")
+        or (
+            finance_debt.get("bridge_period_treatment")
+            if isinstance(finance_debt, Mapping)
+            else None
+        )
+        or financing.get("bridge_period_treatment")
+        or _BRIDGE_DEFAULT_TREATMENT
+    )
+    treatment = str(treatment_raw).lower().strip()
+    if treatment not in _BRIDGE_VALID_TREATMENTS:
+        raise ValueError(
+            f"Unknown bridge_period_treatment {treatment_raw!r}; "
+            f"expected one of {sorted(_BRIDGE_VALID_TREATMENTS)}"
+        )
+    return treatment
