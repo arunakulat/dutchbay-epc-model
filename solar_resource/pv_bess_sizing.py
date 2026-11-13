@@ -867,11 +867,18 @@ def project_opex_basis(
         raise ValueError("O&M escalation must match the LKR component escalation")
     parts = split.get("components")
     names = ("solar_om", "bess_om", "insurance_land_spv")
-    if (
-        not isinstance(parts, list)
-        or len(parts) != 3
-        or {p.get("name") for p in parts if isinstance(p, Mapping)} != set(names)
-    ):
+    if not isinstance(parts, list) or len(parts) != 3:
+        raise ValueError("project O&M requires exactly the three named components")
+    component_names = []
+    for index, part in enumerate(parts):
+        path = f"scenario.opex.currency_split.components[{index}]"
+        if not isinstance(part, Mapping):
+            raise ValueError(f"{path} must be a named O&M mapping")
+        name = part.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{path}.name must be a nonempty string")
+        component_names.append(name)
+    if set(component_names) != set(names):
         raise ValueError("project O&M requires exactly the three named components")
     ordered = tuple(dict(next(p for p in parts if p["name"] == name)) for name in names)
     for index, part in enumerate(ordered):

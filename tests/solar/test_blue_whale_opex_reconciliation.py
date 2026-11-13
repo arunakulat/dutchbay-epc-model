@@ -98,3 +98,12 @@ def test_missing_source_names_its_contract(field: str) -> None:
         del raw["opex"]["currency_split"][field]
     with pytest.raises(ValueError, match="opex|components"):
         sz.project_opex_basis(raw, 1.1, 150000)
+
+
+@pytest.mark.parametrize("name", [["solar_om"], {"name": "solar_om"}, None, 17, ""])
+def test_malformed_component_name_is_an_actionable_source_error(name: Any) -> None:
+    """Validate YAML name scalars before using them as set or lookup keys."""
+    raw = scenario()
+    raw["opex"]["currency_split"]["components"][0]["name"] = name
+    with pytest.raises(ValueError, match=r"components\[0\]\.name"):
+        sz.project_opex_basis(raw, 1.1, 150000)
