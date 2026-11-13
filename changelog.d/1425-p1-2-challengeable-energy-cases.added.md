@@ -1,0 +1,1 @@
+Scope the five challengeable resource assessment strands, evidence request register (EV-REQ-01..04), and labelled fixtures protocol under Milestone P1.2 in docs/P1_2_INDEPENDENTLY_CHALLENGEABLE_ENERGY_CASES.md and wind_resource/resource_assurance.py (#1425).

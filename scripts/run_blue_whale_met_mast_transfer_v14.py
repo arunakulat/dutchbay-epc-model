@@ -660,12 +660,6 @@ def measured_profiles(
     fit_all = f"alpha_log_fit_{min(cols, key=float)}_{top}"
     upper_from = _channel_key(cols, float(shear_cfg["log_fit_upper_from_height_m"]))
     upper = [k for k in cols if float(k) >= float(upper_from)]
-    if len(upper) < 2:
-        raise ValueError(
-            f"shear.log_fit_upper_from_height_m ({upper_from} m) leaves fewer than 2 speed "
-            f"channels at or above it (found {len(upper)}: {[float(k) for k in upper]}); "
-            "a log-law fit requires at least 2 heights."
-        )
     fit_upper = f"alpha_log_fit_{upper_from}_{top}"
     sec = mmt.sector_index(common[mcfg["direction"]].to_numpy(), n_sectors)
     by_sector = []
