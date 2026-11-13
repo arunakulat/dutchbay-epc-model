@@ -1,0 +1,1 @@
+Add LibCST architecture boundary guard in tests/lint/test_aep_analytics_cluster_boundary.py and deprecation ADR docs/AEP_ANALYTICS_CLUSTER_DEPRECATION_DECISION.md freezing live entrypoints from importing orphaned parallel AEP analytics modules (#1551).
