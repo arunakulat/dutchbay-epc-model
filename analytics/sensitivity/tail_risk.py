@@ -25,6 +25,7 @@ What the live path does NOT compute:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
@@ -151,31 +152,47 @@ def _tornado_tail_stats(*, tornado: TornadoResult) -> dict[str, Any]:
     """Honest per-parameter tail snapshot from a tornado's shock results.
 
     ``downside`` / ``upside`` are keyed to the KPI OUTCOME, not the shock direction:
-    the worst and best KPI achieved across ALL of this parameter's shock cases (both
-    ``low_case`` and ``high_case``). Keying by direction — ``min(low_case)`` /
-    ``max(high_case)`` — inverted the labels for cost drivers (CAPEX/opex/rate), whose
-    low-cost case is the *better* outcome (audit D5/D10, #576). ``impact_abs`` fields are
-    optional on :class:`~analytics.contracts_v14.ShockResult`, so missing values are
-    skipped; a tornado with no usable shocks collapses to its base value.
+    the worst and best KPI achieved across ALL finite shock cases (both
+    ``low_case`` and ``high_case``). Filtering out ``None`` and non-finite (``NaN`` /
+    ``inf``) values ensures Python's order-dependent ``min``/``max`` on ``NaN`` never
+    corrupts defined bounds (#1489). When no shock case is finite, bounds fall back to
+    ``base`` (which itself may be ``NaN``) and ``undefined`` is set True.
     """
     base = float(tornado.base_metric)
     cases = [
-        c
+        float(c)
         for s in tornado.shock_results
         for c in (s.low_case, s.high_case)
-        if c is not None
+        if c is not None and math.isfinite(float(c))
     ]
-    impacts = [s.impact_abs for s in tornado.shock_results if s.impact_abs is not None]
+    impacts = [
+        float(s.impact_abs)
+        for s in tornado.shock_results
+        if s.impact_abs is not None and math.isfinite(float(s.impact_abs))
+    ]
+    raw_tornado_impact = (
+        float(tornado.impact_abs) if tornado.impact_abs is not None else float("nan")
+    )
+    if impacts:
+        worst_impact = float(max(impacts))
+    elif math.isfinite(raw_tornado_impact):
+        worst_impact = raw_tornado_impact
+    else:
+        worst_impact = float("nan")
+    bar_undefined = (
+        (not math.isfinite(base))
+        or (not cases)
+        or (not impacts and not math.isfinite(raw_tornado_impact))
+    )
     return {
         "parameter": str(tornado.label or tornado.metric_name),
         "metric": str(tornado.metric_name),
         "base_value": base,
         "downside": float(min(cases)) if cases else base,
         "upside": float(max(cases)) if cases else base,
-        "worst_impact_abs": (
-            float(max(impacts)) if impacts else float(tornado.impact_abs)
-        ),
+        "worst_impact_abs": worst_impact,
         "n_shocks": len(tornado.shock_results),
+        "undefined": bar_undefined,
     }
 
 
@@ -187,22 +204,38 @@ def _aggregate_metric_snapshot(
     """Aggregate per-parameter rows into one per-metric tail snapshot.
 
     Shaped for the CASPER consumer (``{metric_name: {snapshot}}``): the worst downside /
-    best upside / largest impact across all parameters. It deliberately does NOT echo
-    ``cvar_alpha`` / ``percentiles`` / ``dscr_floor``: the tornado path computes no VaR,
-    CVaR, or breach probability, so surfacing those config knobs implied a distributional
-    computation that never happened (audit D5, #576). ``run_cfg`` is retained for the
-    unwired MC-backed distributional path, not consumed here beyond ``enabled``.
+    best upside / largest impact across all finite parameter rows (#1489).
     """
     base = float(rows[0]["base_value"]) if rows else float("nan")
-    downsides = [float(r["downside"]) for r in rows]
-    upsides = [float(r["upside"]) for r in rows]
-    impacts = [float(r["worst_impact_abs"]) for r in rows]
+    downsides = [
+        float(r["downside"])
+        for r in rows
+        if r.get("downside") is not None and math.isfinite(float(r["downside"]))
+    ]
+    upsides = [
+        float(r["upside"])
+        for r in rows
+        if r.get("upside") is not None and math.isfinite(float(r["upside"]))
+    ]
+    impacts = [
+        float(r["worst_impact_abs"])
+        for r in rows
+        if r.get("worst_impact_abs") is not None
+        and math.isfinite(float(r["worst_impact_abs"]))
+    ]
+    if impacts:
+        worst_impact = max(impacts)
+    elif rows:
+        worst_impact = float("nan")
+    else:
+        worst_impact = 0.0
     return {
         "base_value": base,
         "downside": min(downsides) if downsides else base,
         "upside": max(upsides) if upsides else base,
-        "worst_impact_abs": max(impacts) if impacts else 0.0,
+        "worst_impact_abs": worst_impact,
         "n_parameters": len(rows),
+        "n_undefined_parameters": sum(1 for r in rows if r.get("undefined")),
     }
 
 
