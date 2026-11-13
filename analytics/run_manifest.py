@@ -100,9 +100,13 @@ class RunManifest:
     seed: Optional[int]
     validation_mode: Optional[str]
     manifest_schema_version: str = MANIFEST_SCHEMA_VERSION
+    native_capex: Optional[Dict[str, Any]] = None
 
     def as_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        result = asdict(self)
+        if result["native_capex"] is None:
+            del result["native_capex"]
+        return result
 
 
 def build_run_manifest(
@@ -118,6 +122,12 @@ def build_run_manifest(
     timestamp (seconds precision) is stamped.
     """
     return RunManifest(
+        native_capex=(
+            dict(config["capex"]["native_input_applied"])
+            if isinstance(config.get("capex"), Mapping)
+            and "native_input_applied" in config["capex"]
+            else None
+        ),
         config_sha256=config_sha256(config),
         engine_version=engine_version(),
         git_sha=git_sha(),
