@@ -567,6 +567,14 @@ def validate_config_for_v14(
     """
     errors: list[str] = []
 
+    # A per-block spec cannot see an unused case-variant section (#1643).
+    from finance.cost_input_currency import validate_cost_input_currencies
+
+    try:
+        validate_cost_input_currencies(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
     # 1. Validate FX section (always required for v14)
     _validate_fx_section(raw_config, errors)
 

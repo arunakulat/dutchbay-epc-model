@@ -37,17 +37,15 @@ def capex_currency_is_supported(block: object) -> bool:
     return not _lkr_keys(block)
 
 
-def _value(raw: Mapping[str, object], name: str) -> object:
-    """Read exact spelling first, then the debt extractor's first case alias."""
-    if name in raw:
-        return raw[name]
-    return next((value for key, value in raw.items() if str(key).lower() == name), None)
-
-
-def _section(raw: Mapping[str, object], name: str) -> Mapping[str, object]:
-    """Select the same section as the debt extractor, including exact nulls."""
-    value = _value(raw, name)
-    return value if isinstance(value, Mapping) else {}
+def _sections(
+    raw: Mapping[str, object], name: str
+) -> tuple[tuple[str, Mapping[str, object]], ...]:
+    """Inspect every case alias so an unused block cannot hide a cost input."""
+    return tuple(
+        (key, value)
+        for key, value in raw.items()
+        if isinstance(key, str) and key.lower() == name and isinstance(value, Mapping)
+    )
 
 
 def _has_usd_capex(raw: Mapping[str, object]) -> bool:
@@ -67,13 +65,22 @@ def _has_usd_capex(raw: Mapping[str, object]) -> bool:
         ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
     )
     for name, aliases in sections:
-        block = _section(raw, name)
-        if any(_value(block, key) is not None for key in aliases):
-            return True
-        if name == "capex" and _value(block, "derive_from_breakdown"):
-            return True
+        for _, block in _sections(raw, name):
+            for key, value in block.items():
+                if isinstance(key, str) and value is not None:
+                    if key.lower() in aliases:
+                        return True
+                    if (
+                        name == "capex"
+                        and key.lower() == "derive_from_breakdown"
+                        and value
+                    ):
+                        return True
     roots = ("capex_usd_total", "capex_total_usd", "total_capex_usd")
-    return any(_value(raw, key) is not None for key in roots)
+    return any(
+        isinstance(key, str) and key.lower() in roots and value is not None
+        for key, value in raw.items()
+    )
 
 
 def validate_cost_input_currencies(raw: Mapping[str, object]) -> None:
@@ -87,22 +94,31 @@ def validate_cost_input_currencies(raw: Mapping[str, object]) -> None:
             direct-cashflow ``capex.lkr_total`` tax fallback is allowed only when
             no USD project cost is stated; strict preflight still requires USD.
     """
-    opex_keys = _lkr_keys(_section(raw, "opex"))
-    if opex_keys:
-        paths = ", ".join(f"opex.{key}" for key in opex_keys)
+    opex_paths = [
+        f"{name}.{key}"
+        for name, block in _sections(raw, "opex")
+        for key in _lkr_keys(block)
+    ]
+    if opex_paths:
+        paths = ", ".join(opex_paths)
         raise ValueError(
             f"{paths}: native-LKR opex amounts are unsupported; convert at an "
             "explicitly documented FX rate and provide opex.usd_per_year. "
             "Retain the original amount, currency, price date and FX source."
         )
-    capex_keys = _lkr_keys(_section(raw, "capex"))
-    if not capex_keys:
+    capex_sections = _sections(raw, "capex")
+    capex_paths = [
+        f"{name}.{key}" for name, block in capex_sections for key in _lkr_keys(block)
+    ]
+    if not capex_paths:
         return
-    if all(key.lower() == "lkr_total" for key in capex_keys) and not _has_usd_capex(
-        raw
+    if (
+        len(capex_sections) == 1
+        and capex_paths == ["capex.lkr_total"]
+        and not _has_usd_capex(raw)
     ):
         return
-    paths = ", ".join(f"capex.{key}" for key in capex_keys)
+    paths = ", ".join(capex_paths)
     raise ValueError(
         f"{paths}: native-LKR project costs cannot be combined with the USD "
         "capex contract. Provide USD-equivalent project costs at documented FX; "
