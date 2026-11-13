@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -12,13 +13,15 @@ from solar_resource import pv_bess_sizing as sz
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def scenario():
+def scenario() -> dict[str, Any]:
+    """Load the committed scenario without altering its source or assumptions."""
     return yaml.safe_load(
         (ROOT / "scenarios/blue_whale_solar_bess_lot5b_2026.yaml").read_text()
     )
 
 
-def test_scenario_reference_and_scaled_points():
+def test_scenario_reference_and_scaled_points() -> None:
+    """Scale the independently recorded DC-basis cost to two nominal sizes."""
     basis = sz.project_opex_basis(scenario(), 1.1, 150000)
     total, unit, components = basis.at_size(5.70304, 20)
     assert total == pytest.approx(246630.40)
@@ -31,7 +34,8 @@ def test_scenario_reference_and_scaled_points():
     assert basis.pre_cod_years == 3
 
 
-def test_first_year_matches_finance_engine():
+def test_first_year_matches_finance_engine() -> None:
+    """Compare pre-COD escalation with the canonical cashflow implementation."""
     basis = sz.project_opex_basis(scenario(), 1.1, 150000)
     total, unit, _ = basis.at_size(5.70304, 20)
     params = {
@@ -59,7 +63,8 @@ def test_first_year_matches_finance_engine():
     "change",
     ["duplicate", "missing", "total", "ratio", "overhead", "share", "nonfinite"],
 )
-def test_reject_inconsistent_sources(change):
+def test_reject_inconsistent_sources(change: str) -> None:
+    """Refuse inconsistent, duplicated or invalid O&M source data."""
     raw = deepcopy(scenario())
     parts = raw["opex"]["currency_split"]["components"]
     ratio, overhead = 1.1, 150000
@@ -79,3 +84,17 @@ def test_reject_inconsistent_sources(change):
         parts[0]["usd_per_unit_year"] = float("nan")
     with pytest.raises(ValueError):
         sz.project_opex_basis(raw, ratio, overhead)
+
+
+@pytest.mark.parametrize("field", ["opex", "currency_split", "components"])
+def test_missing_source_names_its_contract(field: str) -> None:
+    """Missing source blocks produce actionable value errors at the boundary."""
+    raw = scenario()
+    if field == "opex":
+        del raw["opex"]
+    elif field == "currency_split":
+        del raw["opex"][field]
+    else:
+        del raw["opex"]["currency_split"][field]
+    with pytest.raises(ValueError, match="opex|components"):
+        sz.project_opex_basis(raw, 1.1, 150000)

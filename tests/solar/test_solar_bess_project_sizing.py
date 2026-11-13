@@ -479,6 +479,9 @@ def test_small_run_is_truthful_reproducible_and_obeys_both_readings(
         return evaluate_with_overrides(**kw)
 
     first = _run(_small(), site, counting)
+    assert first.spec["opex_basis"]["pre_cod_years"] == 3
+    assert first.spec["opex_basis"]["dc_per_nominal"] == pytest.approx(1.1)
+    assert first.spec["opex_basis"]["components"][1]["usd_per_unit_year"] == 1.8
     n_points = first.spec["grid_points_evaluated"]
     assert n_points == 4
     # 4 points x (4 trials + base) + 4 curtailment + 4 RTE-sensitivity cases.

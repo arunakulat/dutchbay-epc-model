@@ -855,13 +855,17 @@ def project_opex_basis(
 ) -> ProjectOpexBasis:
     """Validate the scenario's all-LKR O&M basis before scaling any project size."""
     ratio = _num(dc_per_nominal, "BESS DC/nominal ratio", lo=1.0)
-    opex = scenario["opex"]
-    split = opex["currency_split"]
-    if _num(split["lkr_escalation_pct"], "LKR escalation", lo=0) != _num(
-        opex["escalation_pct"], "O&M escalation", lo=0
+    opex = scenario.get("opex")
+    if not isinstance(opex, Mapping):
+        raise ValueError("scenario.opex must supply the project O&M basis")
+    split = opex.get("currency_split")
+    if not isinstance(split, Mapping):
+        raise ValueError("scenario.opex.currency_split must supply named components")
+    if _num(split.get("lkr_escalation_pct"), "LKR escalation", lo=0) != _num(
+        opex.get("escalation_pct"), "O&M escalation", lo=0
     ):
         raise ValueError("O&M escalation must match the LKR component escalation")
-    parts = split["components"]
+    parts = split.get("components")
     names = ("solar_om", "bess_om", "insurance_land_spv")
     if (
         not isinstance(parts, list)
@@ -877,16 +881,22 @@ def project_opex_basis(
             else ("name", "usd_per_year", "usd_share")
         )
         _strict(part, keys, f"O&M {names[index]}")
-        if _num(part["usd_share"], "O&M USD share", lo=0) != 0:
+        if _num(part.get("usd_share"), "O&M USD share", lo=0) != 0:
             raise ValueError("project sizing unit O&M requires all-LKR components")
         for key in keys[1:-1]:
-            part[key] = _num(part[key], f"O&M {names[index]}.{key}", lo=0)
+            part[key] = _num(part.get(key), f"O&M {names[index]}.{key}", lo=0)
     if not math.isclose(
         ordered[2]["usd_per_year"], _num(fixed_opex, "fixed O&M", lo=0), abs_tol=1e-6
     ):
         raise ValueError("fixed O&M must match scenario insurance, land and SPV")
+    try:
+        nominal_value = scenario["generation"]["technologies"]["bess_1"]["energy_mwh"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(
+            "scenario.generation.technologies.bess_1.energy_mwh is required"
+        ) from exc
     nominal = _num(
-        scenario["generation"]["technologies"]["bess_1"]["energy_mwh"],
+        nominal_value,
         "scenario BESS nominal",
         lo=0,
     )
@@ -902,7 +912,7 @@ def project_opex_basis(
     )
     if not math.isclose(
         scenario_total,
-        _num(opex["usd_per_year"], "scenario O&M", lo=0),
+        _num(opex.get("usd_per_year"), "scenario O&M", lo=0),
         rel_tol=1e-9,
         abs_tol=1e-6,
     ):
@@ -975,7 +985,7 @@ def engine_overrides(
     total = wind_capex + pv_capex_usd + bess_capex_usd + ctx.grid_civils_development_usd
     cap = rep.project_capacity_mw
     t = "generation.technologies"
-    overrides = {
+    overrides: Dict[str, Any] = {
         "project.capacity_mw": cap,
         f"{t}.solar.capacity_mw": rep.solar_capacity_mw,
         f"{t}.solar.capacity_factor": rep.solar_capacity_factor,
@@ -2207,6 +2217,9 @@ def run_project_sizing(
         not reg.losses_on_charge and sens_rte > template.charge_efficiency
     ):
         raise ValueError("sensitivities.round_trip_efficiency is not physical here")
+    opex_basis = project_opex_basis(
+        scenario, plant["bess_dc_per_nominal"], plant["fixed_opex_usd_per_year"]
+    )
     ctx = Context(
         scenario=scenario,
         bess_template=template,
@@ -2221,9 +2234,7 @@ def run_project_sizing(
             plant["fixed_opex_usd_per_year"], "plant.fixed_opex", lo=0.0
         ),
         losses_on_charge=reg.losses_on_charge,
-        project_opex=project_opex_basis(
-            scenario, plant["bess_dc_per_nominal"], plant["fixed_opex_usd_per_year"]
-        ),
+        project_opex=opex_basis,
     )
     trials = draw_trials(
         n_trials=n_trials,
@@ -2683,6 +2694,10 @@ def run_project_sizing(
         "years": years,
         "objective": {"metric": metric, "statistic": statistic},
         "land_max_tables_by_bess_power_mw": {str(k): v for k, v in land_max.items()},
+        "opex_basis": {
+            "source": "scenario.opex.currency_split.components",
+            **asdict(opex_basis),
+        },
         "bess_duration_h": duration,
         "losses_on_charge": reg.losses_on_charge,
         "export_limit_mw": dcfg.export_limit_mw,
@@ -2782,6 +2797,8 @@ __all__ = [
     "run_sizing",
     "site_context",
     "Context",
+    "ProjectOpexBasis",
+    "project_opex_basis",
     "DIMENSIONS",
     "InverterMatch",
     "InverterSpec",
