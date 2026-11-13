@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from typing import List, Tuple
+
+_DRAWDOWN_SUM_TOL = 1e-6
 
 
 def calculate_construction_drawdowns(
@@ -13,8 +16,9 @@ def calculate_construction_drawdowns(
     """Return the debt drawn at the start of each construction-schedule period.
 
     The capex phasing sets only how many periods are drawn; the amounts come from
-    ``drawdown_pct_per_year``. Debt not drawn here is drawn at COD and accrues no
-    interest during construction (see :func:`calculate_idc`).
+    ``drawdown_pct_per_year``. Refuses schedules whose draws do not match the
+    phasing length or fail to sum to 1.0 (except the documented single-period
+    ``[0.5]`` COD-split placeholder convention from #1570) (#1507).
 
     Args:
         total_debt: Debt principal before IDC.
@@ -24,13 +28,39 @@ def calculate_construction_drawdowns(
     Returns:
         The amount drawn in each period of ``construction_schedule``.
     """
+    n_periods = len(construction_schedule)
+    n_draws = len(drawdown_pct_per_year)
+    if n_periods > 0:
+        if n_draws < n_periods:
+            raise ValueError(
+                f"construction_schedule has {n_periods} period(s) but "
+                f"drawdown_pct_per_year has only {n_draws} entry/entries; supply a "
+                "drawdown fraction per construction period (#1507)."
+            )
+        draws = [float(x) for x in drawdown_pct_per_year]
+        is_single_period_cod_placeholder = (
+            n_periods == 1
+            and n_draws == 1
+            and math.isclose(draws[0], 0.5, abs_tol=1e-9)
+        )
+        draw_sum = sum(draws)
+        if not is_single_period_cod_placeholder and not math.isclose(
+            draw_sum, 1.0, abs_tol=_DRAWDOWN_SUM_TOL
+        ):
+            raise ValueError(
+                f"drawdown_pct_per_year {draws!r} sums to {draw_sum:.6f}, expected 1.0 "
+                "(within 1e-6) so IDC reflects the full facility (#1507)."
+            )
+    elif n_draws > 0 and not math.isclose(
+        sum(float(x) for x in drawdown_pct_per_year), 1.0, abs_tol=_DRAWDOWN_SUM_TOL
+    ):
+        raise ValueError(
+            "drawdown_pct_per_year must sum to 1.0 (or be empty when construction_schedule is empty) (#1507)."
+        )
+
     drawn_schedule: List[float] = []
     for i, _ in enumerate(construction_schedule):
-        amt = (
-            total_debt * float(drawdown_pct_per_year[i])
-            if i < len(drawdown_pct_per_year)
-            else 0.0
-        )
+        amt = total_debt * float(drawdown_pct_per_year[i])
         drawn_schedule.append(amt)
     return drawn_schedule
 
@@ -44,12 +74,9 @@ def calculate_idc(
 
     The convention (#1570): each draw is made at the start of its period and
     accrues a full period's interest on the balance, which includes the IDC
-    capitalised in earlier periods. Interest is capitalised only for periods below
-    ``construction_periods``; an entry at or beyond it is listed but not
-    capitalised. A one-period build with half the debt drawn at financial close and
-    the rest at COD therefore capitalises ``0.5 * D * r``, a year's interest on the
-    average balance of an even draw (the placeholder in
-    :func:`finance.debt.terms.placeholder_debt_drawdown_pct`).
+    capitalised in earlier periods. Refuses when ``construction_periods`` exceeds
+    ``len(debt_drawn_schedule)`` so unscheduled build years cannot silently accrue
+    zero IDC (#1507).
 
     Args:
         debt_drawn_schedule: Amount drawn at the start of each period.
@@ -59,6 +86,13 @@ def calculate_idc(
     Returns:
         The interest per listed period, and the total capitalised as IDC.
     """
+    if construction_periods > len(debt_drawn_schedule):
+        raise ValueError(
+            f"construction_periods ({construction_periods}) exceeds "
+            f"debt_drawn_schedule length ({len(debt_drawn_schedule)}); extend "
+            "construction_schedule / drawdown_pct_per_year so every build period "
+            "accrues IDC (#1507)."
+        )
     idc_schedule: List[float] = []
     balance = 0.0
     total_idc = 0.0
