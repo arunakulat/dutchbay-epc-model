@@ -1,0 +1,1 @@
+- Add D4 arithmetic-identity control verifying that fabricating +123,456.75 kWh in ``method_model`` shifts ``unknown_residual_kwh`` identically while ``full_reconciliation_residual_kwh`` remains 0 with ``arithmetic_identity_not_independent_check`` (#1511).
