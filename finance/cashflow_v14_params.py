@@ -19,6 +19,7 @@ from .cashflow_v14_utils import (
     as_int_or_none,
     get_nested,
 )
+from .cost_input_currency import validate_cost_input_currencies
 from .import_levies import resolve_indirect_taxes
 
 logger = logging.getLogger(__name__)
@@ -606,6 +607,7 @@ def _resolve_opex_pre_cod_years(raw: Mapping[str, Any]) -> int:
 
 def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     """Extract and normalize parameters required for v14 CFADS calculation."""
+    validate_cost_input_currencies(raw)
     project_life_years = _extract_project_life_years(raw, log=True)
 
     # Path lists centralised in cashflow_v14_utils so the AEP reconciliation guard

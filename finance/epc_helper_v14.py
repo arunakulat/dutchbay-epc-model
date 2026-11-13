@@ -4,6 +4,10 @@ import logging
 from typing import Any, Dict, Mapping, MutableMapping, Optional, Sequence, Tuple
 
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
+from finance.cost_input_currency import (
+    capex_currency_is_supported,
+    opex_currency_is_supported,
+)
 from finance.utils import as_float
 
 logger = logging.getLogger(__name__)
@@ -443,6 +447,22 @@ def _register_epc_schema() -> None:
       - Subsequent sprint: remove finance.* / costs.* paths entirely.
     """
     specs: list[RequiredFieldSpec] = [
+        RequiredFieldSpec(
+            module="cashflow",
+            name="capex.lkr_total/native-LKR project costs unsupported; use USD "
+            "project costs and tax.depreciable_capex_lkr for a tax-only basis",
+            paths=[("capex",)],
+            required=False,
+            validator=capex_currency_is_supported,
+        ),
+        RequiredFieldSpec(
+            module="cashflow",
+            name="opex.lkr_per_year/native-LKR opex unsupported; convert at "
+            "documented FX to opex.usd_per_year",
+            paths=[("opex",)],
+            required=False,
+            validator=opex_currency_is_supported,
+        ),
         RequiredFieldSpec(
             module="cashflow",
             name="epc_usd_total",

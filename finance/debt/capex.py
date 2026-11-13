@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Mapping
 
+from finance.cost_input_currency import validate_cost_input_currencies
 from finance.debt.helpers import _lookup_case_insensitive, _section_case_insensitive
 from finance.debt.placeholders import _allow_toy_capex_fallback
 from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
@@ -29,6 +30,7 @@ def _extract_capex_base_usd(params: Dict[str, Any]) -> float:
     levies). The financed, levy-inclusive total is the :func:`_extract_capex_usd`
     wrapper below.
     """
+    validate_cost_input_currencies(params)
     capex_section = _section_case_insensitive(params, "capex")
     if capex_section and _lookup_case_insensitive(
         capex_section, "derive_from_breakdown"
