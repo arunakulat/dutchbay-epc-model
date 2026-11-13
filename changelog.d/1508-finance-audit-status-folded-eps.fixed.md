@@ -1,0 +1,1 @@
+- Derive ``audit_status`` in ``apply_debt_layer`` from the bridge-folded operating-year minimum DSCR compared against ``target_dscr - _DSCR_LOCKUP_EPS`` (1e-9) rather than exact comparison on the unfolded period minimum (#1508).
