@@ -60,6 +60,33 @@ _AMORT_VALID_STYLES = _AMORT_ANNUITY_STYLES + _AMORT_SCULPTED_STYLES
 _AMORT_DEFAULT_STYLE = "sculpted"
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bridge period treatment (#1564)
+# ─────────────────────────────────────────────────────────────────────────────
+# When a bridge period precedes commercial operations, its debt service is folded
+# into operating year 1 to prevent orphaning (finding 2.1). The equity waterfall
+# treatment is config-selectable via ``Financing_Terms.bridge_period_treatment``
+# (or compact ``finance.debt.bridge_period_treatment`` / ``debt.bridge_period_treatment``):
+#   - "historical_fold" (default): folds bridge debt service into year 1 without
+#       matching bridge CFADS. Preserves byte-identical baseline scenario outputs.
+#   - "equity_cfads_match": folds bridge debt service into year 1 and credits the
+#       matching bridge CFADS (0.5 * year-1 CFADS) to year-1 equity cashflow,
+#       eliminating synthetic sponsor shortfall cash calls.
+#   - "construction_capitalized": treats bridge debt service as capitalized
+#       construction financing cost rather than operating year 1 debt service.
+BRIDGE_TREATMENT_HISTORICAL_FOLD = "historical_fold"
+BRIDGE_TREATMENT_EQUITY_CFADS_MATCH = "equity_cfads_match"
+BRIDGE_TREATMENT_CONSTRUCTION_CAPITALIZED = "construction_capitalized"
+
+_BRIDGE_VALID_TREATMENTS = (
+    BRIDGE_TREATMENT_HISTORICAL_FOLD,
+    BRIDGE_TREATMENT_EQUITY_CFADS_MATCH,
+    BRIDGE_TREATMENT_CONSTRUCTION_CAPITALIZED,
+)
+
+_BRIDGE_DEFAULT_TREATMENT = BRIDGE_TREATMENT_HISTORICAL_FOLD
+
+
 _BALLOON_TOL = 1.0  # USD; outstanding balances below this are treated as repaid
 
 

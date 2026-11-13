@@ -718,6 +718,8 @@ for _path, _disposition in (
             "dscr_by_year",
             "annual_row_debt_period_map",
             "cfads_bridge_debt_period",
+            # #1564: bridge-period CFADS exposed alongside `cfads_bridge_debt_period`.
+            "cfads_bridge_usd",
             # F-6 period taxonomy. `bridge_debt_period` restates
             # `cfads_bridge_debt_period` above under the engine's own name and
             # `construction_periods` restates `construction_years`. The remaining
@@ -884,6 +886,11 @@ for _path, _disposition in (
             # what the project NPV/IRR path discounts; this one is published
             # alongside it so a reader can see both bases on the same row.
             "cfads_coverage_usd",
+            # #1564: bridge-period waterfall treatment and year-1 folded bridge
+            # debt service / CFADS amounts added by `_enrich_annual_rows_with_debt`.
+            "bridge_period_treatment",
+            "bridge_debt_service_usd",
+            "bridge_cfads_usd",
         )
     ),
 ):
