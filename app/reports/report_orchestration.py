@@ -35,7 +35,7 @@ from app.services.report_global_sa import (
 from app.services.report_tornado import TornadoBlock, compute_report_tornado
 
 ReportSensitivityMethod = Literal["tornado", "morris", "pawn"]
-ReportSensitivityOutcome = Literal["completed", "degraded"]
+ReportSensitivityOutcome = Literal["completed", "partial", "degraded"]
 FinanceRunner = Callable[[Mapping[str, Any]], Mapping[str, Any]]
 TornadoComputer = Callable[..., Optional[TornadoBlock]]
 GlobalSAComputer = Callable[..., Optional[GlobalSABlock]]
@@ -236,6 +236,16 @@ def compute_report_sensitivity(
     # rows were unusable. In that case the effective count is truthfully unknown.
     tornado_requested = profile.tornado_evaluations
     tornado_effective = 1 + 2 * len(tornado.rows) if tornado is not None else None
+    if tornado is None:
+        tornado_outcome: ReportSensitivityOutcome = "degraded"
+    elif tornado.has_undefined:
+        has_any_defined_point = (not tornado.undefined_base) or any(
+            row.low_case is not None or row.high_case is not None
+            for row in tornado.rows
+        )
+        tornado_outcome = "partial" if has_any_defined_point else "degraded"
+    else:
+        tornado_outcome = "completed"
 
     driver_count = _global_sa_driver_count(scenario_config)
     morris_requested = profile.morris_trajectories * (driver_count + 1)
@@ -252,7 +262,7 @@ def compute_report_sensitivity(
             method="tornado",
             requested=tornado_requested,
             effective=tornado_effective,
-            outcome="completed" if tornado is not None else "degraded",
+            outcome=tornado_outcome,
         ),
         _method_metadata(
             method="morris",
