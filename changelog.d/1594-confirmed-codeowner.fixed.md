@@ -1,0 +1,1 @@
+- Set the repository-wide CODEOWNERS rule to the confirmed `@arunakulat` owner.
