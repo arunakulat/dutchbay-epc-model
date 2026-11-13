@@ -190,9 +190,11 @@ def irr(
     # irr([1, 1, -1, 1e-135]) returns 0.0, but NPV(0.0)=1.0 — the true root is ~-0.382).
     # It was previously trusted unchecked. Verify the candidate zeroes the NPV; if not, fall
     # back to the robust bisection solver rather than return a wrong root (#595, audit §3.4).
-    # The two engines are guaranteed-equivalent only on conventional single-sign-change
-    # series (a unique real root) — which is everything DutchBay produces; the guard fires
-    # only on non-physical multi-root fuzz inputs, so this is a no-op on every real cashflow.
+    # The two engines agree on conventional single-sign-change series (which have a
+    # unique real root), whereas multi-sign-change equity cashflows (such as refinanced
+    # structures and Blue Whale solar + BESS) can have multiple real roots; this
+    # verification catches spurious roots and lets equity summaries flag non-unique
+    # rankings via ``equity_irr_ranks_reliably`` (#1456, #1522, #1578 L-13).
     if not _is_npv_root(val, cfs):
         return _irr_bisect(cfs, lower_bound=lo, upper_bound=hi)
 
