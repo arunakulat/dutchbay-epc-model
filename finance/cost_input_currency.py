@@ -37,12 +37,17 @@ def capex_currency_is_supported(block: object) -> bool:
     return not _lkr_keys(block)
 
 
+def _value(raw: Mapping[str, object], name: str) -> object:
+    """Read exact spelling first, then the debt extractor's first case alias."""
+    if name in raw:
+        return raw[name]
+    return next((value for key, value in raw.items() if str(key).lower() == name), None)
+
+
 def _section(raw: Mapping[str, object], name: str) -> Mapping[str, object]:
-    """Read a section with the debt extractor's case-insensitive convention."""
-    for key, value in raw.items():
-        if key.lower() == name and isinstance(value, Mapping):
-            return value
-    return {}
+    """Select the same section as the debt extractor, including exact nulls."""
+    value = _value(raw, name)
+    return value if isinstance(value, Mapping) else {}
 
 
 def _has_usd_capex(raw: Mapping[str, object]) -> bool:
@@ -62,13 +67,13 @@ def _has_usd_capex(raw: Mapping[str, object]) -> bool:
         ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
     )
     for name, aliases in sections:
-        block = {key.lower(): value for key, value in _section(raw, name).items()}
-        if any(block.get(key) is not None for key in aliases):
+        block = _section(raw, name)
+        if any(_value(block, key) is not None for key in aliases):
             return True
-        if name == "capex" and block.get("derive_from_breakdown"):
+        if name == "capex" and _value(block, "derive_from_breakdown"):
             return True
     roots = ("capex_usd_total", "capex_total_usd", "total_capex_usd")
-    return any(key.lower() in roots and value is not None for key, value in raw.items())
+    return any(_value(raw, key) is not None for key in roots)
 
 
 def validate_cost_input_currencies(raw: Mapping[str, object]) -> None:

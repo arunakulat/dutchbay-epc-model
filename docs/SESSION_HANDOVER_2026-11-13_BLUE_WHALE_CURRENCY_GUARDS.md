@@ -46,9 +46,15 @@ eventual PR Evidence pack and unedited domain/assurance comments carry their
 actual outcomes. This handover asserts no unperformed review or green CI.
 The full suite is deferred under REVIEW-01 while the PR remains draft.
 
+Both initial independent lanes rejected the first frozen candidate after hostile
+case-collision probes bypassed direct-path refusal. The writer corrected lookup
+precedence and null-alias handling, with new controls observed to fail before
+the fix. Those initial dispositions remain on the PR; both substantive reviews
+must restart on the corrected frozen subject. No acceptance carries forward.
+
 ## Remaining gaps and queue
 
-The complete scoped residual list is maintained in #1627: shared native-currency
+The residual queue is maintained in #1629, following scoped #1627: shared native-currency
 conversion/equipment support; fee cash-funding semantics; evidenced downside and
 rate decisions; DSRA initial funding under #1399/#920; BESS O&M reconciliation
 under #1578; and transaction/SPV/SPPA/security/land/permits/grid/resource evidence
@@ -67,7 +73,10 @@ the environment contract against 317 locked distributions, with no missing pins,
 editable installation or foreign checkout imports. The hook-created checkout
 `.pth` was removed from this session's cloud environment so each worktree supplies
 its own imports through `PYTHONPATH`. The protected Mac environment was untouched;
-its private evidence and local coordination files were unavailable.
+its private evidence and local coordination files were unavailable at initial
+authoring. The owner subsequently restored read-only Mac access and directed a
+RAG-first, then local/primary-bank evidence search before requesting missing
+inputs. That source search is separate from this software-refusal scope.
 
 Re-read the PR's exact head, evidence and all review findings before any new lease.
 Any subject change restarts required reviews. All #1110/F-5, Board/lender,

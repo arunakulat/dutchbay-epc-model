@@ -126,3 +126,41 @@ def test_lkr_only_capex_is_not_promoted_to_supported_financing(
         )
     with pytest.raises(ValueError, match="CAPEX extractor"):
         _extract_capex_base_usd(scenario)
+
+
+@pytest.mark.parametrize(
+    "section,key", [("capex", "lkr_total"), ("opex", "lkr_per_year")]
+)
+@pytest.mark.parametrize("variant_first", [False, True])
+def test_case_colliding_sections_cannot_mask_consumed_costs(
+    scenario: dict[str, Any], section: str, key: str, variant_first: bool
+) -> None:
+    """Refuse the consumed canonical block regardless of alias insertion order."""
+    scenario[section][key] = 123456789.0
+    variant = {section.upper(): {}}
+    cfg = {**variant, **scenario} if variant_first else {**scenario, **variant}
+    with pytest.raises(ValueError, match=rf"{section}\.{key}"):
+        _build_cashflow_params(cfg)
+    with pytest.raises(ValueError, match=rf"{section}\.{key}"):
+        _extract_capex_base_usd(cfg)
+    with pytest.raises(ValueError, match=rf"{section}\.{key}"):
+        build_annual_rows(cfg)
+    with pytest.raises(ConfigValidationError, match=rf"{section}\.{key}"):
+        validate_config_for_v14(
+            cfg, config_path="case-collision", modules=["cashflow", "debt"]
+        )
+
+
+@pytest.mark.parametrize("variant_first", [False, True])
+def test_null_colliding_alias_cannot_erase_financed_usd(
+    scenario: dict[str, Any], variant_first: bool
+) -> None:
+    """A null case alias must not grant the LKR-only tax-fallback exception."""
+    capex = scenario["capex"]
+    variant = {"USD_TOTAL": None}
+    scenario["capex"] = {**variant, **capex} if variant_first else {**capex, **variant}
+    scenario["capex"]["lkr_total"] = 123456789.0
+    with pytest.raises(ValueError, match=r"capex\.lkr_total"):
+        _extract_capex_base_usd(scenario)
+    with pytest.raises(ValueError, match=r"capex\.lkr_total"):
+        build_annual_rows(scenario)
