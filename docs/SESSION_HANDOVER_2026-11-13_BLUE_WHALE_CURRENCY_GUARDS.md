@@ -2,9 +2,12 @@
 
 ## Status and authority
 
-Codex `/root` coordinates draft PR creation under the owner's direct instruction.
-**No merge or auto-merge is authorized.** The owner withheld merge privileges in
-this chat; tracker #1353 comment 6841057613 also records an all-merge hold.
+Codex `/root` authored the initial `#1627` draft (`a13cd918`) and the alias/null
+remediation (`e0048650`) on `codex/1627-currency-input-guards`. Subsequent base
+refresh onto post-`#1614` `origin/main` (`67734269`), full verification, fresh
+two-lane `RECRUIT-01` reviews, and delivery proceed under the owner's explicit
+2026-11-13 merge/delivery authorization recorded in the active session and
+tracker `#1353` (superseding the earlier draft-only/all-merge hold for PR `#1628`).
 
 This is a scoped successor to
 `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md`. It carries forward
@@ -21,9 +24,9 @@ Its SHA-256 is `bfc334b081243a0fc8aa9da4b85eeca5aea243a729a7fda794e51cb4fb697646
 
 Work item [#1627](https://github.com/arunakulat/dutchbay-epc-model/issues/1627) and
 [tracker intake](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6841623159)
-precede implementation. Base: `f8c0eaf036a0635d23ed56d21a79afec7735554d`.
+precede implementation. Initial base: `f8c0eaf036a0635d23ed56d21a79afec7735554d`;
+current base: `67734269b49db15f83072b95f658d160e7b994b2` (post-`#1614` `origin/main`).
 The owned branch is `codex/1627-currency-input-guards` in a dedicated worktree.
-The coordinator is the sole writer; the queue manager is read-only.
 
 `finance/cost_input_currency.py` rejects ignored native-LKR opex keys and
 ambiguous LKR capex beside USD project costs. Cashflow parameter/debt extraction
@@ -41,16 +44,14 @@ returned identical eight-KPI vectors, including undefined IRRs. No pin, scenario
 formula, VERSION or compiled changelog changed. These are regression receipts,
 not feasibility, bankability, release or commercial approval.
 
-At authoring, mandatory hooks and independent review/draft CI are pending; the
-eventual PR Evidence pack and unedited domain/assurance comments carry their
-actual outcomes. This handover asserts no unperformed review or green CI.
-The full suite is deferred under REVIEW-01 while the PR remains draft.
-
-Both initial independent lanes rejected the first frozen candidate after hostile
-case-collision probes bypassed direct-path refusal. The writer corrected lookup
-precedence and null-alias handling, with new controls observed to fail before
-the fix. Those initial dispositions remain on the PR; both substantive reviews
-must restart on the corrected frozen subject. No acceptance carries forward.
+Both initial independent lanes rejected the first frozen candidate (`a13cd918`)
+after hostile case-collision probes (`ASSURANCE-1628-01`, `FD-1628-01`,
+`FD-1628-02`) bypassed direct-path refusal. The writer corrected lookup
+precedence and null-alias handling in `e0048650`, with new controls observed to
+fail before the fix. Those initial dispositions remain on the PR; fresh
+independent finance-domain and assurance reviews bind to the frozen post-`#1614`
+candidate head before transitioning PR `#1628` to Ready under `REVIEW-01`. No
+prior acceptance carries forward.
 
 ## Remaining gaps and queue
 
@@ -62,9 +63,11 @@ under #1110 and existing Blue Whale registers. Existing DSRA disclosure and
 derived-PPP guards must not be reimplemented from stale issue descriptions.
 None of those evidence/commercial gaps is closed by this refusal guard.
 
-The intake sweep covered #1626, #1625, #1624, #1623, #1619, #1614 and #1596–#1600.
-Dependency remediation belongs to #1626; bridge-finance changes belong to #1624.
-Preserve their owners and refresh all heads/checks before further action.
+The pre-merge open PR sweep covers `#1628` (active here) plus Dependabot PRs
+`#1599`, `#1597`, and `#1596` (separately gated on protected environment/constraint
+policy). `#1626`, `#1625`, `#1624`, `#1623`, `#1619`, and `#1614` have landed on
+`origin/main` (`67734269`). Preserve base/owner isolation and refresh all
+heads/checks before transition and merge.
 
 ## Environment and continuation
 
@@ -78,8 +81,9 @@ authoring. The owner subsequently restored read-only Mac access and directed a
 RAG-first, then local/primary-bank evidence search before requesting missing
 inputs. That source search is separate from this software-refusal scope.
 
-Re-read the PR's exact head, evidence and all review findings before any new lease.
-Any subject change restarts required reviews. All #1110/F-5, Board/lender,
-professional, release and source-evidence boundaries survive. Leave the PR draft
-and unmerged under the owner's present instruction; preserve its branch/worktree
-for review rather than applying post-merge cleanup.
+Re-read the PR's exact head, evidence and all review findings before transition.
+Any subject change restarts required reviews. All `#1110`/F-5, Board/lender,
+professional, release and source-evidence boundaries survive. Complete `REVIEW-01`
+(both fresh independent acceptances on frozen draft -> Ready CI -> `MERGE-01`),
+then apply `CLEANUP-01` (close `#1627`, post `#1353` receipt, sync `main`, and retire
+this worktree/branch) without modifying `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`.
