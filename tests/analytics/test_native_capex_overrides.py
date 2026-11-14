@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides, evaluated_scenario_config
+from analytics.pipeline_v14_enhanced import PipelineValidationError
 from analytics.run_manifest import build_run_manifest, config_sha256
 from finance.native_cost_inputs import normalize_native_capex
 
@@ -142,3 +143,32 @@ def test_manifest_freezes_native_provenance_and_declares_its_schema() -> None:
     legacy = build_run_manifest(usd).as_dict()
     assert legacy["manifest_schema_version"] == "1.0"
     assert "native_capex" not in legacy
+
+
+def test_resolved_native_config_refuses_changed_construction_phasing() -> None:
+    """Saved price escalation cannot conceal a changed construction draw basis."""
+    _, native = cases()
+    native["project"]["cod_year"] = 2029
+    native["timeline"]["construction_years"] = 2
+    native["Financing_Terms"].update(
+        construction_periods=2, construction_schedule=[1, 0]
+    )
+    resolved = evaluated_scenario_config(native)
+    assert evaluated_scenario_config(resolved) == resolved
+    override = {"Financing_Terms.construction_schedule": [0, 1]}
+    fresh = evaluate_with_overrides(
+        raw_config=native, overrides=override, return_full_result=True
+    )
+    assert fresh["debt_result"]["funding"]["sources_and_uses"]["uses"][
+        "capex_usd"
+    ] == pytest.approx(
+        native["capex"]["input"]["amount"] / native["fx"]["start_lkr_per_usd"] * 1.05**2
+    )
+    stale = copy.deepcopy(resolved)
+    stale["Financing_Terms"]["construction_schedule"] = [0, 1]
+    with pytest.raises(ValueError, match="stale.*price|price.*stale"):
+        normalize_native_capex(stale)
+    with pytest.raises(PipelineValidationError, match="stale.*price|price.*stale"):
+        evaluate_with_overrides(
+            raw_config=resolved, overrides=override, return_full_result=True
+        )

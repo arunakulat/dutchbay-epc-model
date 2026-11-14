@@ -101,3 +101,32 @@ def test_strict_preflight_preserves_its_error_contract() -> None:
         validate_config_for_v14(
             cfg, config_path="native-case", modules=["cashflow", "debt"]
         )
+
+
+@pytest.mark.parametrize("path", ["amount", "conversion.rate_lkr_per_usd"])
+def test_unrepresentable_numbers_keep_the_validation_error_contract(path: str) -> None:
+    """Out-of-range YAML integers are path-specific failures, never raw overflow."""
+    cfg = config()
+    target = cfg["capex"]["input"]
+    if path.startswith("conversion."):
+        target = target["conversion"]
+    target[path.split(".")[-1]] = 10**400
+    with pytest.raises(ValueError, match=f"capex.input.{path}"):
+        normalize_native_capex(cfg)
+    with pytest.raises(ConfigValidationError, match=f"capex.input.{path}"):
+        validate_config_for_v14(
+            cfg, config_path="large-native-input", modules=["cashflow", "debt"]
+        )
+
+
+@pytest.mark.parametrize("key", ["Price_basis", "PRICE_BASIS", "Cost_basis_year"])
+def test_native_contract_refuses_noncanonical_price_keys(key: str) -> None:
+    """An authored pricing key must never disappear through case-sensitive lookup."""
+    cfg = config()
+    cfg["capex"][key] = (
+        2026
+        if key.lower() == "cost_basis_year"
+        else {"price_year": 2026, "escalation_pct": 5.0, "source": "test"}
+    )
+    with pytest.raises(ValueError, match=key):
+        normalize_native_capex(cfg)

@@ -10,14 +10,15 @@ from typing import Any, Mapping
 
 def _number(value: Any, path: str) -> float:
     """Read a strictly positive finite monetary amount or FX rate."""
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or value <= 0
-    ):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{path} must be a finite positive number")
-    return float(value)
+    try:
+        number = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{path} must be a finite positive number") from exc
+    if not math.isfinite(number) or number <= 0:
+        raise ValueError(f"{path} must be a finite positive number")
+    return number
 
 
 def _date(value: Any, path: str) -> str:
@@ -73,6 +74,11 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
     cap = config[cap_names[0]]
     _unique(cap, "capex")
     names = {k.lower(): k for k in cap if isinstance(k, str)}
+    for key in ("price_basis", "price_basis_applied", "cost_basis_year"):
+        if key in names and names[key] != key:
+            raise ValueError(
+                f"native CAPEX requires canonical capex.{key}; got {names[key]}"
+            )
     if cap_names[0] != "capex" or any(
         names.get(k, k) != k for k in ("input", "native_input_applied")
     ):
@@ -226,13 +232,22 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("top-level CAPEX alias conflicts with capex.input")
     basis = cap.get("price_basis", cap.get("price_basis_applied"))
-    if basis is not None:
+    if basis is not None or "price_basis_applied" in cap:
         if not isinstance(basis, Mapping) or basis.get("price_year") != int(
             price_date[:4]
         ):
             raise ValueError(
                 "capex.input.price_date must match capex.price_basis.price_year"
             )
+    if "price_basis" in cap:
+        from finance.capex_price_basis import capex_escalation_factor
+
+        try:
+            capex_escalation_factor(config)
+        except (TypeError, OverflowError) as exc:
+            raise ValueError(
+                "capex.price_basis contains an invalid numeric input"
+            ) from exc
     usd = amount / rate if currency == "LKR" else amount
     if not math.isfinite(usd) or usd <= 0:
         raise ValueError("capex.input resolves to a nonfinite or zero USD amount")
@@ -243,7 +258,45 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
             )
         factor = 1.0
         if "price_basis_applied" in cap:
-            factor = cap["price_basis_applied"].get("factor")
+            saved_basis = cap["price_basis_applied"]
+            from finance.capex_price_basis import capex_escalation_factor
+
+            # Rebuild only the pricing declaration to validate the cached amount
+            # against today's draw schedule, COD and construction periods.
+            pricing_config = dict(config)
+            pricing_capex = dict(cap)
+            pricing_capex.pop("price_basis_applied")
+            pricing_capex["price_basis"] = {
+                key: saved_basis[key]
+                for key in ("price_year", "escalation_pct", "source")
+                if key in saved_basis
+            }
+            pricing_config["capex"] = pricing_capex
+            try:
+                expected = capex_escalation_factor(pricing_config)
+            except (TypeError, OverflowError) as exc:
+                raise ValueError(
+                    "capex.price_basis_applied contains an invalid numeric input"
+                ) from exc
+            if (
+                expected is None
+                or any(
+                    saved_basis.get(key) != expected[key]
+                    for key in (
+                        "factor",
+                        "close_year",
+                        "cod_year",
+                        "construction_periods",
+                        "price_year",
+                        "escalation_pct",
+                    )
+                )
+                or saved_basis.get("usd_total_at_price_year") != usd
+            ):
+                raise ValueError(
+                    "native CAPEX price basis is stale; start from the authored config"
+                )
+            factor = saved_basis.get("factor")
             factor = _number(factor, "capex.price_basis_applied.factor")
         if cap.get("usd_total") != usd * factor:
             raise ValueError(
