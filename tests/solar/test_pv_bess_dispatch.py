@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -387,6 +388,46 @@ def test_tariff_guards_refuse_each_bad_value(
     assert pbd.TariffConfig.from_mapping(cfg["tariff"]).priority_term_years == 15
     with pytest.raises(ValueError, match=message):
         pbd.TariffConfig.from_mapping({**cfg["tariff"], **changes})
+
+
+# #1590 assurance A-1: the shared ``_number`` helper refuses a bool before ``float()`` can
+# turn ``True`` into 1.0. For each block that calls it, the same key at 1.0 is not refused
+# as "not a number" (it may be accepted, or refused by a later range guard), and at ``True``
+# it is refused with the bool message, so the bool check and nothing else refuses it.
+@pytest.mark.parametrize(
+    ("block", "key"),
+    [
+        ("bess", "power_mw"),
+        ("bess", "energy_mwh"),
+        ("bess", "min_soc_fraction"),
+        ("dispatch", "export_limit_mw"),
+        ("dispatch", "cyclic_soc_tolerance_mwh"),
+        ("tariff", "wind_lkr_per_kwh"),
+    ],
+)
+def test_number_guard_refuses_a_bool_and_only_a_bool(
+    cfg: Dict[str, Any], block: str, key: str
+) -> None:
+    build = {
+        "bess": pbd.BessConfig.from_mapping,
+        "dispatch": pbd.DispatchConfig.from_mapping,
+        "tariff": pbd.TariffConfig.from_mapping,
+    }[block]
+    message = rf"{block}\.{key} must be a number; got True"
+    try:
+        build({**cfg[block], key: 1.0})
+    except ValueError as exc:
+        assert not re.search(message, str(exc)), exc
+    with pytest.raises(ValueError, match=message):
+        build({**cfg[block], key: True})
+
+
+def test_number_helper_refuses_bools_but_takes_ints() -> None:
+    assert pbd._number(1, "x") == 1.0
+    assert pbd._number(0, "x") == 0.0
+    for flag in (True, False):
+        with pytest.raises(ValueError, match=r"x must be a number; got (True|False)"):
+            pbd._number(flag, "x")
 
 
 def test_dispatcher_input_guards(
