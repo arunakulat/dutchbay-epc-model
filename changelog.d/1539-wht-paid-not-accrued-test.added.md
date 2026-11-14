@@ -1,0 +1,1 @@
+A test now tells the WHT gross-up on balloon interest paid apart from interest accrued (#1539, #1526 assurance A-4). It runs the capitalising base case with `wht_gross_up` on, where the two differ, so a mutant that reads the accrued column fails. Test only; no KPI moves.
