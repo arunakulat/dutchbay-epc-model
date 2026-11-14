@@ -256,8 +256,13 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
     cap_mw = float(scenario["generation"]["technologies"]["wind"]["capacity_mw"])
     a_limit = float(cfg["limits"]["standardised_ppa_mw"]) - cap_mw
 
+    reserve = float(bcfg["black_start_reserve_mwh"])
+
     def run_dispatch(
-        opts: List[Dict[str, Any]], rtes: Any, cap: Optional[float]
+        opts: List[Dict[str, Any]],
+        rtes: Any,
+        cap: Optional[float],
+        floor: Optional[float] = None,
     ) -> wbo.DispatchResult:
         return wbo.dispatch(
             prof["poi_mw"],
@@ -267,9 +272,13 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
             round_trip_efficiency=rtes,
             window_utc_hours=window_hours,
             export_cap_mw=cap,
+            reserve_mwh=reserve if floor is None else floor,
         )
 
+    # Every cycled option keeps the black-start reserve; the no-reserve run is reported only
+    # to show what giving up the function would be worth.
     disp = {r: run_dispatch(cycled, rte, cap) for r, cap in readings.items()}
+    disp_free = {r: run_dispatch(cycled, rte, cap, 0.0) for r, cap in readings.items()}
 
     def energy(opt: Mapping[str, Any], reading: str) -> Tuple[float, float, float]:
         if opt["operation"] != "cycled":
@@ -293,6 +302,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         rte_: float = rte,
         fade: float = 0.0,
         ym: float = 1.0,
+        overrides: Optional[Mapping[str, Any]] = None,
     ) -> Dict[str, Any]:
         return wbo.scenario_with_battery(
             scenario,
@@ -315,10 +325,14 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
             ),
             residual_fade=fade,
             wind_yield_multiplier=ym,
+            scenario_overrides=overrides,
         )
 
     wind_only = _kpis(scenario)
     rate = wind_only["discount_rate_used"]
+    # The scenario's WACC moves with gearing, so a battery also re-discounts the whole wind
+    # project. Pinning the rate at the wind-only value isolates the battery's own effect.
+    pinned = {"wacc.drives_discount_rate": False, "returns.project_discount_rate": rate}
     timeline = scenario["timeline"]
 
     def pretax(
@@ -373,6 +387,23 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 "equivalent_full_cycles_per_year": d / float(opt["energy_mwh"]),
                 "bases": {},
             }
+            if opt["operation"] == "cycled":
+                i_free = [o["name"] for o in cycled].index(opt["name"])
+                d0 = float(disp_free[reading].delivered_mwh[i_free])
+                c0 = float(disp_free[reading].charged_mwh[i_free])
+                k0 = _kpis(scen(opt, delivered=d0, charged=c0, basis=base_basis))
+                rr["black_start_reserve_mwh"] = reserve
+                rr["without_reserve_base_basis"] = {
+                    "delivered_mwh_per_year": d0,
+                    "delta_project_npv_vs_wind_only": k0["project_npv"]
+                    - wind_only["project_npv"],
+                }
+            kp = _kpis(
+                scen(opt, delivered=d, charged=c, basis=base_basis, overrides=pinned)
+            )
+            rr["pinned_discount_rate_delta_project_npv_base_basis"] = (
+                kp["project_npv"] - wind_only["project_npv"]
+            )
             for basis in bases:
                 k = _kpis(scen(opt, delivered=d, charged=c, basis=basis))
                 k["delta_project_npv_vs_wind_only"] = (
@@ -422,6 +453,15 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 )
             row["readings"][reading] = rr
         out_opts[opt["name"]] = row
+
+    # The cheapest option that keeps the function and fits every reading of the limit.
+    first = next(iter(readings))
+    fitting = {
+        n: r["readings"][first]["bases"][base_basis]["delta_project_npv_vs_wind_only"]
+        for n, r in out_opts.items()
+        if r["fits_reading_A_turbine_plus_battery_le_limit"]
+    }
+    recommended = max(fitting, key=lambda n: fitting[n]) if fitting else None
 
     # RTE grid (base basis, cycled options): one dispatch per grid point and reading.
     rte_grid: Dict[str, Any] = {}
@@ -574,6 +614,9 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         all_in_usd_per_contracted_kwh=float(price["mode"]),
     )
 
+    # A cycled firming unit keeps both the ramp energy and the black-start reserve in hand.
+    firming_reserve = reserve + float(worst["energy_mwh"])
+
     def firming_kpis(
         unit: Mapping[str, float], operation: str, reading: Optional[str]
     ) -> Dict[str, Any]:
@@ -588,6 +631,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 round_trip_efficiency=rte,
                 window_utc_hours=window_hours,
                 export_cap_mw=readings[reading],
+                reserve_mwh=firming_reserve,
             )
             d, c = float(res.delivered_mwh[0]), float(res.charged_mwh[0])
         k = _kpis(
@@ -614,6 +658,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         k["delta_equity_npv_vs_wind_only"] = k["equity_npv"] - wind_only["equity_npv"]
         return dict(unit) | {
             "operation": operation,
+            "reserve_mwh": firming_reserve if operation == "cycled" else None,
             "delivered_mwh_per_year": d,
             "charged_mwh_per_year": c,
             "kpis": k,
@@ -653,6 +698,25 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         | {"window_wind_mwh_per_year": prof["window_wind_mwh"]},
         "wind_only": wind_only,
         "options": out_opts,
+        "recommended_option_reading_A": recommended,
+        "wind_only_pinned_discount_rate": _kpis(
+            wbo.scenario_with_battery(
+                scenario,
+                power_mw=0.0,
+                energy_mwh=0.0,
+                operation="held",
+                usd_per_kwh=0.0,
+                om_usd_per_dc_kwh_year=0.0,
+                dc_per_nominal=1.0,
+                round_trip_efficiency=rte,
+                delivered_mwh=0.0,
+                charged_mwh=0.0,
+                peak_rate=wind_rate,
+                wind_rate=wind_rate,
+                contract_years=int(tcfg["contract_years"]),
+                scenario_overrides=pinned,
+            )
+        ),
         "rte_grid_delta_project_npv_base_basis": rte_grid,
         "monte_carlo_base_basis": {"n_trials": n, "seed": int(mc["seed"])} | mc_out,
         "down_ramp_illustrative": down_ramp,

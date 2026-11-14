@@ -121,6 +121,10 @@ battery:
   om_usd_per_dc_kwh_year: 1.80    # input B20 (#1646 basis), LKR-denominated at the scenario FX
   dc_per_nominal: 1.1             # input B20 placeholder
   round_trip_efficiency: 0.85     # repository value; every loss booked on charge
+  # ASSUMPTION (as the held 0.5 MW / 0.5 MWh option): the energy a battery must keep to
+  # black-start the turbine. A cycled option never discharges for revenue below it, so it keeps
+  # the function after the evening window. The firming unit keeps this plus its down-ramp energy.
+  black_start_reserve_mwh: 0.5
 
 options:
   # power_mw / energy_mwh; operation: cycled (daily, 4 h, earns the peak rate) or held (kept for
@@ -151,12 +155,12 @@ down_ramp:
     offer_usd_per_dc_kwh: 90.0009          # whole offer over DC installed energy
     dc_block_usd_per_dc_kwh: 72.6308       # the offer's battery (DC) line over DC installed energy
     ac_skid_usd: 229072.36                 # one PCS + MV transformer skid
-    ac_skid_mw: 10.08                      # 4 x 2.52 MW PCS, 10.1 MVA
+    ac_skid_mw: 10.0                       # about 10 MW per skid (rounded)
     ems_usd: 41126.89                      # SCADA and EMS, per site
     install_transport_share: 0.072450      # installation guidance, commissioning and CIF transport
     ltsa_share_of_supply_per_year: 0.02    # the offer's LTSA: 30% of supply over 15 years
-    usable_per_dc: 0.909050                # 40.2 MWh usable at the connection point of 44.222 DC
-    smallest_block_dc_mwh: 20.101          # the smallest DC block offered with one skid (0.5C)
+    usable_per_dc: 0.91                    # usable at the connection point per DC kWh (rounded)
+    smallest_block_dc_mwh: 20.0            # the smallest DC block offered with one skid, about 0.5C (rounded)
     # ASSUMPTION: 9.5 MW from under 1 MWh is about 11C, beyond the offered energy cells; a
     # power-cell premium on the DC rate brackets it. No supplier has quoted such a unit.
     power_cell_premium: [1.0, 3.0]

@@ -77,6 +77,7 @@ CONFIG_KEYS: Dict[str, Optional[Tuple[str, ...]]] = {
         "om_usd_per_dc_kwh_year",
         "dc_per_nominal",
         "round_trip_efficiency",
+        "black_start_reserve_mwh",
     ),
     "options": None,
     "down_ramp": (
@@ -215,10 +216,14 @@ def whole_wind_peak_rate(
 
 
 def stacked_rate(wind: Sequence[float], component: Sequence[float]) -> PeakRate:
-    """The wind tariff plus the BESS component, per discharged kWh."""
+    """The wind tariff plus the BESS component, per discharged kWh.
+
+    The component's own escalable part (PUCSL's rounding remainder) is kept, as in
+    :func:`whole_wind_peak_rate`.
+    """
     return PeakRate(
         non_escalable=float(wind[0]) + float(component[0]),
-        escalable=float(wind[1]) + max(float(component[1]), 0.0),
+        escalable=float(wind[1]) + float(component[1]),
     )
 
 
@@ -373,6 +378,7 @@ def dispatch(
     round_trip_efficiency: Union[float, Sequence[float]],
     window_utc_hours: Sequence[int],
     export_cap_mw: Optional[float],
+    reserve_mwh: Union[float, Sequence[float]] = 0.0,
 ) -> DispatchResult:
     """Charge from the turbine only, outside the window; discharge only in the window.
 
@@ -381,6 +387,9 @@ def dispatch(
     the state of charge and the export headroom ``export_cap_mw - wind`` (``None``: no cap).
     The turbine is never curtailed for the battery. Leftover energy carries to the next day.
     ``round_trip_efficiency`` is one value or one per size, so a Monte Carlo runs in one pass.
+    ``reserve_mwh`` (one value or one per size) is a state-of-charge floor that discharge for
+    revenue never draws below: the energy held for black start or down-ramp firming. It is
+    charged first, like any other energy, and never released in this dispatch.
     """
     p = np.asarray(power_mw, dtype=np.float64)
     e = np.asarray(energy_mwh, dtype=np.float64)
@@ -389,6 +398,9 @@ def dispatch(
     rte = np.broadcast_to(np.asarray(round_trip_efficiency, dtype=np.float64), p.shape)
     if (rte <= 0.0).any() or (rte > 1.0).any():
         raise ValueError("round-trip efficiency must be in (0, 1]")
+    floor = np.broadcast_to(np.asarray(reserve_mwh, dtype=np.float64), p.shape)
+    if (floor < 0.0).any() or (floor > e).any():
+        raise ValueError("the reserve must be in [0, energy]")
     hours = np.array([int(s[8:10]) for s in stamps_utc])
     years = np.array([int(s[:4]) for s in stamps_utc])
     window = np.isin(hours, np.asarray(window_utc_hours))
@@ -400,7 +412,9 @@ def dispatch(
     for i in range(len(wind_mw)):
         w = float(wind_mw[i])
         if window[i]:
-            out = np.minimum(np.minimum(p, max(cap - w, 0.0)), soc)
+            out = np.minimum(
+                np.minimum(p, max(cap - w, 0.0)), np.maximum(soc - floor, 0.0)
+            )
             soc -= out
             d[years[i]] += out
         else:
@@ -453,6 +467,10 @@ def scenario_with_battery(
     premium over the wind tariff on the delivered kWh for ``contract_years``. A ``held`` battery
     is never cycled: capex and O&M only. ``window_wind_mwh`` > 0 also pays the premium on the
     turbine's own window exports (the all-window-exports reading).
+
+    Conservative simplifications, stated rather than modelled: the battery keeps cycling (and
+    losing the round trip) after the contract, where an operator would hold it; standby and
+    auxiliary load (BMS, HVAC) is excluded for every option.
 
     Raises:
         ValueError: On an unknown operation, a negative premium or inconsistent energy.

@@ -7,12 +7,17 @@ Oracles do not come from the code under test (TEST-01):
   for floating), and the whole wind peak rate 20.80 / 0.90 + 27.08 + 4.93 / 0.90;
 * a hand-worked dispatch on a constant-wind synthetic day (charge hours, export headroom and
   state of charge carried to the next day);
+* hand-worked dispatches that bind the turbine's output on charge and hold a black-start
+  reserve on discharge;
 * the closed-form ramp triangle rated x minutes / 2 for the down-ramp firming energy;
+* a hand-built pre-tax cash flow for the battery's own view, and a hand-built supplier price;
 * responsiveness of the engine (ARCH-04): a higher peak rate raises project NPV, a held battery
   lowers it, and a zero battery leaves the wind scenario's KPIs unchanged.
 
-The NASA POWER reference is not in the repository, so the CLI test runs on a synthetic profile;
-the committed summary is checked against the committed config and scenario bytes.
+The NASA POWER reference is not in the repository, so the profile tests run on synthetic files
+(pinned with an independently computed digest) and the CLI test on a synthetic profile. The
+committed summary is checked against the committed config and scenario bytes, and one option's
+committed figures are recomputed through the engine from the committed energies.
 """
 
 from __future__ import annotations
@@ -80,7 +85,11 @@ def test_derive_rates_builds_the_whole_wind_peak_rate_and_the_stacked_rate() -> 
         20.80 / 0.9 + 27.08 + (3.02 - 2.72 / 0.9) + 4.93 / 0.9, abs=1e-9
     )
     assert rates["whole_wind_peak_rate"].total == pytest.approx(55.67, abs=0.005)
-    assert rates["stacked"].total == pytest.approx(25.73 + 27.08, abs=1e-9)
+    # Stacked keeps the component's escalable remainder, as the whole rate does.
+    assert rates["stacked"].total == pytest.approx(
+        25.73 + 27.08 + (3.02 - 2.72 / 0.9), abs=1e-9
+    )
+    assert rates["stacked"].escalable == pytest.approx(4.93 + 3.02 - 2.72 / 0.9)
     assert rates["wind"].total == pytest.approx(25.73)
 
 
@@ -115,6 +124,8 @@ def test_committed_config_validates() -> None:
         (lambda c: c["battery"].update({"extra": 1}), "unknown"),
         (lambda c: c["revenue_bases"].update({"base": "invented"}), "revenue bases"),
         (lambda c: c["options"].append(dict(c["options"][0])), "unique"),
+        (lambda c: c["down_ramp"]["supplier"].update({"extra": 1}), "supplier"),
+        (lambda c: c["down_ramp"]["supplier"].pop("usable_per_dc"), "supplier"),
     ],
 )
 def test_config_refuses_missing_unknown_and_inconsistent_keys(
@@ -147,6 +158,140 @@ def test_calibrated_cp_hits_the_target_and_stays_below_betz() -> None:
         wbo.calibrate_cp(speeds, 0.99, **curve)
 
 
+def test_generic_curve_is_zero_outside_cut_in_and_cut_out() -> None:
+    curve = {
+        "rotor_diameter_m": 100.0,
+        "air_density_kgm3": 1.2,
+        "rated_mw": 3.0,
+        "cut_in_ms": 3.0,
+        "cut_out_ms": 25.0,
+    }
+    speeds = np.array([2.9, 4.0, 20.0, 25.1])
+    out = wbo.generic_power_mw(speeds, cp=0.4, **curve)
+    area = math.pi * 50.0**2
+    assert out[0] == 0.0 and out[3] == 0.0
+    assert out[1] == pytest.approx(0.5 * 1.2 * area * 0.4 * 4.0**3 / 1e6)
+    assert out[2] == 3.0
+
+
+def _digest(block: Dict[str, Any]) -> str:
+    text = json.dumps(block, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _write_power_year(
+    root: Path, year: int, speeds: List[float], lon: float, lat: float
+) -> str:
+    block = {
+        "WS50M": {f"{year}0101{h:02d}": v for h, v in enumerate(speeds)},
+    }
+    doc = {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [lon, lat, 10.0]},
+        "properties": {"parameter": block},
+    }
+    (root / "pt").mkdir(exist_ok=True)
+    (root / "pt" / f"wsd_{year}.json").write_text(json.dumps(doc))
+    return _digest(block)
+
+
+def test_reference_loader_checks_pin_point_and_fill(tmp_path: Path) -> None:
+    pins = {
+        "2015": _write_power_year(tmp_path, 2015, [5.0, 6.0], 79.75, 8.29),
+        "2016": _write_power_year(tmp_path, 2016, [7.0, 8.0], 79.75, 8.29),
+    }
+    kw: Dict[str, Any] = {
+        "subdir": "pt",
+        "first_year": 2015,
+        "last_year": 2016,
+        "latitude_deg_n": 8.29,
+        "longitude_deg_e": 79.75,
+    }
+    stamps, ws = wbo.load_reference_ws50(tmp_path, pins=pins, **kw)
+    assert stamps == ["2015010100", "2015010101", "2016010100", "2016010101"]
+    assert ws.tolist() == [5.0, 6.0, 7.0, 8.0]
+    with pytest.raises(ValueError, match="pin"):
+        wbo.load_reference_ws50(tmp_path, pins=pins | {"2016": "0" * 64}, **kw)
+    with pytest.raises(ValueError, match="point"):
+        wbo.load_reference_ws50(tmp_path, pins=pins, **(kw | {"latitude_deg_n": 8.40}))
+    pins["2016"] = _write_power_year(tmp_path, 2016, [7.0, -999.0], 79.75, 8.29)
+    with pytest.raises(ValueError, match="fill"):
+        wbo.load_reference_ws50(tmp_path, pins=pins, **kw)
+
+
+def _synthetic_profile_inputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Dict[str, Any]:
+    """A pinned two-year reference, its config and a transfer summary, all in tmp_path."""
+    rng = np.random.default_rng(5)
+    pins: Dict[str, str] = {}
+    root = tmp_path / "power"
+    root.mkdir()
+    for year in (2015, 2016):
+        speeds = [round(float(v), 2) for v in rng.rayleigh(6.0, 24)]
+        block = {"WS50M": {f"{year}0101{h:02d}": v for h, v in enumerate(speeds)}}
+        doc = {
+            "geometry": {"coordinates": [79.75, 8.29, 10.0]},
+            "properties": {"parameter": block},
+        }
+        (root / "pt").mkdir(exist_ok=True)
+        (root / "pt" / f"wsd_{year}.json").write_text(json.dumps(doc))
+        pins[str(year)] = _digest(block)
+    ref = {
+        "reference": {
+            "dir_env": "WIND_BESS_TEST_POWER_DIR",
+            "height_m": 50.0,
+            "first_year": 2015,
+            "last_year": 2016,
+            "points": {
+                "turbine": {
+                    "subdir": "pt",
+                    "latitude_deg_n": 8.29,
+                    "longitude_deg_e": 79.75,
+                    "parameter_sha256": pins,
+                }
+            },
+        }
+    }
+    ref_path = tmp_path / "ref.yaml"
+    ref_path.write_text(yaml.safe_dump(ref))
+    summary = {
+        "shear": {"extrapolation": {"alpha_all": 0.2}},
+        "long_term_130m": {"mean_speed_ms": 8.0},
+        "yield": {"gross_capacity_factor": 0.45, "total_loss_pct": 12.0},
+    }
+    summary_path = tmp_path / "summary.json"
+    summary_path.write_text(json.dumps(summary))
+    monkeypatch.setenv("WIND_BESS_TEST_POWER_DIR", str(root))
+    cfg = _cfg()
+    cfg["profile"] |= {
+        "reference_config": str(ref_path),
+        "transfer_summary": str(summary_path),
+    }
+    scenario = _scenario()
+    scenario["generation"]["technologies"]["wind"]["capacity_factor"] = 0.45 * 0.88
+    return {"cfg": cfg, "scenario": scenario}
+
+
+def test_profile_window_exports_are_net_and_the_cf_guard_holds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = _cli()
+    inputs = _synthetic_profile_inputs(tmp_path, monkeypatch)
+    prof = cli.build_profile(inputs["cfg"], inputs["scenario"])
+    assert prof["checks"]["gross_cf"] == pytest.approx(0.45, abs=1e-6)
+    window = np.isin([int(s[8:10]) for s in prof["stamps"]], [12, 13, 14, 15])
+    poi_window_per_year = float(prof["poi_mw"][window].sum()) / 2.0
+    # Window exports carry the total loss (time and power); the POI profile only the power
+    # losses (electrical 2%, other 1%).
+    assert prof["window_wind_mwh"] / poi_window_per_year == pytest.approx(
+        (1 - 0.12) / (0.98 * 0.99)
+    )
+    inputs["scenario"]["generation"]["technologies"]["wind"]["capacity_factor"] += 0.01
+    with pytest.raises(ValueError, match="reproduce"):
+        cli.build_profile(inputs["cfg"], inputs["scenario"])
+
+
 # ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
@@ -171,6 +316,67 @@ def test_dispatch_matches_a_hand_worked_constant_wind_day() -> None:
     # refill again.
     assert capped.delivered_mwh[0] == pytest.approx(4.0)
     assert capped.charged_mwh[0] == pytest.approx(5.0 + 2.5 + 2.5)
+
+
+def test_dispatch_charge_is_limited_by_the_turbine() -> None:
+    stamps = _stamps(2)
+    wind = np.full(len(stamps), 0.3)
+    res = wbo.dispatch(
+        wind,
+        stamps,
+        power_mw=[1.0],
+        energy_mwh=[4.0],
+        round_trip_efficiency=0.8,
+        window_utc_hours=[12, 13, 14, 15],
+        export_cap_mw=None,
+    )
+    # Day 1: hours 0-11 take 0.3 MW in (3.6 in, 2.88 stored), all of it out in the window;
+    # hours 16-23 take 2.4 in (1.92 stored). Day 2: 2.6 in fills it to 4 by hour 9, 4 out in
+    # the window, then 2.4 in again.
+    assert res.delivered_mwh[0] == pytest.approx(2.88 + 4.0)
+    assert res.charged_mwh[0] == pytest.approx(3.6 + 2.4 + 2.6 + 2.4)
+
+
+def test_dispatch_never_draws_below_the_black_start_reserve() -> None:
+    stamps = _stamps(2)
+    wind = np.full(len(stamps), 5.0)
+    res = wbo.dispatch(
+        wind,
+        stamps,
+        power_mw=[1.0],
+        energy_mwh=[4.0],
+        round_trip_efficiency=0.8,
+        window_utc_hours=[12, 13, 14, 15],
+        export_cap_mw=None,
+        reserve_mwh=1.0,
+    )
+    # Fill 4 (5 in); 3 out each window, leaving the 1 MWh reserve; refill 3 (3.75 in) twice.
+    assert res.delivered_mwh[0] == pytest.approx(6.0)
+    assert res.charged_mwh[0] == pytest.approx(5.0 + 3.75 + 3.75)
+    many = _stamps(28)
+    varied = np.random.default_rng(9).uniform(0.0, 9.5, len(many))
+    sizes = {"power_mw": [0.5, 2.0], "energy_mwh": [2.0, 8.0]}
+    held = wbo.dispatch(
+        varied,
+        many,
+        round_trip_efficiency=0.85,
+        window_utc_hours=[12, 13, 14, 15],
+        export_cap_mw=None,
+        reserve_mwh=[0.5, 3.0],
+        **sizes,
+    )
+    assert (held.delivered_mwh <= 28 * (np.array([2.0, 8.0]) - [0.5, 3.0]) + 1e-9).all()
+    with pytest.raises(ValueError, match="reserve"):
+        wbo.dispatch(
+            varied,
+            many,
+            round_trip_efficiency=0.85,
+            window_utc_hours=[12],
+            export_cap_mw=None,
+            reserve_mwh=2.5,
+            power_mw=[0.5],
+            energy_mwh=[2.0],
+        )
 
 
 def test_dispatch_invariants_on_a_varying_profile() -> None:
@@ -242,11 +448,44 @@ def test_firming_unit_prices_follow_the_hand_build_up() -> None:
     assert unit["om_usd_per_year"] == pytest.approx(cif * 0.02)
     assert prices["power_heavy_cells_x3"]["cif_usd"] > unit["cif_usd"]
     block = prices["smallest_block"]
-    assert block["cif_usd"] == pytest.approx(20_101 * supplier["offer_usd_per_dc_kwh"])
+    assert supplier["smallest_block_dc_mwh"] == 20.0
+    assert supplier["usable_per_dc"] == 0.91
+    assert block["cif_usd"] == pytest.approx(20_000 * supplier["offer_usd_per_dc_kwh"])
+    assert block["energy_mwh"] == pytest.approx(18.2)
     with pytest.raises(ValueError, match="one skid"):
         wbo.firming_unit_prices(
             supplier, power_mw=12.0, energy_mwh=0.8, all_in_usd_per_contracted_kwh=140.0
         )
+
+
+def test_battery_pretax_matches_a_hand_built_cash_flow() -> None:
+    out = wbo.battery_pretax(
+        energy_mwh=1.0,
+        usd_per_kwh=100.0,
+        om_usd_per_dc_kwh_year=2.0,
+        dc_per_nominal=1.0,
+        delivered_mwh=100.0,
+        charged_mwh=125.0,
+        peak_rate=wbo.PeakRate(50.0, 0.0),
+        wind_rate=wbo.PeakRate(20.0, 0.0),
+        contract_years=2,
+        term_years=3,
+        lkr_per_usd=100.0,
+        index_rate=0.0,
+        pre_operation_years=0,
+        opex_escalation=0.0,
+        capex_escalation=0.0,
+        construction_years=1,
+        discount_rate=0.10,
+    )
+    # Contract years: (100 x 50 - 125 x 20) MWh-LKR x 1000 / 100 = 25,000, less O&M 2,000.
+    # Year 3 (after the contract): (100 x 20 - 125 x 20) x 10 = -5,000, less 2,000.
+    flows = [-100_000.0, 23_000.0, 23_000.0, -7_000.0]
+    assert out["capex_usd_at_draw"] == pytest.approx(100_000.0)
+    assert out["year1_net_usd"] == pytest.approx(23_000.0)
+    assert out["npv_usd"] == pytest.approx(
+        sum(f / 1.1**t for t, f in enumerate(flows)), abs=1e-6
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +528,32 @@ def test_scenario_mapping_books_capex_loss_and_premium() -> None:
     rev = s["generation"]["technologies"]["bess_1"]["revenue"]
     assert rev["tariff_lkr_per_kwh"] == pytest.approx(55.6667 - 25.73, abs=1e-3)
     assert rev["cycles_per_year"] == pytest.approx(700.0 / (2.0 * 0.85))
-    held = _with(scenario, operation="held")["generation"]["technologies"]["bess_1"][
-        "revenue"
-    ]
+    # Escalable premium: the whole rate's escalable part less the wind tariff's 4.93.
+    assert rev["escalable_om_lkr_per_kwh"] == pytest.approx(
+        4.93 / 0.9 + (3.02 - 2.72 / 0.9) - 4.93, abs=1e-9
+    )
+    assert rev["contract_years"] == 15
+    # O&M: 2 MWh x 1000 x 1.1 DC x 1.80 USD per DC kWh-year, in the opex total too.
+    om = 2000 * 1.1 * 1.8
+    assert s["opex"]["usd_per_year"] - scenario["opex"][
+        "usd_per_year"
+    ] == pytest.approx(om)
+    assert s["opex"]["currency_split"]["components"][-1] == {
+        "name": "bess_om",
+        "usd_per_year": pytest.approx(om),
+        "usd_share": 0.0,
+    }
+    held_s = _with(scenario, operation="held")
+    held = held_s["generation"]["technologies"]["bess_1"]["revenue"]
     assert held["tariff_lkr_per_kwh"] == 0.0
+    # A held battery is never cycled, whatever energies are passed: no round-trip loss.
+    assert held_s["generation"]["technologies"]["wind"]["capacity_factor"] == cf0
+    exports = _with(scenario, window_wind_mwh=7000.0)["generation"]["technologies"][
+        "bess_1"
+    ]["revenue"]
+    assert exports["cycles_per_year"] == pytest.approx((700.0 + 7000.0) / (2.0 * 0.85))
+    with pytest.raises(ValueError, match="below"):
+        _with(scenario, peak_rate=wbo.PeakRate(10.0, 0.0))
 
 
 def test_engine_responds_to_the_battery_and_the_rate() -> None:
@@ -330,7 +591,7 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
     cfg["options"] = [
         o for o in cfg["options"] if o["name"] in ("held_0_5_0_5", "cycled_0_5_2")
     ]
-    cfg["monte_carlo"] |= {"n_trials": 4, "rte_grid": [0.85]}
+    cfg["monte_carlo"] |= {"n_trials": 8, "rte_grid": [0.85]}
     out = cli.json_clean(cli.run(cfg))
     json.dumps(out, allow_nan=False)
     row = out["options"]["cycled_0_5_2"]
@@ -346,6 +607,39 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
     for unit in firming.values():
         assert unit["kpis"]["delta_project_npv_vs_wind_only"] < 0
     assert firming["smallest_block_cycled|C"]["delivered_mwh_per_year"] > 0
+    # The cycled block keeps the black-start reserve plus the down-ramp energy.
+    assert firming["smallest_block_cycled|C"]["reserve_mwh"] == pytest.approx(
+        0.5 + 9.5 * 9.95 / 2 / 60
+    )
+    block_reserve = 0.5 + 9.5 * 9.95 / 2 / 60
+    held_back = wbo.dispatch(
+        wind,
+        stamps,
+        power_mw=[9.5],
+        energy_mwh=[18.2],
+        round_trip_efficiency=0.85,
+        window_utc_hours=[12, 13, 14, 15],
+        export_cap_mw=None,
+        reserve_mwh=block_reserve,
+    )
+    assert firming["smallest_block_cycled|C"][
+        "delivered_mwh_per_year"
+    ] == pytest.approx(float(held_back.delivered_mwh[0]))
+    for reading in ("B", "C"):
+        rr = row["readings"][reading]
+        assert rr["black_start_reserve_mwh"] == 0.5
+        assert rr["delivered_mwh_per_year"] <= 14 * (2.0 - 0.5) + 1e-9
+        assert (
+            rr["without_reserve_base_basis"]["delivered_mwh_per_year"]
+            >= rr["delivered_mwh_per_year"]
+        )
+    assert out["recommended_option_reading_A"] in {"held_0_5_0_5", "cycled_0_5_2"}
+    # Every Monte Carlo trial is measured against wind-only at the same wind yield, so a held
+    # battery (capex and O&M only) never beats it.
+    held_mc = out["monte_carlo_base_basis"]["held_0_5_0_5"][
+        "delta_project_npv_vs_wind_only"
+    ]
+    assert held_mc["share_positive"] == 0.0 and held_mc["max"] < 0.0
 
 
 def test_committed_summary_pins_the_committed_inputs() -> None:
@@ -357,7 +651,8 @@ def test_committed_summary_pins_the_committed_inputs() -> None:
         == hashlib.sha256(scenario_path.read_bytes()).hexdigest()
     )
     assert summary["revenue_bases"]["base"] == "whole_wind_peak_rate"
-    # No private price is committed for the down-ramp unit.
+    # The firming unit is sized by the ramp triangle (its prices are the owner-approved
+    # generic supplier figures in the config).
     firming = summary["down_ramp_illustrative"]["firming_unit_base_basis"]
     assert firming["power_heavy_cells_x1"]["energy_mwh"] == pytest.approx(
         9.5 * 9.95 / 2 / 60
@@ -371,3 +666,39 @@ def test_committed_summary_pins_the_committed_inputs() -> None:
         summary["profile"]["target_gross_cf"],
         abs_tol=1e-6,
     )
+
+
+def test_committed_option_figures_reproduce_through_the_engine() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    cfg = _cfg()
+    rates = wbo.derive_rates(cfg["tariff"])
+    bcfg = cfg["battery"]
+    scenario = _scenario()
+    wind_only = summary["wind_only"]["project_npv"]
+    for name in ("cycled_0_5_2", "held_0_5_0_5"):
+        row = summary["options"][name]
+        rr = row["readings"]["B"]
+        s = wbo.scenario_with_battery(
+            scenario,
+            power_mw=row["power_mw"],
+            energy_mwh=row["energy_mwh"],
+            operation=row["operation"],
+            usd_per_kwh=bcfg["usd_per_kwh"]["mode"],
+            om_usd_per_dc_kwh_year=bcfg["om_usd_per_dc_kwh_year"],
+            dc_per_nominal=bcfg["dc_per_nominal"],
+            round_trip_efficiency=bcfg["round_trip_efficiency"],
+            delivered_mwh=rr["delivered_mwh_per_year"],
+            charged_mwh=rr["charged_mwh_per_year"],
+            peak_rate=rates["whole_wind_peak_rate"],
+            wind_rate=rates["wind"],
+            contract_years=cfg["tariff"]["contract_years"],
+        )
+        delta = _engine_project_value(s) - wind_only
+        committed = rr["bases"]["whole_wind_peak_rate"][
+            "delta_project_npv_vs_wind_only"
+        ]
+        assert delta == pytest.approx(committed, rel=1e-9)
+        assert delta < 0
+    cycled = summary["options"]["cycled_0_5_2"]["readings"]["B"]
+    assert cycled["black_start_reserve_mwh"] == bcfg["black_start_reserve_mwh"]
+    assert summary["recommended_option_reading_A"] == "held_0_5_0_5"
