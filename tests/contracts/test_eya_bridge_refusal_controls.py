@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from fractions import Fraction
 from typing import Any
 
@@ -411,3 +411,253 @@ def test_d4_fabricated_method_model_attribution_still_reconciles_to_zero(
         manipulated.component("method_model").signed_delta_kwh.as_fraction()
         == expected_shift
     )
+
+
+@pytest.mark.parametrize(
+    ("override_kwargs", "error_match"),
+    [
+        (
+            {"decision": "apply_proposal_to_scenario"},
+            "finance proposal decision must retain the current basis",
+        ),
+        (
+            {"decision": 123},
+            "finance proposal decision must retain the current basis",
+        ),
+        (
+            {"default_off": False},
+            "finance proposal must be exactly default_off=True",
+        ),
+        (
+            {"default_off": 1},
+            "finance proposal must be exactly default_off=True",
+        ),
+        (
+            {"proposed_updates": ("candidate_p50",)},
+            "finance proposal updates must be the empty tuple",
+        ),
+        (
+            {"proposed_updates": []},
+            "finance proposal updates must be the empty tuple",
+        ),
+        (
+            {"target_scenario_id": "dutchbay_lendercase_2025Q4"},
+            "target_scenario_id must remain unavailable",
+        ),
+        (
+            {"candidate_capacity_factor": 0.42},
+            "candidate_capacity_factor must remain unavailable",
+        ),
+        (
+            {"candidate_p50": 1000.0},
+            "candidate_p50 must remain unavailable",
+        ),
+        (
+            {"candidate_p90": 900.0},
+            "candidate_p90 must remain unavailable",
+        ),
+        (
+            {"candidate_debt": 50_000_000.0},
+            "candidate_debt must remain unavailable",
+        ),
+        (
+            {"candidate_tariff": 0.082},
+            "candidate_tariff must remain unavailable",
+        ),
+        (
+            {"requires_separate_r3_rebaseline": False},
+            "a separate R3 re-baseline must remain required",
+        ),
+        (
+            {"requires_separate_r3_rebaseline": 1},
+            "a separate R3 re-baseline must remain required",
+        ),
+        (
+            {"issue_1110_state": "CLOSED"},
+            "issue_1110_state must remain OPEN_HOLD",
+        ),
+        (
+            {"issue_1110_state": 1110},
+            "issue_1110_state must remain OPEN_HOLD",
+        ),
+        (
+            {"apply_authorized": True},
+            "apply_authorized must be the exact boolean False",
+        ),
+        (
+            {"canonical_finance_eligible": True},
+            "canonical_finance_eligible must be the exact boolean False",
+        ),
+        (
+            {"bankable": True},
+            "bankable must be the exact boolean False",
+        ),
+        (
+            {"lender_eligible": True},
+            "lender_eligible must be the exact boolean False",
+        ),
+        (
+            {"board_eligible": True},
+            "board_eligible must be the exact boolean False",
+        ),
+        (
+            {"release_eligible": True},
+            "release_eligible must be the exact boolean False",
+        ),
+        (
+            {"apply_authorized": 0},
+            "apply_authorized must be the exact boolean False",
+        ),
+    ],
+)
+def test_finance_update_proposal_refuses_permissive_or_authorizing_fields(
+    override_kwargs: dict[str, Any],
+    error_match: str,
+) -> None:
+    valid_args: dict[str, Any] = {
+        "eya_claim_sha256": "0" * 64,
+        "operational_claim_sha256": "1" * 64,
+    }
+    kwargs = {**valid_args, **override_kwargs}
+    with pytest.raises(ValueError, match=error_match):
+        bridge.FinanceUpdateProposal(**kwargs)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value", "error_match"),
+    [
+        (
+            "decision",
+            "apply_basis",
+            "finance proposal decision must retain the current basis",
+        ),
+        (
+            "default_off",
+            False,
+            "finance proposal must be exactly default_off=True",
+        ),
+        (
+            "proposed_updates",
+            ("candidate_p50",),
+            "finance proposal updates must be the empty tuple",
+        ),
+        (
+            "target_scenario_id",
+            "scenario_1",
+            "target_scenario_id must remain unavailable",
+        ),
+        (
+            "candidate_capacity_factor",
+            0.5,
+            "candidate_capacity_factor must remain unavailable",
+        ),
+        (
+            "candidate_p50",
+            123.0,
+            "candidate_p50 must remain unavailable",
+        ),
+        (
+            "candidate_p90",
+            100.0,
+            "candidate_p90 must remain unavailable",
+        ),
+        (
+            "candidate_debt",
+            1000.0,
+            "candidate_debt must remain unavailable",
+        ),
+        (
+            "candidate_tariff",
+            0.05,
+            "candidate_tariff must remain unavailable",
+        ),
+        (
+            "requires_separate_r3_rebaseline",
+            False,
+            "a separate R3 re-baseline must remain required",
+        ),
+        (
+            "issue_1110_state",
+            "CLOSED",
+            "issue_1110_state must remain OPEN_HOLD",
+        ),
+        (
+            "apply_authorized",
+            True,
+            "apply_authorized must be the exact boolean False",
+        ),
+        (
+            "canonical_finance_eligible",
+            True,
+            "canonical_finance_eligible must be the exact boolean False",
+        ),
+        (
+            "bankable",
+            True,
+            "bankable must be the exact boolean False",
+        ),
+        (
+            "lender_eligible",
+            True,
+            "lender_eligible must be the exact boolean False",
+        ),
+        (
+            "board_eligible",
+            True,
+            "board_eligible must be the exact boolean False",
+        ),
+        (
+            "release_eligible",
+            True,
+            "release_eligible must be the exact boolean False",
+        ),
+    ],
+)
+def test_finance_update_proposal_model_dump_fails_closed_on_post_init_tampering(
+    field: str,
+    bad_value: Any,
+    error_match: str,
+) -> None:
+    proposal = bridge.FinanceUpdateProposal(
+        eya_claim_sha256="0" * 64,
+        operational_claim_sha256="1" * 64,
+    )
+    object.__setattr__(proposal, field, bad_value)
+    with pytest.raises(ValueError, match=error_match):
+        proposal.model_dump()
+
+
+def test_finance_update_proposal_frozen_immutability() -> None:
+    proposal = bridge.FinanceUpdateProposal(
+        eya_claim_sha256="0" * 64,
+        operational_claim_sha256="1" * 64,
+    )
+    with pytest.raises(FrozenInstanceError):
+        proposal.bankable = True  # type: ignore[misc]
+    with pytest.raises(FrozenInstanceError):
+        proposal.default_off = False  # type: ignore[misc]
+
+
+def test_finance_update_proposal_model_dump_clean_snapshot() -> None:
+    proposal = bridge.FinanceUpdateProposal(
+        eya_claim_sha256="0" * 64,
+        operational_claim_sha256="1" * 64,
+    )
+    dumped = proposal.model_dump()
+    assert dumped["decision"] == "retain_current_canonical_basis_pending_r3"
+    assert dumped["default_off"] is True
+    assert dumped["proposed_updates"] == ()
+    assert dumped["target_scenario_id"] is None
+    assert dumped["candidate_capacity_factor"] is None
+    assert dumped["candidate_p50"] is None
+    assert dumped["candidate_p90"] is None
+    assert dumped["candidate_debt"] is None
+    assert dumped["candidate_tariff"] is None
+    assert dumped["apply_authorized"] is False
+    assert dumped["requires_separate_r3_rebaseline"] is True
+    assert dumped["issue_1110_state"] == "OPEN_HOLD"
+    assert dumped["canonical_finance_eligible"] is False
+    assert dumped["bankable"] is False
+    assert dumped["lender_eligible"] is False
+    assert dumped["board_eligible"] is False
+    assert dumped["release_eligible"] is False
