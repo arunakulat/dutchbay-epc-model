@@ -110,6 +110,8 @@ plant:
   # SPV overhead USD 0.15M/yr (B02, B28). No wind O&M: the turbine is the other project.
   grid_civils_development_usd: 2000000.0
   fixed_opex_usd_per_year: 150000.0
+  # Assumed 10% installed DC oversize over nominal energy (B20), not a supplier quote.
+  bess_dc_per_nominal: 1.1
 
 objective:
   # PRIMARY (PR 7; owner decision 2 of 2026-11-01, #1353 comment 6563070978, verbatim:

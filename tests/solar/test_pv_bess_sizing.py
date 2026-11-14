@@ -691,3 +691,51 @@ def test_cli_module_loads_without_running() -> None:
     cli = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cli)
     assert callable(cli.run)
+
+
+def test_unit_opex_takes_the_scenarios_pre_cod_escalation(
+    point_ctx: tuple[sz.Context, sz.PointInputs],
+    pricing: sz.Pricing,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The unit metric's year-1 O&M is the price-year cost escalated to COD (#1578).
+
+    The finance engine escalates opex.usd_per_year from opex.price_year to COD, so the
+    unit pre-tax metric must start from the same escalated year-1 cost. This runs
+    ``evaluate_point`` itself rather than restating the escalation (ASSURANCE-1646-03).
+    """
+    import dataclasses
+
+    ctx, point = point_ctx
+    scenario = _yaml(REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml")
+    basis = sz.project_opex_basis(scenario, 1.1, 150000)
+    ctx = dataclasses.replace(ctx, scenario=scenario, project_opex=basis)
+    esc = float(scenario["opex"]["escalation_pct"])
+    assert basis.pre_cod_years >= 2 and esc > 0
+    seen: list[float] = []
+    real = sz.unit_pretax_cashflows_usd
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        seen.append(kwargs["opex_usd_year1"])
+        return real(*args, **kwargs)
+
+    def evaluator(**_: Any) -> Dict[str, float]:
+        return {
+            "discount_rate_used": 0.1,
+            "project_npv": 0.0,
+            "project_irr": 0.1,
+            "equity_npv": 0.0,
+            "equity_irr": 0.1,
+            "min_dscr": 1.3,
+        }
+
+    monkeypatch.setattr(sz, "unit_pretax_cashflows_usd", spy)
+    sz.evaluate_point(
+        ctx, point, _trials(pricing, 2), has_base=False, evaluator=evaluator
+    )
+    _, unit, _ = basis.at_size(point.dc_mwp, point.bess_energy_mwh)
+    expected = unit * (1.0 + esc / 100.0) ** basis.pre_cod_years
+    assert seen == [pytest.approx(expected, rel=1e-12)] * 2
+    assert seen[0] != pytest.approx(
+        unit * (1.0 + esc / 100.0) ** (basis.pre_cod_years - 1)
+    )

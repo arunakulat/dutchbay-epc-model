@@ -14,6 +14,7 @@ primitive.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -29,6 +30,7 @@ _VERSION_PATH = _REPO_ROOT / "VERSION"
 
 #: Bump when the manifest's own field set changes (so consumers can branch on shape).
 MANIFEST_SCHEMA_VERSION = "1.0"
+NATIVE_CAPEX_MANIFEST_SCHEMA_VERSION = "1.1"
 
 
 @lru_cache(maxsize=1)
@@ -100,9 +102,14 @@ class RunManifest:
     seed: Optional[int]
     validation_mode: Optional[str]
     manifest_schema_version: str = MANIFEST_SCHEMA_VERSION
+    native_capex: Optional[Dict[str, Any]] = None
 
     def as_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        """Serialize optional native provenance without changing legacy payloads."""
+        result = asdict(self)
+        if result["native_capex"] is None:
+            del result["native_capex"]
+        return result
 
 
 def build_run_manifest(
@@ -118,6 +125,18 @@ def build_run_manifest(
     timestamp (seconds precision) is stamped.
     """
     return RunManifest(
+        native_capex=(
+            copy.deepcopy(dict(config["capex"]["native_input_applied"]))
+            if isinstance(config.get("capex"), Mapping)
+            and "native_input_applied" in config["capex"]
+            else None
+        ),
+        manifest_schema_version=(
+            NATIVE_CAPEX_MANIFEST_SCHEMA_VERSION
+            if isinstance(config.get("capex"), Mapping)
+            and "native_input_applied" in config["capex"]
+            else MANIFEST_SCHEMA_VERSION
+        ),
         config_sha256=config_sha256(config),
         engine_version=engine_version(),
         git_sha=git_sha(),

@@ -805,6 +805,45 @@ class TechComparisonBlock(BaseModel):
     rows: List[TechComparisonRow]
 
 
+class RefinanceCoverageRow(BaseModel):
+    """One operating year's refinanced-balloon debt service and coverage (#1491)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    debt_period: int
+    year: int
+    service_usd: float
+    interest_usd: float
+    principal_usd: float
+    cash_available_usd: float
+    coverage: Optional[float] = None
+
+
+class RefinanceCoverageBlock(BaseModel):
+    """Refinanced-balloon coverage disclosure under assumed terms (#1491).
+
+    Projects ``debt_result['refinance']`` directly without modifying engine figures.
+    Always carries the F-5 non-reliance caveat explaining that terms are assumed
+    (``assumption_no_term_sheet``) and support no covenant, lender, or IC
+    representation until ``#1395`` (within-year calendar) and binding terms land.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    terms_basis: str
+    tenor_years: int
+    rate_premium: float
+    rate: float
+    principal_usd: float
+    total_service_usd: float
+    total_interest_usd: float
+    min_coverage: Optional[float] = None
+    coverage_floor: Optional[float] = None
+    coverage_breach: bool
+    coverage_by_period: List[RefinanceCoverageRow]
+    caveat: str
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -923,6 +962,10 @@ class ReportContext(BaseModel):
     #: because the numbers look plausible. None when no fallback fired (render-when-present;
     #: the committed scenarios take no fallback, so byte-identical).
     fx_fallback_note: Optional[str] = None
+    #: Refinanced-balloon coverage disclosure under assumed terms (#1491). Populated when
+    #: ``debt_result['refinance']`` is present; ``None`` otherwise (non-refinance cases stay
+    #: byte-identical).
+    refinance_coverage: Optional[RefinanceCoverageBlock] = None
     manifest: Dict[str, Any]
 
 
@@ -2461,6 +2504,83 @@ def _resolve_report_grade(
     return POLICIES[mode].report_grade if mode is not None else None
 
 
+_REFINANCE_F5_CAVEAT = (
+    "Assumed refinance terms only (assumption_no_term_sheet — no executed term sheet). "
+    "Under the F-5 bar, these coverage figures support no covenant, lender, or IC "
+    "representation until the within-year event calendar (#1395) and real refinance terms land."
+)
+
+
+def _build_refinance_coverage(
+    debt_result: Optional[Mapping[str, Any]],
+    run_result: Optional[Mapping[str, Any]] = None,
+) -> Optional[RefinanceCoverageBlock]:
+    """Project ``debt_result['refinance']`` under the mandatory F-5 caveat (#1491)."""
+    source = debt_result
+    if source is None and isinstance(run_result, Mapping):
+        candidate = run_result.get("debt_result")
+        if isinstance(candidate, Mapping):
+            source = candidate
+    if not isinstance(source, Mapping):
+        return None
+    refi = source.get("refinance")
+    if not isinstance(refi, Mapping):
+        return None
+    period_to_year: Dict[int, int] = {}
+    for entry in source.get("annual_row_debt_period_map") or ():
+        if isinstance(entry, Mapping) and "debt_period" in entry:
+            period_idx = int(entry["debt_period"])
+            raw_year = entry.get("year")
+            if raw_year is not None:
+                period_to_year[period_idx] = int(raw_year)
+            elif "annual_row_index" in entry:
+                period_to_year[period_idx] = int(entry["annual_row_index"]) + 1
+    rows: List[RefinanceCoverageRow] = []
+    for item in refi.get("coverage_by_period") or ():
+        if not isinstance(item, Mapping):
+            continue
+        debt_period = int(item["period"])
+        if debt_period not in period_to_year:
+            # A debt period is not an operating year; never label one as the other.
+            raise ValueError(
+                f"refinance period {debt_period} is missing from "
+                "debt_result['annual_row_debt_period_map']"
+            )
+        cov_raw = item.get("coverage")
+        coverage = float(cov_raw) if cov_raw is not None else None
+        rows.append(
+            RefinanceCoverageRow(
+                debt_period=debt_period,
+                year=period_to_year[debt_period],
+                service_usd=float(item["service_usd"]),
+                interest_usd=float(item["interest_usd"]),
+                principal_usd=float(item["principal_usd"]),
+                cash_available_usd=float(item["cash_available_usd"]),
+                coverage=coverage,
+            )
+        )
+    min_cov_raw = refi.get("min_coverage")
+    floor_raw = refi.get("coverage_floor")
+    breach = refi.get("coverage_breach")
+    if not isinstance(breach, bool):
+        # An absent flag must not render as "WITHIN FLOOR" (fail closed).
+        raise ValueError("debt_result['refinance'] carries no boolean coverage_breach")
+    return RefinanceCoverageBlock(
+        terms_basis=str(refi.get("terms_basis", "assumption_no_term_sheet")),
+        tenor_years=int(refi["tenor_years"]),
+        rate_premium=float(refi["rate_premium"]),
+        rate=float(refi["rate"]),
+        principal_usd=float(refi["principal_usd"]),
+        total_service_usd=float(refi["total_service_usd"]),
+        total_interest_usd=float(refi["total_interest_usd"]),
+        min_coverage=float(min_cov_raw) if min_cov_raw is not None else None,
+        coverage_floor=float(floor_raw) if floor_raw is not None else None,
+        coverage_breach=breach,
+        coverage_by_period=rows,
+        caveat=_REFINANCE_F5_CAVEAT,
+    )
+
+
 def build_report_context(
     case_result: CaseResult,
     *,
@@ -2595,5 +2715,6 @@ def build_report_context(
         irr_bridge=_irr_bridge_block(run_result),
         fx_warning=_build_fx_warning(run_result),
         fx_fallback_note=_build_fx_fallback_note(run_result),
+        refinance_coverage=_build_refinance_coverage(debt_result, run_result),
         manifest=dict(case_result.run_manifest or {}),
     )

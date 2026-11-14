@@ -341,6 +341,9 @@ class MonteCarloEngine:
             self._dead_param_names,
             self._base_outside_bounds,
         ) = self._extract_param_definitions(self._base_config)
+        self._refuse_native_capex_conflicts(
+            self._base_config, self._param_names, self._param_kinds
+        )
 
         # MC-7 (#487): re-index the correlation matrix onto the ACTIVE parameter set. A
         # scenario authors its matrix against the parameters it declares; a consumer that
@@ -598,6 +601,35 @@ class MonteCarloEngine:
                 base_cf * ratio,
             )
         return overrides
+
+    @staticmethod
+    def _refuse_native_capex_conflicts(
+        cfg: Mapping[str, Any], names: List[str], kinds: List[str]
+    ) -> None:
+        """Refuse sweeps that every trial of a native-CAPEX scenario would reject.
+
+        A scenario authored with ``capex.input`` (or already resolved to
+        ``capex.native_input_applied``) owns its USD CAPEX and pins its conversion rate to
+        ``fx.start_lkr_per_usd``. A sampled ``capex.usd_total`` or FX spot is refused by
+        ``normalize_native_capex`` inside each trial, so a permissive failure policy would
+        report fallback KPIs instead of a risk distribution (DOM-1645-02). Fail before
+        sampling instead. Sweep ``capex.input.amount`` to vary native CAPEX; FX sweeps on
+        native scenarios are the open #1629 design question.
+        """
+        capex = cfg.get("capex") if isinstance(cfg, Mapping) else None
+        if not isinstance(capex, Mapping) or not (
+            "input" in capex or "native_input_applied" in capex
+        ):
+            return
+        blocked = {"capex.usd_total", "fx.start_lkr_per_usd"}
+        for name, kind in zip(names, kinds, strict=True):
+            if kind == "fx_calibrated" or name.strip().lower() in blocked:
+                raise MonteCarloConfigError(
+                    f"monte_carlo parameter {name!r} cannot be swept on a native-CAPEX "
+                    "scenario (capex.input): every trial would refuse it. Sweep "
+                    "capex.input.amount for CAPEX; FX sweeps with native CAPEX are not "
+                    "supported yet (#1629)."
+                )
 
     @staticmethod
     def _extract_param_definitions(

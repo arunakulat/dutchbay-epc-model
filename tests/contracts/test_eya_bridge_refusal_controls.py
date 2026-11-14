@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 from dataclasses import replace
+from fractions import Fraction
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from analytics.operational.aep import OperationalAEPResult, OperationalEnergyQua
 from analytics.resource_contracts import ResourceAssessment
 from tests.contracts.test_eya_actual_bridge import annual_sources  # noqa: F401
 from tests.contracts.test_eya_actual_bridge import (
+    _attribution,
     _bridge_inputs,
     _complete_bridge,
 )
@@ -361,3 +363,51 @@ def test_operational_result_type_refusal_is_not_a_generic_replay_error() -> None
         bridge.EYAActualBridgeError, match="must use the exact D3 public contract"
     ):
         bridge._replay_operational_result(object())
+
+
+def test_d4_fabricated_method_model_attribution_still_reconciles_to_zero(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],  # noqa: F811
+) -> None:
+    """#1511: Demonstrate D4's arithmetic-identity limitation on an un-cross-checked category.
+
+    ``method_model`` has no independent D3 cross-check. Fabricating +123,456.75 kWh in
+    ``method_model`` shifts ``unknown_residual_kwh`` by exact -123,456.75 kWh while
+    ``full_reconciliation_residual_kwh`` still reads 0 and the disclosure token stays
+    ``arithmetic_identity_not_independent_check``. This control fails if reconciliation
+    were promoted into an independent validation of un-cross-checked categories without
+    dropping the arithmetic-identity definition.
+    """
+    resource, operational = annual_sources
+    baseline = _complete_bridge(resource, operational)
+
+    spec, boundary = _bridge_inputs(resource, operational)
+    fabricated_delta = "123456.75"
+    attributions = (
+        _attribution("availability", "-365", spec),
+        _attribution("curtailment", "-182.5", spec),
+        _attribution("electrical", "-365", spec),
+        _attribution("wake_performance", "-500", spec),
+        _attribution("method_model", fabricated_delta, spec),
+    )
+    manipulated = bridge.build_eya_actual_bridge(
+        resource, operational, spec, boundary, attributions
+    )
+
+    expected_shift = Fraction(fabricated_delta)
+    assert (
+        baseline.unknown_residual_kwh.as_fraction()
+        - manipulated.unknown_residual_kwh.as_fraction()
+    ) == expected_shift
+    assert manipulated.receipt.full_reconciliation_residual_kwh.as_fraction() == 0
+    assert (
+        manipulated.receipt.full_reconciliation_semantics
+        == "arithmetic_identity_not_independent_check"
+    )
+    # Control expectation: unknown_residual must differ from baseline by the exact shift
+    # because method_model is not cross-checked against D3; if an independent check ever
+    # superseded U = actual - eya - sum(deltas), either this build or zero residual fails.
+    assert manipulated.component("method_model").signed_delta_kwh is not None
+    assert (
+        manipulated.component("method_model").signed_delta_kwh.as_fraction()
+        == expected_shift
+    )
