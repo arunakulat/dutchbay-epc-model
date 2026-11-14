@@ -765,6 +765,12 @@ def test_battery_sensitivities_and_break_even_are_counted_and_responsive(
                 <= r["choice_against_this"]["share_of_trials_at_least_as_good"]
                 <= 1.0
             )
+    # Every decision variable's grid edge is flagged (DOM-1691-04). PV is a single value,
+    # so it is at both edges; the battery is at exactly one edge or neither.
+    edge = run.recommendation["by_reading"]["A"]["any_pv"]["at_grid_edge"]
+    assert set(edge) == {"pv_tables", "pv_ac_mw", "bess_power_mw"}
+    assert edge["pv_tables"] == edge["pv_ac_mw"] == {"minimum": True, "maximum": True}
+    assert edge["bess_power_mw"] == {"minimum": chosen == 0.5, "maximum": chosen == 2.0}
 
 
 # ---------------------------------------------------------------------------

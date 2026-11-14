@@ -2709,6 +2709,15 @@ def run_project_sizing(
             "objective_value": stats[i]["metrics"][metric][statistic],
             "pv_tables_at_grid_minimum": stats[i]["pv_tables"]
             == min(t["pv_tables"] for t in stats if t[key]),
+            # Every decision variable's grid edge (#1691 domain lane DOM-1691-04): a
+            # choice on an edge is set by the grid, not found by the optimiser.
+            "at_grid_edge": {
+                dim: {
+                    "minimum": stats[i][dim] == min(t[dim] for t in stats if t[key]),
+                    "maximum": stats[i][dim] == max(t[dim] for t in stats if t[key]),
+                }
+                for dim in ("pv_tables", "pv_ac_mw", "bess_power_mw")
+            },
             "against_the_committed_choice": (
                 None if i == primary else paired_trials(i, primary)
             ),

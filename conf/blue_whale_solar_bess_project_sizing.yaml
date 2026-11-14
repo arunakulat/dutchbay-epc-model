@@ -70,9 +70,15 @@ grid:
   max_dc_ac_ratio: 1.5      # ASSUMPTION: above PR 3's 1.4 grid edge; the inverter match also binds
   # BESS power (MW); energy = bess_duration_h x power (PUCSL 4 h at nominal capacity).
   # 2026-11-07: 0.5 MW steps from 0.5 to 6.5 (reading A's range at 3.5 MW AC), then 7-10
-  # (reading B only). The 4 h duration is regulatory, so power is the battery's one variable.
-  bess_power_mw: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 8.0,
-    9.0, 10.0]
+  # (reading B only). 2026-11-14 (owner: "lower the floor", after the #1691 domain lane found
+  # 0.5 MW was the grid floor, not an optimum): 0.1 MW steps from 0.1 to 0.5. 0.1 MW is an
+  # ASSUMPTION, not a regulatory or technical minimum (B18 asks for one): the battery loses
+  # value at every size tested, so the run picks whichever floor this list sets. A zero
+  # battery is outside the model (the dispatcher needs energy > 0) and outside the PUCSL
+  # "Power Plants with BESS" category. The 4 h duration is regulatory, so power is the
+  # battery's one variable.
+  bess_power_mw: [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5,
+    6.0, 6.5, 7.0, 8.0, 9.0, 10.0]
   bess_duration_h: 4.0
 
 readings:
