@@ -30,7 +30,7 @@ requests==2.34.2
 # dolphin revalidates conversion, extraction, rendering, hooks, audit, and the suite.
 markitdown==0.1.9
 pdfplumber==0.11.10
-pymupdf==2.0
+pymupdf==2.1
 pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
 # versions were migrated from the retiring 3.11 environment and cleared together

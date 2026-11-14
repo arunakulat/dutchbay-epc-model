@@ -251,7 +251,7 @@ pydyf==0.12.1
 Pygments==2.21.0
 PyJWT==2.15.0
 pymupdf4llm==2.0
-pymupdf==2.0
+pymupdf==2.1
 pymupdf_layout==2.0
 pyogrio==0.13.0
 pyomo==6.10.1
