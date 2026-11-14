@@ -2540,12 +2540,18 @@ def _build_refinance_coverage(
         if not isinstance(item, Mapping):
             continue
         debt_period = int(item["period"])
+        if debt_period not in period_to_year:
+            # A debt period is not an operating year; never label one as the other.
+            raise ValueError(
+                f"refinance period {debt_period} is missing from "
+                "debt_result['annual_row_debt_period_map']"
+            )
         cov_raw = item.get("coverage")
         coverage = float(cov_raw) if cov_raw is not None else None
         rows.append(
             RefinanceCoverageRow(
                 debt_period=debt_period,
-                year=period_to_year.get(debt_period, debt_period),
+                year=period_to_year[debt_period],
                 service_usd=float(item["service_usd"]),
                 interest_usd=float(item["interest_usd"]),
                 principal_usd=float(item["principal_usd"]),
@@ -2555,6 +2561,10 @@ def _build_refinance_coverage(
         )
     min_cov_raw = refi.get("min_coverage")
     floor_raw = refi.get("coverage_floor")
+    breach = refi.get("coverage_breach")
+    if not isinstance(breach, bool):
+        # An absent flag must not render as "WITHIN FLOOR" (fail closed).
+        raise ValueError("debt_result['refinance'] carries no boolean coverage_breach")
     return RefinanceCoverageBlock(
         terms_basis=str(refi.get("terms_basis", "assumption_no_term_sheet")),
         tenor_years=int(refi["tenor_years"]),
@@ -2565,7 +2575,7 @@ def _build_refinance_coverage(
         total_interest_usd=float(refi["total_interest_usd"]),
         min_coverage=float(min_cov_raw) if min_cov_raw is not None else None,
         coverage_floor=float(floor_raw) if floor_raw is not None else None,
-        coverage_breach=bool(refi.get("coverage_breach", False)),
+        coverage_breach=breach,
         coverage_by_period=rows,
         caveat=_REFINANCE_F5_CAVEAT,
     )

@@ -1,1 +1,2 @@
 - Surface the refinanced-balloon coverage block (``debt_result['refinance']``) in ``ReportContext`` and the lender report template under the mandatory F-5 non-reliance caveat (#1491).
+- The block refuses a refinance result with no boolean `coverage_breach` flag or a period missing from the annual period map, rather than show it as within the floor or label a debt period as an operating year.
