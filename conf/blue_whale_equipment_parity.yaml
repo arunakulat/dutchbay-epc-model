@@ -1,0 +1,134 @@
+# Blue Whale Lot 5B: Equipment-Cost Parity Benchmark & Unpriced Cost-Buildup Config
+#
+# Read by scripts/run_blue_whale_equipment_parity_v14.py (Hydra, one JSON object on stdout:
+# CLI-01, CLI-03) through analytics.wind.blue_whale_equipment_parity.
+# Incorporates the public benchmark arithmetic and unpriced buildup structure from
+# Blue_Whale_Review_Package_2026-11-14.zip (BW-COST-AEP-REVIEW-2026-11-14, v1.1) without
+# modifying the frozen screening scenario CAPEX or publishing confidential draft terms.
+
+schema_version: blue_whale_equipment_parity_v1
+
+blue_whale:
+  summary_json_path: docs/blue_whale/met_mast_transfer_summary.json
+  rated_capacity_mw: 9.5
+  operating_life_years: 20
+  hours_per_year: 8760
+  road_allowance_usd_per_kw: 40
+  epc_wrap_pct: 5
+
+mannar_benchmark:
+  source: "docs/knowledge_base/01_wind_epc_costs_and_scaling.md §1; Envision 2026-02-11 / Hayleys 2026-10-05 public statements"
+  status: "Approximate secondary benchmark; original SINOHYDRO PDF missing; final Hayleys contract unverified"
+  turbine_count: 10
+  rated_capacity_mw: 50
+  historical_unreconciled_capacity_mw: 56
+  turbine_supply_usd: 19490000
+  annual_aep_mwh: 207000
+  operating_life_years: 20
+
+sensitivity_premium_pct:
+  - -10.0
+  - 0.0
+  - 5.0
+  - 10.0
+  - 20.0
+
+# Table 2, Ashuri et al. (2016), p. 60: 5 MW, 10 MW, 20 MW offshore reference scaling
+# counterexample showing that $/MWh does not necessarily fall with turbine rating.
+ashuri_2016_counterexample:
+  - rating_mw: 5
+    modelled_tcc_usd_2010_basis: 6072300
+    modelled_annual_mwh: 28397
+  - rating_mw: 10
+    modelled_tcc_usd_2010_basis: 15489000
+    modelled_annual_mwh: 56273
+  - rating_mw: 20
+    modelled_tcc_usd_2010_basis: 45618000
+    modelled_annual_mwh: 122806
+
+# Itemized single-turbine cost-buildup structure (null = unpriced, never zero).
+# Road and marine delivery packages are mutually exclusive.
+cost_buildup_packages:
+  - id: E01
+    package: "One complete EN206 machine and 130 m tower"
+    route: common
+    quoted_amount_usd: null
+  - id: E02
+    package: "Origin handling, international freight and insurance"
+    route: common
+    quoted_amount_usd: null
+  - id: E03
+    package: "Colombo discharge, storage, clearance and route-specific reload"
+    route: route_specific
+    quoted_amount_usd: null
+  - id: E04
+    package: "Import levies, domestic taxes and tax cash funding"
+    route: common
+    quoted_amount_usd: null
+  - id: M01
+    package: "Marine engineering, bathymetry, metocean and ground/interface surveys"
+    route: marine
+    quoted_amount_usd: null
+  - id: M02
+    package: "Barge and tug mobilization and demobilization"
+    route: marine
+    quoted_amount_usd: null
+  - id: M03
+    package: "Barge/tug operating hire, fuel and waiting"
+    route: marine
+    quoted_amount_usd: null
+  - id: M04
+    package: "Racks, grillage, sea fastening and ballast engineering"
+    route: marine
+    quoted_amount_usd: null
+  - id: M05
+    package: "Jetty, ramp, moorings, shoreline interface and access licence"
+    route: marine
+    quoted_amount_usd: null
+  - id: M06
+    package: "Dredging, dredge transport and disposal if required"
+    route: marine_conditional
+    quoted_amount_usd: null
+  - id: M07
+    package: "Offloading cranes, lifting equipment and platforms"
+    route: marine
+    quoted_amount_usd: null
+  - id: M08
+    package: "Jetty-to-foundation haul and local upgrades"
+    route: marine
+    quoted_amount_usd: null
+  - id: R01
+    package: "Road-route survey and engineered approvals"
+    route: road
+    quoted_amount_usd: null
+  - id: R02
+    package: "Road transporter mobilization, movements and demobilization"
+    route: road
+    quoted_amount_usd: null
+  - id: R03
+    package: "Road/utility alterations, temporary rights and reinstatement"
+    route: road
+    quoted_amount_usd: null
+  - id: C01
+    package: "One turbine foundation, crane pad and site works"
+    route: common
+    quoted_amount_usd: null
+  - id: C02
+    package: "Main erection and assist cranes; installation and demobilization"
+    route: common
+    quoted_amount_usd: null
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
