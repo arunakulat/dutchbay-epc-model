@@ -37,6 +37,10 @@ ClimateRiskCategory = Literal["physical", "transition"]
 #: fallback mitigation after the resolved scenario is proven to match the run manifest.
 MethodologyKey = Literal["fx_path"]
 
+#: Where a covenant threshold came from (#1668): the scenario's own ``constraints``
+#: block, or this file's report-level default when the scenario declares none.
+CovenantSource = Literal["scenario", "report_defaults"]
+
 
 class ReportMeta(BaseModel):
     """Branding / front-matter for the rendered report."""
@@ -59,6 +63,10 @@ class Covenants(BaseModel):
     min_dscr_floor: float
     min_dscr_target: float
     max_balloon_pct: float
+    #: Set by the report from the scenario (#1668); the YAML defaults leave both
+    #: as ``report_defaults``.
+    min_dscr_floor_source: CovenantSource = "report_defaults"
+    max_balloon_pct_source: CovenantSource = "report_defaults"
 
 
 class KpiSpec(BaseModel):

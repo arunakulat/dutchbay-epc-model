@@ -997,6 +997,68 @@ def _build_kpi_rows(
     return rows
 
 
+#: Tolerance for the minimum-DSCR covenant test. Matches the engine's
+#: ``finance.equity_distribution_v14_hydra._DSCR_LOCKUP_EPS`` (#1508), so sculpt
+#: representation noise cannot flip "Met" to "Breach" (#1668).
+_DSCR_COVENANT_EPS = 1e-9
+
+#: How the verdict notes and covenant table name a threshold's source (#1668).
+_COVENANT_SOURCE_NOTE: Dict[str, str] = {
+    "scenario": "the scenario's covenant",
+    "report_defaults": "report default",
+}
+
+
+def _scenario_number(value: Any) -> Optional[float]:
+    """A declared covenant value as a finite float, or ``None`` (bools are not numbers)."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _scenario_covenants(
+    defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
+) -> Covenants:
+    """The covenant thresholds the report tests: the scenario's first (#1668).
+
+    Owner decision on #1668 (2026-11-14): the lender report tests the scenario's own
+    covenant, not a report-level default, so the report and the engine are one source of
+    truth (FRAMEWORK-03). ``constraints.min_dscr_covenant`` sets the minimum-DSCR floor
+    and ``constraints.max_balloon_pct`` the balloon ceiling. A threshold the scenario does
+    not declare (or declares as a non-number) keeps ``config/report_defaults.yaml``'s
+    value, and each threshold records which source it came from. The DSCR target is
+    unchanged.
+
+    Args:
+        defaults: The report-level covenants from ``report_defaults.yaml``.
+        scenario_config: The evaluated scenario configuration, or ``None``.
+
+    Returns:
+        The covenants to test, with their sources.
+    """
+    constraints = (
+        scenario_config.get("constraints")
+        if isinstance(scenario_config, Mapping)
+        else None
+    )
+    if not isinstance(constraints, Mapping):
+        return defaults
+    update: Dict[str, Any] = {}
+    floor = _scenario_number(constraints.get("min_dscr_covenant"))
+    if floor is not None:
+        update["min_dscr_floor"] = floor
+        update["min_dscr_floor_source"] = "scenario"
+    ceiling = _scenario_number(constraints.get("max_balloon_pct"))
+    if ceiling is not None:
+        update["max_balloon_pct"] = ceiling
+        update["max_balloon_pct_source"] = "scenario"
+    return defaults.model_copy(update=update) if update else defaults
+
+
 def _build_verdict(
     kpis: Mapping[str, Optional[float]], covenants: Covenants
 ) -> Verdict:
@@ -1022,7 +1084,13 @@ def _build_verdict(
         equity_positive = equity_irr > 0
     else:
         equity_positive = False
-    dscr_covenant_met = min_dscr is not None and min_dscr >= covenants.min_dscr_floor
+    # A sculpted DSCR solved to exactly the covenant reads 1.2999999999999998, so compare
+    # with the engine's lock-up tolerance; otherwise a case sized to the scenario's 1.30
+    # covenant would print as a breach of it (#1668, the same tolerance as #1508).
+    dscr_covenant_met = (
+        min_dscr is not None
+        and min_dscr >= covenants.min_dscr_floor - _DSCR_COVENANT_EPS
+    )
     # Honor the engine's authoritative covenant judgment when it published one: the engine
     # evaluates balloon_pct against the SCENARIO's own max_balloon_pct (e.g. 10%), so the
     # report must NOT re-derive "within limit" against its more lenient presentation default
@@ -1078,7 +1146,8 @@ def _build_verdict(
         notes.append(
             f"Minimum DSCR {min_dscr:.2f}x {rel} the "
             f"{covenants.min_dscr_floor:.2f}x lender floor "
-            f"(target {covenants.min_dscr_target:.2f}x)."
+            f"({_COVENANT_SOURCE_NOTE[covenants.min_dscr_floor_source]}; "
+            f"target {covenants.min_dscr_target:.2f}x)."
         )
     if balloon_pct is not None:
         if balloon_breach is not None:
@@ -1092,7 +1161,8 @@ def _build_verdict(
             rel = "within" if balloon_within_limit else "exceeds"
             notes.append(
                 f"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the "
-                f"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling."
+                f"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling "
+                f"({_COVENANT_SOURCE_NOTE[covenants.max_balloon_pct_source]})."
             )
 
     # The headline must never contradict the covenant table: a "Bankable" claim
@@ -2670,13 +2740,16 @@ def build_report_context(
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
     # The verdict is built once and shared: the IC summary reads its covenant/return
     # judgments (single source) rather than re-deriving them.
-    verdict = _build_verdict(case_result.kpis, cfg.covenants)
+    # #1668: test the scenario's own covenant thresholds, falling back to the report
+    # defaults only for a threshold the scenario does not declare.
+    covenants = _scenario_covenants(cfg.covenants, scenario_config)
+    verdict = _build_verdict(case_result.kpis, covenants)
     # Assemble the three-statement result once; both the statements and the payment-priority
     # waterfall blocks derive from it (one engine-output source, no second pass).
     ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
     return ReportContext(
         meta=cfg.report,
-        covenants=cfg.covenants,
+        covenants=covenants,
         generated_at=generated_at,
         report_grade=_resolve_report_grade(scenario_config),
         scenario_variant=case_result.scenario_variant,
