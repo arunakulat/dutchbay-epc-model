@@ -235,10 +235,12 @@ the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 M
 choice and the PV curve are in `STATUS.md`.
 
 From 2026-11-14 (owner, 2026-11-07: "Whatever the optimiser picks") the battery is a decision
-variable again, searched with the PV on the current opex and tariff basis: the run chooses 107
-tables (4.01464 MWp), 3.5 MW AC and 0.5 MW / 2.0 MWh, the smallest PV and battery on the grid.
-The blended BESS price is applied per kWh at that size, which a small battery is unlikely to
-achieve (L-10). The battery curve, sensitivities and break-even values are in `STATUS.md`.
+variable again, searched with the PV on the current opex and tariff basis. Every component
+loses value at the margin, so the run returns its grid floor, not an optimum: 107 tables
+(4.01464 MWp), 3.5 MW AC and 0.1 MW / 0.4 MWh, the battery floor the owner chose (2026-11-14:
+"Battery floor 0.1 MW, PV unchanged"). The blended BESS price is applied per kWh at that size,
+which a small battery is unlikely to achieve (L-10). The battery curve, sensitivities and
+break-even values are in `STATUS.md`.
 
 ## 7. References
 
