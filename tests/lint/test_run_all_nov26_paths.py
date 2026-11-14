@@ -282,7 +282,14 @@ def test_every_hydra_entry_point_gets_a_run_dir_under_out() -> None:
     assert len(hydra_lines) >= 10
     assert _hydra_calls_without_run_dir(text) == []
     mc_run = (KIT / "lib" / "mc_run.py").read_text(encoding="utf-8")
-    assert 'f"hydra.run.dir=' in mc_run
+    assert "f\"hydra.run.dir={outdir / 'hydra'}\"," in mc_run
+    # The two suite tests that run a Hydra CLI from the checkout (#1659 N-1).
+    for test in (
+        "tests/integration/test_sensitivity_cli_smoke.py",
+        "tests/analytics/test_mc_sobol_sampler.py",
+    ):
+        source = (REPO_ROOT / test).read_text(encoding="utf-8")
+        assert "f\"hydra.run.dir={tmp_path / 'hydra'}\"," in source, test
 
 
 _REQUIRED_LINES = (
@@ -362,6 +369,7 @@ def _residue_function() -> str:
         (None, 0),
         ("new_file.txt", 1),
         ("outputs/receipt.json", 1),
+        ("outputs/existing.json", 1),
         ("tracked.txt", 1),
         ("delete:tracked.txt", 1),
         (".git/new_object", 0),
@@ -380,6 +388,10 @@ def test_the_residue_check_catches_writes_into_the_checkout(
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     (repo / ".gitignore").write_text(".venv/\noutputs/\n", encoding="utf-8")
     (repo / "tracked.txt").write_text("a\n", encoding="utf-8")
+    # An ignored file that already exists: appending to it changes neither git status
+    # nor its directory's mtime, so only the file-level mtime check can see it.
+    (repo / "outputs").mkdir()
+    (repo / "outputs" / "existing.json").write_text("{}\n", encoding="utf-8")
     subprocess.run([*git, "add", "."], check=True)
     subprocess.run([*git, "commit", "-q", "-m", "init"], check=True)
     old = 1_600_000_000
