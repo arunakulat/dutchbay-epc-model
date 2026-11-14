@@ -201,6 +201,9 @@ def _resolve_capex_usd_total(config: Mapping[str, Any]) -> Optional[float]:
         >>> _resolve_capex_usd_total(config)
         10000000.0
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    config = normalize_native_capex(config)
     # Try canonical paths first
     capex = config.get("capex", {}) or {}
     if isinstance(capex, Mapping):
