@@ -71,3 +71,15 @@ def test_apply_debt_layer_refuses_explicit_underdrawn_or_short_schedule() -> Non
         + ((500_000.0 + 25_000.0) * 0.10)
         + ((500_000.0 + 25_000.0 + 52_500.0) * 0.10)
     )
+
+
+def test_refuses_negative_or_non_finite_drawdown_fractions() -> None:
+    for bad_draws in ([-0.5, 1.5], [1.2, -0.2], [float("nan"), 1.0]):
+        with pytest.raises(ValueError, match="finite non-negative"):
+            calculate_construction_drawdowns(100.0, [50.0, 50.0], bad_draws)
+
+        cfg_bad_neg = _base_config(
+            construction_periods=2, schedule=[50.0, 50.0], draws=bad_draws
+        )
+        with pytest.raises(ValueError, match="finite non-negative"):
+            apply_debt_layer(cfg_bad_neg, annual_rows=[])

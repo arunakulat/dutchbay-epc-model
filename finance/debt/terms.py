@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.debt.constants import (
@@ -221,6 +222,10 @@ def _validate_explicit_drawdowns(drawdowns: Any, periods: int, *, source: str) -
     if not isinstance(drawdowns, Sequence) or isinstance(drawdowns, (str, bytes)):
         raise ValueError(f"{source} must be a sequence of fractions (#1507).")
     values = [float(x) for x in drawdowns]
+    if any(not math.isfinite(v) or v < 0.0 for v in values):
+        raise ValueError(
+            f"{source} {values!r} must contain finite non-negative fractions (#1507)."
+        )
     if periods > 0 and len(values) < periods:
         raise ValueError(
             f"{source} has {len(values)} entries, fewer than construction_periods = {periods} (#1507)."

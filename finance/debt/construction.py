@@ -30,6 +30,12 @@ def calculate_construction_drawdowns(
     """
     n_periods = len(construction_schedule)
     n_draws = len(drawdown_pct_per_year)
+    draws = [float(x) for x in drawdown_pct_per_year]
+    if any(not math.isfinite(d) or d < 0.0 for d in draws):
+        raise ValueError(
+            f"drawdown_pct_per_year {draws!r} must contain finite non-negative "
+            "fractions (#1507)."
+        )
     if n_periods > 0:
         if n_draws < n_periods:
             raise ValueError(
@@ -37,7 +43,6 @@ def calculate_construction_drawdowns(
                 f"drawdown_pct_per_year has only {n_draws} entry/entries; supply a "
                 "drawdown fraction per construction period (#1507)."
             )
-        draws = [float(x) for x in drawdown_pct_per_year]
         is_single_period_cod_placeholder = (
             n_periods == 1
             and n_draws == 1
