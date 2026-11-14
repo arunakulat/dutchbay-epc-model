@@ -511,7 +511,7 @@ Files read (repo-relative): `analytics/mc/{__init__,samplers,correlation,converg
 
 ## Wind Resource Pipeline (ERA5 to bankable AEP)
 
-**Path(s):** `wind_resource/` — `wind_pipeline.py`, `arco_assessment.py`, `bankable_aep.py`, `weibull_fit.py`, `wind_analyzer.py`, `energy_calculator.py`, `mcp.py`, `synthetic_mcp_measurement.py`, `long_term_trend.py`, `crossval.py`, `layout_optimizer.py`, `era5_fetcher.py`, `era5_retrieval.py`, `era5_grid.py`, `power_curve_sourcing.py`, `cashflow_adapter.py` (config in `wind_resource/config/`).
+**Path(s):** `wind_resource/` — `wind_pipeline.py`, `arco_assessment.py`, `bankable_aep.py`, `weibull_fit.py`, `wind_analyzer.py`, `energy_calculator.py`, `mcp.py`, `synthetic_mcp_measurement.py`, `long_term_trend.py`, `crossval.py`, `layout_optimizer.py`, `era5_fetcher.py`, `era5_retrieval.py`, `era5_grid.py`, `power_curve_sourcing.py`, `cashflow_adapter.py`, `resource_assurance.py` (config in `wind_resource/config/`).
 
 **Purpose:** Converts ERA5 reanalysis wind data into a standards-referenced, lender-grade Annual Energy Production (AEP) estimate — from data retrieval and hub-height extrapolation, through Weibull characterisation, wake modelling and an IEC uncertainty build-up, to the P50/P75/P90 capacity factor that feeds the finance model.
 
@@ -537,6 +537,7 @@ Files read (repo-relative): `analytics/mc/{__init__,samplers,correlation,converg
 | `layout_optimizer.py` | Area→optimized-layout micro-siting via the DTU TopFarm gradient optimizer on PyWake: given a boundary polygon, exclusion zones, wind rose, turbine geometry and minimum spacing, proposes an AEP-maximising candidate layout and its uplift vs a caller-supplied baseline. KPI-neutral candidate generator only (Deliverable A); feeding a layout into headline economics is out of scope. |
 | `power_curve_sourcing.py` | Brings a turbine power curve into the store either by fetching from the open turbine library (oedb via `windpowerlib`) or by validated manual entry of an OEM spec-sheet curve; both paths validate length/monotonicity/rated consistency and stamp provenance (never fabricates curve data). |
 | `cashflow_adapter.py` | Pure-function bridge from the wind export to a v14 finance scenario dict. Three adapter modes (`overwrite`, `fill_if_absent` default, `validate_only`) with a drift tolerance; writes capacity factor to `project.capacity_factor` (the canonical lender slot). Deliberately imports no heavy geoscience deps so finance consumers need no `[wind]` extra. |
+| `resource_assurance.py` | Milestone P1.2 governance contracts and labelled-fixture guards (not on the runtime lender AEP/cashflow calculation path). Defines the five independently challengeable resource-assessment strands (`STRAND_SPECS`), the pending lender technical due-diligence evidence register (`EVIDENCE_REQUEST_REGISTER`, `EV-REQ-01`..`EV-REQ-04`), and `assert_labelled_fixture_only()` to block silent promotion of uncertified fixtures to `CERTIFIED_BANKABLE`. |
 
 ### Academic / methodological grounding
 

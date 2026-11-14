@@ -1,1 +1,0 @@
-Model the PUCSL 2026 renewable energy feed-in tariff one-off non-escalable adjustment (s.3.1 item 1) 365 days after SPPA signing via optional scenario input `tariff.non_escalable_adjustment`, with CCPI/FX weighting, relative PPP derivation, and standalone/BESS energy tariff support (#1574).

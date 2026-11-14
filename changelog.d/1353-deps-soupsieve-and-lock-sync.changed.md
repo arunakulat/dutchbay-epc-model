@@ -1,0 +1,1 @@
+- Upgrade `soupsieve` (3.0.4 -> 4.1) to remediate `CVE-2026-126190` (`GHSA-mmhr-3c5m-f64f`), and fold in compatible dependency pin bumps `fonttools` (4.67.0 -> 4.68.0, #1598), `filelock` (4.2.1 -> 4.2.9, #1599), and `threadpoolctl` (3.6.0 -> 3.8.0, #1600) with synchronized shared environment resync (#1353).

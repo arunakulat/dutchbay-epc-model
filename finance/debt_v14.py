@@ -33,7 +33,12 @@ from finance.debt.constants import (  # noqa: F401
     _BALLOON_DEFAULT_TREATMENT,
     _BALLOON_TOL,
     _BALLOON_VALID_TREATMENTS,
+    _BRIDGE_DEFAULT_TREATMENT,
+    _BRIDGE_VALID_TREATMENTS,
     _SERVICE_TOL,
+    BRIDGE_TREATMENT_CONSTRUCTION_CAPITALIZED,
+    BRIDGE_TREATMENT_EQUITY_CFADS_MATCH,
+    BRIDGE_TREATMENT_HISTORICAL_FOLD,
     REFINANCE_TERMS_BASIS,
 )
 from finance.debt.construction import (  # noqa: F401
@@ -102,6 +107,7 @@ from finance.debt.terms import (  # noqa: F401
     _warn_if_decorative_tranches,
     placeholder_construction_schedule,
     placeholder_debt_drawdown_pct,
+    resolve_bridge_period_treatment,
 )
 
 logger = logging.getLogger(__name__)

@@ -1,1 +1,0 @@
-Document PUCSL 2026 non-escalable adjustment offset arithmetic with worked examples, prune dead config keys under FRAMEWORK-02, use contextual error prefixes, and add comprehensive start-year and BESS step tests.
