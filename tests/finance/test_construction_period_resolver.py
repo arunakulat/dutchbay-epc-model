@@ -11,11 +11,19 @@ from finance.debt_v14 import _resolve_construction_periods, apply_debt_layer
 
 def _engine_config(section: str | None, values: dict[str, Any]) -> dict[str, Any]:
     """Build a minimal debt-engine config around one financing schema shape."""
+    probe: dict[str, Any] = {"capex": {"usd_total": 100.0}}
+    if section is None:
+        probe.update(values)
+    else:
+        probe[section] = dict(values)
+    n = _resolve_construction_periods(probe)
+    sched = [100.0 / n] * n if n >= 1 else []
+    draw = [1.0 / n] * n if n >= 1 else []
     debt_terms: dict[str, Any] = {
         "debt_ratio": 0.0,
         "tenor_years": 1,
-        "construction_schedule": [100.0],
-        "debt_drawdown_pct": [1.0],
+        "construction_schedule": sched,
+        "debt_drawdown_pct": draw,
         "rates": {"usd_nominal": 0.08},
         "mix": {"usd_commercial_min": 1.0},
         **values,

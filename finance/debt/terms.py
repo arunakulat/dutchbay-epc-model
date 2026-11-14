@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.debt.constants import (
@@ -61,7 +62,17 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                     "construction period(s); IDC is draw-timing-sensitive, so supply "
                     "the EPC milestone draw schedule for a lender-grade figure.",
                 )
+            else:
+                _validate_explicit_drawdowns(
+                    fallback_drawdown, periods, source="Financing_Terms.drawdown_pct"
+                )
             adapted["debt_drawdown_pct"] = fallback_drawdown
+        else:
+            _validate_explicit_drawdowns(
+                adapted["debt_drawdown_pct"],
+                periods,
+                source="Financing_Terms.debt_drawdown_pct",
+            )
         if adapted.get("construction_schedule") is None:
             # Same A1/#91 stance as the draw schedule above (#585): the capex phasing
             # is a placeholder, not a project input — WARN rather than silently
@@ -76,13 +87,36 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 "construction period(s); supply the EPC milestone schedule for a "
                 "lender-grade figure.",
             )
+        elif len(adapted["construction_schedule"]) < periods:
+            raise ValueError(
+                f"Financing_Terms.construction_schedule has "
+                f"{len(adapted['construction_schedule'])} entries, fewer than "
+                f"construction_periods = {periods} (#1507)."
+            )
         if adapted.get("mix") is None:
             adapted["mix"] = {"usd_commercial_min": 1.0}
         return adapted
 
     financing = _section_case_insensitive(params, "financing")
     if financing:
-        return dict(financing)
+        copied = dict(financing)
+        periods = _resolve_construction_periods(params)
+        if copied.get("debt_drawdown_pct") is not None:
+            _validate_explicit_drawdowns(
+                copied["debt_drawdown_pct"],
+                periods,
+                source="financing.debt_drawdown_pct",
+            )
+        if (
+            copied.get("construction_schedule") is not None
+            and len(copied["construction_schedule"]) < periods
+        ):
+            raise ValueError(
+                f"financing.construction_schedule has "
+                f"{len(copied['construction_schedule'])} entries, fewer than "
+                f"construction_periods = {periods} (#1507)."
+            )
+        return copied
 
     debt_cfg = _section_case_insensitive(params, "debt")
     if isinstance(debt_cfg, Mapping):
@@ -118,6 +152,11 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 "period(s); supply the EPC milestone schedule for a "
                 "lender-grade figure.",
             )
+        elif len(construction_schedule) < periods:
+            raise ValueError(
+                f"debt.construction_schedule has {len(construction_schedule)} entries, "
+                f"fewer than construction_periods = {periods} (#1507)."
+            )
         debt_drawdown_pct = debt_cfg.get("debt_drawdown_pct")
         if debt_drawdown_pct is None:
             debt_drawdown_pct = placeholder_debt_drawdown_pct(periods)
@@ -127,6 +166,10 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 f"{debt_drawdown_pct} for {periods} construction period(s); IDC is "
                 "draw-timing-sensitive, so supply the EPC milestone draw schedule "
                 "for a lender-grade figure.",
+            )
+        else:
+            _validate_explicit_drawdowns(
+                debt_drawdown_pct, periods, source="debt.debt_drawdown_pct"
             )
 
         return {
@@ -172,6 +215,25 @@ def _declared_timeline_construction_years(
     if raw is None:
         return None
     return raw, _coerce_period_count(raw)
+
+
+def _validate_explicit_drawdowns(drawdowns: Any, periods: int, *, source: str) -> None:
+    """Validate explicit user drawdown fractions against period count and sum == 1.0."""
+    if not isinstance(drawdowns, Sequence) or isinstance(drawdowns, (str, bytes)):
+        raise ValueError(f"{source} must be a sequence of fractions (#1507).")
+    values = [float(x) for x in drawdowns]
+    if any(not math.isfinite(v) or v < 0.0 for v in values):
+        raise ValueError(
+            f"{source} {values!r} must contain finite non-negative fractions (#1507)."
+        )
+    if periods > 0 and len(values) < periods:
+        raise ValueError(
+            f"{source} has {len(values)} entries, fewer than construction_periods = {periods} (#1507)."
+        )
+    if periods > 0 and abs(sum(values) - 1.0) > 1e-6:
+        raise ValueError(
+            f"{source} {values!r} sums to {sum(values):.6f}, expected 1.0 (within 1e-6) (#1507)."
+        )
 
 
 def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
