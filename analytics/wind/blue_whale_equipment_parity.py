@@ -35,13 +35,13 @@ def _fraction_to_decimal(frac: Fraction) -> Decimal:
 def _load_blue_whale_aep_mwh(summary_path: Path) -> Decimal:
     """Load and cross-check Blue Whale net P50 AEP (MWh/yr) from transfer summary."""
     raw = json.loads(summary_path.read_text(encoding="utf-8"), parse_float=Decimal)
-    net_aep_gwh = raw["yield"]["net_aep_gwh"]
-    p50_net_gwh = raw["uncertainty"]["p50_net_gwh"]
+    net_aep_gwh = _to_decimal(raw["yield"]["net_aep_gwh"])
+    p50_net_gwh = _to_decimal(raw["uncertainty"]["p50_net_gwh"])
     if net_aep_gwh != p50_net_gwh:
         raise ValueError(
             f"net_aep_gwh ({net_aep_gwh}) does not match p50_net_gwh ({p50_net_gwh})"
         )
-    gross_aep_gwh = raw["yield"]["gross_aep_gwh"]
+    gross_aep_gwh = _to_decimal(raw["yield"]["gross_aep_gwh"])
     if abs(gross_aep_gwh * _LOSS_RETENTION - net_aep_gwh) >= Decimal("1e-12"):
         raise ValueError("gross_aep_gwh * loss_retention diverges from net_aep_gwh")
     return net_aep_gwh * Decimal("1000")

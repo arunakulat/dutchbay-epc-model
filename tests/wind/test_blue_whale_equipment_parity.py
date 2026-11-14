@@ -8,6 +8,7 @@ import subprocess
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -21,8 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONF_PATH = REPO_ROOT / "conf" / "blue_whale_equipment_parity.yaml"
 
 
-def _load_cfg() -> dict:
-    return yaml.safe_load(CONF_PATH.read_text(encoding="utf-8"))
+def _load_cfg() -> dict[str, Any]:
+    loaded = yaml.safe_load(CONF_PATH.read_text(encoding="utf-8"))
+    assert isinstance(loaded, dict)
+    return {str(k): v for k, v in loaded.items()}
 
 
 def test_equipment_parity_matches_2026_11_14_review_package() -> None:
