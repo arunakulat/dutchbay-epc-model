@@ -459,9 +459,14 @@ def _usd_share_from_components(components: Any) -> float:
         else:
             if rate is None or units is None:
                 raise ValueError(f"{where} needs both usd_per_unit_year and units")
-            amount = _finite(rate, f"{where}.usd_per_unit_year") * _finite(
-                units, f"{where}.units"
-            )
+            # Each factor is checked on its own: a negative rate times negative units
+            # is a positive product that the amount check below would let through.
+            per_unit = _finite(rate, f"{where}.usd_per_unit_year")
+            count = _finite(units, f"{where}.units")
+            for factor, label in ((per_unit, "usd_per_unit_year"), (count, "units")):
+                if factor < 0.0:
+                    raise ValueError(f"{where}.{label} must be >= 0; got {factor!r}")
+            amount = per_unit * count
         if amount < 0.0:
             raise ValueError(f"{where} amount must be >= 0; got {amount!r}")
         if comp.get("usd_share") is None:
