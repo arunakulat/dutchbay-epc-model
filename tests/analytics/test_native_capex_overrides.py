@@ -265,6 +265,9 @@ def test_batch_analytics_native_matches_usd(tmp_path: Path) -> None:
     assert left.debt_result == right.debt_result
     assert left.kpis == right.kpis
     assert any(row.get("total_depreciation_lkr") for row in left.annual_rows)
+    # The batch manifest is stamped from the authored scenario (declared boundary).
+    assert left.run_manifest["manifest_schema_version"] == "1.0"
+    assert "native_capex" not in left.run_manifest
 
 
 def test_capex_mc_native_matches_usd_magnitude() -> None:
@@ -306,3 +309,25 @@ def test_declared_boundaries_fail_closed(tmp_path: Path) -> None:
         solve_for_min_capex_given_irr_floor(str(path), None, 0.05)
     with pytest.raises(PipelineValidationError, match="conflicts with capex.input"):
         optimize_capex_contingency(str(path), base_capex_usd=1.0e7, n_steps=3)
+
+
+def test_declared_analytics_boundaries(tmp_path: Path) -> None:
+    """The multi-technology tornado refuses per-technology generation CAPEX, and the
+    returns block is omitted, on a native scenario (DOM-1645-R4-03)."""
+    from analytics.pipeline_analytics_v14 import run_v14_pipeline_with_analytics
+    from analytics.portfolio.multi_tech_tornado import run_multi_tech_tornado
+
+    usd, native = cases()
+    assert run_multi_tech_tornado(usd)
+    with pytest.raises(ValueError, match="capex.usd_total is required to couple"):
+        run_multi_tech_tornado(native)
+    returns = {}
+    for name, cfg in (("usd", usd), ("native", native)):
+        path = tmp_path / f"{name}.yaml"
+        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        result = run_v14_pipeline_with_analytics(
+            str(path), enable_returns=True, enable_risk=False
+        )
+        returns[name] = result["analytics_result"]["returns_analysis"]
+    assert returns["usd"] is not None
+    assert returns["native"] is None

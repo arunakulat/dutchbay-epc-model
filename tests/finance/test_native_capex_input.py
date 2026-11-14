@@ -558,10 +558,18 @@ def test_resolved_values_are_checked_exactly(priced: bool, up: bool) -> None:
 
 
 @pytest.mark.parametrize("up", [True, False], ids=["above", "below"])
-def test_spot_must_equal_the_conversion_rate_exactly(up: bool) -> None:
+@pytest.mark.parametrize(
+    "build",
+    [config, lambda: normalize_native_capex(config()), priced_resolved],
+    ids=["authored", "resolved", "priced_resolved"],
+)
+def test_spot_must_equal_the_conversion_rate_exactly(
+    build: Callable[[], dict[str, Any]], up: bool
+) -> None:
     """One ulp between spot and rate converts at one rate and runs at another
-    (ASSURANCE-1645-05c)."""
-    cfg = config()
+    (ASSURANCE-1645-05c), including on an already-resolved config, where CAPEX
+    would otherwise stay at the old rate (ASSURANCE-1645-06)."""
+    cfg = build()
     cfg["fx"]["start_lkr_per_usd"] = _one_ulp(317.25, up)
     with pytest.raises(
         ValueError, match="conversion rate must equal fx.start_lkr_per_usd"
