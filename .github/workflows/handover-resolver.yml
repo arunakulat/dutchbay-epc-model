@@ -41,5 +41,7 @@ jobs:
 
       - name: Run Handover Continuity and Policy Tests
         run: |
-          pip install pytest
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e ".[dev]"
           python -m pytest tests/lint/test_session_handover_policy.py -q
