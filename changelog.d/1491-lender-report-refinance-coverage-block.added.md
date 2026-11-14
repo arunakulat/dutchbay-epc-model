@@ -1,0 +1,1 @@
+- Surface the refinanced-balloon coverage block (``debt_result['refinance']``) in ``ReportContext`` and the lender report template under the mandatory F-5 non-reliance caveat (#1491).
