@@ -44,6 +44,7 @@ import numpy.typing as npt
 
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.samplers import generate_lhs_samples
+from finance.cashflow_v14_params import _resolve_opex_pre_cod_years
 from finance.irr import irr, npv
 from solar_resource.pv_bess_dispatch import (
     SUPPORTED_RATES,
@@ -77,16 +78,21 @@ METRICS = (
 STATISTICS = ("p50", "p90", "p10", "mean")
 
 
+def _key_sort_order(item: Any) -> tuple[str, str]:
+    """Provide a deterministic sort key that handles mixed-type keys without TypeError."""
+    return (type(item).__name__, str(item))
+
+
 def _strict(raw: Mapping[str, Any], keys: Sequence[str], where: str) -> None:
     """Refuse a mapping whose keys are not exactly ``keys`` (``FRAMEWORK-02``)."""
     if not isinstance(raw, Mapping):
         raise ValueError(f"{where} must be a mapping")
-    missing = sorted(set(keys) - set(raw))
-    extra = sorted(set(raw) - set(keys))
+    missing = sorted(set(keys) - set(raw), key=_key_sort_order)
+    extra = sorted(set(raw) - set(keys), key=_key_sort_order)
     if missing or extra:
         raise ValueError(
             f"{where}: missing keys {missing} and unknown keys {extra}; "
-            f"expected exactly {sorted(keys)}."
+            f"expected exactly {sorted(keys, key=_key_sort_order)}."
         )
 
 
@@ -823,6 +829,119 @@ class PointInputs:
 
 
 @dataclass(frozen=True)
+class ProjectOpexBasis:
+    """Scenario rates and an explicitly assumed installed DC/nameplate ratio."""
+
+    components: Tuple[Dict[str, Any], ...]
+    dc_per_nominal: float
+    pre_cod_years: int
+
+    def at_size(
+        self, dc_mwp: float, bess_energy_mwh: float
+    ) -> Tuple[float, float, List[Dict[str, Any]]]:
+        """Return total, unit O&M, and the scaled engine components."""
+        solar = dict(self.components[0], units=_num(dc_mwp, "PV DC", lo=0) * 1000)
+        bess = dict(
+            self.components[1],
+            units=_num(bess_energy_mwh, "BESS nominal", lo=0)
+            * 1000
+            * self.dc_per_nominal,
+        )
+        overhead = dict(self.components[2])
+        unit = (
+            solar["units"] * solar["usd_per_unit_year"]
+            + bess["units"] * bess["usd_per_unit_year"]
+        )
+        return unit + overhead["usd_per_year"], unit, [solar, bess, overhead]
+
+
+def project_opex_basis(
+    scenario: Mapping[str, Any], dc_per_nominal: float, fixed_opex: float
+) -> ProjectOpexBasis:
+    """Validate the scenario's all-LKR O&M basis before scaling any project size."""
+
+    def number(value: Any, path: str, *, lo: float = 0.0) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{path} must be a finite O&M number")
+        try:
+            return _num(value, path, lo=lo)
+        except (TypeError, OverflowError) as exc:
+            raise ValueError(f"{path} must be a finite O&M number") from exc
+
+    ratio = number(dc_per_nominal, "BESS DC/nominal ratio", lo=1.0)
+    opex = scenario.get("opex")
+    if not isinstance(opex, Mapping):
+        raise ValueError("scenario.opex must supply the project O&M basis")
+    split = opex.get("currency_split")
+    if not isinstance(split, Mapping):
+        raise ValueError("scenario.opex.currency_split must supply named components")
+    if number(split.get("lkr_escalation_pct"), "LKR escalation", lo=0) != number(
+        opex.get("escalation_pct"), "O&M escalation", lo=0
+    ):
+        raise ValueError("O&M escalation must match the LKR component escalation")
+    parts = split.get("components")
+    names = ("solar_om", "bess_om", "insurance_land_spv")
+    if not isinstance(parts, list) or len(parts) != 3:
+        raise ValueError("project O&M requires exactly the three named components")
+    component_names = []
+    for index, part in enumerate(parts):
+        path = f"scenario.opex.currency_split.components[{index}]"
+        if not isinstance(part, Mapping):
+            raise ValueError(f"{path} must be a named O&M mapping")
+        name = part.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{path}.name must be a nonempty string")
+        component_names.append(name)
+    if set(component_names) != set(names):
+        raise ValueError("project O&M requires exactly the three named components")
+    ordered = tuple(dict(next(p for p in parts if p["name"] == name)) for name in names)
+    for index, part in enumerate(ordered):
+        keys = (
+            ("name", "usd_per_unit_year", "units", "usd_share")
+            if index < 2
+            else ("name", "usd_per_year", "usd_share")
+        )
+        _strict(part, keys, f"O&M {names[index]}")
+        if number(part.get("usd_share"), "O&M USD share", lo=0) != 0:
+            raise ValueError("project sizing unit O&M requires all-LKR components")
+        for key in keys[1:-1]:
+            part[key] = number(part.get(key), f"O&M {names[index]}.{key}", lo=0)
+    if not math.isclose(
+        ordered[2]["usd_per_year"], number(fixed_opex, "fixed O&M", lo=0), abs_tol=1e-6
+    ):
+        raise ValueError("fixed O&M must match scenario insurance, land and SPV")
+    try:
+        nominal_value = scenario["generation"]["technologies"]["bess_1"]["energy_mwh"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(
+            "scenario.generation.technologies.bess_1.energy_mwh is required"
+        ) from exc
+    nominal = number(
+        nominal_value,
+        "scenario BESS nominal",
+        lo=0,
+    )
+    if not math.isclose(
+        ordered[1]["units"], nominal * 1000 * ratio, rel_tol=1e-9, abs_tol=1e-6
+    ):
+        raise ValueError(
+            "BESS scenario DC units do not match nominal energy and scaling assumption"
+        )
+    scenario_total = (
+        sum(p["units"] * p["usd_per_unit_year"] for p in ordered[:2])
+        + ordered[2]["usd_per_year"]
+    )
+    if not math.isclose(
+        scenario_total,
+        number(opex.get("usd_per_year"), "scenario O&M", lo=0),
+        rel_tol=1e-9,
+        abs_tol=1e-6,
+    ):
+        raise ValueError("scenario O&M components do not match total")
+    return ProjectOpexBasis(ordered, ratio, _resolve_opex_pre_cod_years(scenario))
+
+
+@dataclass(frozen=True)
 class Context:
     """Fixed model context for every grid point.
 
@@ -850,6 +969,7 @@ class Context:
     grid_civils_development_usd: float
     fixed_opex_usd_per_year: float
     losses_on_charge: bool = False
+    project_opex: Optional[ProjectOpexBasis] = None
 
 
 def _bess_for(
@@ -886,7 +1006,7 @@ def engine_overrides(
     total = wind_capex + pv_capex_usd + bess_capex_usd + ctx.grid_civils_development_usd
     cap = rep.project_capacity_mw
     t = "generation.technologies"
-    return {
+    overrides: Dict[str, Any] = {
         "project.capacity_mw": cap,
         f"{t}.solar.capacity_mw": rep.solar_capacity_mw,
         f"{t}.solar.capacity_factor": rep.solar_capacity_factor,
@@ -909,6 +1029,10 @@ def engine_overrides(
         "opex.usd_per_year": opex_usd_per_year,
         "opex.opex_per_kw_yr_usd": opex_usd_per_year / (cap * 1000.0),
     }
+    if ctx.project_opex is not None:
+        _, _, components = ctx.project_opex.at_size(point.dc_mwp, point.bess_energy_mwh)
+        overrides["opex.currency_split.components"] = components
+    return overrides
 
 
 def unit_pretax_cashflows_usd(
@@ -1016,6 +1140,11 @@ def evaluate_point(
         + price.bess_opex_usd_per_kwh_year * point.bess_energy_mwh * 1000.0
     )
     unit_opex = opex - ctx.fixed_opex_usd_per_year
+    if ctx.project_opex is not None:
+        opex, unit_opex, _ = ctx.project_opex.at_size(
+            point.dc_mwp, point.bess_energy_mwh
+        )
+        unit_opex *= (1.0 + esc / 100.0) ** ctx.project_opex.pre_cod_years
     result = PointResult(
         dc_ac_ratio=point.dc_ac_ratio,
         dc_mwp=point.dc_mwp,
@@ -2051,7 +2180,15 @@ def run_project_sizing(
         if isinstance(val, bool) or not isinstance(val, int) or val < 1:
             raise ValueError(f"monte_carlo.{name} must be a positive integer")
     plant = sizing_cfg["plant"]
-    _strict(plant, ("grid_civils_development_usd", "fixed_opex_usd_per_year"), "plant")
+    _strict(
+        plant,
+        (
+            "grid_civils_development_usd",
+            "fixed_opex_usd_per_year",
+            "bess_dc_per_nominal",
+        ),
+        "plant",
+    )
     objective = sizing_cfg["objective"]
     _strict(
         objective,
@@ -2101,6 +2238,9 @@ def run_project_sizing(
         not reg.losses_on_charge and sens_rte > template.charge_efficiency
     ):
         raise ValueError("sensitivities.round_trip_efficiency is not physical here")
+    opex_basis = project_opex_basis(
+        scenario, plant["bess_dc_per_nominal"], plant["fixed_opex_usd_per_year"]
+    )
     ctx = Context(
         scenario=scenario,
         bess_template=template,
@@ -2115,6 +2255,7 @@ def run_project_sizing(
             plant["fixed_opex_usd_per_year"], "plant.fixed_opex", lo=0.0
         ),
         losses_on_charge=reg.losses_on_charge,
+        project_opex=opex_basis,
     )
     trials = draw_trials(
         n_trials=n_trials,
@@ -2574,6 +2715,10 @@ def run_project_sizing(
         "years": years,
         "objective": {"metric": metric, "statistic": statistic},
         "land_max_tables_by_bess_power_mw": {str(k): v for k, v in land_max.items()},
+        "opex_basis": {
+            "source": "scenario.opex.currency_split.components",
+            **asdict(opex_basis),
+        },
         "bess_duration_h": duration,
         "losses_on_charge": reg.losses_on_charge,
         "export_limit_mw": dcfg.export_limit_mw,
@@ -2673,6 +2818,8 @@ __all__ = [
     "run_sizing",
     "site_context",
     "Context",
+    "ProjectOpexBasis",
+    "project_opex_basis",
     "DIMENSIONS",
     "InverterMatch",
     "InverterSpec",
