@@ -40,6 +40,8 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
+from wind_resource.bankable_aep import gaussian_k_star
+
 logger = logging.getLogger(__name__)
 
 # IEC-37 style omnidirectional single-turbine defaults are intentionally NOT
@@ -122,9 +124,11 @@ def _build_wind_farm_model(
 ) -> Any:
     """Construct the PyWake Bastankhah-Porte-Agel 2014 wind-farm model.
 
-    Identical site/turbine/closure choices to
-    :func:`wind_resource.bankable_aep.model_wake_loss`, so a candidate scored here
-    reconciles with the bankable engine.
+    Matches :func:`wind_resource.bankable_aep.model_wake_loss` on its default
+    ``Bastankhah_PorteAgel_2014`` branch (``deficit_model="bastankhah"`` / ``"bpa"``)
+    via the shared :func:`wind_resource.bankable_aep.gaussian_k_star` closure. The
+    non-default ``TurboGaussianDeficit`` branch uses TurbOPark turbulence propagation
+    rather than ``k*`` and is outside this optimizer (#1434).
     """
     from py_wake.literature.gaussian_models import Bastankhah_PorteAgel_2014
     from py_wake.site import UniformWeibullSite
@@ -159,9 +163,9 @@ def _build_wind_farm_model(
         k=[float(weibull_k)] * n_sectors,
         ti=float(turbulence_intensity),
     )
-    # Niayifar & Porte-Agel (2016) TI-based wake-expansion closure — same as the
-    # bankable engine's Bastankhah-Porte-Agel 2014 default.
-    k_star = 0.38 * float(turbulence_intensity) + 0.004
+    # Niayifar & Porte-Agel (2016) TI-based wake-expansion closure via the single
+    # source of truth in wind_resource.bankable_aep (#1434).
+    k_star = gaussian_k_star(float(turbulence_intensity))
     return Bastankhah_PorteAgel_2014(site, wt, k=k_star)
 
 
