@@ -9,6 +9,8 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT_CONFIG = ROOT / ".codex" / "config.toml"
 ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
@@ -136,6 +138,67 @@ def test_local_setup_reuses_the_shared_contract_without_path_laundering() -> Non
     assert "setup:\n\t./setup_venv.sh" in makefile
 
 
+def _extract_venv_provisioning_branches(script: str) -> tuple[str, str]:
+    """Extract (existing_branch, created_branch) from setup_venv.sh.
+
+    Bounds the venv-existence conditional by tracking bash if/fi nesting
+    so nested conditionals or subsequent blocks (such as pre-commit hooks)
+    do not leak into or truncate the isolated branches (#1265).
+    """
+    marker = 'if [ -e "$VENV_DIR" ]; then'
+    start_idx = script.find(marker)
+    if start_idx == -1:
+        raise ValueError(f"setup script missing conditional: {marker!r}")
+
+    lines = script[start_idx + len(marker) :].splitlines(keepends=True)
+    depth = 0
+    existing_lines: list[str] = []
+    created_lines: list[str] = []
+    found_else = False
+    found_fi = False
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            if not found_else:
+                existing_lines.append(line)
+            else:
+                created_lines.append(line)
+            continue
+
+        if re.match(r"^if\b", stripped):
+            depth += 1
+        elif stripped == "fi":
+            if depth > 0:
+                depth -= 1
+            else:
+                found_fi = True
+                break
+        elif stripped == "else" and depth == 0:
+            if found_else:
+                raise ValueError(
+                    "duplicate top-level 'else' in venv provisioning conditional"
+                )
+            found_else = True
+            continue
+
+        if not found_else:
+            existing_lines.append(line)
+        else:
+            created_lines.append(line)
+
+    if not found_else:
+        raise ValueError(
+            "setup script missing outer 'else' in venv provisioning conditional"
+        )
+    if not found_fi:
+        raise ValueError(
+            "setup script missing outer 'fi' in venv provisioning conditional"
+        )
+
+    return "".join(existing_lines), "".join(created_lines)
+
+
 def test_local_setup_reconciles_an_existing_environment_with_the_lock() -> None:
     """R21 step (2) is "create or reconcile"; validation alone is not reconciliation.
 
@@ -153,18 +216,77 @@ def test_local_setup_reconciles_an_existing_environment_with_the_lock() -> None:
     setup = SETUP_SCRIPT.read_text(encoding="utf-8")
     install = '-m pip install --quiet -r "$REQUIREMENTS"'
 
-    existing_branch, separator, created_branch = setup.partition("\nelse\n")
-    assert separator, "setup_venv.sh no longer branches on an existing environment"
+    existing_branch, created_branch = _extract_venv_provisioning_branches(setup)
 
     # Both paths must land the committed lock, not just the freshly-created one.
     assert install in existing_branch
     assert install in created_branch
+
+    # created_branch must be bounded to the provisioning block, not absorbing downstream steps (#1265)
+    assert "-m pre_commit install" not in created_branch
+    assert "Environment ready" not in created_branch
 
     # The reconcile must precede the health check, or a drifted environment is
     # still judged on its pre-reconcile state.
     assert existing_branch.index(install) < existing_branch.index(
         "dutchbay_validate_venv"
     )
+
+
+def test_venv_provisioning_branches_negative_controls() -> None:
+    """Negative controls for venv provisioning branch isolation (#1265, VERIFY-01).
+
+    Proves the extractor rejects malformed scripts, ignores nested and downstream
+    else/fi tokens, and proves the guard assertions fail when either branch is mutated.
+    """
+    setup = SETUP_SCRIPT.read_text(encoding="utf-8")
+    install = '-m pip install --quiet -r "$REQUIREMENTS"'
+    existing_branch, created_branch = _extract_venv_provisioning_branches(setup)
+
+    # 1. Missing outer conditional
+    with pytest.raises(ValueError, match="missing conditional"):
+        _extract_venv_provisioning_branches("echo hello\n")
+
+    # 2. Missing outer else
+    broken_no_else = setup.replace("\nelse\n", "\n# no else\n", 1)
+    with pytest.raises(ValueError, match="missing outer 'else'"):
+        _extract_venv_provisioning_branches(broken_no_else)
+
+    # 3. Missing outer fi
+    broken_no_fi = setup.replace("\nfi\n", "\n# no fi\n", 1)
+    with pytest.raises(ValueError, match="missing outer 'fi'"):
+        _extract_venv_provisioning_branches(broken_no_fi)
+
+    # 4. Mutation negative control: removing install from existing branch fails assertion
+    mutated_existing = existing_branch.replace(install, "# omitted install")
+    with pytest.raises(AssertionError):
+        assert install in mutated_existing
+
+    # 5. Mutation negative control: removing install from created branch fails assertion
+    mutated_created = created_branch.replace(install, "# omitted install")
+    with pytest.raises(AssertionError):
+        assert install in mutated_created
+
+    # 6. Mutation negative control: reversing reconcile and validation order fails assertion
+    reconcile_idx = existing_branch.index(install)
+    validate_idx = existing_branch.index("dutchbay_validate_venv")
+    assert reconcile_idx < validate_idx
+    with pytest.raises(AssertionError):
+        assert validate_idx < reconcile_idx
+
+    # 7. Immunity to nested else inside existing branch
+    nested_else_script = setup.replace(
+        'if [ -L "$VENV_DIR" ] || [ ! -d "$VENV_DIR" ]; then',
+        'if [ -L "$VENV_DIR" ] || [ ! -d "$VENV_DIR" ]; then\n'
+        '    echo "symlink"\n'
+        "  else\n"
+        '    echo "real"',
+    )
+    ex_nested, cr_nested = _extract_venv_provisioning_branches(nested_else_script)
+    assert install in ex_nested
+    assert install in cr_nested
+    assert "-m pre_commit install" not in cr_nested
+    assert "Environment ready" not in cr_nested
 
 
 def test_envrc_activation_reuses_the_shared_contract_without_provisioning() -> None:

@@ -1,0 +1,1 @@
+- Read equity schedule ``debt_outstanding_usd`` through ``annual_row_debt_period_map`` instead of indexing raw ``debt_result['debt_outstanding']`` by operating row, and add ``debt_period``, ``operating_year``, and ``phase`` fields onto ``DebtScheduleRow`` in ``api.pipeline_api`` (#1506).

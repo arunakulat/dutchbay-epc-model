@@ -356,7 +356,9 @@ def evaluated_scenario_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     configuration the engine financed. Idempotent; a configuration without the block is
     returned as a copy.
     """
-    return apply_capex_price_basis(config)
+    from finance.native_cost_inputs import normalize_native_capex
+
+    return apply_capex_price_basis(normalize_native_capex(config))
 
 
 def evaluate_scenario_from_dict(
