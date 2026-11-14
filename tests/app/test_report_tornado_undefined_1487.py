@@ -9,6 +9,8 @@ adds a note naming the undefined points and drivers.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.api.responses import CaseResult
@@ -43,6 +45,13 @@ def _tornado_section(tornado: TornadoBlock) -> str:
     start = html.index("Sensitivity Tornado")
     end = html.index("</section>", start)
     return html[start:end]
+
+
+def _note_text(section: str) -> str:
+    """The note's rendered text with HTML whitespace collapsed, as a reader sees it."""
+    start = section.index(_NOTE_CLASS)
+    note = section[section.index(">", start) + 1 : section.index("</p>", start)]
+    return re.sub(r"\s+", " ", note).strip()
 
 
 def _defined_row(label: str = "Tariff") -> TornadoRow:
@@ -87,8 +96,18 @@ def test_undefined_cells_render_as_undefined_with_a_note() -> None:
     assert _NOTE_CLASS in section
     assert "Undefined points: 1." in section
     assert "Drivers with an undefined point:" in section
-    note = section[section.index(_NOTE_CLASS) :]
-    assert "Debt Tenor" in note
+    note = _note_text(section)
+    # The sentences are joined with a space: the report's Jinja environment trims
+    # block whitespace, which once printed "1.Drivers" (#1692 domain D-1).
+    assert note.endswith(
+        "a value left out. Undefined points: 1. Drivers with an undefined point: "
+        "Debt Tenor."
+    )
+    assert re.search(r"\.\S", note.replace("&rsquo;", "'")) is None
+    # The wording claims no more than the solver shows, matching the #1494
+    # Project IRR note (#1692 domain D-2).
+    assert "resolved no single rate" in note
+    assert "no rate solves" not in note
 
 
 def test_undefined_base_reads_undefined_in_the_caption() -> None:
@@ -132,3 +151,10 @@ def test_note_count_shows_only_when_positive(points: int) -> None:
     assert _NOTE_CLASS in section
     assert ("Undefined points:" in section) is (points > 0)
     assert "Undefined points: 0" not in section
+    note = _note_text(section)
+    expected_tail = (
+        "a value left out. Undefined points: 2. Drivers with an undefined point: Tariff."
+        if points
+        else "a value left out. Drivers with an undefined point: Tariff."
+    )
+    assert note.endswith(expected_tail)
