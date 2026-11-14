@@ -96,15 +96,18 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # sponsor cures in years 16-20 outweigh the distributions at any negative rate). Before, at
 # 15.24.0 (v0.7): project NPV -4439999.608625973, equity NPV -5075831.700126602, equity IRR
 # -0.04998720726172046, min DSCR 0.8681005901376199.
-# Re-pinned for the battery optimisation (v0.9: the optimiser's 107 tables, 3.5 MW AC and
-# 0.5 MW / 2.0 MWh, sized on this scenario's own basis; owner, 2026-11-07: "Whatever the
-# optimiser picks"). Equity IRR stays undefined. Before (v0.8): project NPV -5579964.010141663,
-# equity NPV -6167136.817522649, min DSCR 0.868213653807526.
+# Re-pinned for the battery search (v0.9: 107 tables, 3.5 MW AC and 0.1 MW / 0.4 MWh, the
+# search grid's floor on every decision variable, sized on this scenario's own basis; owner,
+# 2026-11-07: "Whatever the optimiser picks"; 2026-11-14: "Battery floor 0.1 MW, PV
+# unchanged"). Equity IRR stays undefined. Before (v0.8): project NPV -5579964.010141663,
+# equity NPV -6167136.817522649, min DSCR 0.868213653807526. (A first v0.9 at the 0.5 MW
+# floor, never on main: project NPV -4518152.075386281, equity NPV -4628674.688512776, min
+# DSCR 0.8702721240311019.)
 SOLAR_BESS_PINS = {
-    "project_npv": -4518152.075386281,
-    "equity_npv": -4628674.688512776,
+    "project_npv": -4477786.514808497,
+    "equity_npv": -4557056.390826946,
     "equity_irr": None,
-    "min_dscr": 0.8702721240311019,
+    "min_dscr": 0.8716987467623586,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -1011,11 +1014,18 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
             (r["posttax_cfads_lkr"] - r["risk_haircut_amount_lkr"]) / r["fx_rate"],
             rel=1e-12,
         )
-    assert sum(r["tax_lkr"] for r in rows) > 0.0
-    # Responsiveness at a held discount rate: a higher tax rate lowers the objective. (With
-    # the build-up WACC driving the rate, tax also lowers the rate; see the PR's challenge
-    # points.)
-    held = {"wacc.drives_discount_rate": False}
+    # At v0.9's grid-floor size the project never has a taxable profit, so its after-tax
+    # objective equals the pre-tax one (#1691: disclosed in STATUS). Under v0.8 tax was paid.
+    assert sum(r["tax_lkr"] for r in rows) == 0.0
+    # Responsiveness at a held discount rate, where tax bites (a 30 LKR/kWh generation tariff):
+    # tax is paid, and a higher tax rate lowers the objective. (With the build-up WACC driving
+    # the rate, tax also lowers the rate; see the PR's challenge points.)
+    held = {"wacc.drives_discount_rate": False, "tariff.lkr_per_kwh": 30.0}
+    dear = evaluate_with_overrides(
+        str(SOLAR_BESS), overrides=held, return_full_result=True
+    )
+    assert isinstance(dear, dict)
+    assert sum(r["tax_lkr"] for r in dear["annual_rows"]) > 0.0
     untaxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.0})
     taxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.30})
     assert taxed["project_npv"] < untaxed["project_npv"]
