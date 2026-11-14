@@ -1,0 +1,143 @@
+# Blue Whale: Dual-Currency FX, Tenor-Tail, and Evidence-Status Screening Config
+#
+# Read by scripts/run_blue_whale_fx_tenor_screening_v14.py (Hydra, one JSON object on stdout:
+# CLI-01, CLI-03) through analytics.finance.blue_whale_fx_tenor_screening.
+# Incorporates the recoverable dual-currency loan review, dated FX observations with
+# evidence status, tenor-tail validation, and reconstructed screening cash flows from
+# Blue_Whale_Research_Handoff_2026-11-14 (BW-FIN-COST-20261114, v1.0).
+#
+# Standalone review screening tool complementary to analytics.evaluation_v14 and PR #1678.
+# Does NOT modify frozen scenario YAMLs (scenarios/blue_whale_*.yaml) or publish confidential terms.
+
+schema_version: blue_whale_fx_tenor_screening_v1
+retrieved: "2026-11-14"
+status: "New transparent reconstruction not an exact reproduction of original chat"
+
+disclosure_note: >-
+  Screening assumptions and dated secondary FX observations are compiled for review only.
+  No confidential raw price, private quote, or unapproved lender term enters this file.
+
+# Dated historical exchange-rate observations with evidence provenance
+fx_observations:
+  - date: "2021-12-31"
+    lkr_per_usd: 200.43
+    type: "year_end"
+    evidence_status: "conversation_transcription_primary_series_not_refetched"
+  - date: "2022-12-31"
+    lkr_per_usd: 363.11
+    type: "year_end"
+    evidence_status: "conversation_transcription_primary_series_not_refetched"
+  - date: "2023-12-31"
+    lkr_per_usd: 323.92
+    type: "year_end"
+    evidence_status: "conversation_transcription_primary_series_not_refetched"
+  - date: "2024-12-31"
+    lkr_per_usd: 292.58
+    type: "year_end"
+    evidence_status: "CBSL_2025_review_and_2026_press_release"
+  - date: "2025-12-31"
+    lkr_per_usd: 309.99
+    type: "year_end"
+    evidence_status: "CBSL_2025_review_and_2026_press_release"
+  - date: "2026-11-13"
+    lkr_per_usd: 332.50
+    type: "partial_year_indicative"
+    evidence_status: "conversation_plus_secondary_CBSL_republication_not_primary_refetch"
+
+# Historical reference windows for actual-day / 365.25 CAGR analysis
+fx_cagr_benchmark_windows:
+  - label: "five_year_near_matched"
+    start: 200.78
+    end: 332.50
+    start_date: "2021-11-24"
+    end_date: "2026-11-13"
+  - label: "post_crisis"
+    start: 363.11
+    end: 332.50
+    start_date: "2022-12-31"
+    end_date: "2026-11-13"
+  - label: "recent"
+    start: 292.58
+    end: 332.50
+    start_date: "2024-12-31"
+    end_date: "2026-11-13"
+
+# Dual-currency screening parameters (screening controls, not v14 lender commitments)
+screening_parameters:
+  fx_close_lkr_per_usd: 333.79
+  construction_years: 2
+  ppa_years: 20
+  lender_tail_years: 0
+  dfi_share: 0.3
+  dfi_rate_decimal: 0.084       # SOFR 3.90% + 4.50% margin
+  local_rate_decimal: 0.1276    # AWPR 11.01% + 1.75% margin
+  dfi_tenor_years: 15
+  local_tenor_years: 10
+  maximum_gearing_decimal: 0.7
+  min_p50_dscr: 1.3
+  min_p90_dscr: 1.1
+  average_p50_dscr: 1.5
+  tariff_fixed_lkr_per_kwh: 20.8
+  tariff_om_lkr_per_kwh: 4.93
+  tariff_om_escalation_decimal: 0.0
+  generation_degradation_decimal: 0.005
+  opex_usd_share: 0.7
+  usd_opex_escalation_decimal: 0.025
+  lkr_opex_escalation_decimal: 0.05
+  annual_credit_fee_decimal: 0.0175
+  tax_rate_decimal: 0.3
+  allowance_years: 20
+  loss_carryforward_years: 6
+  fx_depreciation_decimal: 0.07
+  fx_shock_decimal: 0.0
+  shock_operating_year: 5
+
+# Historical Dutch Bay screening reference comparator cases
+cases:
+  "15":
+    capex_usd: 167860000
+    p50_gwh: 464.3
+    p90_gwh: 404.4
+    opex_usd_equivalent_year1: 3540000
+    description: "15-turbine Dutch Bay farm illustration (reconstructed screening reference)"
+  "14":
+    capex_usd: 159120000
+    p50_gwh: 433.2
+    p90_gwh: 377.3
+    opex_usd_equivalent_year1: 3359106
+    description: "14-turbine Dutch Bay farm illustration (reconstructed screening reference)"
+
+# Projection depreciation rates evaluated in screening sensitivity
+projection_depreciation_rates:
+  - 0.0589
+  - 0.0700
+  - 0.0800
+  - 0.1068
+  - 0.1200
+
+# Fixed debt stress grid (held debt = 87,770,000 USD)
+stress_grid:
+  held_debt_usd: 87770000
+  shock_operating_year: 5
+  depreciation_rates:
+    - 0.0000
+    - 0.0300
+    - 0.0589
+    - 0.0700
+    - 0.0800
+    - 0.1068
+    - 0.1200
+  shock_decimals:
+    - 0.0
+    - 0.2
+    - 0.3
+
+# Explicit limitations of the reconstructed screening model
+limitations:
+  - "Annual end-period payments; no construction draw profile or IDC capitalization"
+  - "20-year straight-line tax allowance is a reconstruction assumption, not legal tax advice"
+  - "14-unit OPEX is the chat value 2.8467m times its illustrative 1.18 VAT factor"
+  - "OPEX split 70/30 is a new screening assumption for Dutch Bay, not an executed contract"
+  - "No sponsor IRR, discount-rate selection, LLCR, hedge premium, DSRA, working capital, BESS funding or reserve movement"
+  - "PPA eligibility is conditional; 3.85 percent perpetual tariff escalation is a scenario only"
+  - "1.75 percent credit fee is inherited screening input, not a guarantee quote"
