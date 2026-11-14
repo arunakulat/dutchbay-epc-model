@@ -92,7 +92,9 @@ def test_undefined_cells_render_as_undefined_with_a_note() -> None:
     ]
     assert row_html.count(">undefined<") == 2  # downside and swing
     assert "1.01%" in row_html  # the defined upside still prints
-    assert _ABSENT not in section  # no bare em-dash anywhere in the tornado
+    # No cell prints the absent-value em-dash. Checked per cell, so a literal "—" in
+    # the section heading cannot trip it (#1692 assurance AS-L2).
+    assert f">{_ABSENT}<" not in section
     assert _NOTE_CLASS in section
     assert "Undefined points: 1." in section
     assert "Drivers with an undefined point:" in section
@@ -125,7 +127,7 @@ def test_undefined_base_reads_undefined_in_the_caption() -> None:
     )
     assert "(base undefined)" in section
     assert "Undefined points: 3." in section
-    assert _ABSENT not in section
+    assert f">{_ABSENT}<" not in section
 
 
 def test_fully_defined_tornado_has_no_note() -> None:
