@@ -23,7 +23,10 @@ Usage: bash feasibility_reproduce/run_all_NOV26.sh [options]
                            Every output, Hydra run dir and test/lint cache goes under
                            it; an existing DIR must be owned by the invoking user and
                            not writable by group or others; no "." or ".." components.
-                           A final stage fails if the run wrote any file into the checkout
+                           A final stage fails if any file in the checkout (outside .git
+                           and the venv) is newer than the run's start, or if git status
+                           changed (a new, deleted or modified file). It does not see an
+                           empty directory or a file written with an older mtime
  --require-private         exit 3 before any stage if a confidential input is missing,
                            and exit 3 at the end if any private stage stayed blocked
  --online-security         run network-dependent make security (otherwise offline)
@@ -145,6 +148,8 @@ check_out
 # Anything the run writes into the checkout after this marker fails the final stage.
 CHECKOUT_MARKER="$OUT/.checkout_marker"
 : > "$CHECKOUT_MARKER"
+GIT_STATUS_BEFORE="$OUT/.git_status_before"
+git status --porcelain=v1 --untracked-files=all > "$GIT_STATUS_BEFORE"
 VENV="${DUTCHBAY_VENV:-$REPO/.venv}"
 [[ "$VENV" == /* && -x "$VENV/bin/python" ]] ||
   die "configure governed Python with an absolute DUTCHBAY_VENV (or local .venv)"
@@ -233,7 +238,8 @@ printf 'internal_free_kib=%s\noutput_free_kib=%s\nwork_tmpdir=%s\nmake_version=%
   "$INTERNAL_FREE_KIB" "$OUT_FREE_KIB" "$TMPDIR" "$MAKE_VERSION" >> "$OUT/manifest.txt"
 printf 'validation_profile=%s\n' "$PROFILE" >> "$OUT/manifest.txt"
 # A run of an uncommitted tree must say so: commit= alone would misname it.
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then TREE_DIRTY=yes; else TREE_DIRTY=no; fi
+# Untracked files count too: an untracked module a test imports changes the result.
+if [[ -s "$GIT_STATUS_BEFORE" ]]; then TREE_DIRTY=yes; else TREE_DIRTY=no; fi
 printf 'tree_dirty=%s\n' "$TREE_DIRTY" >> "$OUT/manifest.txt"
 git ls-files '*.py' | LC_ALL=C sort > "$OUT/python_source_inventory.txt"
 printf 'tracked_python_files=%s\n' "$(wc -l < "$OUT/python_source_inventory.txt" | tr -d ' ')" >> "$OUT/manifest.txt"
@@ -275,10 +281,18 @@ scenario() {
     write_artifacts=true run_scoped=true "export_dir=$OUT/scenarios/$slug"
 }
 checkout_residue() {
-  local found
+  local found changed rc=0
   found="$(find "$REPO" \( -path "$REPO/.git" -o -path "$REPO/.venv" -o -path "$VENV" \) \
     -prune -o ! -type d -newer "$CHECKOUT_MARKER" -print)"
-  [[ -z "$found" ]] || { printf 'files written into the checkout since this run started:\n%s\n' "$found"; return 1; }
+  if [[ -n "$found" ]]; then
+    printf 'files written into the checkout since this run started:\n%s\n' "$found"; rc=1
+  fi
+  changed="$(git -C "$REPO" status --porcelain=v1 --untracked-files=all |
+    diff "$GIT_STATUS_BEFORE" - || true)"
+  if [[ -n "$changed" ]]; then
+    printf 'git status of the checkout changed during this run:\n%s\n' "$changed"; rc=1
+  fi
+  return "$rc"
 }
 paths_exist() {
   local f
@@ -346,8 +360,13 @@ if [[ "$PROFILE" == full ]]; then
     --cov=finance --cov=analytics --cov=wind_resource \
     --cov=api --cov=app --cov=solar_resource \
     --cov-report=term-missing --cov-fail-under=95
-  run_step "grid-study" env DUTCHBAY_TEST_MODE=full "$PY" -m pytest \
-    -n "$JOBS" -m grid --tb=short --junitxml="$OUT/pytest_grid.xml"
+  # The base-candidate receipt test writes outputs/ relative to its cwd, which must be the
+  # checkout (it git-archives a pinned base commit). CI's Grid Study job runs it and keeps
+  # that receipt; here it would write into the checkout, so it is left to CI.
+  STEP_NOTE="excludes the CI base-candidate receipt test (CI Grid Study runs it)" \
+    run_step "grid-study" env DUTCHBAY_TEST_MODE=full "$PY" -m pytest \
+    -n "$JOBS" -m grid --tb=short --junitxml="$OUT/pytest_grid.xml" \
+    --ignore=tests/grid/test_base_candidate_physical_receipt.py
   run_step "stochastic-qualification" env DUTCHBAY_TEST_MODE=qualification \
     "$PY" -m pytest -n "$JOBS" -m stochastic_qualification \
     --tb=short --junitxml="$OUT/pytest_stochastic.xml"

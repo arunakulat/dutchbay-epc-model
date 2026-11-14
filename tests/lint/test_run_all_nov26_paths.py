@@ -45,7 +45,7 @@ _REPO_VAR_PATH = re.compile(r"\$REPO/([\w./-]+\.\w+)")
 # Every config the runner hands the engine: a config= override or the scenario() helper.
 _CONFIG_ARG = re.compile(r'config=["\']?([^"\'\s]+\.yaml)')
 _SCENARIO_ARG = re.compile(r'\bscenario "?[^"\s]+"? "?([^"\s]+\.yaml)')
-_PY_CALL = re.compile(r'"\$PY" ([^"\s]+\.py)\b')
+_PY_CALL = re.compile(r'"\$PY" "?([^"\s]+\.py)\b')
 _LENDER = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 _PRIVATE_ENV = (
     "BLUE_WHALE_POWER_CURVE_CSV",
@@ -178,10 +178,18 @@ def _resolve(token: str) -> Path:
     return REPO_ROOT / token
 
 
+_HELPER_CONFIG = re.compile(r'^CONFIG = "([^"]+\.yaml)"', re.MULTILINE)
+
+
 def engine_configs(text: str) -> set[Path]:
-    """Every scenario YAML the runner text hands the engine, resolved."""
+    """Every scenario YAML the runner text, or a kit helper it calls, hands the engine."""
     tokens = set(_CONFIG_ARG.findall(text)) | set(_SCENARIO_ARG.findall(text))
     paths = {_resolve(t) for t in tokens if "$" not in t.replace("$KIT/", "")}
+    for helper in set(_PY_CALL.findall(text)):
+        source = _resolve(helper)
+        if helper.startswith("$KIT/") and source.is_file():
+            constants = _HELPER_CONFIG.findall(source.read_text(encoding="utf-8"))
+            paths |= {REPO_ROOT / c for c in constants}
     loop = _STUDY_LOOP.search(text)
     if loop is not None:
         words = loop.group(1).replace("\\", " ").split()
@@ -200,8 +208,12 @@ def _stale_engine_configs(text: str) -> list[str]:
             bad.append(rel)
             continue
         cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
-        turbines = (cfg.get("turbine") or {}).get("n_turbines")
-        if turbines is not None and turbines != count:
+        stated = [
+            (cfg.get("turbine") or {}).get("n_turbines"),
+            (cfg.get("project") or {}).get("n_turbines"),
+            ((cfg.get("resource") or {}).get("turbines") or {}).get("count"),
+        ]
+        if any(n is not None and n != count for n in stated):
             bad.append(rel)
     return bad
 
@@ -213,13 +225,17 @@ def test_the_config_extractor_sees_each_route_to_the_engine() -> None:
         'run_step "b" scenario y feasibility_reproduce/cache/lender_gridon.yaml\n'
         '  "$PY" run_full_pipeline_v14.py "config=$KIT/cache/lender_gridon.yaml"\n'
         "  config=legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml x\n"
+        "  config=scenarios/dutchbay_mc_enhanced_2025Q4.yaml x\n"
         "  config=scenarios/dutchbay_lendercase_2025Q4.yaml x\n"
     )
     assert _stale_engine_configs(planted) == [
         "feasibility_reproduce/cache/lender_gridon.yaml",
         "legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml",
+        "scenarios/dutchbay_mc_enhanced_2025Q4.yaml",
     ]
-    assert len(engine_configs(planted)) == 3
+    assert len(engine_configs(planted)) == 4
+    helper = '"$PY" "$KIT/lib/mc_run.py" 1 out\n'
+    assert engine_configs(helper) == {_LENDER}
 
 
 def test_every_engine_config_is_a_current_scenario_that_loads() -> None:
@@ -269,20 +285,125 @@ def test_every_hydra_entry_point_gets_a_run_dir_under_out() -> None:
     assert 'f"hydra.run.dir=' in mc_run
 
 
+_REQUIRED_LINES = (
+    # Every place the run writes is under --out or a private mktemp dir (B-3, N-1).
+    "umask 077",
+    "export PYTHONDONTWRITEBYTECODE=1",
+    'export COVERAGE_FILE="$OUT/.coverage"',
+    'TMP_PRIVATE="$(mktemp -d /tmp/dutchbay-nov26-tmp.XXXXXXXX)"',
+    'TMP_WORK="$OUT/tmp"',
+    'export MPLCONFIGDIR="$OUT/cache/matplotlib"',
+    'export NUMBA_CACHE_DIR="$OUT/cache/numba"',
+    'export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p no:cacheprovider"',
+    'export HYPOTHESIS_STORAGE_DIRECTORY="$OUT/cache/hypothesis"',
+    'export RUFF_CACHE_DIR="$OUT/cache/ruff"',
+    'export MYPY_CACHE_DIR="$OUT/cache/mypy"',
+    'export BLACK_CACHE_DIR="$OUT/cache/black"',
+    'hydra_dir() { printf \'hydra.run.dir=%s/hydra/%s\' "$OUT" "$1"; }',
+    # The residue stage's reference points (N-1, N-5).
+    'CHECKOUT_MARKER="$OUT/.checkout_marker"',
+    ': > "$CHECKOUT_MARKER"',
+    'GIT_STATUS_BEFORE="$OUT/.git_status_before"',
+    'git status --porcelain=v1 --untracked-files=all > "$GIT_STATUS_BEFORE"',
+    'if [[ -s "$GIT_STATUS_BEFORE" ]]; then TREE_DIRTY=yes; else TREE_DIRTY=no; fi',
+    'printf \'tree_dirty=%s\\n\' "$TREE_DIRTY" >> "$OUT/manifest.txt"',
+    # Defence in depth after the preflight (N-4).
+    "if ((REQUIRE_PRIVATE)); then exit 3; fi",
+)
+
+
+@pytest.mark.parametrize("line", _REQUIRED_LINES)
+def test_write_locations_and_receipt_lines_are_as_reviewed(line: str) -> None:
+    """#1659 B-3 / N-1 / N-4 / N-5: each reviewed line is present verbatim."""
+    stripped = [ln.strip() for ln in _runner_text().splitlines()]
+    assert line in stripped
+
+
+def test_out_is_checked_again_after_it_is_created() -> None:
+    """#1659 N-2: check, create, re-resolve, check again, in that order."""
+    code = [
+        ln.strip()
+        for ln in _runner_text().splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    seq = ["check_out", 'mkdir -p "$OUT"', 'OUT="$(cd "$OUT" && pwd -P)"', "check_out"]
+    starts = [i for i in range(len(code)) if code[i : i + len(seq)] == seq]
+    assert len(starts) == 1
+    marker = code.index(': > "$CHECKOUT_MARKER"')
+    first_stage = next(i for i, ln in enumerate(code) if ln.startswith("run_step "))
+    assert starts[0] < marker < first_stage
+
+
+def test_the_residue_stage_is_the_last_stage() -> None:
+    """#1659 R3-2: it must run after every stage that could write."""
+    stages = [
+        ln
+        for ln in _logical_lines(_runner_text())
+        if re.search(r'(^|\s)run_step "', ln)
+    ]
+    assert stages[-1].strip() == 'run_step "checkout-residue" checkout_residue'
+    assert sum("checkout_residue" in ln for ln in stages) == 1
+
+
+def _residue_function() -> str:
+    text = _runner_text()
+    start = text.index("checkout_residue() {")
+    end = text.index("\n}\n", start) + 3
+    return text[start:end]
+
+
+@pytest.mark.skipif(
+    shutil.which("bash") is None or shutil.which("git") is None,
+    reason="bash and git are needed",
+)
 @pytest.mark.parametrize(
-    "line",
+    "plant, expect",
     [
-        'export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p no:cacheprovider"',
-        'export HYPOTHESIS_STORAGE_DIRECTORY="$OUT/cache/hypothesis"',
-        'export RUFF_CACHE_DIR="$OUT/cache/ruff"',
-        'export MYPY_CACHE_DIR="$OUT/cache/mypy"',
-        'export BLACK_CACHE_DIR="$OUT/cache/black"',
-        'run_step "checkout-residue" checkout_residue',
+        (None, 0),
+        ("new_file.txt", 1),
+        ("outputs/receipt.json", 1),
+        ("tracked.txt", 1),
+        ("delete:tracked.txt", 1),
+        (".git/new_object", 0),
+        (".venv/lib/new.py", 0),
     ],
 )
-def test_test_and_tool_caches_stay_out_of_the_checkout(line: str) -> None:
-    """#1659 B-3 / N-1 (M12, M13): caches under --out, and a final residue stage."""
-    assert line in _runner_text().splitlines() or f"\n{line}\n" in _runner_text()
+def test_the_residue_check_catches_writes_into_the_checkout(
+    tmp_path: Path, plant: str | None, expect: int
+) -> None:
+    """#1659 R3-2 / R3D-4: the extracted function fails on each kind of write."""
+    repo = tmp_path / "repo"
+    out = tmp_path / "out"
+    (repo / ".venv" / "lib").mkdir(parents=True)
+    out.mkdir()
+    git = ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    (repo / ".gitignore").write_text(".venv/\noutputs/\n", encoding="utf-8")
+    (repo / "tracked.txt").write_text("a\n", encoding="utf-8")
+    subprocess.run([*git, "add", "."], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "init"], check=True)
+    old = 1_600_000_000
+    for path in repo.rglob("*"):
+        os.utime(path, (old, old))
+    script = f"""
+set -euo pipefail
+REPO={str(repo)!r}; VENV={str(repo / ".venv")!r}
+CHECKOUT_MARKER={str(out / ".checkout_marker")!r}
+GIT_STATUS_BEFORE={str(out / ".git_status_before")!r}
+: > "$CHECKOUT_MARKER"
+git -C "$REPO" status --porcelain=v1 --untracked-files=all > "$GIT_STATUS_BEFORE"
+sleep 1
+{_residue_function()}
+PLANT={plant or ""!r}
+case "$PLANT" in
+  "") ;;
+  delete:*) rm "$REPO/${{PLANT#delete:}}" ;;
+  *) mkdir -p "$(dirname "$REPO/$PLANT")"; echo x >> "$REPO/$PLANT" ;;
+esac
+checkout_residue
+"""
+    proc = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
+    assert proc.returncode == expect, proc.stdout + proc.stderr
 
 
 def test_the_full_profile_mirrors_ci_gates() -> None:
@@ -301,29 +422,76 @@ def test_the_full_profile_mirrors_ci_gates() -> None:
     assert ignore in workflow
     full = [ln for ln in lines if '"full-pytest-six-package-95pct-coverage"' in ln]
     assert len(full) == 1 and ignore in full[0]
+    # The receipt test writes outputs/ into its cwd (the checkout); CI's Grid Study job
+    # runs it, so the runner's grid stage leaves it out too (#1659 R3-1).
+    grid = [ln for ln in lines if '"grid-study"' in ln]
+    assert len(grid) == 1 and ignore in grid[0]
+
+
+def test_the_14_turbine_oracle_stage_keeps_its_three_oracles() -> None:
+    """#1659 R3D-4 (DM12)."""
+    stage = [
+        ln
+        for ln in _logical_lines(_runner_text())
+        if '"current-14-turbine-oracles"' in ln
+    ]
+    assert len(stage) == 1
+    for oracle in (
+        "tests/finance/test_multitech_generation.py::"
+        "test_canonical_lendercase_economics_unchanged",
+        "tests/finance/test_lendercase_expected_results.py",
+        "tests/wind/test_dutchbay_14_turbines.py",
+    ):
+        assert oracle in stage[0]
+
+
+def _expected_basis_fragments(cfg: dict) -> list[str]:
+    """An independent reading of what a study note must say about its own YAML."""
+    techs = (cfg.get("generation") or {}).get("technologies") or {}
+    count = (cfg.get("turbine") or {}).get("n_turbines")
+    if count is None:
+        count = (cfg.get("project") or {}).get("n_turbines")
+    frags = [f"{count}-turbine layout"] if count is not None else ["no turbine layout"]
+    frags += [f"{name} {spec['capacity_mw']} MW" for name, spec in techs.items()]
+    if count is None:
+        frags += [
+            f"capacity factor {spec['capacity_factor']}" for spec in techs.values()
+        ] or [f"capacity factor {cfg['project']['capacity_factor']}"]
+    if len(techs) > 1:
+        frags.append(f"({cfg['project']['capacity_mw']} MW total)")
+    return frags
 
 
 def test_study_receipts_name_what_each_row_models() -> None:
-    """#1659 D-1 / R2D-1 (N-3 M22): synthetic and flat-capacity rows are labelled."""
+    """#1659 D-1 / R2D-1 / R3D-3: each row's note is read from that row's own YAML."""
     lines = _logical_lines(_runner_text())
     micrositing = [ln for ln in lines if '"study-wind-aep-synthetic-micrositing"' in ln]
     assert len(micrositing) == 1
     assert 'STEP_NOTE="synthetic 15-turbine wiring check' in micrositing[0]
     study = [ln for ln in lines if '"study-scenario-$s"' in ln]
-    assert len(study) == 1 and "$KIT/lib/scenario_basis.py" in study[0]
+    assert len(study) == 1
+    template = '"scenarios/dutchbay_${s}_2025Q4.yaml"'
+    note_arg = f'"$KIT/lib/scenario_basis.py" {template})"'
+    assert note_arg in study[0]
+    assert study[0].rstrip().endswith(f'scenario "$s" {template}')
     script = str(KIT / "lib" / "scenario_basis.py")
-    notes = {}
-    for name in ("basecase", "lendercase"):
-        cfg = REPO_ROOT / "scenarios" / f"dutchbay_{name}_2025Q4.yaml"
-        proc = subprocess.run(
-            [sys.executable, script, str(cfg)],
+    loop = _STUDY_LOOP.search(_runner_text())
+    assert loop is not None
+    notes = set()
+    for word in loop.group(1).replace("\\", " ").split():
+        path = REPO_ROOT / _STUDY_TEMPLATE.format(word)
+        cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+        note = subprocess.run(
+            [sys.executable, script, str(path)],
             capture_output=True,
             text=True,
             check=True,
-        )
-        notes[name] = proc.stdout.strip()
-    assert notes["basecase"].startswith("no turbine layout: flat ")
-    assert notes["lendercase"].startswith("14-turbine layout")
+        ).stdout.strip()
+        for fragment in _expected_basis_fragments(cfg):
+            assert fragment in note, (word, note)
+        notes.add(note)
+    # Rows that model different things must not share one note.
+    assert len(notes) >= 4
 
 
 def _private_env(tmp_path: Path, missing: str) -> dict[str, str]:
@@ -399,12 +567,16 @@ def test_out_inside_the_checkout_is_refused(tmp_path: Path) -> None:
 
 
 @_NEEDS_TOOLS
-def test_out_with_dotdot_is_refused(tmp_path: Path) -> None:
-    """#1659 N-2: a ".." after a missing component cannot walk into the checkout."""
+@pytest.mark.parametrize("form", ["dotdot", "dot"])
+def test_out_with_dot_components_is_refused(tmp_path: Path, form: str) -> None:
+    """#1659 N-2: a "." or ".." component is refused before anything is created."""
     landing = REPO_ROOT / "nov26_dotdot_probe_refused"
     assert not landing.exists()
     up = "/".join([".."] * (len(tmp_path.parts) + 1))
-    out = f"{tmp_path}/missing/{up}{REPO_ROOT}/{landing.name}"
+    if form == "dotdot":
+        out = f"{tmp_path}/missing/{up}{REPO_ROOT}/{landing.name}"
+    else:
+        out = f"{tmp_path}/missing/./x"
     try:
         proc = _run_out(out, tmp_path)
         assert not landing.exists()
@@ -441,3 +613,31 @@ def test_out_owned_by_another_user_is_refused(tmp_path: Path) -> None:
     proc = _run_out(str(out), tmp_path)
     assert proc.returncode == 1
     assert "is not owned by the invoking user" in proc.stderr
+
+
+@_NEEDS_TOOLS
+def test_relative_private_paths_are_made_absolute_before_cd(tmp_path: Path) -> None:
+    """#1659 N-4 (R10): a relative path means the caller's directory, not the checkout."""
+    env = {k: v for k, v in os.environ.items() if k not in _PRIVATE_ENV}
+    (tmp_path / "nasa").mkdir()
+    for var in _PRIVATE_ENV:
+        name = "nasa" if var == "DUTCHBAY_NASA_POWER_DIR" else f"{var.lower()}.dat"
+        if name != "nasa":
+            (tmp_path / name).write_text("x", encoding="utf-8")
+        env[var] = name
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    shared.chmod(0o770)
+    proc = subprocess.run(
+        ["bash", "-x", str(RUNNER), "--profile", "quick", "--out", str(shared)],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        timeout=120,
+    )
+    assert proc.returncode == 1
+    assert "writable by group or others" in proc.stderr
+    for var in _PRIVATE_ENV:
+        name = "nasa" if var == "DUTCHBAY_NASA_POWER_DIR" else f"{var.lower()}.dat"
+        assert f"export {var}={tmp_path}/{name}" in proc.stderr, var
