@@ -105,15 +105,50 @@ monte_carlo:
   include_base_case: true
 
 uncertainty:
-  # PR 3's ranges, unchanged (conf/blue_whale_pv_bess_sizing.yaml carries their sources).
+  # PR 3's yield and RTE ranges, unchanged (conf/blue_whale_pv_bess_sizing.yaml carries their
+  # sources).
   yield_sigma_pct: 4.7
   yield_clip_sigma: 3.0
   rte_low: 0.82
   rte_high: 0.88
+  # #1578 L-11: fade ON TOP of battery_health.fade_pct_per_year, percent of nameplate per year.
+  # ASSUMPTION: the base rate is the OEM's own curve, so the mode adds nothing; the high end
+  # covers cycling faster than the curve's rated duty and a site hotter than its basis.
+  # Was low 0, mode 0, high 2 (PR 3: the fade the price's augmentation reserve did not cover).
   residual_fade_pct_per_year:
     low: 0.0
     mode: 0.0
-    high: 2.0
+    high: 0.5
+
+battery_health:
+  # #1578 L-11 (owner, 2026-11-14): the fade from the OEM's performance curve in the private
+  # corpus; augment "when capacity falls below 80%"; the augmentation cost: "use an
+  # assumption".
+  # Linear fade of the nameplate energy, the straight line from beginning of life to the last
+  # year of the OEM's state-of-health performance curve (private corpus; the curve stays outside
+  # the repository and only this derived rate is committed: tests/solar/
+  # test_battery_health.py re-derives it when DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE names the
+  # private file). The line and the curve both first fall below 80% in year 13, so both put
+  # the augmentation before operating year 14. The curve covers 15 years at its rated duty;
+  # years 16-20 extend the line (an EXTRAPOLATION), and the curve's duty is not scaled to this
+  # battery's cycling (residual_fade_pct_per_year above carries that).
+  fade_pct_per_year: 1.5533
+  fade_basis: "OEM state-of-health performance curve (private corpus), linear from beginning of life to its last year; extended linearly past it"
+  augment_below_soh: 0.80        # owner, 2026-11-14: "when capacity falls below 80%"
+  restore_to_soh: 1.0            # ASSUMPTION: each augmentation restores the nameplate
+  # ASSUMPTION (owner: "use an assumption"): the pricing config's equipment line (DC block,
+  # PCS and EMS landed, with duties and its EPC margin; USD 103.55/kWh) per kWh added, held
+  # flat: the engine pays it as stated in the event year, neither escalated (the other capex
+  # and the O&M escalate) nor reduced for falling cell prices; the two are assumed to cancel.
+  # Conservative in scope: an augmentation adds DC blocks, not PCS or EMS. The engine gives
+  # it no depreciation shield (finance.bess_revenue).
+  augmentation_usd_per_kwh: 103.55
+  augmentation_basis: "ASSUMPTION: the pricing config's BESS equipment line (2026 prices) per kWh added, paid as stated in the event year"
+  # The explicit events REPLACE the NSO 250 augmentation reserve held inside the BESS all-in
+  # price (USD 8.00/kWh before land and auxiliaries, 8.89 in the all-in): every BESS price,
+  # each trial's and each sensitivity's, is reduced by it. The prices below (one-at-a-time
+  # cases, break-even) stay on the pricing config's published basis, which includes it.
+  replaces_price_reserve: true
 
 plant:
   # PLACEHOLDERS for the separate project (the hybrid's lines, input register IDs):
@@ -188,6 +223,10 @@ sensitivities:
     - {name: no_cfads_haircut, scenario: {risk_adjustment.cfads_haircut_pct: 0.0}}
     - {name: cost_of_equity_10pct, scenario: {wacc.cost_of_equity: 0.10}}
     - {name: cost_of_equity_14pct, scenario: {wacc.cost_of_equity: 0.14}}
+    # #1578 L-11: the battery-health assumptions.
+    - {name: fade_2_0_pct, fade_pct_per_year: 2.0}               # faster than the curve
+    - {name: augmentation_half_price, augmentation_usd_per_kwh: 51.78}
+    - {name: augmentation_at_all_in, augmentation_usd_per_kwh: 131.85}  # 140.74 less the reserve
   # The value of one input, all else at base, at which the base case's best battery (at its
   # best PV, under the committed reading) stops being the battery this run chose. Bisection
   # to the tolerance; null when the gap does not change sign within [low, high].

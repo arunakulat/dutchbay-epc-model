@@ -103,11 +103,14 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # equity NPV -6167136.817522649, min DSCR 0.868213653807526. (A first v0.9 at the 0.5 MW
 # floor, never on main: project NPV -4518152.075386281, equity NPV -4628674.688512776, min
 # DSCR 0.8702721240311019.)
+# Re-pinned for v0.10 (#1578 L-11: the battery's fade and its year-14 augmentation, with the
+# price's augmentation reserve removed; the size is unchanged). Before (v0.9): project NPV
+# -4477786.514808497, equity NPV -4557056.390826946, min DSCR 0.8716987467623586.
 SOLAR_BESS_PINS = {
-    "project_npv": -4477786.514808497,
-    "equity_npv": -4557056.390826946,
+    "project_npv": -4479213.671770833,
+    "equity_npv": -4557963.632064052,
     "equity_irr": None,
-    "min_dscr": 0.8716987467623586,
+    "min_dscr": 0.8719255106683012,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -587,6 +590,7 @@ def _context() -> sz.Context:
             _project_cfg()["plant"]["bess_dc_per_nominal"],
             150000.0,
         ),
+        battery_health=sz.BatteryHealth.from_mapping(_project_cfg()["battery_health"]),
     )
 
 
@@ -794,7 +798,7 @@ def test_committed_summary_is_truthful_and_matches_the_config() -> None:
     # Each point: the trials and the base case, then the RTE case, the curtailment case and
     # the one-at-a-time cases (sensitivity_cases_per_point); then the break-even searches.
     oat = len(cfg["sensitivities"]["one_at_a_time"])
-    assert spec["sensitivity_cases_per_point"] == 2 + oat == 17
+    assert spec["sensitivity_cases_per_point"] == 2 + oat == 20
     assert (
         spec["effective_evaluations"]
         == pts * (n + 1)
@@ -1010,11 +1014,20 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
         assert r["posttax_cfads_lkr"] == pytest.approx(
             r["pretax_cfads_lkr"] - r["tax_lkr"], abs=1e-6
         )
+        # #1578 L-11 (v0.10): and after the battery's augmentation in its year.
         assert r["cfads_usd"] == pytest.approx(
-            (r["posttax_cfads_lkr"] - r["risk_haircut_amount_lkr"]) / r["fx_rate"],
+            (
+                r["posttax_cfads_lkr"]
+                - r["risk_haircut_amount_lkr"]
+                - r["bess_augmentation_capex_lkr"]
+            )
+            / r["fx_rate"],
             rel=1e-12,
         )
-    # At v0.9's grid-floor size the project never has a taxable profit, so its after-tax
+    assert [i + 1 for i, r in enumerate(rows) if r["bess_augmentation_capex_lkr"]] == [
+        14
+    ]
+    # At the grid-floor size (v0.9, v0.10) the project never has a taxable profit, so its after-tax
     # objective equals the pre-tax one (#1691: disclosed in STATUS). Under v0.8 tax was paid.
     assert sum(r["tax_lkr"] for r in rows) == 0.0
     # Responsiveness at a held discount rate, where tax bites (a 30 LKR/kWh generation tariff):
@@ -1075,6 +1088,18 @@ def test_solar_bess_scenario_carries_the_committed_base_case() -> None:
         eng["bess_mdsc_fade_pct_annual"], abs=5e-7
     )
     assert b["revenue"]["tariff_lkr_per_kwh"] == pytest.approx(50.10 - 20.72)
+    # #1578 L-11: the scenario's augmentation is the point's base case, and each event
+    # restores the engine's own SoH that year, so it moves the cash only.
+    health = point["base"]["battery_health"]
+    events = b["revenue"]["augmentation_schedule"]
+    by_year = health["augmentation_capex_usd_by_year"]
+    assert [e["year"] for e in events] == [int(y) for y in by_year] == [14]
+    for e in events:
+        assert e["capex_usd"] == pytest.approx(by_year[str(e["year"])], abs=0.005)
+        assert e["restore_to_soh"] == pytest.approx(
+            (1.0 - eng["bess_mdsc_fade_pct_annual"]) ** (e["year"] - 1), abs=5e-7
+        )
+    assert health["reserve_removed_usd_per_kwh"] == pytest.approx(8.00 / 0.90)
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(eng["tariff_lkr_per_kwh"])
     assert scen["capex"]["usd_total"] == pytest.approx(
         solar["capex_usd"] + b["capex_usd"] + 2.0e6
