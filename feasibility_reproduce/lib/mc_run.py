@@ -52,6 +52,8 @@ def run_mc(n_trials: int, outdir: Path) -> Dict[str, Any]:
         f"output_dir={outdir}",
         "write_artifacts=true",
         "run_scoped=true",
+        # Hydra's own run directory goes under the output folder, not the checkout.
+        f"hydra.run.dir={outdir / 'hydra'}",
     ]
     # The MC engine logs one line per trial per tranche; keep it out of the terminal.
     proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
