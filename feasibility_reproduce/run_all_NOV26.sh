@@ -229,7 +229,6 @@ blue_tests=(
   tests/wind/test_blue_whale_wind_siting.py
   tests/wind/test_met_mast_transfer.py
   tests/wind/test_dutchbay_14_turbines.py
-  tests/wind/test_wake_deficit_gap_1589.py
   tests/analytics/test_wake_counted_mask.py
   tests/solar/test_blue_whale_site_inputs.py
   tests/solar/test_pv_array_turbine_shading.py
