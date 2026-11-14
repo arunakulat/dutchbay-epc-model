@@ -20,9 +20,12 @@ Usage: bash feasibility_reproduce/run_all_NOV26.sh [options]
  --profile full|quick      full default; quick focused smoke
  --jobs N                  pytest workers; default 4, never auto
  --out DIR                 output outside the Git checkout; may be an external drive.
-                           Every output, Hydra run dir and test cache goes under it;
-                           an existing DIR must be owned by the invoking user
- --require-private         exit 3 before any stage if a confidential input is missing
+                           Every output, Hydra run dir and test/lint cache goes under
+                           it; an existing DIR must be owned by the invoking user and
+                           not writable by group or others; no "." or ".." components.
+                           A final stage fails if the run wrote any file into the checkout
+ --require-private         exit 3 before any stage if a confidential input is missing,
+                           and exit 3 at the end if any private stage stayed blocked
  --online-security         run network-dependent make security (otherwise offline)
  --study                   run current full analytical-study extensions (very costly)
  --study-quick             run smoke-sized analytical-study extensions
@@ -79,6 +82,15 @@ PLAN
   exit 0
 fi
 
+# Private inputs are made absolute against the caller's directory before the runner
+# changes into the checkout, so a relative path means what the caller meant.
+for _var in BLUE_WHALE_POWER_CURVE_CSV DUTCHBAY_MET_MAST_617725_SOURCE \
+            DUTCHBAY_NASA_POWER_DIR BLUE_WHALE_PRIVATE_ANCHORS_PATH; do
+  _val="${!_var:-}"
+  if [[ -n "$_val" && "$_val" != /* ]]; then export "$_var=$PWD/$_val"; fi
+done
+unset _var _val
+
 # --require-private: a missing confidential input exits 3, before any stage or any write,
 # so a caller can tell "private inputs missing" (3) from "a stage failed" (its exit code)
 # and from any other refusal (1).
@@ -106,19 +118,33 @@ OUT="${OUT:-$HOME/Downloads/DutchBay_NOV26_runs/${SHORT}_$(date +%Y%m%d_%H%M%S)}
 # Resolve --out physically WITHOUT creating it, refuse it inside the checkout, then
 # refuse to reuse a directory another user owns (its contents could be swapped mid-run).
 case "$OUT" in /*) ;; *) OUT="$CALLER_PWD/$OUT" ;; esac
+# A "." or ".." after a missing component would be resolved only by mkdir, after the
+# checks below, and could land inside the checkout. Refuse them outright.
+case "/$OUT/" in */./*|*/../*) die "--out must not contain . or .. components: $OUT";; esac
 OUT_PROBE="$OUT"; OUT_REST=""
 while [[ ! -d "$OUT_PROBE" ]]; do
   OUT_REST="/$(basename "$OUT_PROBE")$OUT_REST"; OUT_PROBE="$(dirname "$OUT_PROBE")"
 done
 OUT="$(cd "$OUT_PROBE" && pwd -P)$OUT_REST"
-case "$OUT/" in "$REPO/"*) die "--out must be outside checkout";; esac
-if [[ -e "$OUT" && ! -O "$OUT" ]]; then
-  die "--out exists and is not owned by the invoking user: $OUT"
-fi
-if [[ -d "$OUT" ]] && [[ -n "$(find "$OUT" -maxdepth 0 \( -perm -020 -o -perm -002 \) -print)" ]]; then
-  die "--out exists and is writable by group or others: $OUT"
-fi
+check_out() {
+  case "$OUT/" in "$REPO/"*) die "--out must be outside checkout";; esac
+  if [[ -e "$OUT" && ! -O "$OUT" ]]; then
+    die "--out exists and is not owned by the invoking user: $OUT"
+  fi
+  if [[ -d "$OUT" ]] &&
+     [[ -n "$(find "$OUT" -maxdepth 0 \( -perm -020 -o -perm -002 \) -print)" ]]; then
+    die "--out exists and is writable by group or others: $OUT"
+  fi
+}
+check_out
 mkdir -p "$OUT"
+# Re-resolve what mkdir actually created and check it again (closes the gap between
+# the checks above and the directory the run will use).
+OUT="$(cd "$OUT" && pwd -P)"
+check_out
+# Anything the run writes into the checkout after this marker fails the final stage.
+CHECKOUT_MARKER="$OUT/.checkout_marker"
+: > "$CHECKOUT_MARKER"
 VENV="${DUTCHBAY_VENV:-$REPO/.venv}"
 [[ "$VENV" == /* && -x "$VENV/bin/python" ]] ||
   die "configure governed Python with an absolute DUTCHBAY_VENV (or local .venv)"
@@ -176,6 +202,10 @@ export NUMBA_CACHE_DIR="$OUT/cache/numba"
 # database would otherwise write .pytest_cache/ and .hypothesis/ under $REPO.
 export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p no:cacheprovider"
 export HYPOTHESIS_STORAGE_DIRECTORY="$OUT/cache/hypothesis"
+# Lint and type tools run from the checkout root; keep their caches out of it.
+export RUFF_CACHE_DIR="$OUT/cache/ruff"
+export MYPY_CACHE_DIR="$OUT/cache/mypy"
+export BLACK_CACHE_DIR="$OUT/cache/black"
 # Every Hydra entry point gets its run directory under $OUT (otherwise Hydra writes
 # outputs/<date>/<time>/ into the checkout).
 hydra_dir() { printf 'hydra.run.dir=%s/hydra/%s' "$OUT" "$1"; }
@@ -202,6 +232,9 @@ printf 'scope=software_only_not_external_bankability\n' >> "$OUT/manifest.txt"
 printf 'internal_free_kib=%s\noutput_free_kib=%s\nwork_tmpdir=%s\nmake_version=%s\n' \
   "$INTERNAL_FREE_KIB" "$OUT_FREE_KIB" "$TMPDIR" "$MAKE_VERSION" >> "$OUT/manifest.txt"
 printf 'validation_profile=%s\n' "$PROFILE" >> "$OUT/manifest.txt"
+# A run of an uncommitted tree must say so: commit= alone would misname it.
+if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then TREE_DIRTY=yes; else TREE_DIRTY=no; fi
+printf 'tree_dirty=%s\n' "$TREE_DIRTY" >> "$OUT/manifest.txt"
 git ls-files '*.py' | LC_ALL=C sort > "$OUT/python_source_inventory.txt"
 printf 'tracked_python_files=%s\n' "$(wc -l < "$OUT/python_source_inventory.txt" | tr -d ' ')" >> "$OUT/manifest.txt"
 printf '\nDutchBay NOV26 | %s | %s | %s\n' "$SHORT" "$PROFILE" "$OUT"
@@ -240,6 +273,12 @@ scenario() {
   "$PY" run_full_pipeline_v14.py "config=$cfg" validation_mode=strict \
     "$(hydra_dir "scenario-$slug")" \
     write_artifacts=true run_scoped=true "export_dir=$OUT/scenarios/$slug"
+}
+checkout_residue() {
+  local found
+  found="$(find "$REPO" \( -path "$REPO/.git" -o -path "$REPO/.venv" -o -path "$VENV" \) \
+    -prune -o ! -type d -newer "$CHECKOUT_MARKER" -print)"
+  [[ -z "$found" ]] || { printf 'files written into the checkout since this run started:\n%s\n' "$found"; return 1; }
 }
 paths_exist() {
   local f
@@ -331,7 +370,8 @@ fi
 # Optional analytical-study screening runs against current files and the current
 # engine. These are NEW screening runs, NOT reproductions of the frozen August 2026
 # published KPI vector, PDF, or 294-module manifest. Every financial stage below runs a
-# current committed scenario (DutchBay is 14 turbines, #1587). The one exception is the
+# current committed scenario, and each receipt row names its basis (14-turbine layout,
+# or a flat capacity-factor case with no turbine layout). The one exception is the
 # synthetic micrositing wiring check, which uses its own synthetic 15-turbine site and
 # says so in its receipt note. The August grid-on lender fork in $KIT/cache is not run:
 # it predates the 14-turbine layout and main's AEP reconciliation guard refuses it.
@@ -347,7 +387,10 @@ if ((STUDY)); then
   printf 'study_status=screening_only_not_historical_reproduction\n' >> "$OUT/manifest.txt"
   for s in basecase equitycase optimistic pessimistic capex_sinohydro_lean \
            capex_eia_prudent hybrid_windsolar solar_only; do
-    run_step "study-scenario-$s" scenario "$s" "scenarios/dutchbay_${s}_2025Q4.yaml"
+    # The receipt says what each scenario models, read from its own YAML (#1587 left
+    # four of these as flat 150 MW capacity-factor cases with no turbine layout).
+    STEP_NOTE="$("$PY" "$KIT/lib/scenario_basis.py" "scenarios/dutchbay_${s}_2025Q4.yaml")" \
+      run_step "study-scenario-$s" scenario "$s" "scenarios/dutchbay_${s}_2025Q4.yaml"
   done
   STEP_NOTE="synthetic 15-turbine wiring check, not the DutchBay layout" \
     run_step "study-wind-aep-synthetic-micrositing" \
@@ -399,6 +442,7 @@ if ((ONLINE_SECURITY)); then
 else
   printf 'online-security-audit\tNOT_RUN_OFFLINE\t0\tnetwork-dependent, opt-in\n' >> "$RECEIPT"
 fi
+run_step "checkout-residue" checkout_residue
 if [[ "$PROFILE" == full ]]; then
   SCOPE=FULL_GOVERNED_SOFTWARE_SUITE
 else
@@ -407,6 +451,8 @@ fi
 if ((BLOCKED)); then
   printf 'status=%s_EXTERNAL_ASSURANCE_INCOMPLETE\n' "$SCOPE" >> "$OUT/manifest.txt"
   printf '\n%s passed; %d private-input workflows BLOCKED (not bankable).\n' "$SCOPE" "$BLOCKED"
+  # Defence in depth: the preflight should make this unreachable under --require-private.
+  if ((REQUIRE_PRIVATE)); then exit 3; fi
 else
   printf 'status=%s_WITH_SUPPLIED_PRIVATE_PATHS_PASSED\n' "$SCOPE" >> "$OUT/manifest.txt"
 fi
