@@ -1,6 +1,7 @@
 """Independent arithmetic and refusal controls for native CAPEX."""
 
 import copy
+import math
 import re
 from collections.abc import Callable
 from datetime import date
@@ -501,3 +502,85 @@ def test_provenance_is_a_copy_of_the_authored_input() -> None:
     cfg["capex"]["input"]["conversion"]["source"] = "changed"
     saved = resolved["capex"]["native_input_applied"]["input"]
     assert saved == config()["capex"]["input"]
+
+
+@pytest.mark.parametrize(
+    "currency",
+    [" LKR", "LKR ", "LKR\n", "", "L", "LKR USD", "lkr", "Lkr", "usd", " USD", None, 1],
+)
+def test_currency_whitelist_is_exact(currency: Any) -> None:
+    """Only the exact codes pass: the conversion branch is exact, so a looser
+    whitelist would treat an LKR amount as USD (ASSURANCE-1645-05a)."""
+    cfg = config()
+    cfg["capex"]["input"]["currency"] = currency
+    with pytest.raises(ValueError, match="capex.input.currency must be LKR or USD"):
+        normalize_native_capex(cfg)
+
+
+def _one_ulp(value: float, up: bool) -> float:
+    return math.nextafter(value, math.inf if up else 0.0)
+
+
+@pytest.mark.parametrize("up", [True, False], ids=["above", "below"])
+@pytest.mark.parametrize("priced", [False, True], ids=["unpriced", "priced"])
+def test_resolved_values_are_checked_exactly(priced: bool, up: bool) -> None:
+    """A resolved amount one ulp off its source is stale, in either direction
+    (ASSURANCE-1645-05b, R7 B03/B04)."""
+    build = priced_resolved if priced else (lambda: normalize_native_capex(config()))
+    cases: list[tuple[Callable[[dict[str, Any]], None], str]] = [
+        (
+            lambda c: c["capex"].update(
+                usd_total=_one_ulp(c["capex"]["usd_total"], up)
+            ),
+            "native CAPEX resolved USD is stale",
+        ),
+        (
+            lambda c: c["capex"]["native_input_applied"].update(
+                usd_at_price_date=_one_ulp(20000.0, up)
+            ),
+            "native CAPEX provenance is stale",
+        ),
+    ]
+    if priced:
+        cases.append(
+            (
+                lambda c: c["capex"]["price_basis_applied"].update(
+                    usd_total_at_price_year=_one_ulp(20000.0, up)
+                ),
+                "native CAPEX price basis is stale",
+            )
+        )
+    for mutate, message in cases:
+        cfg = build()
+        mutate(cfg)
+        with pytest.raises(ValueError, match=re.escape(message)):
+            normalize_native_capex(cfg)
+
+
+@pytest.mark.parametrize("up", [True, False], ids=["above", "below"])
+def test_spot_must_equal_the_conversion_rate_exactly(up: bool) -> None:
+    """One ulp between spot and rate converts at one rate and runs at another
+    (ASSURANCE-1645-05c)."""
+    cfg = config()
+    cfg["fx"]["start_lkr_per_usd"] = _one_ulp(317.25, up)
+    with pytest.raises(
+        ValueError, match="conversion rate must equal fx.start_lkr_per_usd"
+    ):
+        normalize_native_capex(cfg)
+
+
+@pytest.mark.parametrize("cod_year", [2028, 2030])
+def test_close_year_must_match_cod_in_both_directions(cod_year: int) -> None:
+    """Two default construction periods put a 2027 close at COD 2029 (R7 D02)."""
+    cfg = config()
+    cfg["project"] = {"cod_year": cod_year}
+    with pytest.raises(ValueError, match="financial-close year"):
+        normalize_native_capex(cfg)
+
+
+def test_conversion_must_be_dated_at_close_not_just_in_its_year() -> None:
+    """A same-year conversion date that is not the close date is refused (R7 D03)."""
+    cfg = config()
+    cfg["capex"]["input"]["conversion"]["date"] = "2027-06-01"
+    with pytest.raises(ValueError, match="dated financial_close rate"):
+        normalize_native_capex(cfg)

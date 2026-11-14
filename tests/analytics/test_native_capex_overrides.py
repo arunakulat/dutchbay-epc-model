@@ -265,3 +265,44 @@ def test_batch_analytics_native_matches_usd(tmp_path: Path) -> None:
     assert left.debt_result == right.debt_result
     assert left.kpis == right.kpis
     assert any(row.get("total_depreciation_lkr") for row in left.annual_rows)
+
+
+def test_capex_mc_native_matches_usd_magnitude() -> None:
+    """Each native trial scales the authored amount once (ASSURANCE-1645-05d).
+
+    The same seed draws the same factors, so every percentile must match the USD
+    twin; the native path differs only by the float order of (amount * f) / rate.
+    """
+    from analytics.cost.mc_capex import run_capex_mc
+
+    usd, native = cases()
+    left = run_capex_mc(native, n_samples=4, sigma_pct=15, seed=21).as_dict()
+    right = run_capex_mc(usd, n_samples=4, sigma_pct=15, seed=21).as_dict()
+    assert left["base_capex_usd"] == pytest.approx(right["base_capex_usd"], rel=1e-12)
+    for field in (
+        "capex_usd",
+        "project_irr",
+        "equity_irr",
+        "project_npv_usd",
+        "min_dscr",
+    ):
+        assert left[field] == pytest.approx(right[field], rel=1e-9), field
+    assert right["capex_usd"]["p10"] < right["capex_usd"]["p90"]
+
+
+def test_declared_boundaries_fail_closed(tmp_path: Path) -> None:
+    """The changelog's refusing surfaces refuse, rather than run (DOM-1645-R3-04)."""
+    from analytics.capital_structure_optimizer_v14 import optimize_capex_contingency
+    from analytics.core.parameter_solvers import solve_for_min_capex_given_irr_floor
+    from analytics.scenario_analytics import ScenarioAnalytics
+
+    _, native = cases()
+    path = tmp_path / "native.yaml"
+    path.write_text(yaml.safe_dump(native, sort_keys=False))
+    batch = ScenarioAnalytics(tmp_path)._run_single(path)
+    assert batch.fail_reason is not None and "capex.price_basis" in batch.fail_reason
+    assert batch.kpis == {}
+    with pytest.raises(PipelineValidationError, match="conflicts with capex.input"):
+        solve_for_min_capex_given_irr_floor(str(path), None, 0.05)
+    with pytest.raises(PipelineValidationError, match="conflicts with capex.input"):
+        optimize_capex_contingency(str(path), base_capex_usd=1.0e7, n_steps=3)
