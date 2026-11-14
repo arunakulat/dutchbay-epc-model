@@ -1,0 +1,1 @@
+- Filter non-finite (``NaN`` / ``inf``) shock values and bar impacts out of ``_tornado_tail_stats`` and ``_aggregate_metric_snapshot``, flagging undefined bars rather than letting Python ``min``/``max`` produce order-dependent ``NaN`` tail bounds (#1489).
