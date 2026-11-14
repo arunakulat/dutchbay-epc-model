@@ -22,7 +22,7 @@ analytics.pipeline_v14_enhanced.run_v14_pipeline   ← THE canonical pipeline
 `run_v14_pipeline` as an alias of `run_v14_pipeline_enhanced`). The legacy wind-only
 `analytics/pipeline_v14.py` was retired in #456: the engine was routed off it in #286,
 and its two remaining script consumers (`scripts/export_to_excel.py`,
-`scripts/legacy_runners/run_complete_analysis_fixed.py`) were already reading the
+`scripts/legacy_runners/run_complete_analysis_fixed.py`, itself retired in #1424) were already reading the
 enhanced finance contract (`annual_rows` / `debt_result` / `kpis`), so they were folded
 onto `pipeline_v14_enhanced` and the legacy module was deleted.
 
