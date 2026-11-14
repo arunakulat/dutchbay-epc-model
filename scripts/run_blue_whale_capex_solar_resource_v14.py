@@ -138,6 +138,39 @@ def run_capex(cfg: Mapping[str, Any], private_path: Optional[str]) -> Dict[str, 
     }
 
 
+#: Keys that would be a second copy of the turbine point in ``solar_resource.site``.
+TURBINE_POINT_COPIES = ("turbine_latitude", "turbine_longitude")
+
+
+def siting_turbine_point(site: Mapping[str, Any]) -> tuple[float, float]:
+    """The turbine's ``(latitude, longitude)``, read from the siting config (#1578 L-16).
+
+    ``solar_resource.site.turbine_siting_config`` names the siting config, and the point is
+    where that config places the turbine (:func:`analytics.gis.shadow_flicker.placed_turbine_lat_lon`).
+    The capex config used to carry its own copy, which went stale when the turbine moved to
+    DutchBay T2, so a copy beside the reference is refused.
+
+    Raises:
+        ValueError: If the site block repeats the turbine point, or names no siting config.
+    """
+    from analytics.gis.shadow_flicker import placed_turbine_lat_lon
+
+    copies = [k for k in TURBINE_POINT_COPIES if k in site]
+    if copies:
+        raise ValueError(
+            f"solar_resource.site must not repeat the turbine point ({', '.join(copies)}); "
+            "it is read from turbine_siting_config"
+        )
+    rel = site.get("turbine_siting_config")
+    if not rel:
+        raise ValueError("solar_resource.site.turbine_siting_config is required")
+    siting = yaml.safe_load(_repo_path(str(rel)).read_text(encoding="utf-8"))
+    coast = json.loads(
+        _repo_path(str(siting["site"]["coastline_geojson"])).read_text(encoding="utf-8")
+    )
+    return placed_turbine_lat_lon(siting["site"], siting["coastal_setback"], coast)
+
+
 def run_solar(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     """The solar resource summary and the cross-check table."""
     sr = cfg["solar_resource"]
@@ -159,6 +192,7 @@ def run_solar(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         albedo=float(sr["albedo"]),
     )
     site = sr["site"]
+    turbine = siting_turbine_point(site)
     at_centroid = solar_resource_summary(
         tmy,
         latitude=float(site["latitude"]),
@@ -245,10 +279,7 @@ def run_solar(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         "site": {
             "pv_centroid": [float(site["latitude"]), float(site["longitude"])],
             "distance_to_turbine_m": _haversine_m(
-                site["latitude"],
-                site["longitude"],
-                site["turbine_latitude"],
-                site["turbine_longitude"],
+                site["latitude"], site["longitude"], *turbine
             ),
             "distance_to_tmy_point_m": _haversine_m(
                 site["latitude"],

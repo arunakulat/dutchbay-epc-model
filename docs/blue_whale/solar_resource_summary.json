@@ -184,7 +184,7 @@
     "relative_difference_to_producer": 3.8522668415831106e-16
   },
   "config": "conf/blue_whale_capex_solar_resource.yaml",
-  "config_sha256": "8d6ad66d2d5c29f09d92ba3b89b22435681034dda99125040e36c427871b4e38",
+  "config_sha256": "1c6127cf25408a069173b5c76d89dd533df7ecc346472b524e52b6a19c2837e8",
   "cross_checks": [
     {
       "dhi_kwh_m2": 657.4910500000001,
@@ -242,12 +242,12 @@
       "specific_yield_kwh_per_kwp_vs_pvlib": null
     }
   ],
-  "model_version": "15.18.0",
+  "model_version": "15.27.0",
   "scenario": "scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
   "schema": "dutchbay.epc.blue_whale_solar_resource.v1",
   "site": {
     "distance_to_tmy_point_m": 2419.410124910669,
-    "distance_to_turbine_m": 123.42653311214886,
+    "distance_to_turbine_m": 197.04269323756557,
     "pv_centroid": [
       8.291526,
       79.753204
