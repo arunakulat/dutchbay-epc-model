@@ -298,7 +298,9 @@ def test_scenario_mapping_books_capex_loss_and_premium() -> None:
 def test_engine_responds_to_the_battery_and_the_rate() -> None:
     scenario = _scenario()
     wind_only = _engine_project_value(scenario)
-    assert _engine_project_value(_with(scenario, power_mw=0.0)) == pytest.approx(wind_only)
+    assert _engine_project_value(_with(scenario, power_mw=0.0)) == pytest.approx(
+        wind_only
+    )
     assert _engine_project_value(_with(scenario, operation="held")) < wind_only
     low = _engine_project_value(_with(scenario))
     high = _engine_project_value(_with(scenario, peak_rate=wbo.PeakRate(70.0, 5.48)))
