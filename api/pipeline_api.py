@@ -185,8 +185,12 @@ class ManifestBlock(BaseModel):
     validation_mode: Optional[str] = None
     manifest_schema_version: str
     # Schema 1.1 (native CAPEX, #1645): the authored native input and its conversion
-    # provenance. Absent for a USD-authored run, whose manifest stays schema 1.0.
-    native_capex: Optional[Dict[str, Any]] = None
+    # provenance. A USD-authored run has none: its manifest stays schema 1.0 and the key
+    # is left out of the JSON, as RunManifest.as_dict does, so a USD response keeps the
+    # manifest keys it had before (API contract 2.2).
+    native_capex: Optional[Dict[str, Any]] = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class FundingBlock(BaseModel):
