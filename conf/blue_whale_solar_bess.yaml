@@ -80,7 +80,7 @@ array:
   # energy below are PR 2's unit, the fixture of its tests and committed outputs, not the
   # project's size. Every sizing run replaces them at each point (a test checks that changing
   # them leaves a run unchanged). The committed size is the scenario's
-  # (scenarios/blue_whale_solar_bess_lot5b_2026.yaml v0.8: 107 tables, 3.5 MW AC, 0.5 MW /
+  # (scenarios/blue_whale_solar_bess_lot5b_2026.yaml v0.9: 107 tables, 3.5 MW AC, 0.5 MW /
   # 2.0 MWh at 4 h), chosen by conf/blue_whale_solar_bess_project_sizing.yaml.
   dc_ac_ratio: 1.2
   # Fixed tilt near the PR 1 site latitude (8.29 N), equal to the DutchBay basis (8 deg).

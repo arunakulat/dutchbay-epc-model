@@ -96,27 +96,15 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # sponsor cures in years 16-20 outweigh the distributions at any negative rate). Before, at
 # 15.24.0 (v0.7): project NPV -4439999.608625973, equity NPV -5075831.700126602, equity IRR
 # -0.04998720726172046, min DSCR 0.8681005901376199.
+# Re-pinned for the battery optimisation (v0.9: the optimiser's 107 tables, 3.5 MW AC and
+# 0.5 MW / 2.0 MWh, sized on this scenario's own basis; owner, 2026-11-07: "Whatever the
+# optimiser picks"). Equity IRR stays undefined. Before (v0.8): project NPV -5579964.010141663,
+# equity NPV -6167136.817522649, min DSCR 0.868213653807526.
 SOLAR_BESS_PINS = {
-    "project_npv": -5579964.010141663,
-    "equity_npv": -6167136.817522649,
+    "project_npv": -4518152.075386281,
+    "equity_npv": -4628674.688512776,
     "equity_irr": None,
-    "min_dscr": 0.868213653807526,
-}
-# The basis the sizing runs priced (v0.3 to v0.7): opex in one currency, BESS O&M at USD
-# 2.5/kWh-yr, the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1,
-# B30), and flat tariffs (no L-9 indexation of the escalable O&M parts; from 15.21.0 the scenario
-# indexes them). From 15.22.0 the solar O&M is on 152 tables (257,030; was 256,655 on 151).
-SIZING_OPEX_BASIS = {
-    "opex.currency_split": None,
-    "opex.usd_per_year": 257030,
-    "Financing_Terms.construction_periods": 2,
-    # #1570: the count must equal the declared build time, so the basis states both.
-    "timeline.construction_years": 2,
-    "tariff.om_indexation": None,
-    "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
-    # #1569: the sizing priced capex and opex as stated, with no price dates.
-    "capex.price_basis": None,
-    "opex.price_year": None,
+    "min_dscr": 0.8702721240311019,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR

@@ -197,7 +197,7 @@ recommendation:
   # docs/blue_whale/solar_bess_project_sizing_summary.json (a test checks that too).
   # Committed run (seed 20261101, 256 trials, 414 points): both readings choose 107 tables
   # (4.01464 MWp), 3.5 MW AC and 0.5 MW / 2.0 MWh, the smallest PV and battery on the grid.
-  # P50 after-tax project NPV USD -3,817,369, P90 -4,056,854 (STATUS.md, "Latest run").
+  # P50 after-tax project NPV USD -4,534,558, P90 -4,794,729 (STATUS.md, "The battery optimised").
   # PR 7 re-run (after-tax project NPV P50; 1.0-10 MW grid, BESS O&M at the 2.5 placeholder):
   # both readings chose 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, then reported only; the
   # scenario carried the owner's fixed 5 MW / 20 MWh. PR 4's run (NSO 250 price 135.00, unit

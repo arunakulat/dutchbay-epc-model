@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-08. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-14. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -10,7 +10,7 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 | Project | Component | Size | Notes |
 |---|---|---|---|
 | Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
-| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 4.01464 MWp DC (107 tables) at 3.5 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 12 x Huawei SUN2000-330KTL-H1 | From 15.24.0 the optimiser's choice with the battery (owner, 2026-11-07: "Whatever the optimiser picks"): the smallest PV on the grid. 15.18.0 to 15.22.0 carried 151-152 tables at 5.0 MW AC, the best PV for the owner's then-fixed battery |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 4.01464 MWp DC (107 tables) at 3.5 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 12 x Huawei SUN2000-330KTL-H1 | From 2026-11-14 the optimiser's choice with the battery (owner, 2026-11-07: "Whatever the optimiser picks"): the smallest PV on the grid. 15.18.0 to 15.22.0 carried 151-152 tables at 5.0 MW AC, the best PV for the owner's then-fixed battery |
 | | BESS | **0.5 MW / 2.0 MWh (4 h), the optimiser's choice**, charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule. The smallest battery on the grid; it beats every larger one in 100% of paired trials. Replaces PR 7's "Fix 5 MW / 20 MWh", which the owner withdrew on 2026-11-07 (section "The battery optimised") |
 
 The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.8: 9.5 MW wind, 5.51544 MWp
@@ -25,7 +25,7 @@ Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
 `scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.5 and 0.8), and the superseded
 `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.10). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
-size (the battery and PV the optimiser chose, 15.24.0), the cited PV capex and
+size (the battery and PV the optimiser chose, 2026-11-14), the cited PV capex and
 the blended wind and BESS capex (PR 6).
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
@@ -83,9 +83,9 @@ record under `DATA-01`.
    0.5 MW and the pair exceeds the limit at every size considered, under either reading of the
    limit. For PUCSL, the NSO or counsel (input L01); see the PR 4 section below.
 9. **The solar + BESS size minimises a loss.** Every size on the grid has a negative after-tax
-   project NPV, so the optimiser walks to the smallest PV and battery it is offered (15.24.0).
+   project NPV, so the optimiser walks to the smallest PV and battery it is offered (2026-11-14).
    The BESS price is a utility-scale per-kWh blend applied at 2 MWh, which flatters a small
-   battery (audit residual L-10), and the base case has no capacity fade or augmentation
+   battery's KPIs (audit residual L-10), and the base case has no capacity fade or augmentation
    (L-11). A supplier's price at this size (input B19) and a fade and augmentation basis
    (B20) come before any reliance on the size.
 
@@ -335,7 +335,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-battery-optimised-15240-2026-11-08) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-battery-optimised-2026-11-14) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -495,7 +495,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-battery-optimised-15240-2026-11-08) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-battery-optimised-2026-11-14) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -1123,88 +1123,89 @@ reliable ranking figure (audit residual L-13). Solar + BESS year 1: PV 8,676.59 
 7,479.55 MWh (was 7,431.76), of which 6,817.18 MWh in the priority window (was 6,799.68);
 revenue LKR 355.27M (was 353.76M). The extra table outweighs the larger shadow.
 
-## The battery optimised (15.24.0, 2026-11-08)
+## The battery optimised (2026-11-14)
 
-Work item: #1353 comment 6715108541. Owner, verbatim (2026-11-07), on PR 7's fixed battery:
-"This should not be a fixed choice. It needs an MC run and a sensitivity analyze to optimize";
-and on which size the scenario should carry: "Whatever the optimiser picks". KPI sign-off is
-delegated (owner, 2026-11-07: "Do not wait for KPI clearance from me. Apply your
-recommendations"); the KPIs below are applied under that delegation and recorded on the pull
-request.
+Work item: the battery-size line of #1578 (L-6, L-10, L-11 and the pricing half of W-4), listed
+in #1353 comment 6872251348; intake first recorded at #1353 comment 6715108541. Owner, verbatim
+(2026-11-07), on PR 7's fixed battery: "This should not be a fixed choice. It needs an MC run and
+a sensitivity analyze to optimize"; and on which size the scenario should carry: "Whatever the
+optimiser picks". KPI sign-off is delegated (owner, 2026-11-07: "Do not wait for KPI clearance
+from me. Apply your recommendations"); the KPIs below are applied under that delegation and
+recorded on the pull request.
 
 **Method.** One seeded run of `conf/blue_whale_solar_bess_project_sizing.yaml` (seed 20261101,
-256 LHS trials, 414 points, 121,692 engine evaluations) searches the battery power (0.5 to
+256 LHS trials, 414 points, 119,886 engine evaluations) searches the battery power (0.5 to
 6.5 MW in 0.5 MW steps under reading A, up to 10 MW under reading B; energy = 4 x power, the
 PUCSL 4 h rule) together with the PV DC and AC, and ranks on the P50 after-tax project NPV. The
-PR 7 child config with the battery fixed is retired. The run prices the current basis, so the
-scenario reproduces its base case with no override: battery O&M at USD 1.80/kWh-yr on DC kWh
-(DC = nominal x 1.10, new `bess_opex` block), in LKR at 333.79 with the opex currency split, one
-construction period, and the PUCSL escalable O&M parts indexed (L-9). It answers #1568's
-assurance A-1 gate. Each summary now also records the code that ran by content
-(`spec.code_sha256`, a `sha256sum` listing of every repository module the run imported), because
-a squash merge leaves the run's `git_sha` outside `main` (MRM-02; #1568's summaries cite
-`f5b45904`).
+PR 7 child config with the battery fixed is retired. The run prices the scenario's own basis,
+so the scenario reproduces its base case with no override: O&M from the scenario's components
+at each size (#1646, with `plant.bess_dc_per_nominal` 1.1), the 2026 price dates (#1569), one
+construction period and the indexed PUCSL O&M parts (L-9). It answers #1568's assurance A-1
+gate. The summary also records the code that ran by content (`spec.code_sha256`, a `sha256sum`
+listing of every repository module the run imported), because a squash merge leaves the run's
+`git_sha` outside `main` (MRM-02; #1568's summaries cite `f5b45904`).
 
 **Result.** Both readings choose **107 tables (4.01464 MWp), 3.5 MW AC and 0.5 MW / 2.0 MWh**,
-the smallest PV and the smallest battery on the grid. 152 tables (15.22.0) was the best PV for
+the smallest PV and the smallest battery on the grid. 152 tables (v0.7-v0.8) was the best PV for
 the owner's 5 MW battery only. Best PV at each battery, reading A:
 
 | Battery (MW / MWh) | PV (tables / MW AC) | After-tax project NPV P50 (USD) | P90 | Chosen size better by, at P50 (share of paired trials) |
 |---|---|---|---|---|
-| **0.5 / 2, chosen** | **107 / 3.5** | **-3,817,369** | **-4,056,854** | |
-| 1.0 / 4 | 107 / 3.5 | -3,886,547 | -4,132,213 | 60,964 (100%) |
-| 2.0 / 8 | 107 / 3.5 | -4,030,036 | -4,304,820 | 189,539 (100%) |
-| 3.0 / 12 | 107 / 3.5 | -4,200,019 | -4,551,705 | 355,371 (100%) |
-| 4.0 / 16 | 134 / 4.5 | -4,480,817 | -4,947,664 | 635,936 (100%) |
-| 5.0 / 20 (PR 7's battery) | 160 / 5.0 | -4,769,622 | -5,349,164 | 936,502 (100%) |
-| 6.0 / 24 | 147 / 4.0 | -5,405,950 | -6,092,013 | 1,558,069 (100%) |
+| **0.5 / 2, chosen** | **107 / 3.5** | **-4,534,558** | **-4,794,729** | |
+| 1.0 / 4 | 107 / 3.5 | -4,634,299 | -4,902,300 | 95,902 (100%) |
+| 2.0 / 8 | 107 / 3.5 | -4,852,216 | -5,157,980 | 301,199 (100%) |
+| 3.0 / 12 | 107 / 3.5 | -5,098,219 | -5,498,245 | 543,430 (100%) |
+| 4.0 / 16 | 120 / 3.5 | -5,509,743 | -6,020,095 | 950,254 (100%) |
+| 5.0 / 20 (PR 7's battery) | 147 / 4.5 | -5,949,193 | -6,585,828 | 1,394,680 (100%) |
+| 6.0 / 24 | 147 / 4.0 | -6,649,212 | -7,392,588 | 2,079,280 (100%) |
 
-Each 0.5 MW of battery costs about USD 60-70k at P50 up to 3 MW, and more beyond. Reading B gives
-the same choice; its larger batteries (to 10 MW / 40 MWh) are worse still. The runner-up is the
-same battery at 4.0 MW AC, by USD 18,396 at P50. No trial has a project IRR; unit pre-tax NPV
-P50 USD -269,893, P90 -522,124.
+Each 0.5 MW of battery costs about USD 100-125k at P50 up to 3 MW, and more beyond. Reading B
+gives the same choice; its larger batteries (to 10 MW / 40 MWh) are worse still. The runner-up is
+the same battery at 4.0 MW AC, by USD 20,341 at P50 (100% of paired trials). No trial has a
+project IRR; unit pre-tax NPV P50 USD -345,081, P90 -595,410.
 
 **Sensitivity (base case, one input at a time, best PV at each battery).** After-tax project NPV
-in USD thousands, reading A:
+in USD thousands, reading A. No case moves the choice:
 
-| Case | 0.5 MW | 1 | 2 | 3 | 4 | 5 | 6 | Best |
-|---|---|---|---|---|---|---|---|---|
-| Base | -3,806 | -3,831 | -3,888 | -3,982 | -4,192 | -4,435 | -5,042 | 0.5 |
-| BESS capex low (129.13 USD/kWh) | -3,783 | -3,785 | -3,795 | -3,842 | -4,004 | -4,216 | -4,760 | 0.5 |
-| BESS capex high (202.51) | -3,930 | -4,079 | -4,385 | -4,727 | -5,190 | -5,660 | -6,538 | 0.5 |
-| BESS O&M x0.5 (0.90 USD/kWh-yr DC) | -3,789 | -3,798 | -3,820 | -3,878 | -4,054 | -4,282 | -4,834 | 0.5 |
-| BESS O&M x1.5 (2.70) | -3,823 | -3,865 | -3,956 | -4,084 | -4,330 | -4,589 | -5,250 | 0.5 |
-| Priority rate -10% (45.09 LKR/kWh) | -3,866 | -3,949 | -4,122 | -4,324 | -4,647 | -4,975 | -5,601 | 0.5 |
-| Priority rate +10% (55.11) | -3,747 | -3,713 | -3,653 | **-3,637** | -3,772 | -3,955 | -4,519 | 2.5 |
-| Other rate -10% (18.648) | -3,998 | -3,995 | -3,997 | -4,037 | -4,251 | -4,491 | -5,071 | 1.5 |
-| Other rate +10% (22.792) | -3,614 | -3,667 | -3,780 | -3,926 | -4,128 | -4,379 | -5,014 | 0.5 |
-| Priority term 20 years, not 15 | -3,763 | -3,751 | -3,745 | -3,781 | -3,954 | -4,159 | -4,758 | 1.5 |
-| RTE 0.82 | -3,818 | -3,855 | -3,937 | -4,063 | -4,305 | -4,566 | -5,252 | 0.5 |
-| RTE 0.88 | -3,795 | -3,809 | -3,843 | -3,907 | -4,087 | -4,317 | -4,834 | 0.5 |
-| Corporate tax 0% | -3,817 | -3,844 | -3,907 | -4,010 | -4,253 | -4,507 | -5,112 | 0.5 |
-| No 10% CFADS haircut | -3,692 | -3,686 | **-3,679** | -3,714 | -3,808 | -3,959 | -4,599 | 2.0 |
-| Cost of equity 10% | -3,728 | -3,729 | -3,741 | -3,794 | -3,897 | -4,066 | -4,707 | 0.5 |
-| Cost of equity 14% | -3,877 | -3,923 | -4,021 | -4,150 | -4,439 | -4,749 | -5,339 | 0.5 |
+| Case | 0.5 MW | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| Base | **-4,518** | -4,576 | -4,705 | -4,871 | -5,213 | -5,581 | -6,245 |
+| BESS capex low (129.13 USD/kWh) | **-4,493** | -4,525 | -4,603 | -4,717 | -5,008 | -5,323 | -5,936 |
+| BESS capex high (202.51) | **-4,654** | -4,849 | -5,251 | -5,690 | -6,308 | -6,955 | -7,888 |
+| BESS O&M x0.5 (0.90 USD/kWh-yr DC) | **-4,498** | -4,537 | -4,627 | -4,752 | -5,055 | -5,382 | -6,006 |
+| BESS O&M x1.5 (2.70) | **-4,538** | -4,615 | -4,784 | -4,988 | -5,371 | -5,781 | -6,483 |
+| Priority rate -10% (45.09 LKR/kWh) | **-4,579** | -4,694 | -4,937 | -5,210 | -5,645 | -6,124 | -6,799 |
+| Priority rate +10% (55.11) | **-4,458** | -4,459 | -4,473 | -4,530 | -4,771 | -5,031 | -5,687 |
+| Other rate -10% (18.648) | **-4,714** | -4,739 | -4,812 | -4,925 | -5,251 | -5,627 | -6,272 |
+| Other rate +10% (22.792) | **-4,325** | -4,414 | -4,598 | -4,816 | -5,166 | -5,522 | -6,217 |
+| Priority term 20 years, not 15 | **-4,474** | -4,489 | -4,545 | -4,651 | -4,954 | -5,284 | -5,938 |
+| RTE 0.82 | **-4,531** | -4,600 | -4,755 | -4,952 | -5,339 | -5,733 | -6,454 |
+| RTE 0.88 | **-4,507** | -4,553 | -4,659 | -4,796 | -5,095 | -5,433 | -6,037 |
+| Corporate tax 0% | **-4,526** | -4,585 | -4,716 | -4,886 | -5,240 | -5,637 | -6,288 |
+| No 10% CFADS haircut | **-4,422** | -4,448 | -4,516 | -4,624 | -4,872 | -5,128 | -5,829 |
+| Cost of equity 10% | **-4,478** | -4,510 | -4,593 | -4,718 | -4,973 | -5,239 | -5,946 |
+| Cost of equity 14% | **-4,559** | -4,638 | -4,809 | -5,010 | -5,405 | -5,857 | -6,511 |
 
-The 1.5 MW and 2.5 MW "best" cells fall between the columns shown. Four cases out of fifteen
-favour a larger battery, each by USD 6k to 110k: the choice is robust in sign under the Monte
-Carlo but close at the margin. The 12.5% daytime curtailment scenario picks 2.5 MW (the battery
-stores PV that would be curtailed); PUCSL's 0.90 RTE reference case keeps 0.5 MW.
+A 10% higher priority rate comes closest: 1.0 MW is then within USD 1k. The 12.5% daytime
+curtailment scenario and PUCSL's 0.90 RTE reference case keep 0.5 MW too. (A preview run on
+2026-11-08, before the 2026 price dates and #1646, also chose 0.5 MW, with four of these cases
+then favouring 1.5-2.5 MW by small margins; the price dates widened the gap.)
 
 **Break-even values** (the chosen battery against the best other, base case, bisection;
 `sensitivities.break_even` in the summary). 1.0 MW / 4.0 MWh overtakes 0.5 MW at:
 
-- BESS all-in capex **USD 128.3/kWh** (mode 140.74; the low case 129.13 is just above it);
-- priority rate **LKR 52.25/kWh** (50.10);
-- BESS O&M **USD 0.45/kWh-yr DC** (1.80).
+- BESS all-in capex **USD 114.7/kWh** (mode 140.74; 18% below it, and below the 129.13 low case);
+- priority rate **LKR 55.22/kWh** (50.10; 10.2% above it).
+- No BESS O&M rate from 0 to USD 5/kWh-yr DC changes the choice.
 
 **Disclosures.**
 
 - **L-10, the BESS price at small sizes (#1578).** The per-kWh price is a blend for a
   utility-scale product, applied unchanged at 2 MWh. A small battery is likely to cost more per
   kWh (fixed PCS, container, controls and integration costs), and no small-size quote is in the
-  corpus. The bias favours small batteries, so the chosen size leans on it; a supplier's price at
-  this size is the first input to obtain (B19).
+  corpus. A dearer small battery lowers every KPI here and narrows the gap to 1 MW without
+  closing it unless larger batteries get cheaper too; a supplier's price at this size is the
+  first input to obtain (B19).
 - **L-11, fade and augmentation (#1578).** After the 15-year priority term the model keeps
   cycling the battery with its round-trip loss, and the base case has no capacity fade or
   augmentation (the price carries NSO 250's augmentation reserve). Modelling it needs the owner's
@@ -1217,35 +1218,45 @@ stores PV that would be curtailed); PUCSL's 0.90 RTE reference case keeps 0.5 MW
   5 MW / 30 MWh battery, DC/AC 1.2 and 0.96 inverter, which its tests and committed layout and
   hourly outputs use. They are now labelled as such; the sizing replaces each at every point, and
   a test shows that changing them leaves a run unchanged.
-
-**PR 3's sizing** was re-run on the same commit: DC/AC 1.1 with 24 MWh, unchanged. The hybrid
-(superseded) and the wind project do not move.
+- **PR 3's sizing (the superseded hybrid) is not regenerated.** Re-run on the same commit, it
+  moves from DC/AC 1.1 to 1.2 with 24 MWh, a near tie (USD 9,509 at P50, 64% of paired trials)
+  driven by the basis changes since 15.22.0, not by this work. Committing it would re-size the
+  superseded hybrid, so its summary stays as it was and the move is left for a follow-up.
+- **W-4's pricing half is carried here, not yet in the pricing config.** The accepted wording
+  (the blends' private inputs can be recovered exactly; owner accepted on 2026-11-07, #1353
+  comment 6702419885) is in this file, the scenario header and the methods note. The comments in
+  `conf/blue_whale_pv_bess_pricing.yaml` still carry the older "may be able to back out" wording:
+  PR 3's committed summary pins that file's bytes, so its comments change in the follow-up that
+  regenerates PR 3's summary.
 
 **KPIs.** Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case
-only. "Was" is main at 15.22.0.
+only. "Was" is main before this change (v0.8).
 
 | Scenario | Project NPV (USD) | Equity NPV (USD) | Equity IRR | Min DSCR | Project IRR |
 |---|---|---|---|---|---|
-| Solar + BESS v0.8 | -3,806,403 (was -4,440,000) | -3,948,909 (was -5,075,832) | undefined (was -5.00%) | 0.8710 (was 0.8681) | undefined |
-| Hybrid v0.11 (superseded) | unchanged | unchanged | unchanged | unchanged | 9.28% |
-| Wind v0.5 | unchanged | unchanged | unchanged | unchanged | 13.13% |
+| Solar + BESS v0.9 | -4,518,152 (was -5,579,964) | -4,628,675 (was -6,167,137) | undefined (unchanged) | 0.8703 (was 0.8682) | undefined |
+| Hybrid v0.11 (superseded) | unchanged | unchanged | unchanged | unchanged | unchanged |
+| Wind v0.5 | unchanged | unchanged | unchanged | unchanged | unchanged |
 
-Solar + BESS year 1: PV 6,114.41 MWh, export 5,985.63 MWh (was 7,479.55), of which 753.68 MWh in
-the priority window (was 6,817.18); revenue LKR 146.17M (was 355.27M). Capex USD 4,729,960 (was
-8,292,579); O&M USD 194,106 a year (was 246,630), all in LKR. The NPV is less negative because
-the project is smaller, not because it earns more per dollar.
+Solar + BESS year 1 (dispatcher, flat rates): PV 6,114.41 MWh, export 5,985.63 MWh (was
+7,479.55), of which 753.68 MWh in the priority window (was 6,817.18). Capex USD 4,729,960 at 2026
+prices (was 8,292,579); O&M USD 194,106 a year at 2026 prices (was 246,630), all in LKR. The NPV
+is less negative because the project is smaller, not because it earns more per dollar.
 
-## Latest run (the battery optimised, 15.24.0, 2026-11-08)
+## Latest run (the battery optimised, 2026-11-14)
 
-Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only:
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on main's current
+basis (the 2026 price dates included):
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
-| Wind project (v0.5) | 13.13% (unchanged) | 11.55% | 0.867 | 1,956,797 | -215,852 |
-| Solar + BESS project (v0.8, 0.5 MW / 2 MWh, 107 tables, 3.5 MW AC) | undefined (reported as 0.0) | undefined | 0.871 | -3,806,403 | -3,948,909 |
-| Hybrid (v0.11, superseded) | 9.28% | 6.79% | 0.868 | -2,067,303 | -4,614,880 |
+| Wind project (v0.5) | 12.41% | 10.55% | 0.867 | 1,398,803 | -740,793 |
+| Solar + BESS project (v0.9, 0.5 MW / 2 MWh, 107 tables, 3.5 MW AC) | undefined | undefined | 0.870 | -4,518,152 | -4,628,675 |
+| Hybrid (v0.11, superseded) | 10.61% | 8.20% | 0.868 | -205,833 | -3,036,703 |
 
-Every other input is still a placeholder, so these are not results.
+The wind and hybrid figures did not move in this change; they are restated because the section
+below predates the 2026 price dates. Every other input is still a placeholder, so these are not
+results.
 
 ## Earlier run (the turbine on DutchBay T2, 15.22.0, 2026-11-07)
 

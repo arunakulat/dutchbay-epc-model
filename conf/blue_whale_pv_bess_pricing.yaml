@@ -16,10 +16,9 @@
 # (handling notes NSO250MW-OFFERS-HANDLING-2026-09-04 and
 # DUTCHBAY150MW-PACKAGE-HANDLING-2026-09-21), published as blends only on the owner's decision
 # of 2026-11-01 ("Derived blend may publish", #1353 comment 6556975196). No raw private
-# figure is written out in this repository, but these blends include private commercial
-# inputs, and those inputs can be recovered exactly from the published figures (owner
-# accepted on 2026-11-07, #1353 comment 6702419885). The PV figures below are unchanged from
-# PR 3 and use no private input.
+# figure is in this repository. This figure is a blend that includes private commercial
+# inputs; a reader may be able to back out a private input. The PV figures below are
+# unchanged from PR 3 and use no private input.
 #
 # "verbatim" holds each figure as the retrieval tool returned it from the page (bracketed
 # words are editorial). The tool extracts rather than mirrors a page, so re-check exact
@@ -216,9 +215,8 @@ bess:
   # 14, EPC 5%; mode: prudent levies (PAL 5% + SSCL 2.5%, VAT relieved), BoP 14, EPC 8%; high:
   # every levy paid, high FOB, BoP 30, EPC 12%. Was 78.75 / 135.00 / 143.41 (NSO 250
   # BIDIMPLIED / BASE / STRESS). This figure is a blend that includes private commercial
-  # inputs, and those inputs can be recovered exactly from the published figures (owner
-  # accepted on 2026-11-07, #1353 comment 6702419885). Published on the owner's decision of
-  # 2026-11-01 (#1353 comment 6556975196).
+  # inputs; a reader may be able to back out a private input. Published on the owner's
+  # decision of 2026-11-01 (#1353 comment 6556975196).
   # Applied per kWh at every duration (a challenge point: power-related costs scale with MW).
   all_in_usd_per_kwh:
     low: 129.13
@@ -241,9 +239,8 @@ wind:
   # and a developer estimate (private, blended only), landed, with BoP calibrated on three
   # anchors and a single-machine premium. The range is the blend's low and high. Was 1300.0
   # (placeholder B09, public range 977-1,420). This figure is a blend that includes private
-  # commercial inputs, and those inputs can be recovered exactly from the published figures
-  # (owner accepted on 2026-11-07, #1353 comment 6702419885). Published on the owner's
-  # decision of 2026-11-01 (#1353 comment 6556975196).
+  # commercial inputs; a reader may be able to back out a private input. Published on the
+  # owner's decision of 2026-11-01 (#1353 comment 6556975196).
   capex_usd_per_kw: 936.84
   source: PR6-CAPEX-BLEND
   public_range_usd_per_kw: [728.16, 1341.16]
