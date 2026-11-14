@@ -21,7 +21,7 @@ updates:
         patterns:
           - "markitdown"
           - "pdfplumber"
-          - "pymupdf"
+          - "pymupdf*"
           - "magika"
       jobs:
         patterns:
