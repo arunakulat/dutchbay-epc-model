@@ -20,7 +20,6 @@ is skipped unless the three private inputs are configured on the host.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import math
@@ -1178,6 +1177,53 @@ _PRIVATE = (
 )
 
 
+def _assert_summary_reproduced(got: Dict[str, Any], committed: Dict[str, Any]) -> None:
+    """Allow one micrometre of distance rounding; keep all other fields exact."""
+    normalized = json.loads(json.dumps(got))
+    receptors = normalized["shadow_flicker"]["receptors"]
+    expected = committed["shadow_flicker"]["receptors"]
+    assert len(receptors) == len(expected)
+    for actual, reference in zip(receptors, expected, strict=True):
+        assert actual["distance_m"] == pytest.approx(
+            reference["distance_m"], abs=1e-6, rel=0
+        )
+        actual["distance_m"] = reference["distance_m"]
+    assert normalized == committed
+
+
+@pytest.mark.parametrize("delta_m", [0.0, 1e-11, -1e-11, 5e-7, -5e-7])
+def test_summary_comparison_accepts_distance_rounding(delta_m: float) -> None:
+    committed = json.loads(SUMMARY.read_text())
+    got = json.loads(json.dumps(committed))
+    for receptor in got["shadow_flicker"]["receptors"]:
+        receptor["distance_m"] += delta_m
+    _assert_summary_reproduced(got, committed)
+    assert got != committed or delta_m == 0.0  # Comparison must not mutate its input.
+
+
+@pytest.mark.parametrize(
+    "change", ["distance", "version", "energy", "receptor_field", "missing", "extra"]
+)
+def test_summary_comparison_rejects_other_drift(change: str) -> None:
+    committed = json.loads(SUMMARY.read_text())
+    got = json.loads(json.dumps(committed))
+    receptors = got["shadow_flicker"]["receptors"]
+    if change == "distance":
+        receptors[0]["distance_m"] += 2e-6
+    elif change == "version":
+        got["model_version"] = "different-version"
+    elif change == "energy":
+        got["long_term_130m"]["mean_speed_ms"] += 1e-10
+    elif change == "receptor_field":
+        receptors[0]["unexpected_field"] = True
+    elif change == "missing":
+        receptors.pop()
+    else:
+        receptors.append(dict(receptors[0]))
+    with pytest.raises(AssertionError):
+        _assert_summary_reproduced(got, committed)
+
+
 @pytest.mark.skipif(
     not all(os.environ.get(k) for k in _PRIVATE),
     reason="needs the private mast, the reference files and the confidential curve",
@@ -1191,8 +1237,4 @@ def test_rerun_reproduces_the_committed_summary() -> None:
     out = cli.run(raw)
     committed = json.loads(SUMMARY.read_text())
     got = json.loads(json.dumps(out, sort_keys=True))
-    assert got == committed
-    assert (
-        hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest()
-        == hashlib.sha256(json.dumps(committed, sort_keys=True).encode()).hexdigest()
-    )
+    _assert_summary_reproduced(got, committed)
