@@ -341,6 +341,60 @@
   </section>
   {% endif %}
 
+  {% if ctx.refinance_coverage %}
+  <section class="page">
+    <h2>Refinanced Balloon Coverage &mdash; Assumed Terms</h2>
+    <div class="fx-warning">
+      <strong>F-5 Non-Reliance Caveat:</strong> {{ ctx.refinance_coverage.caveat }}
+    </div>
+    <table>
+      <tbody>
+        <tr><td>Terms basis</td><td class="num">{{ ctx.refinance_coverage.terms_basis }}</td></tr>
+        <tr><td>Assumed refinance tenor</td><td class="num">{{ ctx.refinance_coverage.tenor_years }} years</td></tr>
+        <tr><td>Rate premium / all-in rate</td><td class="num">{{ fmt_ratio_pct(ctx.refinance_coverage.rate_premium) }} / {{ fmt_ratio_pct(ctx.refinance_coverage.rate) }}</td></tr>
+        <tr><td>Refinanced principal</td><td class="num">{{ fmt_usd(ctx.refinance_coverage.principal_usd) }}</td></tr>
+        <tr><td>Total refinance service / interest</td><td class="num">{{ fmt_usd(ctx.refinance_coverage.total_service_usd) }} / {{ fmt_usd(ctx.refinance_coverage.total_interest_usd) }}</td></tr>
+        <tr>
+          <td>Minimum refinance coverage / floor</td>
+          <td class="num">
+            {{ fmt_x(ctx.refinance_coverage.min_coverage) }} / {{ fmt_x(ctx.refinance_coverage.coverage_floor) }}
+            <span class="rag-pill {% if ctx.refinance_coverage.coverage_breach %}rag-red{% else %}rag-green{% endif %}">
+              {% if ctx.refinance_coverage.coverage_breach %}COVERAGE BREACH{% else %}WITHIN FLOOR{% endif %}
+            </span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% if ctx.refinance_coverage.coverage_by_period %}
+    <h3>Annual refinance service &amp; coverage</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Operating year</th>
+          <th style="text-align:right;">Debt service</th>
+          <th style="text-align:right;">Interest</th>
+          <th style="text-align:right;">Principal</th>
+          <th style="text-align:right;">Cash available</th>
+          <th style="text-align:right;">Coverage</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in ctx.refinance_coverage.coverage_by_period %}
+        <tr>
+          <td>{{ row.year }}</td>
+          <td class="num">{{ fmt_usd(row.service_usd) }}</td>
+          <td class="num">{{ fmt_usd(row.interest_usd) }}</td>
+          <td class="num">{{ fmt_usd(row.principal_usd) }}</td>
+          <td class="num">{{ fmt_usd(row.cash_available_usd) }}</td>
+          <td class="num">{{ fmt_x(row.coverage) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">

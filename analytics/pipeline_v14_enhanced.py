@@ -1117,6 +1117,9 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
 
         cfg = _validate_config_type_and_structure(config)
+        from finance.native_cost_inputs import normalize_native_capex
+
+        cfg = normalize_native_capex(cfg)
         config_path_label = (
             str(config) if isinstance(config, (str, Path)) else "<inline>"
         )
