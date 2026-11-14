@@ -994,6 +994,13 @@ def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
         cli.measured_profiles(
             twice, twice_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
         )
+    # A non-finite height above the floor is not a second height.
+    beyond = four.assign(**{"Speed inf m": four[names["110"]]})
+    beyond_m = dict(alt_m, speed_avg={**names, "inf": "Speed inf m"})
+    with pytest.raises(ValueError, match=floor):
+        cli.measured_profiles(
+            beyond, beyond_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
+        )
     # Unordered speed map produces identical labels and values
     unordered_names = {h: names[h] for h in ("75", "110", "40", "90", "60")}
     unordered_m = dict(alt_m, speed_avg=unordered_names)
