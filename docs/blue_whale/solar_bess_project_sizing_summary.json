@@ -37016,7 +37016,7 @@
     "finance/tech_types.py": "361dc3020e39b6fb05322667bb90e54e209e601c8bed5766146e22d9f3a6eb47",
     "finance/utils.py": "9ea95db732184a0a0bd2a16bc72cc96407b6ce9fcfdf7c40b97c57a87f362613",
     "finance/wacc_v14.py": "dc1a1099efd7350c580359b903352e188892df40ac21690e3f006bbb13e13742",
-    "scripts/run_blue_whale_pv_bess_sizing_v14.py": "631f8cc7f95953e6683a8d9dd0047315ade88c83dbdaf038c4d3476726d763af",
+    "scripts/run_blue_whale_pv_bess_sizing_v14.py": "02b783f867c941be9f475a769cf9f538bdd61a45033475344e304a2dfb1cd722",
     "solar_resource/__init__.py": "804a77357ecf026e2f739a1d2b481dc04ed81a0534ed5d211d6f52f74f994892",
     "solar_resource/bifacial_guard.py": "f79aa9d616e0afedc8af58173cb4cd9186bff60f206f7b1632cb0cc83d480e39",
     "solar_resource/cashflow_adapter.py": "323cccdc0938ab7c68ee04d5fcc85dbd958a5349570ccad833dabb1126df613e",
@@ -37030,7 +37030,7 @@
     "solar_resource/source_quality.py": "215f79cca0198bdfdac41360dcba88c826b4ebdb0be6257bc52f2141a3a0d8bb",
     "solar_resource/turbine_shading.py": "1a8e33bb324f9e07afdc63da106b14cadfb3d9421c4610065337c2c0f507fe21"
    },
-   "tree": "96f2c140196e61ea5e008975f40d0781bc9d74c32f3f8fb421896bc00aad7d00",
+   "tree": "5edf230352ea72cfc2fc1aa456372693400a0bbafef7d42590349d93b120c9b9",
    "uncommitted": []
   },
   "common_random_numbers": true,
@@ -37052,14 +37052,14 @@
   ],
   "effective_evaluations": 149786,
   "export_limit_mw": 10.0,
-  "git_sha": "e1faea217205c7ce9a01e661ed1e4888d42c89c7",
+  "git_sha": "58007dd70e0ee8dbff1947052183feecbb90e6e8",
   "grid_points": 514,
   "grid_points_evaluated": 514,
   "inputs_sha256": {
    "conf/blue_whale_pucsl_fit_2026.yaml": "e45ad203388b910fcd7cf22b5559ccdad913ceaaf0ff829b38a087e06158ba20",
    "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
-   "conf/blue_whale_solar_bess.yaml": "362ca19abee2af915538a845c971f1ff28afe128dd375488dd88c2be3262e55c",
-   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "016408c90a0267f59af078b34021ac28fb9107b7d18db5b0725320dc63ec5229"
+   "conf/blue_whale_solar_bess.yaml": "7bd055cafe5c844643cfe8c695144d491220a9afb76b424e9176de60dbc15ba9",
+   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "65dc98ba7185d0c4bc3cbd31fe5907bea0cd74f1d479243ae43238c19b654239"
   },
   "land_max_tables_by_bess_power_mw": {
    "0.1": 188,
@@ -37107,7 +37107,7 @@
     },
     {
      "name": "bess_om",
-     "units": 2200.0,
+     "units": 440.0,
      "usd_per_unit_year": 1.8,
      "usd_share": 0.0
     },
@@ -37122,8 +37122,8 @@
    "source": "scenario.opex.currency_split.components"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "038bc8a6ae4692c877c7a58a2bf10fb0a933f781ae26225bc80140f50608f47d",
-  "runtime_s": 5876.4,
+  "result_sha256": "28bcbcd515ed7c55d3a1e9e277f759ab49e64f10a825229e21c02f52d180e919",
+  "runtime_s": 5712.3,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 17,
