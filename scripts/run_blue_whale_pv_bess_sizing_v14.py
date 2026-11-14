@@ -121,16 +121,26 @@ def loaded_repo_modules(root: Path = REPO_ROOT) -> list[Path]:
     """The source files of every imported module that lives in this repository.
 
     Modules under a virtual environment or ``site-packages`` inside the checkout are third
-    party and are left out (the lock file pins them).
+    party and are left out (the lock file pins them). A module of one of this repository's
+    top-level packages that was imported from outside ``root`` (another checkout reached
+    through an editable install, say) is refused, not dropped: ``code_sha256`` would
+    otherwise omit code that ran (#1691 assurance A-4).
     """
     base = root.resolve()
+    packages = {p.name for p in base.iterdir() if (p / "__init__.py").is_file()}
     out: list[Path] = []
-    for mod in list(sys.modules.values()):
+    for key, mod in list(sys.modules.items()):
         name = getattr(mod, "__file__", None)
         if not name:
             continue
         path = Path(name).resolve()
-        if path.suffix != ".py" or not path.is_relative_to(base):
+        if not path.is_relative_to(base):
+            if key.split(".")[0] in packages:
+                raise RuntimeError(
+                    f"repository module {key} was imported from {path}, outside {base}"
+                )
+            continue
+        if path.suffix != ".py":
             continue
         rel = path.relative_to(base).parts
         if rel[0].startswith(".") or "site-packages" in rel:
@@ -290,7 +300,10 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
     Every grid point is one row of ``grid`` (size, fit, eligibility, base case and the
     distribution summaries). The full point, with the base case's engine fields and year-1
     energy, is kept in ``named_points`` only for the sizes the recommendation names.
-    ``spec.result_sha256`` still identifies the full output the CLI printed.
+    ``spec.result_sha256`` still identifies the full output the CLI printed. It hashes
+    the spec too (``git_sha``, ``code_sha256``, input digests), so two runs on different
+    commits never share it even when their results agree: to show that a re-run
+    reproduced, compare ``points``, ``grid`` and ``recommendation`` (#1691 assurance A-6).
     """
     rec = out["recommendation"]
     named = set()

@@ -23,6 +23,7 @@ import math
 import os
 import subprocess
 import sys
+import types
 from pathlib import Path
 from typing import Any, Dict
 
@@ -765,7 +766,9 @@ def _cli() -> Any:
     return cli
 
 
-def test_code_digest_is_a_checkable_sha256sum_listing(tmp_path: Path) -> None:
+def test_code_digest_is_a_checkable_sha256sum_listing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """MRM-02: ``spec.code_sha256`` survives a squash merge that drops ``git_sha``.
 
     Oracle: the ``sha256sum`` listing format, written out here by hand, and ``hashlib``.
@@ -798,6 +801,21 @@ def test_code_digest_is_a_checkable_sha256sum_listing(tmp_path: Path) -> None:
     rels = {p.relative_to(REPO_ROOT).as_posix() for p in mods}
     assert "solar_resource/pv_bess_sizing.py" in rels
     assert not any(r.startswith(".") or "site-packages" in r for r in rels)
+    # A repository package imported from another checkout is refused, not dropped.
+    stray = tmp_path / "elsewhere" / "solar_resource" / "stray.py"
+    stray.parent.mkdir(parents=True)
+    stray.write_text("X = 1\n")
+    fake = types.ModuleType("solar_resource._stray_for_test")
+    fake.__file__ = str(stray)
+    monkeypatch.setitem(sys.modules, fake.__name__, fake)
+    with pytest.raises(RuntimeError, match="outside"):
+        cli.loaded_repo_modules()
+    # A third-party module outside the checkout is still left out silently.
+    monkeypatch.delitem(sys.modules, fake.__name__)
+    other = types.ModuleType("not_a_repository_package")
+    other.__file__ = str(stray)
+    monkeypatch.setitem(sys.modules, other.__name__, other)
+    assert stray.resolve() not in cli.loaded_repo_modules()
 
 
 @pytest.mark.parametrize(
