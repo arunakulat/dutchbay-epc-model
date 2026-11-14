@@ -1,0 +1,44 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+project: wind
+output_name: wind_financing_questionnaire
+fields:
+  - {id: capacity_rate, path: Financing_Terms.interest_rate_nominal, unit: fraction_per_year, label: Capacity discount rate, note: Discounts dual-DSCR capacity detail; not the repayment schedule rate.}
+  - {id: lkr_rate, path: Financing_Terms.rates.lkr_nominal, unit: fraction_per_year, label: LKR repayment rate, note: Per-tranche schedule rate; model assumption only.}
+  - {id: dfi_rate, path: Financing_Terms.rates.dfi_nominal, unit: fraction_per_year, label: DFI repayment rate, note: Per-tranche schedule rate; model assumption only.}
+  - {id: usd_rate, path: Financing_Terms.rates.usd_nominal, unit: fraction_per_year, label: USD repayment rate, note: Per-tranche schedule rate; model assumption only.}
+  - {id: gearing, path: Financing_Terms.debt_ratio, unit: fraction, label: Debt ratio, note: Confirm actual gearing and sizing basis.}
+  - {id: tenor, path: Financing_Terms.tenor_years, unit: years, label: Debt tenor, note: Confirm tenor and repayment convention.}
+  - {id: grace, path: Financing_Terms.interest_only_years, unit: years, label: Interest-only period, note: Confirm grace and repayment timing.}
+  - {id: sizing_target, path: Financing_Terms.target_dscr, unit: ratio, label: Sizing target DSCR, note: Model target; confirm covenant basis.}
+  - {id: sizing_minimum, path: Financing_Terms.min_dscr, unit: ratio, label: Financing minimum DSCR, note: Model threshold; confirm covenant basis.}
+  - {id: constraint_minimum, path: constraints.min_dscr_covenant, unit: ratio, label: Constraint minimum DSCR, note: Separate constraint; confirm covenant basis.}
+  - {id: constraint_target, path: constraints.target_dscr, unit: ratio, label: Constraint target DSCR, note: Separate constraint; confirm covenant basis.}
+  - {id: dsra_target, path: Financing_Terms.reserves.dsra_months, unit: months, label: DSRA target, note: Target does not establish initial funding; confirm funding timing and source.}
+  - {id: upfront_fee, path: Financing_Terms.fees.upfront_pct, unit: fraction, label: Upfront fee, note: Amortised into WACC debt cost; does not establish CAPEX cash funding.}
+  - {id: capex, path: capex.usd_total, unit: USD, label: CAPEX model reference, note: Confirm currency and cash funding basis.}
+  - {id: capex_year, path: capex.price_basis.price_year, unit: year, label: CAPEX price year, note: Confirm quote and funding dates.}
+  - {id: fx_rate, path: fx.start_lkr_per_usd, unit: LKR_per_USD, label: Model exchange rate, note: Confirm value date and conversion basis.}
+  - {id: ppa_currency, path: ppa.primary_currency, unit: currency_code, label: PPA currency, note: Confirm contract currency.}
+  - {id: lkr_mix, path: Financing_Terms.mix.lkr_max, unit: fraction, label: Maximum LKR mix, note: Model reference; confirm financing currency and facilities.}
+gaps:
+  - {id: borrower, label: Borrower and transaction identity, note: Provide entity and transaction evidence.}
+  - {id: lender, label: Lender and facility authority, note: Provide lender identity and authorized facility terms.}
+  - {id: security, label: Security package, note: Provide security and priority evidence.}
+  - {id: sppa, label: SPPA and offtake, note: Provide executed agreement and relevant payment terms.}
+  - {id: land, label: Land rights, note: Provide land and site rights evidence.}
+  - {id: permits, label: Permits and approvals, note: Provide applicable permits and approval evidence.}
+  - {id: grid, label: Grid connection, note: Provide authenticated connection evidence.}
+  - {id: dsra_funding, label: Initial DSRA funding, note: Confirm funding date source and amount.}
+  - {id: fee_cash, label: Fee cash funding, note: Confirm cash amount timing currency and inclusion in sources and uses.}
+  - {id: downside_selection, label: Downside and coverage convention, note: Confirm production downside selection and which debt sizing and covenant tests it binds.}
+  - {id: fx_value_date, label: FX value date and source, note: Confirm the actual conversion date source and distinction from quote and financial-close rates.}
+hydra:
+  run:
+    dir: .
+  job:
+    chdir: false
+  output_subdir: null
