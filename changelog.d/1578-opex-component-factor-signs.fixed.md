@@ -1,0 +1,1 @@
+`opex.currency_split.components` now refuses a negative `usd_per_unit_year` or a negative `units` on its own (#1578 L-12, D-5). Before, only their product was checked, so a negative rate times negative units passed as a positive cost. No committed scenario uses a negative factor, so no KPI moves.

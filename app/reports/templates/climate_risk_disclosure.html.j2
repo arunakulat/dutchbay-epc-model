@@ -1,0 +1,289 @@
+{% if standalone %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Climate-Related Risk Disclosure — {{ ctx.perimeter.project_name }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 20mm 16mm 20mm 16mm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1c2733;
+      font-size: 10pt;
+      line-height: 1.45;
+      background: #ffffff;
+      margin: 0;
+      padding: 0;
+    }
+    .climate-risk-disclosure {
+      margin-bottom: 24pt;
+    }
+    h2.section-title {
+      font-size: 14pt;
+      color: #0b3d62;
+      border-bottom: 2px solid #0b3d62;
+      padding-bottom: 4pt;
+      margin-top: 16pt;
+      margin-bottom: 8pt;
+    }
+    h3.sub-title {
+      font-size: 11pt;
+      color: #34556b;
+      margin-top: 12pt;
+      margin-bottom: 6pt;
+    }
+    .disclaimer-banner {
+      background: #fbf7ed;
+      border-left: 4px solid #b57a00;
+      padding: 8pt 10pt;
+      font-size: 8.5pt;
+      color: #634300;
+      margin-bottom: 12pt;
+    }
+    .perimeter-box {
+      background: #f4f8fb;
+      border: 1px solid #d0e0eb;
+      border-radius: 4px;
+      padding: 8pt 12pt;
+      margin-bottom: 12pt;
+      font-size: 9pt;
+    }
+    .perimeter-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6pt 16pt;
+    }
+    .perimeter-item strong {
+      color: #0b3d62;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6pt;
+      margin-bottom: 12pt;
+      font-size: 8.5pt;
+    }
+    th, td {
+      text-align: left;
+      padding: 5pt 7pt;
+      border-bottom: 1px solid #dfe6ec;
+      vertical-align: top;
+    }
+    th {
+      background: #eef3f7;
+      color: #0b3d62;
+      font-weight: 600;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1.5pt 5pt;
+      border-radius: 3pt;
+      font-size: 7.5pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3pt;
+    }
+    .badge-physical { background: #e3effa; color: #15558d; }
+    .badge-transition { background: #f3e8fa; color: #6a1b9a; }
+    .badge-present { background: #e6f7ec; color: #1e7e34; }
+    .badge-absent { background: #f0f4f8; color: #495057; }
+    .badge-missing { background: #fbeae8; color: #c82333; }
+    .badge-low { background: #e6f7ec; color: #1e7e34; }
+    .badge-medium { background: #fff3cd; color: #856404; }
+    .badge-high { background: #f8d7da; color: #721c24; }
+    .badge-undetermined { background: #e2e3e5; color: #383d41; }
+    .missing-box {
+      background: #fdf2f2;
+      border-left: 4px solid #c82333;
+      padding: 8pt 10pt;
+      margin-top: 8pt;
+      margin-bottom: 12pt;
+      font-size: 8.5pt;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+{% endif %}
+
+<section class="climate-risk-disclosure">
+  <h2 class="section-title">Climate-Related Risk &amp; Scenario Disclosure (D5)</h2>
+
+  <div class="disclaimer-banner">
+    <strong>Regulatory &amp; Methodological Disclosure:</strong> {{ ctx.disclaimer }}
+  </div>
+
+  <div class="perimeter-box">
+    <div class="perimeter-grid">
+      <div class="perimeter-item"><strong>Project:</strong> {{ ctx.perimeter.project_name }}</div>
+      <div class="perimeter-item"><strong>Jurisdiction:</strong> {{ ctx.perimeter.jurisdiction }} ({{ ctx.perimeter.jurisdiction_iso }})</div>
+      <div class="perimeter-item"><strong>Reporting Boundary:</strong> {{ ctx.perimeter.reporting_boundary }}</div>
+      <div class="perimeter-item"><strong>Asset Lifespan:</strong> {{ ctx.perimeter.asset_lifespan_years }} years</div>
+    </div>
+  </div>
+
+  <h3 class="sub-title">1. Reference Climate Scenarios</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 15%;">Scenario</th>
+        <th style="width: 15%;">Family</th>
+        <th style="width: 15%;">Trajectory</th>
+        <th style="width: 35%;">Perimeter-Specific Selection Rationale</th>
+        <th style="width: 20%;">Source Citation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in ctx.scenarios %}
+      <tr>
+        <td><strong>{{ s.name }}</strong><br /><small style="color: #6c757d;">{{ s.scenario_id }}</small></td>
+        <td>{{ s.pathway_family }}</td>
+        <td>{{ s.temperature_trajectory or "—" }}</td>
+        <td>{{ s.selection_rationale }}</td>
+        <td>{{ s.source_citation }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 class="sub-title">2. Assessment Time Horizons</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Horizon</th>
+        <th style="width: 15%;">Period</th>
+        <th style="width: 65%;">Operational Context</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for th in ctx.time_horizons %}
+      <tr>
+        <td><strong>{{ th.label }}</strong></td>
+        <td>{{ th.start_year }}–{{ th.end_year }}</td>
+        <td>{{ th.operational_context }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 class="sub-title">3. Registered Climate Risk Drivers</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 12%;">Category</th>
+        <th style="width: 20%;">Risk Driver</th>
+        <th style="width: 12%;">Horizon</th>
+        <th style="width: 14%;">Analysis Status</th>
+        <th style="width: 20%;">Hazard Description &amp; Evidence</th>
+        <th style="width: 14%;">Residual Severity</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in ctx.drivers %}
+      <tr>
+        <td>
+          {% if 'physical' in d.risk_type %}
+          <span class="badge badge-physical">Physical</span>
+          {% else %}
+          <span class="badge badge-transition">Transition</span>
+          {% endif %}
+          <br /><small style="color: #6c757d;">{{ d.risk_type }}</small>
+        </td>
+        <td><strong>{{ d.title }}</strong><br /><small style="color: #6c757d;">ID: {{ d.risk_id }}</small></td>
+        <td>{{ d.time_horizon | replace('_', ' ') | title }}</td>
+        <td>
+          {% if d.analysis_status == 'analyzed_present' %}
+          <span class="badge badge-present">Analyzed Present</span>
+          {% elif d.analysis_status == 'analyzed_absent' %}
+          <span class="badge badge-absent">Analyzed Absent</span>
+          {% else %}
+          <span class="badge badge-missing">Missing / Gap</span>
+          {% endif %}
+        </td>
+        <td>
+          {{ d.hazard_description }}<br />
+          <small><em>Basis: {{ d.evidence_basis }}</em></small>
+        </td>
+        <td>
+          {% if d.residual_severity == 'low' %}
+          <span class="badge badge-low">Low</span>
+          {% elif d.residual_severity == 'medium' %}
+          <span class="badge badge-medium">Medium</span>
+          {% elif d.residual_severity == 'high' %}
+          <span class="badge badge-high">High</span>
+          {% else %}
+          <span class="badge badge-undetermined">Undetermined</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 class="sub-title">4. Financial Transmission Channels &amp; Double-Counting Protections</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 20%;">Risk ID &amp; Driver</th>
+        <th style="width: 20%;">Transmission Channel</th>
+        <th style="width: 35%;">Financial Impact Description</th>
+        <th style="width: 15%;">Modelled in Base Cashflows?</th>
+        <th style="width: 10%;">Parallel WACC Markup</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in ctx.drivers %}
+        {% if d.transmission_channels %}
+          {% for item in d.transmission_channels %}
+          <tr>
+            <td>{{ d.title }}</td>
+            <td><code>{{ item.channel }}</code></td>
+            <td>
+              {{ item.description }}
+              {% if item.modelled_impact %}
+              <br /><small style="color: #0b3d62;">Impact: {{ item.modelled_impact }}</small>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.already_modelled_in_cashflows %}
+              <strong style="color: #1e7e34;">Yes (In Base CF)</strong>
+              {% else %}
+              <span style="color: #6c757d;">No (Unmodelled Contingency)</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if item.wacc_adjustment_allowed %}
+              <span style="color: #b57a00;">Permitted</span>
+              {% else %}
+              <strong style="color: #15558d;">Prohibited (No Double Count)</strong>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if ctx.missing_analyses_count > 0 %}
+  <div class="missing-box">
+    <strong>Explicit Climate Assessment Gaps ({{ ctx.missing_analyses_count }} identified):</strong>
+    <p style="margin: 3pt 0 0 0;">
+      Per DutchBay governance, missing analyses are disclosed as missing and are not assumed to be zero or immaterial. The following hazards require dedicated engineering study prior to financial close:
+    </p>
+    <ul style="margin: 4pt 0 0 16pt; padding: 0;">
+      {% for gap in ctx.missing_analyses_drivers %}
+      <li><strong>{{ gap.title }} ({{ gap.risk_id }}):</strong> {{ gap.hazard_description }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+{% if standalone %}
+</body>
+</html>
+{% endif %}
