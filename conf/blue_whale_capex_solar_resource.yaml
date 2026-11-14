@@ -23,8 +23,9 @@
 schema_version: blue_whale_capex_solar_resource_v1
 retrieved: "2026-11-01"
 disclosure_note: >-
-  This figure is a blend that includes private commercial inputs; a reader may be able to back
-  out a private input. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).
+  This figure is a blend that includes private commercial inputs, and those inputs can be
+  recovered exactly from the published figures (owner accepted on 2026-11-07, #1353 comment
+  6702419885). Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).
 
 sources:
   SOOCHOW-2026-07-24:
@@ -339,8 +340,10 @@ solar_resource:
     # Area centroid of the 160 PV tables in docs/blue_whale/pv_bess_layout_lot5b.geojson.
     latitude: 8.291526
     longitude: 79.753204
-    turbine_latitude: 8.2925           # conf/blue_whale_wind_siting.yaml (PR 1 turbine)
-    turbine_longitude: 79.752666
+    # The turbine point is read from the siting config, where the turbine is placed (DutchBay
+    # T2). This file kept its own copy until #1578 L-16, and it went stale (79.752666, the
+    # #1530 setback spot); the runner now refuses a turbine_latitude/turbine_longitude here.
+    turbine_siting_config: conf/blue_whale_wind_siting.yaml
     tmy_latitude: 8.27
     tmy_longitude: 79.75
   unit_config: conf/blue_whale_solar_bess.yaml
