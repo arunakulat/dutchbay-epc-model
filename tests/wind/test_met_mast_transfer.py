@@ -936,16 +936,22 @@ def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
     names = {h: f"Speed {h} m Avg [m/s]" for h in ("40", "60", "75", "90", "110")}
     idx = mast.index
     base = mast[mcfg["speed_avg"]["100"]].to_numpy()
+    alt_s = dict(
+        shear, low_height_m=90.0, high_height_m=110.0, log_fit_upper_from_height_m=90.0
+    )
+    day_sel = (idx.hour >= int(alt_s["day_start_local_h"])) & (
+        idx.hour < int(alt_s["day_end_local_h"])
+    )
+    # The lower heights shear harder by day (0.35) than by night (0.15), so the day,
+    # night and all-rows fits differ and each pins its own row subset (#1657 D-1).
+    lower = np.where(day_sel, 0.35, 0.15)
     cols: Dict[str, Any] = {
-        names[h]: base * (float(h) / 100.0) ** (0.35 if float(h) < 90.0 else 0.2)
+        names[h]: base * (float(h) / 100.0) ** (lower if float(h) < 90.0 else 0.2)
         for h in names
     }
     cols[mcfg["direction"]] = mast[mcfg["direction"]].to_numpy()
     four = pd.DataFrame(cols, index=idx)
     alt_m = dict(mcfg, speed_avg=names)
-    alt_s = dict(
-        shear, low_height_m=90.0, high_height_m=110.0, log_fit_upper_from_height_m=90.0
-    )
     alt = cli.measured_profiles(four, alt_m, alt_s, n)
     assert "alpha_log_fit_30_120" not in alt and "alpha_log_fit_80_120" not in alt
     assert alt["alpha_log_fit_90_110"] == pytest.approx(0.2, abs=1e-12)
@@ -954,14 +960,19 @@ def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
         mmt.log_law_fit_exponent([40.0, 60.0, 75.0, 90.0, 110.0], means), abs=1e-15
     )
     assert abs(alt["alpha_log_fit_40_110"] - 0.2) > 0.01
-    day_sel = (idx.hour >= int(alt_s["day_start_local_h"])) & (
-        idx.hour < int(alt_s["day_end_local_h"])
+    five = [40.0, 60.0, 75.0, 90.0, 110.0]
+    dn = alt["day_night_local_06_18"]
+    for part, sel in (("day", day_sel), ("night", ~day_sel)):
+        part_means = [float(four.loc[sel, c].mean()) for c in names.values()]
+        assert dn[part]["alpha_log_fit_40_110"] == pytest.approx(
+            mmt.log_law_fit_exponent(five, part_means), abs=1e-12
+        )
+    # The planted profile separates the subsets by far more than the tolerance.
+    assert (
+        dn["day"]["alpha_log_fit_40_110"] - dn["night"]["alpha_log_fit_40_110"] > 0.05
     )
-    day_means = [float(four.loc[day_sel, c].mean()) for c in names.values()]
-    assert alt["day_night_local_06_18"]["day"]["alpha_log_fit_40_110"] == pytest.approx(
-        mmt.log_law_fit_exponent([40.0, 60.0, 75.0, 90.0, 110.0], day_means),
-        abs=1e-15,
-    )
+    assert abs(dn["day"]["alpha_log_fit_40_110"] - alt["alpha_log_fit_40_110"]) > 0.02
+    assert abs(dn["night"]["alpha_log_fit_40_110"] - alt["alpha_log_fit_40_110"]) > 0.02
     assert alt["basis"].startswith("10-minute rows with all five mean speeds")
     four_m = dict(alt_m, speed_avg={h: names[h] for h in ("40", "60", "90", "110")})
     assert cli.measured_profiles(four, four_m, alt_s, n)["basis"].startswith(
@@ -971,11 +982,17 @@ def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
         cli.measured_profiles(
             four, alt_m, dict(alt_s, log_fit_upper_from_height_m=80), n
         )
-    with pytest.raises(
-        ValueError, match="leaves fewer than 2 speed channels at or above it"
-    ):
+    floor = "leaves fewer than 2 distinct finite positive speed heights"
+    with pytest.raises(ValueError, match=floor):
         cli.measured_profiles(
             four, alt_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
+        )
+    # One height under two spellings is still one height (#1657 D-3).
+    twice = four.assign(**{"Speed 110.0 m": four[names["110"]]})
+    twice_m = dict(alt_m, speed_avg={**names, "110.0": "Speed 110.0 m"})
+    with pytest.raises(ValueError, match=floor):
+        cli.measured_profiles(
+            twice, twice_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
         )
     # Unordered speed map produces identical labels and values
     unordered_names = {h: names[h] for h in ("75", "110", "40", "90", "60")}
@@ -1106,7 +1123,9 @@ def test_timezone_evidence_moves_with_its_temperature_pressure_and_month_floor()
     # A second pressure channel whose semidiurnal maximum is 2 h later on the mast clock.
     p10 = mast["Pressure 10 m Avg [kPa]"].to_numpy()
     mast["Pressure 50 m"] = np.roll(p10, 12)  # 12 rows of 10 minutes = 2 h later
-    mast["Pressure 40 m"] = p10 * 0.99  # In-phase at a second pressure height
+    # A third channel 30 min later than 10 m: inside s2_tolerance_h, so it still
+    # supports the configured offset, but its phase is its own (#1657 D-2).
+    mast["Pressure 40 m"] = np.roll(p10, 3) * 0.99
     mcfg = dict(
         raw["mast"],
         pressure_kpa={
@@ -1141,14 +1160,12 @@ def test_timezone_evidence_moves_with_its_temperature_pressure_and_month_floor()
     # A passing-evidence case at a second pressure height (40 m)
     at40 = cli.timezone_evidence(mast, s["ref"], mcfg, {**tz, "pressure_height_m": 40})
     assert at40["s2_pressure_tide_maximum_mast_clock_h"] == pytest.approx(
-        ten["s2_pressure_tide_maximum_mast_clock_h"], abs=1e-12
+        ten["s2_pressure_tide_maximum_mast_clock_h"] + 0.5, abs=0.02
     )
-    assert len(at40["s2_maximum_mast_clock_h_by_month"]) == len(
-        ten["s2_maximum_mast_clock_h_by_month"]
-    )
-    assert at40["s2_maximum_mast_clock_h_by_month"] == pytest.approx(
-        ten["s2_maximum_mast_clock_h_by_month"], abs=1e-12
-    )
+    months10 = ten["s2_maximum_mast_clock_h_by_month"]
+    months40 = at40["s2_maximum_mast_clock_h_by_month"]
+    assert len(months40) == len(months10) == 4
+    assert months40 == pytest.approx([h + 0.5 for h in months10], abs=0.02)
     with pytest.raises(ValueError, match="does not support"):
         cli.timezone_evidence(mast, s["ref"], mcfg, {**tz, "pressure_height_m": 50})
     with pytest.raises(ValueError, match="no mast.pressure_kpa channel at 50 m"):
