@@ -21,6 +21,7 @@ def _rows(cfads: float, n: int = 5) -> list[dict[str, object]]:
 def _params(*, rates: dict | None = None, allow_toy: bool = False) -> dict:
     ft: dict = {
         "debt_ratio": 0.6,
+        "target_dscr": 1.30,  # no code default since #1429
         "tenor_years": 5,
         "construction_periods": 1,
         "mix": {"usd_commercial_min": 1.0},

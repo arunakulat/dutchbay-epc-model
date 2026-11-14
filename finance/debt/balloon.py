@@ -17,6 +17,7 @@ from finance.debt.helpers import (
     _as_float,
     _config_at_debt_ratio,
     _finite_number,
+    _required_number,
     _section_case_insensitive,
 )
 from finance.debt.layer import apply_debt_layer
@@ -380,8 +381,15 @@ def _resize_for_amortization(
     if _as_float(core.get("balloon_remaining"), 0.0) <= _BALLOON_TOL:
         return config, core
 
-    fin = _section_case_insensitive(config, "Financing_Terms") or {}
-    lo, hi = 0.0, _as_float(fin.get("debt_ratio"), 0.70)
+    # Read the gearing where _config_at_debt_ratio writes it: Financing_Terms when the
+    # config has that section, else the top level. Before #1429 this read only
+    # Financing_Terms and fell back to 0.70, so a flat config's own gearing was ignored.
+    fin = _section_case_insensitive(config, "Financing_Terms")
+    if fin is not None:
+        hi_raw, hi_path = fin.get("debt_ratio"), "Financing_Terms.debt_ratio"
+    else:
+        hi_raw, hi_path = config.get("debt_ratio"), "debt_ratio"
+    lo, hi = 0.0, _required_number(hi_raw, hi_path)
 
     # The 40 bisection trials share one deep copy and path-copy per trial (see
     # _config_at_debt_ratio). The config this function RETURNS is still a full deep copy,
