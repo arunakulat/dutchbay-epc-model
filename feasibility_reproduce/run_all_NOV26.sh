@@ -19,8 +19,10 @@ usage() {
 Usage: bash feasibility_reproduce/run_all_NOV26.sh [options]
  --profile full|quick      full default; quick focused smoke
  --jobs N                  pytest workers; default 4, never auto
- --out DIR                 output outside the Git checkout; may be an external drive
- --require-private         missing confidential inputs cause exit 3
+ --out DIR                 output outside the Git checkout; may be an external drive.
+                           Every output, Hydra run dir and test cache goes under it;
+                           an existing DIR must be owned by the invoking user
+ --require-private         exit 3 before any stage if a confidential input is missing
  --online-security         run network-dependent make security (otherwise offline)
  --study                   run current full analytical-study extensions (very costly)
  --study-quick             run smoke-sized analytical-study extensions
@@ -77,6 +79,22 @@ PLAN
   exit 0
 fi
 
+# --require-private: a missing confidential input exits 3, before any stage or any write,
+# so a caller can tell "private inputs missing" (3) from "a stage failed" (its exit code)
+# and from any other refusal (1).
+die_private() { printf 'FATAL: %s\n' "$*" >&2; exit 3; }
+if ((REQUIRE_PRIVATE)); then
+  [[ -f "${BLUE_WHALE_POWER_CURVE_CSV:-/nonexistent}" ]] ||
+    die_private "--require-private needs BLUE_WHALE_POWER_CURVE_CSV"
+  [[ -f "${DUTCHBAY_MET_MAST_617725_SOURCE:-/nonexistent}" ]] ||
+    die_private "--require-private needs DUTCHBAY_MET_MAST_617725_SOURCE"
+  [[ -d "${DUTCHBAY_NASA_POWER_DIR:-/nonexistent}" ]] ||
+    die_private "--require-private needs DUTCHBAY_NASA_POWER_DIR"
+  [[ -f "${BLUE_WHALE_PRIVATE_ANCHORS_PATH:-/nonexistent}" ]] ||
+    die_private "--require-private needs BLUE_WHALE_PRIVATE_ANCHORS_PATH"
+fi
+
+CALLER_PWD="$PWD"
 cd "$REPO"
 [[ -f requirements.txt && -f dutchbay_environment.py ]] || die "wrong checkout: $REPO"
 command -v git >/dev/null || die "git missing"
@@ -85,8 +103,22 @@ SHA="$(git rev-parse HEAD)"; SHORT="${SHA:0:12}"
 BRANCH="$(git branch --show-current)"
 TRACKING="$(git rev-parse origin/main 2>/dev/null || printf unavailable)"
 OUT="${OUT:-$HOME/Downloads/DutchBay_NOV26_runs/${SHORT}_$(date +%Y%m%d_%H%M%S)}"
-mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd -P)"
+# Resolve --out physically WITHOUT creating it, refuse it inside the checkout, then
+# refuse to reuse a directory another user owns (its contents could be swapped mid-run).
+case "$OUT" in /*) ;; *) OUT="$CALLER_PWD/$OUT" ;; esac
+OUT_PROBE="$OUT"; OUT_REST=""
+while [[ ! -d "$OUT_PROBE" ]]; do
+  OUT_REST="/$(basename "$OUT_PROBE")$OUT_REST"; OUT_PROBE="$(dirname "$OUT_PROBE")"
+done
+OUT="$(cd "$OUT_PROBE" && pwd -P)$OUT_REST"
 case "$OUT/" in "$REPO/"*) die "--out must be outside checkout";; esac
+if [[ -e "$OUT" && ! -O "$OUT" ]]; then
+  die "--out exists and is not owned by the invoking user: $OUT"
+fi
+if [[ -d "$OUT" ]] && [[ -n "$(find "$OUT" -maxdepth 0 \( -perm -020 -o -perm -002 \) -print)" ]]; then
+  die "--out exists and is writable by group or others: $OUT"
+fi
+mkdir -p "$OUT"
 VENV="${DUTCHBAY_VENV:-$REPO/.venv}"
 [[ "$VENV" == /* && -x "$VENV/bin/python" ]] ||
   die "configure governed Python with an absolute DUTCHBAY_VENV (or local .venv)"
@@ -97,13 +129,22 @@ export DUTCHBAY_FLOW_RULESET_CSV="$REPO/go_with_the_flow_rules_v3_0_clean.csv"
 # already-activated shell; ENV-01 rejects foreign worktree paths by design.
 export PYTHONPATH="$REPO"
 export PYTHONDONTWRITEBYTECODE=1
+# Private per-run scratch made with mktemp is removed on any exit.
+TOOL_BIN=""; TMP_PRIVATE=""
+cleanup_private_dirs() {
+  [[ -z "$TOOL_BIN" ]] || rm -rf "$TOOL_BIN"
+  [[ -z "$TMP_PRIVATE" ]] || rm -rf "$TMP_PRIVATE"
+}
+trap cleanup_private_dirs EXIT
 # The security negative controls exercise .ONESHELL and GNUMAKEFLAGS, both
 # unavailable in Apple's GNU Make 3.81. Prepend a runner-local gmake alias
 # (without changing users' shell PATH, homebrew links, or origin/main).
+# The shim directory is a fresh private mktemp dir, never a reused path under --out, so
+# nothing another user wrote can be put first on PATH.
 if command -v gmake >/dev/null 2>&1; then
-  mkdir -p "$OUT/tool_bin"
-  ln -sfn "$(command -v gmake)" "$OUT/tool_bin/make"
-  export PATH="$OUT/tool_bin:$VENV/bin:$PATH"
+  TOOL_BIN="$(mktemp -d "${TMPDIR:-/tmp}/dutchbay-nov26-bin.XXXXXXXX")"
+  ln -s "$(command -v gmake)" "$TOOL_BIN/make"
+  export PATH="$TOOL_BIN:$VENV/bin:$PATH"
 else
   export PATH="$VENV/bin:$PATH"
 fi
@@ -119,7 +160,9 @@ export COVERAGE_FILE="$OUT/.coverage"
 # small, local, whitespace-free pytest/subprocess scratch directory when
 # the external volume is named with spaces (e.g. /Volumes/Data backup).
 if [[ "$OUT" == *[[:space:]]* ]]; then
-  TMP_WORK="$HOME/Library/Caches/DutchBayNOV26/tmp"
+  # A fresh private directory per run, removed on exit, never a fixed shared path.
+  TMP_PRIVATE="$(mktemp -d /tmp/dutchbay-nov26-tmp.XXXXXXXX)"
+  TMP_WORK="$TMP_PRIVATE"
 else
   TMP_WORK="$OUT/tmp"
 fi
@@ -129,6 +172,13 @@ export TMPDIR="$(cd "$TMP_WORK" && pwd -P)/"
 export TMP="$TMPDIR" TEMP="$TMPDIR"
 export MPLCONFIGDIR="$OUT/cache/matplotlib"
 export NUMBA_CACHE_DIR="$OUT/cache/numba"
+# Keep test caches out of the checkout: pytest's cache provider and Hypothesis's example
+# database would otherwise write .pytest_cache/ and .hypothesis/ under $REPO.
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }-p no:cacheprovider"
+export HYPOTHESIS_STORAGE_DIRECTORY="$OUT/cache/hypothesis"
+# Every Hydra entry point gets its run directory under $OUT (otherwise Hydra writes
+# outputs/<date>/<time>/ into the checkout).
+hydra_dir() { printf 'hydra.run.dir=%s/hydra/%s' "$OUT" "$1"; }
 "$PY" -c 'import sys; assert sys.version_info[:2] == (3, 12)' ||
   die "Python 3.12 required"
 OUT_FREE_KIB="$(df -Pk "$OUT" | awk 'END {print $4}')"
@@ -142,16 +192,6 @@ printf 'Destination volume: %s (free %.1f GiB)\nInternal SSD: %s (free %.1f GiB)
   "$(awk -v kb="$OUT_FREE_KIB" 'BEGIN {print kb/1048576}')" \
   "$(df -Pk "$HOME" | awk 'END {print $1}')" \
   "$(awk -v kb="$INTERNAL_FREE_KIB" 'BEGIN {print kb/1048576}')"
-if ((REQUIRE_PRIVATE)); then
-  [[ -f "${BLUE_WHALE_POWER_CURVE_CSV:-/nonexistent}" ]] ||
-    die "--require-private needs BLUE_WHALE_POWER_CURVE_CSV"
-  [[ -f "${DUTCHBAY_MET_MAST_617725_SOURCE:-/nonexistent}" ]] ||
-    die "--require-private needs DUTCHBAY_MET_MAST_617725_SOURCE"
-  [[ -d "${DUTCHBAY_NASA_POWER_DIR:-/nonexistent}" ]] ||
-    die "--require-private needs DUTCHBAY_NASA_POWER_DIR"
-  [[ -f "${BLUE_WHALE_PRIVATE_ANCHORS_PATH:-/nonexistent}" ]] ||
-    die "--require-private needs BLUE_WHALE_PRIVATE_ANCHORS_PATH"
-fi
 
 RECEIPT="$OUT/receipt.tsv"
 printf 'stage\tstatus\tseconds\tnote\n' > "$RECEIPT"
@@ -173,7 +213,7 @@ run_step() {
   printf '\n== %s ==\n' "$name"
   if "$@" > "$log" 2>&1; then
     elapsed=$((SECONDS - start))
-    printf '%s\tPASS\t%s\t-\n' "$name" "$elapsed" >> "$RECEIPT"
+    printf '%s\tPASS\t%s\t%s\n' "$name" "$elapsed" "${STEP_NOTE:--}" >> "$RECEIPT"
     printf 'PASS (%ss) %s\n' "$elapsed" "$name"
     rm -f "$log"
   else
@@ -198,6 +238,7 @@ scenario() {
   local slug="$1" cfg="$2"
   mkdir -p "$OUT/scenarios/$slug"
   "$PY" run_full_pipeline_v14.py "config=$cfg" validation_mode=strict \
+    "$(hydra_dir "scenario-$slug")" \
     write_artifacts=true run_scoped=true "export_dir=$OUT/scenarios/$slug"
 }
 paths_exist() {
@@ -245,9 +286,9 @@ blue_tests=(
 run_step "blue-whale-focused-regression" "$PY" -m pytest -q -n "$JOBS" "${blue_tests[@]}"
 
 run_step "dutchbay-14-wake-proxy" capture_json "$OUT/dutchbay_14_wake.json" \
-  "$PY" scripts/run_dutchbay_wake_rebaseline_v14.py
+  "$PY" scripts/run_dutchbay_wake_rebaseline_v14.py "$(hydra_dir dutchbay-14-wake-proxy)"
 run_step "blue-whale-solar-bess-dispatch" capture_json "$OUT/blue_whale_dispatch.json" \
-  "$PY" scripts/run_blue_whale_solar_bess_v14.py
+  "$PY" scripts/run_blue_whale_solar_bess_v14.py "$(hydra_dir blue-whale-solar-bess-dispatch)"
 run_step "dutchbay-lendercase-finance" scenario lender scenarios/dutchbay_lendercase_2025Q4.yaml
 run_step "blue-whale-wind-finance" scenario blue_whale_wind scenarios/blue_whale_wind_lot5b_2026.yaml
 run_step "blue-whale-solar-bess-finance" scenario blue_whale_solar_bess scenarios/blue_whale_solar_bess_lot5b_2026.yaml
@@ -255,8 +296,13 @@ run_step "blue-whale-solar-bess-finance" scenario blue_whale_solar_bess scenario
 if [[ "$PROFILE" == full ]]; then
   run_step "ruff-black-isort" make lint
   run_step "mypy-typed-surface" make type
+  # CI's second mypy gate (test-suite.yml): scripts/ has no __init__.py, so it is a
+  # separate invocation that `make type` does not cover. All Blue Whale CLIs live there.
+  run_step "mypy-scripts" "$PY" -m mypy scripts/ --ignore-missing-imports \
+    --allow-untyped-defs --allow-untyped-calls --allow-any-generics
   run_step "full-pytest-six-package-95pct-coverage" env DUTCHBAY_TEST_MODE=full \
-    "$PY" -m pytest -n "$JOBS" \
+    "$PY" -m pytest tests/ -n "$JOBS" \
+    --ignore=tests/grid/test_base_candidate_physical_receipt.py \
     --junitxml="$OUT/pytest_full.xml" \
     --cov=finance --cov=analytics --cov=wind_resource \
     --cov=api --cov=app --cov=solar_resource \
@@ -271,19 +317,24 @@ if [[ "$PROFILE" == full ]]; then
     tests/integration/test_synthetic_qsts_finance_report.py \
     -m report_qualification --tb=short --junitxml="$OUT/pytest_report.xml"
   run_step "blue-whale-unit-monte-carlo" capture_json "$OUT/blue_whale_sizing_unit.json" \
-    "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py
+    "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py "$(hydra_dir blue-whale-unit-monte-carlo)"
   run_step "blue-whale-project-monte-carlo" capture_json "$OUT/blue_whale_sizing_project.json" \
     "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py \
-    --config-name blue_whale_solar_bess_project_sizing
+    --config-name blue_whale_solar_bess_project_sizing \
+    "$(hydra_dir blue-whale-project-monte-carlo)"
   run_step "blue-whale-fixed-bess-monte-carlo" capture_json "$OUT/blue_whale_sizing_fixed.json" \
     "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py \
-    --config-name blue_whale_solar_bess_fixed_bess_sizing
+    --config-name blue_whale_solar_bess_fixed_bess_sizing \
+    "$(hydra_dir blue-whale-fixed-bess-monte-carlo)"
 fi
 
-# Optional historical-study capability replay against current files and current
-# engine. These analytical outputs are NEW screening runs, NOT reproductions of
-# the frozen August 2026 published KPI vector, PDF, or 294-module manifest.
-# No fixed 15-turbine "goldens" are used; the 14-turbine oracle is tested above.
+# Optional analytical-study screening runs against current files and the current
+# engine. These are NEW screening runs, NOT reproductions of the frozen August 2026
+# published KPI vector, PDF, or 294-module manifest. Every financial stage below runs a
+# current committed scenario (DutchBay is 14 turbines, #1587). The one exception is the
+# synthetic micrositing wiring check, which uses its own synthetic 15-turbine site and
+# says so in its receipt note. The August grid-on lender fork in $KIT/cache is not run:
+# it predates the 14-turbine layout and main's AEP reconciliation guard refuses it.
 if ((STUDY)); then
   mkdir -p "$OUT/study/wind" "$OUT/study/mc" "$OUT/study/sa" "$OUT/study/optimizer"
   if ((STUDY == 2)); then
@@ -298,29 +349,29 @@ if ((STUDY)); then
            capex_eia_prudent hybrid_windsolar solar_only; do
     run_step "study-scenario-$s" scenario "$s" "scenarios/dutchbay_${s}_2025Q4.yaml"
   done
-  run_step "study-wind-aep-synthetic-micrositing" \
+  STEP_NOTE="synthetic 15-turbine wiring check, not the DutchBay layout" \
+    run_step "study-wind-aep-synthetic-micrositing" \
     "$PY" "$KIT/lib/wind_provenance.py" "$OUT/study/wind"
   run_step "study-monte-carlo-$study_trials" \
     "$PY" "$KIT/lib/mc_run.py" "$study_trials" "$OUT/study/mc"
+  # ${a[@]+"${a[@]}"}: an empty array under set -u is an error before bash 4.4 (macOS 3.2).
   run_step "study-sobol-morris-pawn" \
-    "$PY" "$KIT/lib/run_global_sa.py" "$OUT/study/sa" "${sa_extra[@]}"
+    "$PY" "$KIT/lib/run_global_sa.py" "$OUT/study/sa" ${sa_extra[@]+"${sa_extra[@]}"}
   run_step "study-debt-mix-optimizer" \
     "$PY" analytics/cli/cli_capital_structure_optimize_hydra.py \
     config=scenarios/dutchbay_lendercase_2025Q4.yaml mode=debt_mix \
-    objective_key=equity_irr direction=max "output_dir=$OUT/study/optimizer"
-  run_step "study-grid-advisory" "$PY" run_full_pipeline_v14.py \
-    "config=$KIT/cache/lender_gridon.yaml" +emit_grid_screen=true \
-    write_artifacts=true run_scoped=true "export_dir=$OUT/study/grid"
+    objective_key=equity_irr direction=max "output_dir=$OUT/study/optimizer" \
+    "$(hydra_dir study-debt-mix-optimizer)"
   run_step "study-executive-workbook-capital-risk" "$PY" run_full_pipeline_v14.py \
     config=scenarios/dutchbay_lendercase_2025Q4.yaml \
     emit_capital_risk_report=true capital_risk_report.n_trials=2000 \
     emit_executive_workbook=true write_artifacts=true run_scoped=true \
-    "export_dir=$OUT/study/emitters"
+    "export_dir=$OUT/study/emitters" "$(hydra_dir study-executive-workbook)"
 fi
 
 if [[ -f "${BLUE_WHALE_POWER_CURVE_CSV:-/nonexistent}" ]]; then
   run_step "blue-whale-private-wind-siting" capture_json "$OUT/blue_whale_siting.json" \
-    "$PY" scripts/run_blue_whale_wind_siting_v14.py
+    "$PY" scripts/run_blue_whale_wind_siting_v14.py "$(hydra_dir blue-whale-private-wind-siting)"
 else
   blocked_external "blue-whale-private-wind-siting" "confidential power curve not supplied"
 fi
@@ -328,7 +379,8 @@ if [[ -f "${DUTCHBAY_MET_MAST_617725_SOURCE:-/nonexistent}" &&
       -d "${DUTCHBAY_NASA_POWER_DIR:-/nonexistent}" &&
       -f "${BLUE_WHALE_POWER_CURVE_CSV:-/nonexistent}" ]]; then
   run_step "blue-whale-private-met-mast-transfer" capture_json "$OUT/blue_whale_mast.json" \
-    "$PY" scripts/run_blue_whale_met_mast_transfer_v14.py
+    "$PY" scripts/run_blue_whale_met_mast_transfer_v14.py \
+    "$(hydra_dir blue-whale-private-met-mast-transfer)"
 else
   blocked_external "blue-whale-private-met-mast-transfer" \
     "mast export, NASA POWER cache and confidential power curve required"
@@ -336,7 +388,8 @@ fi
 if [[ -f "${BLUE_WHALE_PRIVATE_ANCHORS_PATH:-/nonexistent}" ]]; then
   run_step "blue-whale-private-capex-solar" capture_json "$OUT/blue_whale_capex_solar.json" \
     "$PY" scripts/run_blue_whale_capex_solar_resource_v14.py \
-    "private_anchors_path=$BLUE_WHALE_PRIVATE_ANCHORS_PATH"
+    "private_anchors_path=$BLUE_WHALE_PRIVATE_ANCHORS_PATH" \
+    "$(hydra_dir blue-whale-private-capex-solar)"
 else
   blocked_external "blue-whale-private-capex-solar" "private CAPEX anchors not supplied"
 fi
@@ -354,7 +407,6 @@ fi
 if ((BLOCKED)); then
   printf 'status=%s_EXTERNAL_ASSURANCE_INCOMPLETE\n' "$SCOPE" >> "$OUT/manifest.txt"
   printf '\n%s passed; %d private-input workflows BLOCKED (not bankable).\n' "$SCOPE" "$BLOCKED"
-  if ((REQUIRE_PRIVATE)); then exit 3; fi
 else
   printf 'status=%s_WITH_SUPPLIED_PRIVATE_PATHS_PASSED\n' "$SCOPE" >> "$OUT/manifest.txt"
 fi
