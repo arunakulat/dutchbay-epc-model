@@ -1,0 +1,1 @@
+- Record comprehensive P2.3 inventory of run/evidence identity, units, within-year covenant segregation (F-5), and reliance labels across report, workbook, and API surfaces in `docs/P2_3_REPORT_WORKBOOK_API_IDENTITY_INVENTORY.md` with five focused delivery issue proposals (Refs #1427).
