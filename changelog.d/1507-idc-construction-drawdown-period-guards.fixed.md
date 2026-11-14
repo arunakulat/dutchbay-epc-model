@@ -1,0 +1,1 @@
+- Refuse construction draw schedules whose fractions do not sum to 1.0 or whose length is shorter than ``construction_periods`` so unscheduled build periods cannot silently skip IDC (#1507).

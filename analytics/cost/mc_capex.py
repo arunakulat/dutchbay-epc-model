@@ -136,8 +136,15 @@ def run_capex_mc(
     for factor in factors:
         run_cfg = copy.deepcopy(cfg)
         cap = dict(run_cfg.get("capex", {}))
-        cap.pop("derive_from_breakdown", None)  # scale the total via usd_total
-        cap["usd_total"] = base * float(factor)
+        if "native_input_applied" in cap:
+            raise ValueError(
+                "CAPEX Monte Carlo requires the authored capex.input, not an already resolved configuration"
+            )
+        if "input" in cap:
+            cap["input"]["amount"] *= float(factor)
+        else:
+            cap.pop("derive_from_breakdown", None)  # scale the total via usd_total
+            cap["usd_total"] = base * float(factor)
         run_cfg["capex"] = cap
         kpis = run_v14_pipeline(config=run_cfg)["kpis"]
         capex_s.append(base * float(factor))
