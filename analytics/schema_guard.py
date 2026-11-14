@@ -565,6 +565,12 @@ def validate_config_for_v14(
     ConfigValidationError
         If required fields are missing or invalid.
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    try:
+        raw_config = normalize_native_capex(raw_config)
+    except ValueError as exc:
+        raise ConfigValidationError(f"Config '{config_path}': {exc}") from exc
     errors: list[str] = []
 
     # 1. Validate FX section (always required for v14)

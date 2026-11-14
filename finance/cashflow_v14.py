@@ -171,6 +171,9 @@ def _prepare_cashflow_context(
     curve). It is the null :class:`FxHedge` unless ``fx.hedge_ratio > 0`` — in which case
     the USD-view conversion blends spot with the locked forward (see ``_hedged_usd``).
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    config = normalize_native_capex(config)
     # Validate parameters before expensive calculations
     validate_parameters(config)
 

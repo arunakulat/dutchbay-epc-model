@@ -75,13 +75,33 @@ def _get_nested(cfg: Mapping[str, Any], dotted_key: str) -> Optional[float]:
     return float(node)
 
 
+# A scenario that authors its CAPEX natively (#1632) carries no capex.usd_total until
+# normalization; its authored amount is the CAPEX driver, so the CAPEX bar stays in the
+# tornado instead of silently disappearing (DOM-1645-01). A relative shock on the
+# authored amount scales the resolved USD CAPEX by the same percentage.
+_NATIVE_CAPEX_DRIVER_KEY = "capex.input.amount"
+
+
+def _driver_key(cfg: Mapping[str, Any], config_key: str) -> str:
+    """Return the key that carries ``config_key``'s value in this scenario."""
+    if (
+        config_key == "capex.usd_total"
+        and _get_nested(cfg, config_key) is None
+        and _get_nested(cfg, _NATIVE_CAPEX_DRIVER_KEY) is not None
+    ):
+        return _NATIVE_CAPEX_DRIVER_KEY
+    return config_key
+
+
 def _default_parameters(cfg: Mapping[str, Any]) -> List[ParameterRangeConfig]:
     """Build the default one-way driver set from a loaded scenario config.
 
-    Drivers whose key is absent from the config are skipped (no flat bars).
+    Drivers whose key is absent from the config are skipped (no flat bars). The
+    CAPEX driver shocks ``capex.input.amount`` when CAPEX is authored natively.
     """
     params: List[ParameterRangeConfig] = []
-    for config_key, label, low_pct, high_pct in _DEFAULT_DRIVERS:
+    for default_key, label, low_pct, high_pct in _DEFAULT_DRIVERS:
+        config_key = _driver_key(cfg, default_key)
         base = _get_nested(cfg, config_key)
         if base is None:
             continue

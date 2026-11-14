@@ -30,6 +30,9 @@ def _extract_capex_base_usd(params: Dict[str, Any]) -> float:
     levies). The financed, levy-inclusive total is the :func:`_extract_capex_usd`
     wrapper below.
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    params = normalize_native_capex(params)
     validate_cost_input_currencies(params)
     capex_section = _section_case_insensitive(params, "capex")
     if capex_section and _lookup_case_insensitive(
@@ -145,6 +148,9 @@ def _extract_capex_usd(
     pipeline re-applies levies on the perturbed base, instead of levying an
     already-grossed total twice.
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    params = normalize_native_capex(params)
     base = _extract_capex_base_usd(params)
     if not include_import_levies:
         return base
