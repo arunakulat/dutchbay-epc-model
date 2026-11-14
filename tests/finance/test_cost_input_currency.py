@@ -85,7 +85,7 @@ def test_legacy_usd_paths_do_not_hide_capex_conflict(
     cfg = deepcopy(usd_config)
     section = "CAPEX" if "CAPEX" in cfg else "capex"
     cfg.setdefault(section, {})["lkr_total"] = 200.0
-    with pytest.raises(ValueError, match=r"capex\.lkr_total"):
+    with pytest.raises(ValueError, match=rf"{section}\.lkr_total"):
         _extract_capex_base_usd(cfg)
 
 
@@ -164,3 +164,40 @@ def test_null_colliding_alias_cannot_erase_financed_usd(
         _extract_capex_base_usd(scenario)
     with pytest.raises(ValueError, match=r"capex\.lkr_total"):
         build_annual_rows(scenario)
+
+
+@pytest.mark.parametrize(
+    "section,key", [("capex", "lkr_total"), ("opex", "lkr_per_year")]
+)
+@pytest.mark.parametrize("spelling", ["upper", "mixed"])
+@pytest.mark.parametrize("variant_first", [False, True])
+def test_native_cost_in_case_variant_cannot_disappear(
+    scenario: dict[str, Any],
+    section: str,
+    key: str,
+    spelling: str,
+    variant_first: bool,
+) -> None:
+    """Unused case variants must not silently discard a monetary input (#1643)."""
+    name = section.upper() if spelling == "upper" else section.title()
+    variant = {name: {key: 123456789.0}}
+    cfg = {**variant, **scenario} if variant_first else {**scenario, **variant}
+    with pytest.raises(ConfigValidationError, match=rf"{name}\.{key}"):
+        validate_config_for_v14(
+            cfg, config_path="inverse-collision", modules=["cashflow", "debt"]
+        )
+    for resolver in (
+        _build_cashflow_params,
+        _extract_capex_base_usd,
+        build_annual_rows,
+    ):
+        with pytest.raises(ValueError, match=rf"{name}\.{key}"):
+            resolver(cfg)
+
+
+def test_noncanonical_lkr_tax_fallback_is_refused(scenario: dict[str, Any]) -> None:
+    """The legacy tax fallback has an exact spelling; an unused alias is unsafe."""
+    scenario["capex"] = {}
+    scenario["CAPEX"] = {"lkr_total": 123456789.0}
+    with pytest.raises(ValueError, match=r"CAPEX\.lkr_total"):
+        _build_cashflow_params(scenario)
