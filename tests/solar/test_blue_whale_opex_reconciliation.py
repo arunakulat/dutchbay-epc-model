@@ -107,3 +107,21 @@ def test_malformed_component_name_is_an_actionable_source_error(name: Any) -> No
     raw["opex"]["currency_split"]["components"][0]["name"] = name
     with pytest.raises(ValueError, match=r"components\[0\]\.name"):
         sz.project_opex_basis(raw, 1.1, 150000)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("usd_per_unit_year", None),
+        ("usd_share", {}),
+        ("units", [22000]),
+        ("usd_per_unit_year", "bad"),
+        ("units", 10**400),
+    ],
+)
+def test_malformed_component_numbers_name_the_source(field: str, value: Any) -> None:
+    """Refuse malformed numeric cells through the O&M source error contract."""
+    raw = scenario()
+    raw["opex"]["currency_split"]["components"][0][field] = value
+    with pytest.raises(ValueError, match="O&M"):
+        sz.project_opex_basis(raw, 1.1, 150000)

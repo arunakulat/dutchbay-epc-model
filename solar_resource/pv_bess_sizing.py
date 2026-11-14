@@ -854,14 +854,23 @@ def project_opex_basis(
     scenario: Mapping[str, Any], dc_per_nominal: float, fixed_opex: float
 ) -> ProjectOpexBasis:
     """Validate the scenario's all-LKR O&M basis before scaling any project size."""
-    ratio = _num(dc_per_nominal, "BESS DC/nominal ratio", lo=1.0)
+
+    def number(value: Any, path: str, *, lo: float = 0.0) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{path} must be a finite O&M number")
+        try:
+            return _num(value, path, lo=lo)
+        except (TypeError, OverflowError) as exc:
+            raise ValueError(f"{path} must be a finite O&M number") from exc
+
+    ratio = number(dc_per_nominal, "BESS DC/nominal ratio", lo=1.0)
     opex = scenario.get("opex")
     if not isinstance(opex, Mapping):
         raise ValueError("scenario.opex must supply the project O&M basis")
     split = opex.get("currency_split")
     if not isinstance(split, Mapping):
         raise ValueError("scenario.opex.currency_split must supply named components")
-    if _num(split.get("lkr_escalation_pct"), "LKR escalation", lo=0) != _num(
+    if number(split.get("lkr_escalation_pct"), "LKR escalation", lo=0) != number(
         opex.get("escalation_pct"), "O&M escalation", lo=0
     ):
         raise ValueError("O&M escalation must match the LKR component escalation")
@@ -888,12 +897,12 @@ def project_opex_basis(
             else ("name", "usd_per_year", "usd_share")
         )
         _strict(part, keys, f"O&M {names[index]}")
-        if _num(part.get("usd_share"), "O&M USD share", lo=0) != 0:
+        if number(part.get("usd_share"), "O&M USD share", lo=0) != 0:
             raise ValueError("project sizing unit O&M requires all-LKR components")
         for key in keys[1:-1]:
-            part[key] = _num(part.get(key), f"O&M {names[index]}.{key}", lo=0)
+            part[key] = number(part.get(key), f"O&M {names[index]}.{key}", lo=0)
     if not math.isclose(
-        ordered[2]["usd_per_year"], _num(fixed_opex, "fixed O&M", lo=0), abs_tol=1e-6
+        ordered[2]["usd_per_year"], number(fixed_opex, "fixed O&M", lo=0), abs_tol=1e-6
     ):
         raise ValueError("fixed O&M must match scenario insurance, land and SPV")
     try:
@@ -902,7 +911,7 @@ def project_opex_basis(
         raise ValueError(
             "scenario.generation.technologies.bess_1.energy_mwh is required"
         ) from exc
-    nominal = _num(
+    nominal = number(
         nominal_value,
         "scenario BESS nominal",
         lo=0,
@@ -919,7 +928,7 @@ def project_opex_basis(
     )
     if not math.isclose(
         scenario_total,
-        _num(opex.get("usd_per_year"), "scenario O&M", lo=0),
+        number(opex.get("usd_per_year"), "scenario O&M", lo=0),
         rel_tol=1e-9,
         abs_tol=1e-6,
     ):
