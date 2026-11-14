@@ -78,16 +78,21 @@ METRICS = (
 STATISTICS = ("p50", "p90", "p10", "mean")
 
 
+def _key_sort_order(item: Any) -> tuple[str, str]:
+    """Provide a deterministic sort key that handles mixed-type keys without TypeError."""
+    return (type(item).__name__, str(item))
+
+
 def _strict(raw: Mapping[str, Any], keys: Sequence[str], where: str) -> None:
     """Refuse a mapping whose keys are not exactly ``keys`` (``FRAMEWORK-02``)."""
     if not isinstance(raw, Mapping):
         raise ValueError(f"{where} must be a mapping")
-    missing = sorted(set(keys) - set(raw))
-    extra = sorted(set(raw) - set(keys))
+    missing = sorted(set(keys) - set(raw), key=_key_sort_order)
+    extra = sorted(set(raw) - set(keys), key=_key_sort_order)
     if missing or extra:
         raise ValueError(
             f"{where}: missing keys {missing} and unknown keys {extra}; "
-            f"expected exactly {sorted(keys)}."
+            f"expected exactly {sorted(keys, key=_key_sort_order)}."
         )
 
 

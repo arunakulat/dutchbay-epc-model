@@ -125,3 +125,20 @@ def test_malformed_component_numbers_name_the_source(field: str, value: Any) -> 
     raw["opex"]["currency_split"]["components"][0][field] = value
     with pytest.raises(ValueError, match="O&M"):
         sz.project_opex_basis(raw, 1.1, 150000)
+
+
+@pytest.mark.parametrize(
+    "extra_keys",
+    [
+        {1: "invalid", "other": "invalid"},
+        {2: "int_key", 3.14: "float_key", "extra": "str_key"},
+    ],
+)
+def test_mixed_type_unknown_component_keys_raise_actionable_source_error(
+    extra_keys: dict[Any, Any],
+) -> None:
+    """Mixed-type unknown component keys raise ValueError rather than unlabelled TypeError."""
+    raw = scenario()
+    raw["opex"]["currency_split"]["components"][0].update(extra_keys)
+    with pytest.raises(ValueError, match=r"O&M solar_om: missing keys .* unknown keys"):
+        sz.project_opex_basis(raw, 1.1, 150000)
