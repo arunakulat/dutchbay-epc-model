@@ -1,0 +1,1 @@
+- Add CI handover resolver workflow and policy tests in `.github/workflows/handover-resolver.yml` and `tests/lint/test_session_handover_policy.py`, verifying live repository history execution, recording git version, and fencing startup-record and carried-forward state declarations with negative controls (#1409).

@@ -1,0 +1,42 @@
+name: "CI - Handover Resolver & Lineage Gate"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  handover-resolver:
+    name: "Handover Resolver Live Lineage"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with full history and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Record Git Version
+        run: git --version
+
+      - name: Run Handover Resolver on repository history
+        run: python scripts/list_session_handover_records.py
+
+      - name: Run Handover Continuity and Policy Tests
+        run: |
+          pip install pytest
+          python -m pytest tests/lint/test_session_handover_policy.py -q
