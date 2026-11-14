@@ -42,6 +42,7 @@ from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario
 from analytics.schema_guard import ConfigValidationError
 from api.path_safety import UnsafePathError, confined_path
 from finance.debt_v14 import _extract_capex_usd
+from finance.native_cost_inputs import normalize_native_capex
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +184,9 @@ class ManifestBlock(BaseModel):
     seed: Optional[int] = None
     validation_mode: Optional[str] = None
     manifest_schema_version: str
+    # Schema 1.1 (native CAPEX, #1645): the authored native input and its conversion
+    # provenance. Absent for a USD-authored run, whose manifest stays schema 1.0.
+    native_capex: Optional[Dict[str, Any]] = None
 
 
 class FundingBlock(BaseModel):
@@ -635,6 +639,12 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         # self-inconsistent lender pack (#236 class). A client authoring/overriding the
         # config is NOT a deliberate MC perturbation, so enforce it here.
         _assert_fx_spot_consistency(cfg, payload.config_path or "<inline>")
+        # A native-CAPEX scenario refuses an FX spot override (its conversion rate must
+        # equal fx.start) and other conflicting keys. Check here, on the final config, so
+        # the authored refusal reaches the client instead of the engine's generic wrapper
+        # (#1629, ASSURANCE-1645-R11). Only the check runs here; the engine still
+        # receives the authored config and resolves it itself.
+        normalize_native_capex(cfg)
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
     except (
         ConfigValidationError,
