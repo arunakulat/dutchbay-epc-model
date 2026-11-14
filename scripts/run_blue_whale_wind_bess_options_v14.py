@@ -308,9 +308,11 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
             peak_rate=peak_rates[basis] if peak is None else peak,
             wind_rate=wind_rate,
             contract_years=int(tcfg["contract_years"]),
-            window_wind_mwh=prof["window_wind_mwh"]
-            if basis == "whole_wind_peak_rate_on_all_window_exports"
-            else 0.0,
+            window_wind_mwh=(
+                prof["window_wind_mwh"]
+                if basis == "whole_wind_peak_rate_on_all_window_exports"
+                else 0.0
+            ),
             residual_fade=fade,
             wind_yield_multiplier=ym,
         )
@@ -438,7 +440,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 )
                 rte_grid.setdefault(opt["name"], {}).setdefault(reading, {})[
                     str(r_)
-                ] = k["project_npv"] - wind_only["project_npv"]
+                ] = (k["project_npv"] - wind_only["project_npv"])
 
     # Monte Carlo (base basis): capex, battery RTE, residual fade and wind yield, LHS.
     mc = cfg["monte_carlo"]
@@ -462,14 +464,16 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         ),
         "rte": float(mc["rte"]["low"])
         + (float(mc["rte"]["high"]) - float(mc["rte"]["low"])) * u[:, 1],
-        "fade": tri(
-            u[:, 2],
-            float(mc["residual_fade"]["low"]),
-            float(mc["residual_fade"]["mode"]),
-            float(mc["residual_fade"]["high"]),
-        )
-        if float(mc["residual_fade"]["high"]) > float(mc["residual_fade"]["low"])
-        else np.full(n, float(mc["residual_fade"]["low"])),
+        "fade": (
+            tri(
+                u[:, 2],
+                float(mc["residual_fade"]["low"]),
+                float(mc["residual_fade"]["mode"]),
+                float(mc["residual_fade"]["high"]),
+            )
+            if float(mc["residual_fade"]["high"]) > float(mc["residual_fade"]["low"])
+            else np.full(n, float(mc["residual_fade"]["low"]))
+        ),
         "wind_yield_multiplier": np.clip(
             1 + sig * norm.ppf(np.clip(u[:, 3], 1e-9, 1 - 1e-9)),
             1 - 3 * sig,

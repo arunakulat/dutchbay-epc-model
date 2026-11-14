@@ -501,12 +501,12 @@ def scenario_with_battery(
         "revenue": {
             "model": "energy_tariff",
             "tariff_lkr_per_kwh": premium.total if cycled else 0.0,
-            "escalable_om_lkr_per_kwh": min(max(premium.escalable, 0.0), premium.total)
-            if cycled
-            else 0.0,
-            "cycles_per_year": paid / (energy_mwh * round_trip_efficiency)
-            if cycled
-            else 1.0,
+            "escalable_om_lkr_per_kwh": (
+                min(max(premium.escalable, 0.0), premium.total) if cycled else 0.0
+            ),
+            "cycles_per_year": (
+                paid / (energy_mwh * round_trip_efficiency) if cycled else 1.0
+            ),
             "round_trip_efficiency": round_trip_efficiency,
             "availability_factor": 1.0,
             "contract_years": contract_years,
