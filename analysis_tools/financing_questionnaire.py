@@ -94,7 +94,9 @@ def build_questionnaire(config: Mapping[str, Any], raw: bytes) -> dict[str, Any]
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         raise QuestionnaireError("output_name must be a simple file stem")
     try:
-        source = yaml.load(raw.decode("utf-8"), Loader=_UniqueLoader)
+        source = yaml.load(  # nosec B506 - _UniqueLoader subclasses yaml.SafeLoader
+            raw.decode("utf-8"), Loader=_UniqueLoader
+        )
     except (UnicodeError, yaml.YAMLError) as exc:
         raise QuestionnaireError("invalid source YAML") from exc
     if not isinstance(source, dict):
