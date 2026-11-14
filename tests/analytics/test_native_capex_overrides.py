@@ -172,3 +172,61 @@ def test_resolved_native_config_refuses_changed_construction_phasing() -> None:
         evaluate_with_overrides(
             raw_config=resolved, overrides=override, return_full_result=True
         )
+
+
+def test_default_tornado_keeps_native_capex_bar() -> None:
+    """The CAPEX bar shocks the authored amount and matches the USD case (DOM-1645-01)."""
+    from analytics.core.sensitivity_runner import _default_parameters
+
+    usd, native = cases()
+    usd_drivers = {p.variable_name: p for p in _default_parameters(usd)}
+    native_drivers = {p.variable_name: p for p in _default_parameters(native)}
+    assert "capex.usd_total" in usd_drivers
+    assert "capex.usd_total" not in native_drivers
+    bar = native_drivers["capex.input.amount"]
+    assert bar.label == usd_drivers["capex.usd_total"].label
+    assert set(native_drivers) - {"capex.input.amount"} == set(usd_drivers) - {
+        "capex.usd_total"
+    }
+    shocked = evaluate_with_overrides(
+        raw_config=native,
+        overrides={"capex.input.amount": native["capex"]["input"]["amount"] * 1.1},
+    )
+    reference = evaluate_with_overrides(
+        raw_config=usd, overrides={"capex.usd_total": usd["capex"]["usd_total"] * 1.1}
+    )
+    assert shocked["project_npv"] == pytest.approx(reference["project_npv"], rel=1e-9)
+    assert (
+        shocked["project_npv"]
+        < evaluate_with_overrides(raw_config=native)["project_npv"]
+    )
+
+
+@pytest.mark.parametrize(
+    "param",
+    [
+        {"name": "capex.usd_total", "low": 1.0, "high": 2.0},
+        {"name": "fx.start_lkr_per_usd", "low": 300.0, "high": 330.0},
+        {"name": "fx.start_lkr_per_usd", "distribution": "fx_calibrated"},
+    ],
+    ids=["usd_total", "fx_spot", "fx_calibrated"],
+)
+def test_mc_refuses_sweeps_every_native_trial_would_reject(
+    param: dict[str, Any],
+) -> None:
+    """Fail before sampling rather than report fallback KPIs (DOM-1645-02)."""
+    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+
+    usd, native = cases()
+    for cfg in (native, normalize_native_capex(native)):
+        cfg = copy.deepcopy(cfg)
+        cfg["monte_carlo"] = {"parameters": [param]}
+        with pytest.raises(MonteCarloConfigError, match="native-CAPEX.*#1629"):
+            MonteCarloEngine(cfg)
+    if param["name"] == "capex.usd_total":
+        usd["monte_carlo"] = {"parameters": [param]}
+        MonteCarloEngine(usd)
+    native["monte_carlo"] = {
+        "parameters": [{"name": "capex.input.amount", "low": 1.0, "high": 2.0}]
+    }
+    MonteCarloEngine(native)

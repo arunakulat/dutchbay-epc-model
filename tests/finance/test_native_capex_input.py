@@ -1,6 +1,7 @@
 """Independent arithmetic and refusal controls for native CAPEX."""
 
 import copy
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -8,6 +9,7 @@ import pytest
 
 from analytics.core.metrics import _derive_capex_usd
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.debt_v14 import _extract_capex_usd
 from finance.epc_helper_v14 import _resolve_capex_usd_total
 from finance.equity_distribution_v14_hydra import _extract_capex_usd as equity_capex
@@ -53,35 +55,306 @@ def test_nonround_fx_and_all_direct_resolvers() -> None:
     assert _extract_capex_usd(cfg) == 20000
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [
+def priced_config() -> dict[str, Any]:
+    """Add a dated price basis: two default construction periods put COD in 2029."""
+    cfg = config()
+    cfg["project"] = {"cod_year": 2029}
+    cfg["capex"]["price_basis"] = {
+        "price_year": 2026,
+        "escalation_pct": 5.0,
+        "source": "test",
+    }
+    return cfg
+
+
+def priced_resolved() -> dict[str, Any]:
+    """Resolve the native amount, then apply its price basis, as the pipeline does."""
+    return apply_capex_price_basis(normalize_native_capex(priced_config()))
+
+
+def test_usd_currency_input_is_not_converted() -> None:
+    """A USD amount is already the model currency; the LKR rate must not touch it."""
+    cfg = config()
+    cfg["capex"]["input"].update(currency="USD", amount=20000.0)
+    resolved = normalize_native_capex(cfg)
+    assert resolved["capex"]["usd_total"] == 20000.0
+    assert resolved["capex"]["native_input_applied"]["usd_at_price_date"] == 20000.0
+    assert normalize_native_capex(resolved) == resolved
+
+
+def test_priced_native_input_resolves_once_and_is_idempotent() -> None:
+    """The saved price basis reproduces the escalated amount without re-escalating it."""
+    resolved = priced_resolved()
+    applied = resolved["capex"]["price_basis_applied"]
+    assert applied["usd_total_at_price_year"] == 20000.0
+    assert resolved["capex"]["usd_total"] == 20000.0 * applied["factor"]
+    assert normalize_native_capex(resolved) == resolved
+
+
+Mutation = Callable[[dict[str, Any]], None]
+
+# Each row names the one check it exercises, by that check's own message, so a
+# refusal raised later by a different layer cannot stand in for it (ASSURANCE-1645-03).
+REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
+    (
+        "bool amount",
+        config,
         lambda c: c["capex"]["input"].update(amount=True),
+        "capex.input.amount must be a finite positive number",
+    ),
+    (
+        "nan amount",
+        config,
         lambda c: c["capex"]["input"].update(amount=float("nan")),
+        "capex.input.amount must be a finite positive number",
+    ),
+    (
+        "infinite amount",
+        config,
+        lambda c: c["capex"]["input"].update(amount=float("inf")),
+        "capex.input.amount must be a finite positive number",
+    ),
+    (
+        "negative amount",
+        config,
         lambda c: c["capex"]["input"].update(amount=-1),
+        "capex.input.amount must be a finite positive number",
+    ),
+    (
+        "empty price date",
+        config,
         lambda c: c["capex"]["input"].update(price_date=""),
+        "capex.input.price_date must be an ISO date",
+    ),
+    (
+        "basic-format price date",
+        config,
+        lambda c: c["capex"]["input"].update(price_date="20260201"),
+        "capex.input.price_date must be an ISO date",
+    ),
+    (
+        "zero rate",
+        config,
         lambda c: c["capex"]["input"]["conversion"].update(rate_lkr_per_usd=0),
+        "capex.input.conversion.rate_lkr_per_usd must be a finite positive number",
+    ),
+    (
+        "blank source",
+        config,
         lambda c: c["capex"]["input"]["conversion"].update(source=" "),
+        "capex.input.conversion.source must be a non-empty provenance string",
+    ),
+    (
+        "quote-date rate",
+        config,
         lambda c: c["capex"]["input"]["conversion"].update(date="2026-02-01"),
+        "dated financial_close rate",
+    ),
+    (
+        "quote basis",
+        config,
         lambda c: c["capex"]["input"]["conversion"].update(basis="quote"),
-        lambda c: c["capex"].update(USD_TOTAL=20000),
-        lambda c: c["capex"].update(usd_total=20000),
-        lambda c: c["capex"].update(derive_from_breakdown=True),
-        lambda c: c["capex"].update(breakdown={"x": 1}),
-        lambda c: c["capex"].update(contingency={"method": "qra"}),
+        "dated financial_close rate",
+    ),
+    (
+        "unknown currency",
+        config,
+        lambda c: c["capex"]["input"].update(currency="EUR"),
+        "capex.input.currency must be LKR or USD",
+    ),
+    (
+        "price date after close",
+        config,
+        lambda c: c["capex"]["input"].update(price_date="2027-02-01"),
+        "capex.input.price_date cannot be after financial close",
+    ),
+    (
+        "close year off COD",
+        config,
+        lambda c: c.update(project={"cod_year": 2030}),
+        "financial_close_date must match the model financial-close year",
+    ),
+    (
+        "fractional COD",
+        config,
+        lambda c: c.update(project={"cod_year": 2029.5}),
+        "project.cod_year must be a whole calendar year",
+    ),
+    (
+        "spot differs from rate",
+        config,
+        lambda c: c["fx"].update(start_lkr_per_usd=300.0),
+        "capex.input conversion rate must equal fx.start_lkr_per_usd",
+    ),
+    (
+        "cost basis year differs",
+        config,
+        lambda c: c["capex"].update(cost_basis_year=2025),
+        "capex.cost_basis_year must match capex.input.price_date",
+    ),
+    (
+        "extra input key",
+        config,
+        lambda c: c["capex"]["input"].update(note="x"),
+        "capex.input requires exactly currency",
+    ),
+    (
+        "extra conversion key",
+        config,
+        lambda c: c["capex"]["input"]["conversion"].update(note="x"),
+        "capex.input.conversion requires rate_lkr_per_usd",
+    ),
+    (
+        "case-variant input key",
+        config,
         lambda c: c["capex"]["input"].update(Amount=1),
+        "capex.input contains duplicate case variants",
+    ),
+    (
+        "case-variant fx section",
+        config,
+        lambda c: c.update(FX={"start_lkr_per_usd": 317.25}),
+        "config contains duplicate case variants",
+    ),
+    (
+        "noncanonical input key",
+        config,
+        lambda c: c["capex"].update(Input=c["capex"].pop("input")),
+        "canonical lowercase capex.input keys",
+    ),
+    (
+        "noncanonical capex section",
+        config,
+        lambda c: c.update(Capex=c.pop("capex")),
+        "canonical lowercase capex.input keys",
+    ),
+    (
+        "upper-case usd_total",
+        config,
+        lambda c: c["capex"].update(USD_TOTAL=20000),
+        "capex.USD_TOTAL conflicts with capex.input",
+    ),
+    (
+        "usd_total",
+        config,
+        lambda c: c["capex"].update(usd_total=20000),
+        "capex.usd_total conflicts with capex.input",
+    ),
+    (
+        "derive_from_breakdown",
+        config,
+        lambda c: c["capex"].update(derive_from_breakdown=True),
+        "capex.derive_from_breakdown conflicts with capex.input",
+    ),
+    (
+        "breakdown",
+        config,
+        lambda c: c["capex"].update(breakdown={"x": 1}),
+        "capex.breakdown conflicts with capex.input",
+    ),
+    (
+        "contingency",
+        config,
+        lambda c: c["capex"].update(contingency={"method": "qra"}),
+        "capex.contingency conflicts with capex.input",
+    ),
+    (
+        "unknown monetary key",
+        config,
         lambda c: c["capex"].update(mystery_lkr=1),
-        lambda c: c["finance"].update(capex_usd=20000),
-    ],
+        "unsupported monetary key capex.mystery_lkr",
+    ),
+    (
+        "finance alias",
+        config,
+        lambda c: c.update(finance={"capex_usd": 20000}),
+        "finance CAPEX alias conflicts",
+    ),
+    (
+        "costs alias",
+        config,
+        lambda c: c.update(costs={"capex_usd": 20000}),
+        "costs CAPEX alias conflicts",
+    ),
+    (
+        "project alias",
+        config,
+        lambda c: c.update(project={"capex_total_usd": 20000}),
+        "project CAPEX alias conflicts",
+    ),
+    (
+        "top-level alias",
+        config,
+        lambda c: c.update(capex_usd=20000),
+        "top-level CAPEX alias conflicts",
+    ),
+    (
+        "price year differs",
+        priced_config,
+        lambda c: c["capex"]["price_basis"].update(price_year=2025),
+        "capex.input.price_date must match capex.price_basis.price_year",
+    ),
+    (
+        "unrepresentable escalation",
+        priced_config,
+        lambda c: c["capex"]["price_basis"].update(escalation_pct=10**400),
+        "capex.price_basis contains an invalid numeric input",
+    ),
+    (
+        "input with applied price basis",
+        priced_config,
+        lambda c: c["capex"].update(price_basis_applied=c["capex"].pop("price_basis")),
+        "capex.input cannot coexist with an applied price basis",
+    ),
+    (
+        "input with resolved provenance",
+        lambda: normalize_native_capex(config()),
+        lambda c: c["capex"].update(input=config()["capex"]["input"]),
+        "capex.input conflicts with already resolved native input",
+    ),
+    (
+        "provenance shape",
+        lambda: normalize_native_capex(config()),
+        lambda c: c["capex"]["native_input_applied"].update(note="x"),
+        "invalid capex.native_input_applied provenance",
+    ),
+    (
+        "stale provenance amount",
+        lambda: normalize_native_capex(config()),
+        lambda c: c["capex"]["native_input_applied"].update(usd_at_price_date=1.0),
+        "native CAPEX provenance is stale",
+    ),
+    (
+        "price basis beside its applied form",
+        priced_resolved,
+        lambda c: c["capex"].update(
+            price_basis={"price_year": 2026, "escalation_pct": 5.0, "source": "test"}
+        ),
+        "capex.price_basis cannot coexist with price_basis_applied",
+    ),
+    (
+        "stale price-year amount",
+        priced_resolved,
+        lambda c: c["capex"]["price_basis_applied"].update(usd_total_at_price_year=1.0),
+        "native CAPEX price basis is stale",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("build", "mutation", "message"),
+    [pytest.param(b, m, msg, id=name) for name, b, m, msg in REFUSALS],
 )
 def test_bad_or_ambiguous_input_refused(
-    mutation: Callable[[dict[str, Any]], None],
+    build: Callable[[], dict[str, Any]],
+    mutation: Mutation,
+    message: str,
 ) -> None:
-    """Reject a single malformed or conflicting authored monetary input."""
-    cfg = config()
-    cfg["finance"] = {}
+    """Reject each malformed or conflicting monetary input at its own check."""
+    cfg = build()
+    assert normalize_native_capex(copy.deepcopy(cfg)) is not None
     mutation(cfg)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=re.escape(message)):
         normalize_native_capex(cfg)
 
 
