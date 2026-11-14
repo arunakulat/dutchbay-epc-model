@@ -3,6 +3,7 @@
 import copy
 import re
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import pytest
@@ -163,6 +164,72 @@ REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
         "capex.input.currency must be LKR or USD",
     ),
     (
+        "lower-case currency",
+        config,
+        lambda c: c["capex"]["input"].update(currency="lkr"),
+        "capex.input.currency must be LKR or USD",
+    ),
+    (
+        "mixed-case currency",
+        config,
+        lambda c: c["capex"]["input"].update(currency="Usd"),
+        "capex.input.currency must be LKR or USD",
+    ),
+    (
+        "unquoted YAML price date",
+        config,
+        lambda c: c["capex"]["input"].update(price_date=date(2026, 2, 1)),
+        "capex.input.price_date must be an ISO date",
+    ),
+    (
+        "non-string source",
+        config,
+        lambda c: c["capex"]["input"]["conversion"].update(source=7),
+        "capex.input.conversion.source must be a non-empty provenance string",
+    ),
+    (
+        "case-variant fx key",
+        config,
+        lambda c: c["fx"].update(START_LKR_PER_USD=317.25),
+        "fx contains duplicate case variants",
+    ),
+    (
+        "case-variant conversion key",
+        config,
+        lambda c: c["capex"]["input"]["conversion"].update(Source="x"),
+        "capex.input.conversion contains duplicate case variants",
+    ),
+    (
+        "case-variant capex key",
+        config,
+        lambda c: c["capex"].update(note="x", NOTE="y"),
+        "capex contains duplicate case variants",
+    ),
+    (
+        "lkr_total",
+        config,
+        lambda c: c["capex"].update(lkr_total=1),
+        "capex.lkr_total conflicts with capex.input",
+    ),
+    (
+        "freight_pct",
+        config,
+        lambda c: c["capex"].update(freight_pct=0.05),
+        "capex.freight_pct conflicts with capex.input",
+    ),
+    (
+        "contingency_pct",
+        config,
+        lambda c: c["capex"].update(contingency_pct=0.1),
+        "capex.contingency_pct conflicts with capex.input",
+    ),
+    (
+        "top-level LKR alias",
+        config,
+        lambda c: c.update(capex_lkr=1),
+        "top-level CAPEX alias conflicts",
+    ),
+    (
         "price date after close",
         config,
         lambda c: c["capex"]["input"].update(price_date="2027-02-01"),
@@ -172,6 +239,14 @@ REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
         "close year off COD",
         config,
         lambda c: c.update(project={"cod_year": 2030}),
+        "financial_close_date must match the model financial-close year",
+    ),
+    (
+        "close year off COD with a timeline",
+        config,
+        lambda c: c.update(
+            project={"cod_year": 2030}, timeline={"construction_years": 2}
+        ),
         "financial_close_date must match the model financial-close year",
     ),
     (
@@ -333,6 +408,12 @@ REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
         "capex.price_basis cannot coexist with price_basis_applied",
     ),
     (
+        "tampered priced usd_total",
+        priced_resolved,
+        lambda c: c["capex"].update(usd_total=c["capex"]["usd_total"] * 2),
+        "native CAPEX resolved USD is stale",
+    ),
+    (
         "stale price-year amount",
         priced_resolved,
         lambda c: c["capex"]["price_basis_applied"].update(usd_total_at_price_year=1.0),
@@ -403,3 +484,20 @@ def test_native_contract_refuses_noncanonical_price_keys(key: str) -> None:
     )
     with pytest.raises(ValueError, match=key):
         normalize_native_capex(cfg)
+
+
+def test_price_dated_at_close_is_accepted() -> None:
+    """A price dated on the financial-close day itself is not after close."""
+    cfg = config()
+    cfg["capex"]["input"]["price_date"] = cfg["capex"]["input"]["financial_close_date"]
+    assert normalize_native_capex(cfg)["capex"]["usd_total"] == 20000
+
+
+def test_provenance_is_a_copy_of_the_authored_input() -> None:
+    """Later edits to the authored input must not rewrite the saved provenance."""
+    cfg = config()
+    resolved = normalize_native_capex(cfg)
+    cfg["capex"]["input"]["amount"] = 1.0
+    cfg["capex"]["input"]["conversion"]["source"] = "changed"
+    saved = resolved["capex"]["native_input_applied"]["input"]
+    assert saved == config()["capex"]["input"]

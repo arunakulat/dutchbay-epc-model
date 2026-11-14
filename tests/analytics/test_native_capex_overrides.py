@@ -208,8 +208,18 @@ def test_default_tornado_keeps_native_capex_bar() -> None:
         {"name": "capex.usd_total", "low": 1.0, "high": 2.0},
         {"name": "fx.start_lkr_per_usd", "low": 300.0, "high": 330.0},
         {"name": "fx.start_lkr_per_usd", "distribution": "fx_calibrated"},
+        {"name": "fx_spot_driver", "distribution": "fx_calibrated"},
+        {"name": " Capex.USD_Total ", "low": 1.0, "high": 2.0},
+        {"name": "FX.Start_LKR_per_USD", "low": 300.0, "high": 330.0},
     ],
-    ids=["usd_total", "fx_spot", "fx_calibrated"],
+    ids=[
+        "usd_total",
+        "fx_spot",
+        "fx_calibrated",
+        "fx_calibrated_any_name",
+        "usd_total_spelling",
+        "fx_spot_spelling",
+    ],
 )
 def test_mc_refuses_sweeps_every_native_trial_would_reject(
     param: dict[str, Any],
@@ -223,10 +233,35 @@ def test_mc_refuses_sweeps_every_native_trial_would_reject(
         cfg["monte_carlo"] = {"parameters": [param]}
         with pytest.raises(MonteCarloConfigError, match="native-CAPEX.*#1629"):
             MonteCarloEngine(cfg)
-    if param["name"] == "capex.usd_total":
+    if param["name"].strip().lower() == "capex.usd_total":
         usd["monte_carlo"] = {"parameters": [param]}
         MonteCarloEngine(usd)
     native["monte_carlo"] = {
         "parameters": [{"name": "capex.input.amount", "low": 1.0, "high": 2.0}]
     }
     MonteCarloEngine(native)
+
+
+def test_batch_analytics_native_matches_usd(tmp_path: Path) -> None:
+    """Batch analytics converts native CAPEX in its own cash-flow path (DOM-1645-R2-01).
+
+    ScenarioAnalytics hands the authored config to the cash-flow builder, so the
+    builder's own normalization is the only conversion on this path. Batch refuses
+    native CAPEX with a price basis, so both twins drop it here.
+    """
+    from analytics.scenario_analytics import ScenarioAnalytics
+
+    usd, native = cases()
+    for cfg in (usd, native):
+        cfg["capex"].pop("price_basis")
+    results = {}
+    for name, cfg in (("usd", usd), ("native", native)):
+        path = tmp_path / f"{name}.yaml"
+        path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+        results[name] = ScenarioAnalytics(tmp_path)._run_single(path)
+    left, right = results["native"], results["usd"]
+    assert left.fail_reason is None and right.fail_reason is None
+    assert left.annual_rows == right.annual_rows
+    assert left.debt_result == right.debt_result
+    assert left.kpis == right.kpis
+    assert any(row.get("total_depreciation_lkr") for row in left.annual_rows)
