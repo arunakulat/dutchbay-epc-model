@@ -1160,7 +1160,8 @@ battery that moves it, and an extra PV kWh does not repay its table. A negative 
 not force a corner.
 
 **Method.** One seeded run of `conf/blue_whale_solar_bess_project_sizing.yaml` (seed 20261101,
-256 LHS trials, 514 points, 149,786 engine evaluations, at commit e1faea21) searches the battery
+256 LHS trials, 514 points, 149,786 engine evaluations; first at e1faea21, re-run with identical
+results at 591f98a4 after main's merge, which the committed summary records) searches the battery
 power (0.1 to 0.5 MW in 0.1 MW steps, then 0.5 MW steps to 6.5 MW under reading A, up to 10 MW
 under reading B; energy = 4 x power, the PUCSL 4 h rule) together with the PV DC (107-174 tables
 and the lot's maximum) and AC (3.5-7.0 MW), and ranks on the P50 after-tax project NPV. The PR 7
@@ -1283,7 +1284,7 @@ too.
 | Total CFADS, 20 years (USD) | 317,783 | 7,043,044 |
 | Debt-service shortfall years / sponsor cure (USD) | 9 / 757,557 | 6 / 1,113,060 |
 
-Wind v0.5 and the hybrid v0.11 (superseded) do not move. Solar + BESS year 1 (dispatcher, flat
+Wind v0.6 and the hybrid v0.11 (superseded) do not move. Solar + BESS year 1 (dispatcher, flat
 rates): PV 6,114.41 MWh, export 6,088.65 MWh (was 7,479.55), of which 169.93 MWh in the priority
 window (was 6,817.18). Capex USD 4,504,776 at 2026 prices (was 8,292,579); O&M USD 190,938 a year
 at 2026 prices (was 246,630), all in LKR. The NPV is less negative because the project is
@@ -1298,7 +1299,7 @@ basis (the 2026 price dates included):
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
-| Wind project (v0.5) | 12.41% | 10.55% | 0.867 | 1,398,803 | -740,793 |
+| Wind project (v0.6) | 12.41% | 10.55% | 0.867 | 1,398,803 | -740,793 |
 | Solar + BESS project (v0.9, 0.1 MW / 0.4 MWh, 107 tables, 3.5 MW AC; the grid floor) | undefined | undefined | 0.872 | -4,477,787 | -4,557,056 |
 | Hybrid (v0.11, superseded) | 10.61% | 8.20% | 0.868 | -205,833 | -3,036,703 |
 
