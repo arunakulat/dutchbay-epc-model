@@ -471,16 +471,29 @@ def test_small_run_is_truthful_reproducible_and_obeys_both_readings(
     site: Dict[str, Any],
 ) -> None:
     calls = {"n": 0}
+    seen_overrides: list[Dict[str, Any]] = []
 
     def counting(**kw: Any) -> Any:
         calls["n"] += 1
+        seen_overrides.append(kw["overrides"])
         return evaluate_with_overrides(**kw)
 
     first = _run(_small(), site, counting)
+    assert first.spec["opex_basis"]["pre_cod_years"] == 3
+    assert first.spec["opex_basis"]["dc_per_nominal"] == pytest.approx(1.1)
+    assert first.spec["opex_basis"]["components"][1]["usd_per_unit_year"] == 1.8
     n_points = first.spec["grid_points_evaluated"]
     assert n_points == 4
     # 4 points x (4 trials + base) + 4 curtailment + 4 RTE-sensitivity cases.
     assert first.effective_evaluations == calls["n"] == 4 * 5 + 4 + 4
+    for overrides in seen_overrides:
+        components = overrides["opex.currency_split.components"]
+        assert components[1]["units"] == pytest.approx(
+            overrides["generation.technologies.bess_1.energy_mwh"] * 1100
+        )
+        assert overrides["opex.usd_per_year"] == pytest.approx(
+            150000 + 10 * components[0]["units"] + 1.8 * components[1]["units"]
+        )
     again = _run(_small(), site, evaluate_with_overrides)
     other = _run(_small(seed=7), site, evaluate_with_overrides)
     assert 2 * calls["n"] + other.effective_evaluations <= _hard_cap()
