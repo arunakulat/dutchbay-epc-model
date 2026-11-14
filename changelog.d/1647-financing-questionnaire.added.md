@@ -1,0 +1,1 @@
+Added a public-model financing questionnaire export for the separate Blue Whale projects, with blank response fields and source-byte provenance. Actual transaction evidence remains subject to the existing private F5-02 return gate.
