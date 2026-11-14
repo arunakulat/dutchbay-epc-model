@@ -28,6 +28,10 @@ from finance.debt.terms import (
 # log filters and caplog assertions still see these records.
 logger = logging.getLogger("finance.debt_v14")
 
+# Match finance.equity_distribution_v14_hydra._DSCR_LOCKUP_EPS so sub-ULP sculpt
+# representation noise does not flip audit_status from PASS to REVIEW (#1508).
+_DSCR_LOCKUP_EPS = 1e-9
+
 
 def apply_debt_layer(
     params: Dict[str, Any],
@@ -246,6 +250,13 @@ def apply_debt_layer(
         if i >= construction_periods and d is not None
     ]
     dscr_min = min(dscr_op) if dscr_op else 0.0
+    folded_dscr_op = [float(v) for v in dscr_by_year.values() if v is not None]
+    if dscr_op and folded_dscr_op:
+        audit_dscr_min = min(min(dscr_op), min(folded_dscr_op))
+    elif folded_dscr_op:
+        audit_dscr_min = min(folded_dscr_op)
+    else:
+        audit_dscr_min = dscr_min
 
     debt_principal_total = sum(principal_after_idc.values())
 
@@ -348,7 +359,9 @@ def apply_debt_layer(
         ),
         "annual_row_debt_period_map": annual_row_debt_period_map,
         "debt_schedules": schedules,
-        "audit_status": "PASS" if dscr_min >= target_dscr else "REVIEW",
+        "audit_status": (
+            "PASS" if audit_dscr_min >= target_dscr - _DSCR_LOCKUP_EPS else "REVIEW"
+        ),
         "debt_total": debt_total,
         "avg_debt_rate": avg_debt_rate,
         "llcr": llcr,
