@@ -120,15 +120,6 @@ plant:
   # Assumed 10% installed DC oversize over nominal energy (B20), not a supplier quote.
   bess_dc_per_nominal: 1.1
 
-bess_opex:
-  # The battery's O&M (input B20), replacing the pricing config's unsourced USD 2.5/kWh-yr
-  # placeholder: USD 1.80/kWh-yr of DC capacity installed, a vendor LTSA benchmark (source
-  # not named), on the owner's decision of 2026-11-02; the same rate and the same DC
-  # placeholder as the scenario's opex.currency_split component bess_om (a test checks they
-  # agree). Each kWh of nominal energy is priced at 1.80 x 1.10 = USD 1.98/kWh-yr.
-  usd_per_dc_kwh_year: 1.80
-  dc_kwh_per_nominal_kwh: 1.10   # PLACEHOLDER (input B20): nominal plus an assumed 10% DC oversize
-
 objective:
   # PRIMARY (PR 7; owner decision 2 of 2026-11-01, #1353 comment 6563070978, verbatim:
   # "After-tax project NPV (Recommended)"): the P50 of the engine's after-tax project NPV of

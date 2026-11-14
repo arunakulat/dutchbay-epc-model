@@ -1767,7 +1767,6 @@ PROJECT_SIZING_KEYS = (
     "monte_carlo",
     "uncertainty",
     "plant",
-    "bess_opex",
     "objective",
     "curtailment_scenario",
     "sensitivities",
@@ -2070,45 +2069,6 @@ def reading_allows(
     return cap is not None or exp is not None
 
 
-@dataclass(frozen=True)
-class BessOpex:
-    """The battery's O&M rate on its DC capacity (sizing config ``bess_opex``).
-
-    A vendor O&M or LTSA rate is quoted per kWh of DC capacity installed; the grid sizes the
-    battery by its nominal (delivered) energy. The sizing prices each kWh of nominal energy
-    at ``usd_per_dc_kwh_year x dc_kwh_per_nominal_kwh``, which replaces the pricing
-    config's placeholder ``opex.bess_usd_per_kwh_year``.
-
-    Attributes:
-        usd_per_dc_kwh_year: USD per kWh of DC capacity per year.
-        dc_kwh_per_nominal_kwh: DC capacity installed per kWh of nominal energy (>= 1).
-    """
-
-    usd_per_dc_kwh_year: float
-    dc_kwh_per_nominal_kwh: float
-
-    @property
-    def usd_per_nominal_kwh_year(self) -> float:
-        """USD per kWh of nominal energy per year."""
-        return self.usd_per_dc_kwh_year * self.dc_kwh_per_nominal_kwh
-
-    @classmethod
-    def from_mapping(cls, raw: Mapping[str, Any]) -> "BessOpex":
-        """Build from config, refusing a missing or unknown key or a DC ratio below 1."""
-        _strict(raw, ("usd_per_dc_kwh_year", "dc_kwh_per_nominal_kwh"), "bess_opex")
-        out = cls(
-            usd_per_dc_kwh_year=_num(
-                raw["usd_per_dc_kwh_year"], "bess_opex.usd_per_dc_kwh_year", lo=0.0
-            ),
-            dc_kwh_per_nominal_kwh=_num(
-                raw["dc_kwh_per_nominal_kwh"],
-                "bess_opex.dc_kwh_per_nominal_kwh",
-                lo=1.0,
-            ),
-        )
-        return out
-
-
 #: The inputs a one-at-a-time sensitivity case may move from the base case. Each is a
 #: config key (FRAMEWORK-02): a price or rate replaces the base value, ``scenario`` maps
 #: dotted paths of the project scenario (each must already exist) to replacement values.
@@ -2201,7 +2161,6 @@ def shifted_case(
     base: Trials,
     shift: Mapping[str, Any],
     *,
-    bess_opex: BessOpex,
     where: str,
 ) -> Tuple[Context, Trials]:
     """The context and one-trial base case with ``shift`` applied.
@@ -2224,6 +2183,7 @@ def shifted_case(
         raise ValueError(f"{where}: the base case must be one trial")
     values = {k: v.copy() for k, v in base.values.items()}
     pricing, tariff, scenario = ctx.pricing, ctx.tariff, ctx.scenario
+    project_opex = ctx.project_opex
     if "bess_usd_per_kwh" in shift:
         values["bess_usd_per_kwh"] = np.array(
             [_num(shift["bess_usd_per_kwh"], f"{where}.bess_usd_per_kwh", lo=0.0)]
@@ -2234,9 +2194,16 @@ def shifted_case(
             f"{where}.bess_opex_usd_per_dc_kwh_year",
             lo=0.0,
         )
-        pricing = dataclasses.replace(
-            pricing,
-            bess_opex_usd_per_kwh_year=rate * bess_opex.dc_kwh_per_nominal_kwh,
+        # The battery's O&M comes from the scenario's bess_om component (#1646): the
+        # shift replaces that component's rate per DC kWh.
+        if project_opex is None:
+            raise ValueError(
+                f"{where}.bess_opex_usd_per_dc_kwh_year needs the scenario O&M basis"
+            )
+        solar_om, bess_om, overhead = project_opex.components
+        project_opex = dataclasses.replace(
+            project_opex,
+            components=(solar_om, {**bess_om, "usd_per_unit_year": rate}, overhead),
         )
     tariff_kw: Dict[str, Any] = {}
     for key in ("priority_lkr_per_kwh", "other_lkr_per_kwh"):
@@ -2263,7 +2230,13 @@ def shifted_case(
         if not isinstance(updates, Mapping) or not updates:
             raise ValueError(f"{where}.scenario must map dotted paths to values")
         scenario = _with_dotted(scenario, updates, f"{where}.scenario")
-    moved = dataclasses.replace(ctx, pricing=pricing, tariff=tariff, scenario=scenario)
+    moved = dataclasses.replace(
+        ctx,
+        pricing=pricing,
+        tariff=tariff,
+        scenario=scenario,
+        project_opex=project_opex,
+    )
     return moved, Trials(values=values)
 
 
@@ -2423,12 +2396,7 @@ def run_project_sizing(
     oat_cases = _one_at_a_time_cases(sens["one_at_a_time"])
     break_evens = _break_even_specs(sens["break_even"])
 
-    bess_opex = BessOpex.from_mapping(sizing_cfg["bess_opex"])
-    # The battery's O&M on its DC capacity replaces the pricing config's placeholder.
-    pricing = dataclasses.replace(
-        Pricing.from_mapping(pricing_cfg),
-        bess_opex_usd_per_kwh_year=bess_opex.usd_per_nominal_kwh_year,
-    )
+    pricing = Pricing.from_mapping(pricing_cfg)
     uncertainty = Uncertainty.from_mapping(sizing_cfg["uncertainty"])
     module = ModuleSpec.from_mapping(unit["module"])
     strings_design = design_string(
@@ -2986,7 +2954,6 @@ def run_project_sizing(
             ctx,
             base_trial,
             shift,
-            bess_opex=bess_opex,
             where=f"sensitivities.one_at_a_time.{case_name}",
         )
         case_rows = base_sweep(case_trial, case_ctx=case_ctx)
@@ -3006,7 +2973,6 @@ def run_project_sizing(
             ctx,
             base_trial,
             {inp: x},
-            bess_opex=bess_opex,
             where=f"sensitivities.break_even.{inp}",
         )
         rows = base_sweep(
@@ -3069,10 +3035,6 @@ def run_project_sizing(
         "sensitivity_cases_per_point": 1 + int(bool(curt["enabled"])) + len(oat_cases),
         "break_even_evaluations": break_even_evaluations,
         "effective_evaluations": evaluations,
-        "bess_opex": {
-            **asdict(bess_opex),
-            "usd_per_nominal_kwh_year": bess_opex.usd_per_nominal_kwh_year,
-        },
         "dimensions": list(DIMENSIONS),
         "years": years,
         "objective": {"metric": metric, "statistic": statistic},
