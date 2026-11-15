@@ -126,6 +126,13 @@ def test_committed_config_validates() -> None:
         (lambda c: c["options"].append(dict(c["options"][0])), "unique"),
         (lambda c: c["down_ramp"]["supplier"].update({"extra": 1}), "supplier"),
         (lambda c: c["down_ramp"]["supplier"].pop("usable_per_dc"), "supplier"),
+        (lambda c: c["battery"]["usd_per_kwh"].update({"p99": 1.0}), "usd_per_kwh"),
+        (lambda c: c["monte_carlo"]["rte"].pop("high"), "monte_carlo.rte"),
+        (lambda c: c["monte_carlo"]["residual_fade"].update({"x": 0}), "residual_fade"),
+        (
+            lambda c: c["tariff"]["one_time_adjustment_weights"].update({"usd": 0}),
+            "one_time_adjustment_weights",
+        ),
     ],
 )
 def test_config_refuses_missing_unknown_and_inconsistent_keys(
@@ -474,14 +481,15 @@ def test_battery_pretax_matches_a_hand_built_cash_flow() -> None:
         index_rate=0.0,
         pre_operation_years=0,
         opex_escalation=0.0,
-        capex_escalation=0.0,
+        capex_price_factor=1.05,
         construction_years=1,
         discount_rate=0.10,
     )
     # Contract years: (100 x 50 - 125 x 20) MWh-LKR x 1000 / 100 = 25,000, less O&M 2,000.
     # Year 3 (after the contract): (100 x 20 - 125 x 20) x 10 = -5,000, less 2,000.
-    flows = [-100_000.0, 23_000.0, 23_000.0, -7_000.0]
-    assert out["capex_usd_at_draw"] == pytest.approx(100_000.0)
+    # Capex is priced at the draw by the engine's price-year factor: 100,000 x 1.05.
+    flows = [-105_000.0, 23_000.0, 23_000.0, -7_000.0]
+    assert out["capex_usd_at_draw"] == pytest.approx(105_000.0)
     assert out["year1_net_usd"] == pytest.approx(23_000.0)
     assert out["npv_usd"] == pytest.approx(
         sum(f / 1.1**t for t, f in enumerate(flows)), abs=1e-6
@@ -702,3 +710,11 @@ def test_committed_option_figures_reproduce_through_the_engine() -> None:
     cycled = summary["options"]["cycled_0_5_2"]["readings"]["B"]
     assert cycled["black_start_reserve_mwh"] == bcfg["black_start_reserve_mwh"]
     assert summary["recommended_option_reading_A"] == "held_0_5_0_5"
+
+
+def test_cli_refuses_a_scenario_the_engine_would_escalate_automatically() -> None:
+    cli = _cli()
+    scenario = _scenario()
+    scenario.setdefault("finance", {})["capex_usd"] = scenario["capex"]["usd_total"]
+    with pytest.raises(ValueError, match="automatically"):
+        cli._kpis(scenario)

@@ -94,9 +94,13 @@ is reported only to show what giving up the function would be worth.
 | Cycled 2.5 MW / 10 MWh, reserve | no | −611k | −406k | −721k | 9.46% | −547k |
 | Cycled 10 MW / 40 MWh, reserve (UNCONFIRMED 40 MW reading) | no | −4.26M | −1.97M | −4.48M | 5.52% | −3.93M |
 
-- **No option beats wind-only.** The cheapest battery that keeps the ramping and black-start
-  function is **0.5 MW / 0.5 MWh, held**. It costs about USD 79k of project NPV and 0.13 points
-  of equity IRR, and it fits every reading of the 10 MW limit.
+- **No option beats wind-only.** The cheapest black-start battery is **0.5 MW / 0.5 MWh,
+  held**, with the soft (voltage-ramped) energisation the config assumes. It costs about USD 79k
+  of project NPV and 0.13 points of equity IRR, and it fits every reading of the 10 MW limit.
+- **It does not firm a grid down-ramp.** If a wind lull counts against the ramp limit, firming
+  needs about the turbine's rated 9.5 MW whatever Blue Whale's allocation is; the allocation
+  sets only the energy (see the down-ramp section). If a lull does not count, the turbine's own
+  controls deliver the ramp limit (CEB s.3.1) and no battery has a grid-ramp role.
 - **Cycling 0.5 MW / 2 MWh does not pay for its extra energy** once it keeps the reserve:
   - it delivers 544 MWh/yr (272 equivalent full cycles), against 723 without the reserve;
   - it costs −125k, against −65k if it gave up the black-start function;
@@ -147,8 +151,12 @@ needs the following firming (the ramp triangle):
 | none | 10 MW/min | 0.95 | 0.075 MWh |
 | 90 MW (illustrative) | 0.955 MW/min | 9.95 | **0.79 MWh at 9.5 MW** |
 
-If the share is small, the firming unit replaces the black-start battery, because it can also
-black-start the turbine. It is priced from **a generic battery supplier's budgetary offer**:
+Both rows need the full 9.5 MW: a full drop from rated must be firmed at rated power at any
+allowed ramp rate, so the allocation sets only the energy, from 0.075 MWh at the whole
+substation limit to 0.79 MWh at a 0.955 MW/min share. Only the second case is priced below. If
+a lull counts, a firming unit is needed at any allocation and replaces the black-start battery,
+because it can also black-start the turbine. It is priced from **a generic battery supplier's
+budgetary offer**:
 
 - CIF, excluding duty and taxes, priced for many sites;
 - flat at USD 90.00 per DC kWh, split into lines;
@@ -179,7 +187,8 @@ the 10 MW limit, cycling it recovers most of its cost.
 
 ## What would change the answer
 
-1. The NSO's ramp allocation for the substation, and whether a lull counts.
+1. Whether a wind lull counts against the ramp limit (which decides whether a 9.5 MW firming
+   unit is needed at all), and the NSO's allocation for the substation (which sets its energy).
 2. A PUCSL tariff that covers wind + BESS, or confirmation of the whole-rate reading.
 3. Whether a battery may sit outside the 10 MW standardised-PPA limit (reading C).
 4. A quotation for a power-heavy (≥ 2C) unit.

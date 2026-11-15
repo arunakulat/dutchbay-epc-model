@@ -154,6 +154,21 @@ def validate_config(cfg: Mapping[str, Any]) -> None:
             f"down_ramp.supplier: missing {sorted(set(SUPPLIER_KEYS) - set(supplier))}, "
             f"unknown {sorted(set(supplier) - set(SUPPLIER_KEYS))}"
         )
+    nested = {
+        "battery.usd_per_kwh": (cfg["battery"]["usd_per_kwh"], {"low", "mode", "high"}),
+        "monte_carlo.rte": (cfg["monte_carlo"]["rte"], {"low", "high"}),
+        "monte_carlo.residual_fade": (
+            cfg["monte_carlo"]["residual_fade"],
+            {"low", "mode", "high"},
+        ),
+        "tariff.one_time_adjustment_weights": (
+            cfg["tariff"]["one_time_adjustment_weights"],
+            {"lkr_usd", "ccpi"},
+        ),
+    }
+    for name, (block, allowed) in nested.items():
+        if set(block) != allowed:
+            raise ValueError(f"{name} must hold exactly {sorted(allowed)}")
     for name, reading in cfg["limits"]["readings"].items():
         if set(reading) != {"export_cap_mw"}:
             raise ValueError(f"limits.readings.{name} must hold export_cap_mw only")
@@ -468,6 +483,10 @@ def scenario_with_battery(
     is never cycled: capex and O&M only. ``window_wind_mwh`` > 0 also pays the premium on the
     turbine's own window exports (the all-window-exports reading).
 
+    ``bess_1`` carries ``availability_factor`` 1.0 (ASSUMPTION: no further availability
+    derate, since the delivered energy already comes from the hourly dispatch) and
+    ``availability_pct`` 97.0, which the energy-tariff revenue does not read.
+
     Conservative simplifications, stated rather than modelled: the battery keeps cycling (and
     losing the round trip) after the contract, where an operator would hold it; standby and
     auxiliary load (BMS, HVAC) is excluded for every option.
@@ -550,7 +569,7 @@ def battery_pretax(
     index_rate: float,
     pre_operation_years: int,
     opex_escalation: float,
-    capex_escalation: float,
+    capex_price_factor: float,
     construction_years: int,
     discount_rate: float,
 ) -> Dict[str, Optional[float]]:
@@ -559,13 +578,10 @@ def battery_pretax(
     Revenue in a contract year is delivered x peak rate - charged x wind tariff, each with its
     escalable part indexed at ``index_rate`` from the tariff base year; after the contract the
     delivered energy earns the wind tariff. No tax, debt or CFADS haircut.
+        ``capex_price_factor`` is the engine's own price-year escalation of the capex
+    (``capex.price_basis``), so the battery is priced at the same draw as in the engine.
     """
-    capex = (
-        energy_mwh
-        * 1000.0
-        * usd_per_kwh
-        * (1.0 + capex_escalation) ** construction_years
-    )
+    capex = energy_mwh * 1000.0 * usd_per_kwh * capex_price_factor
     flows = [-capex] + [0.0] * (construction_years - 1)
     for year in range(1, term_years + 1):
         idx = (1.0 + index_rate) ** (pre_operation_years + year - 1)

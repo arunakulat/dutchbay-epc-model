@@ -10,6 +10,10 @@ turbine point, content-checked against the pins in ``conf/blue_whale_met_mast_tr
 It only shapes the hour-by-hour charge and export headroom; the engine keeps the scenario's
 own energy. Nothing private is read.
 
+``DUTCHBAY_NASA_POWER_DIR`` must point outside the repository and hold one file per year in the
+point's subdirectory, ``power_t2/wsd_<year>.json`` for 2015 to 2025, each as the NASA POWER
+hourly point API returns it (GeoJSON with ``properties.parameter.WS50M``).
+
 Usage::
 
     DUTCHBAY_NASA_POWER_DIR=/path/to/power \\
@@ -37,6 +41,11 @@ from scipy.stats import norm, qmc
 
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.wind import wind_bess_options as wbo
+from finance.capex_price_basis import (
+    apply_capex_price_basis,
+    automatic_escalation,
+    capex_escalation_factor,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "conf" / "blue_whale_wind_bess_options.yaml"
@@ -89,6 +98,11 @@ def _nasa_dir(env: str) -> Path:
 
 
 def _kpis(scenario: Mapping[str, Any]) -> Dict[str, float]:
+    # Every capex amount here is priced through capex.usd_total. Refuse a scenario in which
+    # the engine would escalate some other capex key automatically (#1704), so the summary
+    # can never absorb that escalation unrecorded.
+    if automatic_escalation(apply_capex_price_basis(dict(scenario))) is not None:
+        raise ValueError("a capex amount would be escalated automatically (#1704)")
     k = evaluate_with_overrides(raw_config=dict(scenario), overrides={})
     out = {m: float(k[m]) if k.get(m) is not None else math.nan for m in KPIS}
     out["discount_rate_used"] = float(k["discount_rate_used"])
@@ -334,6 +348,10 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
     # project. Pinning the rate at the wind-only value isolates the battery's own effect.
     pinned = {"wacc.drives_discount_rate": False, "returns.project_discount_rate": rate}
     timeline = scenario["timeline"]
+    # The engine's own capex price-year escalation (capex.price_basis), for the battery's
+    # pre-tax view; 1.0 when the scenario declares no price basis.
+    basis = capex_escalation_factor(scenario)
+    capex_factor = 1.0 if basis is None else float(basis["factor"])
 
     def pretax(
         opt: Mapping[str, Any], delivered: float, charged: float, peak: wbo.PeakRate
@@ -356,8 +374,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 scenario["opex"]["currency_split"]["lkr_escalation_pct"]
             )
             / 100,
-            capex_escalation=float(scenario["capex"]["price_basis"]["escalation_pct"])
-            / 100,
+            capex_price_factor=capex_factor,
             construction_years=int(timeline["construction_years"]),
             discount_rate=rate,
         )
