@@ -7,9 +7,12 @@
     evaluate to a mapping that cancels an in-progress run;
   - any `strategy` on the audit job, because an empty matrix expands to zero jobs and GitHub
     reports them as skipped.
-- Limit: the guard bounds only in-progress cancellation. GitHub still cancels a pending run
-  when a newer run joins the same concurrency group (the default `queue: single` keeps at most
-  one pending run; `queue: max` keeps up to 100, and the guard requires neither). The
+- Limits: the guard bounds only this workflow's own in-progress cancellation. Concurrency
+  groups are repository-wide and case-insensitive, so another workflow or job that joins the
+  audit's group with `cancel-in-progress: true` could still cancel an in-progress audit; no
+  committed group collides today. GitHub also still cancels a pending run when a newer run
+  joins the same concurrency group (the default `queue: single` keeps at most one pending
+  run; `queue: max` keeps up to 100, and the guard requires neither). The
   SECDEP-01 text now says so, and also says that the guard does not bind any preceding
   workflow step, which can change the checkout, the toolchain or the GitHub runtime
   environment files.

@@ -62,8 +62,12 @@ that is not false, or a ``concurrency`` value written wholly as one expression, 
 workflow or job level, and any ``strategy`` on its gate job: a cancelled run leaves no
 audit status for its commit, and an empty matrix expands to zero jobs that GitHub reports
 as skipped (#1512). GitHub still cancels a pending run when a newer run joins the same
-concurrency group. The default `queue: single` keeps at most one pending run, GitHub's
-`queue: max` keeps up to 100, and this guard requires neither; it does not claim to stop that. No guard here binds a preceding step, which
+concurrency group. The default ``queue: single`` keeps at most one pending run,
+``queue: max`` keeps up to 100, and this guard requires neither; it does not claim to stop
+that. Concurrency groups are repository-wide and case-insensitive, so another workflow or
+job that joins the audit's group with ``cancel-in-progress`` true could still cancel an
+in-progress audit; this guard reads only ``security-audit.yml``. No guard here binds a
+preceding step, which
 can change the checkout or the toolchain while ``run: make security`` stays unchanged;
 SECDEP-01 states that limit. The third blind
 spot's remedy is deliberately HARDENING and names no root cause: whether the cache caused any
@@ -73,7 +77,7 @@ network and a resolve - so the numbers above stay in the pull request's receipts
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: all are pure functions over text, exercised against mutated
-copies rather than trusted - 99 controls: 15 over the ``Makefile``, 42 over the main audit
+copies rather than trusted - 101 controls: 15 over the ``Makefile``, 44 over the main audit
 workflow, 12 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
 hygiene (twelve shapes against each workflow file: cache, pins and canary), and 6 over the
 tooling pins against the lock. The canary's own verdict function carries its negative
@@ -543,9 +547,11 @@ def _cancellation_violations(concurrency: object, level: str) -> list[str]:
     ``concurrency`` value that is wholly one expression is rejected for the same reason:
     it can evaluate to a mapping with ``cancel-in-progress`` true.
 
-    Limit: this bounds only ``cancel-in-progress``. GitHub still cancels a PENDING run
-    when a newer run joins the same concurrency group, whatever this key says, so a
-    committed group keeps that exposure.
+    Limit: this bounds only this workflow's own ``cancel-in-progress``. Under the default
+    ``queue: single``, GitHub still cancels a PENDING run when a newer run joins the same
+    concurrency group, whatever this key says, so a committed group keeps that exposure.
+    Groups are repository-wide and case-insensitive, so another workflow joining the
+    audit's group with ``cancel-in-progress`` true could cancel it in progress.
     """
     if isinstance(concurrency, str):
         # A bare group name is accepted, but a value that is wholly one expression can
