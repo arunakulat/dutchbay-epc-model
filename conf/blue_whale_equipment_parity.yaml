@@ -10,11 +10,15 @@ schema_version: blue_whale_equipment_parity_v1
 
 blue_whale:
   summary_json_path: docs/blue_whale/met_mast_transfer_summary.json
-  rated_capacity_mw: 9.5
+  capex_solar_resource_config: conf/blue_whale_capex_solar_resource.yaml
   operating_life_years: 20
   hours_per_year: 8760
-  road_allowance_usd_per_kw: 40
-  epc_wrap_pct: 5
+  # Met-mast transfer gross-to-net retention factors (7.77% loss stack)
+  loss_retention_factors:
+    - 0.97
+    - 0.98
+    - 0.98
+    - 0.99
 
 mannar_benchmark:
   source: "docs/knowledge_base/01_wind_epc_costs_and_scaling.md §1; Envision 2026-02-11 / Hayleys 2026-10-05 public statements"

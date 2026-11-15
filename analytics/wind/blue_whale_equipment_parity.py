@@ -15,11 +15,17 @@ import json
 from decimal import Decimal, getcontext
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
+
+import yaml
 
 _DECIMAL_PREC = 45
-_LOSS_RETENTION = Decimal("0.97") * Decimal("0.98") * Decimal("0.98") * Decimal("0.99")
 VALID_DELIVERY_ROUTES = frozenset({"road", "marine"})
+CAPEX_SITE_INPUT_COPIES = (
+    "rated_capacity_mw",
+    "road_allowance_usd_per_kw",
+    "epc_wrap_pct",
+)
 
 
 def _to_decimal(value: Any) -> Decimal:
@@ -32,8 +38,28 @@ def _fraction_to_decimal(frac: Fraction) -> Decimal:
     return Decimal(frac.numerator) / Decimal(frac.denominator)
 
 
-def _load_blue_whale_aep_mwh(summary_path: Path) -> Decimal:
-    """Load and cross-check Blue Whale net P50 AEP (MWh/yr) from transfer summary."""
+def _resolve_repo_path(raw_path: str, repo_root: Path) -> Path:
+    """Resolve ``raw_path`` against ``repo_root`` when relative."""
+    p = Path(raw_path)
+    return p if p.is_absolute() else repo_root / p
+
+
+def _load_blue_whale_aep_and_hold(
+    summary_path: Path,
+    loss_retention_factors: Sequence[Any],
+) -> Tuple[Decimal, str]:
+    """Load and cross-check Blue Whale net P50 AEP (MWh/yr) and its HOLD status."""
+    if not loss_retention_factors:
+        raise ValueError("blue_whale.loss_retention_factors must be non-empty")
+    loss_retention = Decimal("1")
+    for raw_factor in loss_retention_factors:
+        factor = _to_decimal(raw_factor)
+        if not (Decimal("0") < factor <= Decimal("1")):
+            raise ValueError(
+                f"loss_retention_factors entries must be in (0, 1], got {factor}"
+            )
+        loss_retention *= factor
+
     raw = json.loads(summary_path.read_text(encoding="utf-8"), parse_float=Decimal)
     net_aep_gwh = _to_decimal(raw["yield"]["net_aep_gwh"])
     p50_net_gwh = _to_decimal(raw["uncertainty"]["p50_net_gwh"])
@@ -42,9 +68,44 @@ def _load_blue_whale_aep_mwh(summary_path: Path) -> Decimal:
             f"net_aep_gwh ({net_aep_gwh}) does not match p50_net_gwh ({p50_net_gwh})"
         )
     gross_aep_gwh = _to_decimal(raw["yield"]["gross_aep_gwh"])
-    if abs(gross_aep_gwh * _LOSS_RETENTION - net_aep_gwh) >= Decimal("1e-12"):
+    if abs(gross_aep_gwh * loss_retention - net_aep_gwh) >= Decimal("1e-12"):
         raise ValueError("gross_aep_gwh * loss_retention diverges from net_aep_gwh")
-    return net_aep_gwh * Decimal("1000")
+    hold_note = str(raw.get("hold") or "").strip()
+    if not hold_note:
+        raise ValueError(
+            f"Met-mast summary {summary_path} is missing its 'hold' status field"
+        )
+    return net_aep_gwh * Decimal("1000"), hold_note
+
+
+def _load_blue_whale_capex_site_inputs(
+    bw: Mapping[str, Any],
+    repo_root: Path,
+) -> Tuple[Decimal, Decimal, Decimal]:
+    """Read rated capacity, road allowance, and EPC wrap from the capex config.
+
+    Refuses duplicate copies on ``blue_whale`` (``#1686`` L-16 pattern).
+    """
+    copies = [k for k in CAPEX_SITE_INPUT_COPIES if k in bw]
+    if copies:
+        raise ValueError(
+            f"blue_whale must not repeat capex site inputs ({', '.join(copies)}); "
+            "they are read from capex_solar_resource_config"
+        )
+    rel = bw.get("capex_solar_resource_config")
+    if not rel:
+        raise ValueError("blue_whale.capex_solar_resource_config is required")
+    capex_path = _resolve_repo_path(str(rel), repo_root)
+    capex_cfg = yaml.safe_load(capex_path.read_text(encoding="utf-8"))
+    if not isinstance(capex_cfg, Mapping) or "wind" not in capex_cfg:
+        raise ValueError(
+            f"capex_solar_resource_config {capex_path} must define a 'wind' mapping"
+        )
+    wind = capex_cfg["wind"]
+    cap_mw = _to_decimal(wind["rated_kw"]) / Decimal("1000")
+    road_allow_per_kw = _to_decimal(wind["inland_transport_usd_per_kw"]["mode"])
+    epc_wrap_frac = _to_decimal(wind["epc_margin_pct"]["mode"])
+    return cap_mw, road_allow_per_kw, epc_wrap_frac
 
 
 def compute_equipment_parity(
@@ -65,15 +126,16 @@ def compute_equipment_parity(
     bw = cfg["blue_whale"]
     mn = cfg["mannar_benchmark"]
 
-    summary_rel = Path(str(bw["summary_json_path"]))
-    summary_path = summary_rel if summary_rel.is_absolute() else repo_root / summary_rel
-    aep_b = _load_blue_whale_aep_mwh(summary_path)
+    summary_path = _resolve_repo_path(str(bw["summary_json_path"]), repo_root)
+    aep_b, aep_hold_note = _load_blue_whale_aep_and_hold(
+        summary_path, bw["loss_retention_factors"]
+    )
 
-    cap_b = _to_decimal(bw["rated_capacity_mw"])
+    cap_b, road_allow_per_kw, epc_wrap_frac = _load_blue_whale_capex_site_inputs(
+        bw, repo_root
+    )
     life_b = _to_decimal(bw["operating_life_years"])
     hours_yr = _to_decimal(bw["hours_per_year"])
-    road_allow_per_kw = _to_decimal(bw["road_allowance_usd_per_kw"])
-    epc_wrap_frac = _to_decimal(bw["epc_wrap_pct"]) / Decimal("100")
 
     count_m = _to_decimal(mn["turbine_count"])
     cap_m = _to_decimal(mn["rated_capacity_mw"])
@@ -156,8 +218,12 @@ def compute_equipment_parity(
     road_allowance_wrap_usd = road_allowance_usd * (Decimal("1") + epc_wrap_frac)
 
     return {
-        "purpose": "Reproducible conditional equipment-cost parity benchmark, no price prediction",
+        "purpose": (
+            "Reproducible conditional equipment-cost parity benchmark (not a quote/forecast; "
+            "met-mast P50 AEP divisor remains under HOLD)"
+        ),
         "mannar_cost_status": str(mn["status"]),
+        "blue_whale_aep_hold_status": aep_hold_note,
         "calculation_basis": (
             f"Equipment only; constant AEP; {int(life_b)} years; "
             "no discounting, FX, escalation or degradation"

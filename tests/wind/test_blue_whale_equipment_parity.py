@@ -53,11 +53,13 @@ def test_equipment_parity_matches_2026_11_14_review_package() -> None:
     assert res["break_even_equipment_price_per_mw_premium_pct"].startswith(
         "3.1648854603187236206"
     )
-    assert res["road_allowance_usd"] == "380000.0"
-    assert res["road_allowance_plus_epc_wrap_usd"] == "399000.000"
+    assert res["road_allowance_usd"] == "380000.00"
+    assert res["road_allowance_plus_epc_wrap_usd"] == "399000.0000"
     assert res[
         "ashuri_5_to_10mw_common_life_equipment_usd_per_mwh_change_pct"
     ].startswith("28.718969119847209104")
+    assert "HOLD" in out["blue_whale_aep_hold_status"]
+    assert "P50/P90 and lender use stands" in out["blue_whale_aep_hold_status"]
     assert all(out["checks"].values())
 
 
@@ -148,3 +150,82 @@ def test_hydra_cli_emits_valid_json() -> None:
     assert "cost_buildup" in payload
     assert payload["cost_buildup"]["road"]["status"] == "UNPRICED_EVIDENCE_GAPS"
     assert payload["cost_buildup"]["marine"]["status"] == "UNPRICED_EVIDENCE_GAPS"
+
+
+def test_capex_site_inputs_are_read_from_capex_config_without_duplicates() -> None:
+    """#1686 L-16 pattern: site capex inputs live in capex_solar_resource_config only."""
+    cfg = _load_cfg()
+    bw = cfg["blue_whale"]
+    assert not {
+        "rated_capacity_mw",
+        "road_allowance_usd_per_kw",
+        "epc_wrap_pct",
+    } & set(bw)
+    assert (
+        bw["capex_solar_resource_config"] == "conf/blue_whale_capex_solar_resource.yaml"
+    )
+
+
+def test_capex_site_inputs_follow_capex_config_changes(tmp_path: Path) -> None:
+    """TEST-01 responsiveness: parity outputs track changes in the capex YAML."""
+    capex_src = REPO_ROOT / "conf" / "blue_whale_capex_solar_resource.yaml"
+    capex_data = yaml.safe_load(capex_src.read_text(encoding="utf-8"))
+    capex_data["wind"]["rated_kw"] = 10000.0
+    capex_data["wind"]["inland_transport_usd_per_kw"]["mode"] = 50.0
+    capex_data["wind"]["epc_margin_pct"]["mode"] = 0.10
+    moved = tmp_path / "capex.yaml"
+    moved.write_text(yaml.safe_dump(capex_data), encoding="utf-8")
+
+    cfg = _load_cfg()
+    cfg["blue_whale"] = {
+        **cfg["blue_whale"],
+        "capex_solar_resource_config": str(moved),
+    }
+    res = compute_equipment_parity(cfg, REPO_ROOT)["results"]
+    assert Decimal(res["constant_price_per_mw_equipment_cost_usd"]) == Decimal(
+        "3898000"
+    )
+    assert Decimal(res["road_allowance_usd"]) == Decimal("500000")
+    assert Decimal(res["road_allowance_plus_epc_wrap_usd"]) == Decimal("550000")
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"rated_capacity_mw": 9.5}, "must not repeat capex site inputs"),
+        ({"road_allowance_usd_per_kw": 40}, "must not repeat capex site inputs"),
+        ({"epc_wrap_pct": 5}, "must not repeat capex site inputs"),
+        (
+            {"capex_solar_resource_config": None},
+            "capex_solar_resource_config is required",
+        ),
+    ],
+)
+def test_duplicate_capex_site_inputs_or_missing_config_refused(
+    changes: dict[str, Any], message: str
+) -> None:
+    """Refuse duplicate capex site inputs or missing capex_solar_resource_config."""
+    cfg = _load_cfg()
+    cfg["blue_whale"] = {**cfg["blue_whale"], **changes}
+    with pytest.raises(ValueError, match=message):
+        compute_equipment_parity(cfg, REPO_ROOT)
+
+
+def test_loss_retention_factors_come_from_yaml_and_validate() -> None:
+    """FRAMEWORK-02: loss_retention_factors come from YAML and fail loudly if invalid."""
+    cfg = _load_cfg()
+    assert cfg["blue_whale"]["loss_retention_factors"] == [0.97, 0.98, 0.98, 0.99]
+
+    empty_cfg = {
+        **cfg,
+        "blue_whale": {**cfg["blue_whale"], "loss_retention_factors": []},
+    }
+    with pytest.raises(ValueError, match="non-empty"):
+        compute_equipment_parity(empty_cfg, REPO_ROOT)
+
+    bad_cfg = {
+        **cfg,
+        "blue_whale": {**cfg["blue_whale"], "loss_retention_factors": [1.05]},
+    }
+    with pytest.raises(ValueError, match="must be in"):
+        compute_equipment_parity(bad_cfg, REPO_ROOT)
