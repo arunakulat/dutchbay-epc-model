@@ -10,8 +10,8 @@
     cash only) and in the unit's own cash flow. With `replaces_price_reserve` every BESS price
     drops the augmentation reserve the all-in holds. Two new one-at-a-time inputs move the fade
     rate and the augmentation price. PR 3's sizing is unchanged.
-  - `conf/blue_whale_solar_bess_project_sizing.yaml`: fade 1.5533%/yr, the line through the OEM
-    curve (the curve stays outside the repository; a test re-derives the rate when
+  - `conf/blue_whale_solar_bess_project_sizing.yaml`: fade 1.5533%/yr, a linear rate derived from
+    the OEM curve (the curve stays outside the repository; a test re-derives the rate when
     `DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE` names it); augment below 80% SoH to the nameplate;
     USD 103.55/kWh added (ASSUMPTION: the pricing config's equipment line, paid as stated); the
     USD 8.89/kWh reserve removed; residual fade 0/0/0.5%/yr (was 0/0/2); three new cases.

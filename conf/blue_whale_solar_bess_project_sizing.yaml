@@ -124,16 +124,15 @@ battery_health:
   # #1578 L-11 (owner, 2026-11-14): the fade from the OEM's performance curve in the private
   # corpus; augment "when capacity falls below 80%"; the augmentation cost: "use an
   # assumption".
-  # Linear fade of the nameplate energy, the straight line from beginning of life to the last
-  # year of the OEM's state-of-health performance curve (private corpus; the curve stays outside
-  # the repository and only this derived rate is committed: tests/solar/
-  # test_battery_health.py re-derives it when DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE names the
-  # private file). The line and the curve both first fall below 80% in year 13, so both put
-  # the augmentation before operating year 14. The curve covers 15 years at its rated duty;
-  # years 16-20 extend the line (an EXTRAPOLATION), and the curve's duty is not scaled to this
+  # Linear fade of the nameplate energy, one rate derived from the OEM's state-of-health
+  # performance curve (private corpus; the curve stays outside the repository and only this
+  # derived rate is committed: tests/solar/test_battery_health.py re-derives it when
+  # DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE names the private file). The rate and the curve both
+  # first fall below 80% in year 13, so both put the augmentation before operating year 14. The
+  # rate is applied in every operating year, and the curve's duty is not scaled to this
   # battery's cycling (residual_fade_pct_per_year above carries that).
   fade_pct_per_year: 1.5533
-  fade_basis: "OEM state-of-health performance curve (private corpus), linear from beginning of life to its last year; extended linearly past it"
+  fade_basis: "OEM state-of-health performance curve (private corpus); one linear rate derived from it, applied in every operating year"
   augment_below_soh: 0.80        # owner, 2026-11-14: "when capacity falls below 80%"
   restore_to_soh: 1.0            # ASSUMPTION: each augmentation restores the nameplate
   # ASSUMPTION (owner: "use an assumption"): the pricing config's equipment line (DC block,

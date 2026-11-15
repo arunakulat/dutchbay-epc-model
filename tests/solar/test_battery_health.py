@@ -11,7 +11,7 @@
   engine's BESS revenue unchanged in every year;
 * the OEM curve itself, when ``DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE`` names the private
   file (outside the repository; the curve is never committed): the committed rate is the
-  line it gives, and the line and the curve cross 80% in the same year.
+  rate it gives, and the rate and the curve cross 80% in the same year.
 
 No test here runs the engine more than a handful of times (``TEST-03``).
 """
@@ -110,7 +110,7 @@ def test_soh_path_without_fade_never_augments_and_refuses_negative_fade() -> Non
         _health().soh_path(-0.001, 20)
 
 
-def test_fade_rate_from_a_curve_is_its_end_to_end_line() -> None:
+def test_fade_rate_from_a_synthetic_curve() -> None:
     curve = [100.0, 97.0, 95.0, 92.0, 90.0, 88.0, 86.0, 84.0, 82.0, 80.5, 79.0]
     got = sz.fade_rate_from_soh_curve(curve)
     assert got["fade_pct_per_year"] == pytest.approx(2.1)
@@ -260,7 +260,7 @@ def test_shifted_case_moves_the_battery_health_inputs() -> None:
 @pytest.mark.skipif(
     not os.environ.get(PRIVATE_ENV), reason="private SoH curve not supplied"
 )
-def test_committed_rate_is_the_private_curves_line() -> None:
+def test_committed_rate_is_the_private_curves_rate() -> None:
     path = Path(os.environ[PRIVATE_ENV]).resolve()
     assert REPO_ROOT.resolve() not in path.parents, "the curve must stay outside"
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))

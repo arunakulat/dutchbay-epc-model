@@ -1307,13 +1307,12 @@ applied under the owner's delegation of 2026-11-07.
 
 **Method** (`conf/blue_whale_solar_bess_project_sizing.yaml`, `battery_health`):
 
-- **Fade.** The battery loses 1.5533% of its nameplate energy a year, linearly: the straight line
-  from beginning of life to the last year of the OEM's state-of-health curve (system SoH
-  including auxiliary power, at the curve's rated duty). The curve stays outside the repository;
-  only the derived rate is committed, and `tests/solar/test_battery_health.py` re-derives it when
-  `DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE` names the private file. The curve falls faster than the
-  line in its early years and slower later; both first fall below 80% at the end of year 13. The
-  curve covers 15 years, so years 16-20 extend the line (an extrapolation).
+- **Fade.** The battery loses 1.5533% of its nameplate energy a year, linearly: one rate derived
+  from the OEM's state-of-health curve (system SoH including auxiliary power, at the curve's
+  rated duty). The curve stays outside the repository; only the derived rate is committed, and
+  `tests/solar/test_battery_health.py` re-derives it when `DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE`
+  names the private file. The rate and the curve both first fall below 80% at the end of year 13.
+  The rate is applied in every operating year.
 - **Augmentation.** Before any operating year that would start below 80% SoH, cells are added to
   restore the nameplate, and the battery fades again from there. In the base case that is once,
   before year 14: 20.19% of the nameplate. The battery is dispatched every year on its faded

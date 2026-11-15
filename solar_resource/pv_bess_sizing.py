@@ -850,9 +850,8 @@ def fade_rate_from_soh_curve(soh_pct: Sequence[float]) -> Dict[str, Any]:
     """The linear fade a SoH curve implies, and the year it first falls below 80%.
 
     ``soh_pct[0]`` is beginning of life and ``soh_pct[k]`` the SoH at the end of year
-    ``k``. The rate is the straight line from beginning of life to the curve's last year,
-    which keeps the year the curve crosses a threshold when the curve is near-linear there.
-    Used to derive a committed rate from a curve that stays outside the repository.
+    ``k``. Used to derive a committed rate from a curve that stays outside the repository;
+    the result also gives the year the curve and the rate first fall below 80%.
     """
     if len(soh_pct) < 2 or any(not math.isfinite(float(s)) for s in soh_pct):
         raise ValueError("a SoH curve needs beginning of life and at least one year")
