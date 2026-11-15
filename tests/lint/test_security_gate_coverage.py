@@ -837,9 +837,6 @@ def test_the_audit_canary_runs_and_can_fail() -> None:
     # status must still fail, or weakening the status check hides behind the empty report
     # above (#1517 F-5).
     assert canary.missing_detections(0, full)
-    # The status check needs its own control: a full, correct report with the wrong exit
-    # status must still fail, or dropping the status check hides behind the empty report
-    # above (#1517 F-5).
     assert canary.missing_detections(1, report())
     assert canary.missing_detections(2, full)
     assert canary.missing_detections(1, "not json")
