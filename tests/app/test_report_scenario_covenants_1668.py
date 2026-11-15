@@ -98,7 +98,7 @@ def test_a_min_dscr_between_the_two_floors_now_breaches() -> None:
     assert ctx.covenants.min_dscr_floor == pytest.approx(1.30)
     assert ctx.verdict.dscr_covenant_met is False
     assert any(
-        "breaches the 1.30x lender floor (the scenario's covenant" in note
+        "breaches the 1.30x lock-up covenant (the scenario's covenant" in note
         for note in ctx.verdict.notes
     )
 
@@ -129,6 +129,9 @@ def test_lender_case_report_tests_the_scenario_covenant() -> None:
         if flag.kind == "covenant_breach" and "Minimum DSCR" in flag.detail
     ]
     assert [flag.severity for flag in dscr_flags] == ["high"]
+    # Owner wording (2026-11-15): the scenario's DSCR covenant is a lock-up covenant.
+    assert dscr_flags[0].detail.endswith("breaches the lock-up covenant.")
+    assert not any("lender floor" in note for note in ctx.verdict.notes)
 
     text = " ".join(render_report_html(ctx).split())
     assert "&ge; 1.30x floor (scenario covenant)" in text
@@ -170,3 +173,8 @@ def test_a_scenario_without_constraints_renders_report_default_labels() -> None:
     text = " ".join(render_report_html(ctx).split())
     assert "&ge; 1.20x floor (report default)" in text
     assert "&le; 40% ceiling (report default)" in text
+    # The report default keeps its own name, and the target says where it comes from.
+    assert any(
+        "1.20x lender floor (report default; report-default target 1.30x)" in note
+        for note in ctx.verdict.notes
+    )

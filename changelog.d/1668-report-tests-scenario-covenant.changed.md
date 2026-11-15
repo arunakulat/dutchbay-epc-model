@@ -4,15 +4,19 @@
   `config/report_defaults.yaml` (1.20x and 40%) applies only to a threshold the scenario
   does not declare. The covenant table and verdict notes say which source each threshold
   came from. Where the scenario declares its covenants, the report and the engine now judge
-  the same covenant (FRAMEWORK-03). Every committed Dutch Bay, Blue Whale, Kalpitiya, NSO and
-  CEB case declares them. A scenario that does not keeps the labelled report defaults, while
+  the same covenant (FRAMEWORK-03). Every runnable committed Dutch Bay, Blue Whale, Kalpitiya,
+  NSO and CEB case declares them. A scenario that does not keeps the labelled report defaults, while
   the engine's own fallbacks differ (follow-up below).
 - **Two verdicts change.** Two cases met the 1.20x report default and now breach their
   1.30x covenant: the lender case (minimum DSCR 1.22x) and the optimistic case (1.21x). In
   both, the IC summary gains a high-severity covenant-breach flag ("Minimum DSCR ... breaches
-  the lender floor"). Neither headline changes ("Value-destructive" in both). No balloon
+  the lock-up covenant"). Neither headline changes ("Value-destructive" in both). No balloon
   verdict changes, because the balloon row already followed the engine's breach flag. The
   covenant table now shows the scenario's 10% ceiling instead of 40%.
+- Wording (owner decision 2026-11-15): a scenario's DSCR covenant is called its lock-up
+  covenant in the verdict note and the IC flag. The report default (1.20x) keeps the name
+  "lender floor". The note's target (1.30x) is labelled "report-default target", because it
+  comes from `config/report_defaults.yaml`, not from the scenario.
 - A minimum DSCR sculpted to exactly the covenant (it reads 1.2999999999999998) is compared
   with the engine's 1e-9 lock-up tolerance (#1508), so it is "Met", not a breach. Without
   it, committed cases sized to 1.30x (at least the EIA-prudent capex variant, the hybrid
