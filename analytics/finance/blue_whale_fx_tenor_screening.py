@@ -2,21 +2,85 @@
 
 Standalone screening calculator implementing the dual-currency debt sizing,
 dated FX observations with evidence classification, tenor-tail validation,
-and debt service coverage ratios (DSCR) from the 2026-11-14 research handoff
-(BW-FIN-COST-20261114, v1.0).
+and debt service coverage ratio (DSCR) screening indicators from the 2026-11-14
+research handoff (BW-FIN-COST-20261114, v1.0).
 
-This is an analytical screening and review utility complementary to
-``analytics.evaluation_v14`` and PR #1678 (equipment-cost parity benchmark).
-It does NOT modify frozen lender scenarios (scenarios/blue_whale_*.yaml) or
-substitute for the governed v14 core financial calculation pipeline (CCCDIR).
+Governance & Scope Boundaries:
+- HOLD (F-5, #1110, v15.6.1): Produces screening indicators only, NOT a lender
+  verdict, bankability determination, or credit commitment. Lender interest rates
+  and DSCR thresholds are illustrative screening assumptions, not terms (#1629).
+- Core v14 engine path is PENDING: FX feeding the USD OPEX share is BW-5
+  (L-12 D-2) work.
+- Basecase capex, tariff, O&M, and FX-at-close are read from
+  ``scenarios/dutchbay_basecase_2025Q4.yaml``; divergent cases are explicitly
+  labeled as sensitivities.
+- Does NOT modify frozen lender scenarios (scenarios/blue_whale_*.yaml) or
+  substitute for the governed v14 core financial calculation pipeline (CCCDIR).
 """
 
 from __future__ import annotations
 
 import math
 from datetime import date
+from pathlib import Path
 from statistics import mean
 from typing import Any, Dict, List, Optional
+
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_GOVERNED_SCENARIO_PATH = "scenarios/dutchbay_basecase_2025Q4.yaml"
+DEFAULT_F5_HOLD_CAVEAT = (
+    "HOLD (F-5, #1110, v15.6.1): Standalone screening indicator only — not a lender "
+    "verdict, bankability determination, or credit commitment. Lender interest rates and "
+    "DSCR thresholds are illustrative screening assumptions, not executed term-sheet terms (#1629)."
+)
+DEFAULT_ENGINE_PATH_NOTE = (
+    "Core v14 engine path is pending: FX feeding the USD OPEX share is BW-5 (L-12 D-2) work; "
+    "this module is a standalone screening utility."
+)
+
+
+def load_governed_basecase_inputs(
+    scenario_path: Path | str = DEFAULT_GOVERNED_SCENARIO_PATH,
+) -> Dict[str, Any]:
+    """Load governed basecase inputs from ``scenarios/dutchbay_basecase_2025Q4.yaml``.
+
+    Args:
+        scenario_path: Path to the governed scenario YAML (relative to repo root or absolute).
+
+    Returns:
+        Dictionary of screening-compatible inputs derived from the governed scenario.
+
+    Raises:
+        FileNotFoundError: If the governed scenario file does not exist.
+        KeyError: If required governed fields are absent.
+        ValueError: If the loaded YAML is not a mapping or contains invalid values.
+    """
+    resolved = Path(scenario_path)
+    if not resolved.is_absolute():
+        resolved = REPO_ROOT / resolved
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Governed scenario file not found: {resolved}")
+
+    data = yaml.safe_load(resolved.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in governed scenario YAML: {resolved}")
+
+    return {
+        "capex_usd": float(data["capex"]["usd_total"]),
+        "opex_usd_equivalent_year1": float(data["opex"]["usd_per_year"]),
+        "tariff_fixed_lkr_per_kwh": float(data["tariff"]["lkr_per_kwh"]),
+        "tariff_om_lkr_per_kwh": 0.0,
+        "fx_close_lkr_per_usd": float(data["fx"]["start_lkr_per_usd"]),
+        "fx_depreciation_decimal": float(data["fx"]["annual_depr"]),
+        "ppa_years": int(data["tariff"]["ppa_term_years"]),
+        "construction_years": int(data["timeline"]["construction_years"]),
+        "tax_rate_decimal": float(data["tax"]["corporate_tax_rate"]),
+        "loss_carryforward_years": int(data["tax"]["loss_carryforward_years"]),
+        "maximum_gearing_decimal": float(data["Financing_Terms"]["debt_ratio"]),
+        "generation_degradation_decimal": float(data["project"]["degradation"]) / 100.0,
+    }
 
 
 def annuity(principal: float, rate: float, years: int) -> float:
@@ -147,7 +211,7 @@ def validate_debt_tenor_against_ppa(
 
 
 def evaluate_dual_currency_screening(
-    cfg: Dict[str, Any], debt_usd_equivalent: float, p90: bool = False
+    cfg: Dict[str, Any], debt_usd_equivalent: float, downside: bool = False
 ) -> List[Dict[str, Any]]:
     """Return annual dual-currency screening cash flows under one generation and FX path.
 
@@ -157,11 +221,13 @@ def evaluate_dual_currency_screening(
     - Year 1 FX is COD FX (2-year construction compounding from close).
     - Straight-line tax allowance is an illustrative screening proxy with loss carryforward.
     - Annual credit fee applies to opening translated debt balances.
+    - Note: There is no measured DutchBay wind data and no measured P90; ``downside=True``
+      uses ``assumed_downside_gwh`` as an assumed downside screening sensitivity.
 
     Args:
         cfg: Configuration dictionary containing screening assumptions.
         debt_usd_equivalent: Total debt commitment in USD equivalent.
-        p90: Whether to evaluate P90 generation instead of P50.
+        downside: Whether to evaluate ``assumed_downside_gwh`` instead of ``p50_gwh``.
 
     Returns:
         List of annual cash flow row dicts across the PPA operating life.
@@ -191,7 +257,7 @@ def evaluate_dual_currency_screening(
         int(cfg["local_tenor_years"]),
     )
 
-    generation = float(cfg["p90_gwh"] if p90 else cfg["p50_gwh"])
+    generation = float(cfg["assumed_downside_gwh"] if downside else cfg["p50_gwh"])
     fx_close = float(cfg["fx_close_lkr_per_usd"])
     opex_base_lkr = float(cfg["opex_usd_equivalent_year1"]) * fx_close
     basis = float(cfg["capex_usd"]) * fx_close
@@ -322,51 +388,64 @@ metrics = compute_coverage_metrics
 
 
 def size_debt_screening(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Bisect debt from zero to gearing cap under P50, P90, and average coverage tests.
+    """Bisect debt from zero to gearing cap under P50 and assumed-downside screening thresholds.
+
+    Produces a standalone screening indicator only (HOLD F-5, #1110, v15.6.1);
+    does not represent a lender verdict or executed financing terms (#1629).
 
     Args:
         cfg: Screening configuration mapping.
 
     Returns:
         Dict containing sized debt_usd, gearing_decimal, equity_capex_balance_usd,
-        p50 coverage metrics, p90 coverage metrics, and execution status.
+        p50 coverage metrics, assumed_downside coverage metrics, screening status
+        indicator, and F-5 HOLD caveat.
     """
     local_years = int(cfg["local_tenor_years"])
+    min_downside_threshold = float(cfg["min_downside_dscr"])
 
-    def feasible(debt: float) -> bool:
+    def meets_screening_dscr_thresholds(debt: float) -> bool:
         p50 = compute_coverage_metrics(
-            evaluate_dual_currency_screening(cfg, debt), local_years
+            evaluate_dual_currency_screening(cfg, debt, downside=False), local_years
         )
-        p90 = compute_coverage_metrics(
-            evaluate_dual_currency_screening(cfg, debt, True), local_years
+        downside = compute_coverage_metrics(
+            evaluate_dual_currency_screening(cfg, debt, downside=True), local_years
         )
         return bool(
             float(p50["min_dscr"]) >= float(cfg["min_p50_dscr"])
-            and float(p90["min_dscr"]) >= float(cfg["min_p90_dscr"])
+            and float(downside["min_dscr"]) >= min_downside_threshold
             and float(p50["first_local_average_dscr"]) >= float(cfg["average_p50_dscr"])
         )
 
     debt_end = max(int(cfg["dfi_tenor_years"]), local_years)
-    unlevered_p90 = evaluate_dual_currency_screening(cfg, 0.0, True)[:debt_end]
-    if min(r["cfads_lkr"] for r in unlevered_p90) < 0:
+    unlevered_downside = evaluate_dual_currency_screening(cfg, 0.0, downside=True)[
+        :debt_end
+    ]
+    if min(r["cfads_lkr"] for r in unlevered_downside) < 0:
         return {
             "debt_usd": 0.0,
             "gearing_decimal": 0.0,
             "equity_capex_balance_usd": float(cfg["capex_usd"]),
             "p50": compute_coverage_metrics(
-                evaluate_dual_currency_screening(cfg, 0.0), local_years
+                evaluate_dual_currency_screening(cfg, 0.0, downside=False), local_years
             ),
-            "p90": compute_coverage_metrics(
-                evaluate_dual_currency_screening(cfg, 0.0, True), local_years
-            ),
-            "status": "unfinanceable_negative_debt_life_unlevered_cfads",
+            "assumed_downside": {
+                "generation_basis": "assumed_downside_not_measured_p90",
+                **compute_coverage_metrics(
+                    evaluate_dual_currency_screening(cfg, 0.0, downside=True),
+                    local_years,
+                ),
+            },
+            "status": "screening_indicator_negative_unlevered_cfads",
+            "lender_rates_are_assumptions": True,
+            "f5_hold_caveat": DEFAULT_F5_HOLD_CAVEAT,
         }
 
     low = 0.0
     high = float(cfg["capex_usd"]) * float(cfg["maximum_gearing_decimal"])
     for _ in range(70):
         mid = (low + high) / 2.0
-        if feasible(mid):
+        if meets_screening_dscr_thresholds(mid):
             low = mid
         else:
             high = mid
@@ -377,12 +456,19 @@ def size_debt_screening(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "gearing_decimal": sized_debt / float(cfg["capex_usd"]),
         "equity_capex_balance_usd": float(cfg["capex_usd"]) - sized_debt,
         "p50": compute_coverage_metrics(
-            evaluate_dual_currency_screening(cfg, sized_debt), local_years
+            evaluate_dual_currency_screening(cfg, sized_debt, downside=False),
+            local_years,
         ),
-        "p90": compute_coverage_metrics(
-            evaluate_dual_currency_screening(cfg, sized_debt, True), local_years
-        ),
-        "status": "reconstructed_screening_only",
+        "assumed_downside": {
+            "generation_basis": "assumed_downside_not_measured_p90",
+            **compute_coverage_metrics(
+                evaluate_dual_currency_screening(cfg, sized_debt, downside=True),
+                local_years,
+            ),
+        },
+        "status": "screening_indicator_only",
+        "lender_rates_are_assumptions": True,
+        "f5_hold_caveat": DEFAULT_F5_HOLD_CAVEAT,
     }
 
 
@@ -507,7 +593,12 @@ def run_fixed_debt_stress(
 
 
 def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute complete screening suite across configurations and return summary dict.
+    """Execute complete screening suite across governed and sensitivity configs.
+
+    Reads governed basecase inputs (capex, tariff, O&M, FX-at-close, etc.) from
+    ``raw_cfg["governed_scenario_path"]`` (``scenarios/dutchbay_basecase_2025Q4.yaml``).
+    Uses the 14-turbine DutchBay scope (#1587) and labels any divergent case as an
+    explicit sensitivity.
 
     Args:
         raw_cfg: Loaded and validated configuration mapping.
@@ -515,6 +606,10 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Structured summary mapping suitable for JSON emission.
     """
+    scenario_path = raw_cfg.get(
+        "governed_scenario_path", DEFAULT_GOVERNED_SCENARIO_PATH
+    )
+    governed_inputs = load_governed_basecase_inputs(scenario_path)
     params = raw_cfg["screening_parameters"]
     cases = raw_cfg["cases"]
 
@@ -534,30 +629,40 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
                 "end": window["end"],
                 "start_date": window["start_date"],
                 "end_date": window["end_date"],
+                "is_assumption": bool(window.get("is_assumption", True)),
+                "evidence_status": window.get(
+                    "evidence_status", "unverified_assumption_unverified_endpoint_rates"
+                ),
                 "annualized_quote_change_decimal": cagr_val,
             }
         )
 
-    # Selected 15-year case (15 turbines, 30% DFI, 7% FX depreciation, 0 escalation)
-    selected_15_cfg = {
+    # Governed basecase 14-turbine screening (#1587, 15-year DFI / 20-year PPA)
+    governed_15_cfg = {
+        **governed_inputs,
         **params,
-        **cases["15"],
-        "dfi_share": 0.3,
-        "fx_depreciation_decimal": 0.07,
-        "tariff_om_escalation_decimal": 0.0,
+        **cases["14_governed_basecase"],
     }
-    sized_15 = size_debt_screening(selected_15_cfg)
+    sized_governed_15 = size_debt_screening(governed_15_cfg)
 
-    # Selected 10-year case (15 turbines, 10-year DFI, 12-year PPA, 2-year lender tail)
-    selected_10_cfg = {
-        **selected_15_cfg,
+    # Governed basecase 14-turbine screening (10-year DFI / 12-year PPA / 2-year tail)
+    governed_10_cfg = {
+        **governed_15_cfg,
         "dfi_tenor_years": 10,
         "ppa_years": 12,
         "lender_tail_years": 2,
     }
-    sized_10 = size_debt_screening(selected_10_cfg)
+    sized_governed_10 = size_debt_screening(governed_10_cfg)
 
-    # Fixed debt stress grid
+    # Explicit sensitivity (14 turbines, handoff PUCSL tariff / assumed O&M / 333.79 FX)
+    sensitivity_15_cfg = {
+        **governed_inputs,
+        **params,
+        **cases["14_handoff_sensitivity"],
+    }
+    sized_sensitivity_15 = size_debt_screening(sensitivity_15_cfg)
+
+    # Fixed debt stress grid on governed 14-turbine basecase
     stress_cfg = raw_cfg.get("stress_grid", {})
     held_debt = float(stress_cfg.get("held_debt_usd", 87770000))
     depreciation_rates = [
@@ -570,33 +675,50 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
         float(s) for s in stress_cfg.get("shock_decimals", [0.0, 0.2, 0.3])
     ]
     stress_results = run_fixed_debt_stress(
-        selected_15_cfg, held_debt, depreciation_rates, shock_decimals
+        governed_15_cfg, held_debt, depreciation_rates, shock_decimals
     )
+
+    def _format_screening_block(
+        sized: Dict[str, Any], case_meta: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return {
+            "case_type": case_meta.get("case_type", "governed_basecase_screening"),
+            "turbine_count": int(case_meta.get("turbine_count", 14)),
+            "debt_usd": sized["debt_usd"],
+            "gearing_decimal": sized["gearing_decimal"],
+            "equity_capex_balance_usd": sized["equity_capex_balance_usd"],
+            "p50": sized["p50"],
+            "assumed_downside": sized["assumed_downside"],
+            "status": sized["status"],
+            "lender_rates_are_assumptions": sized["lender_rates_are_assumptions"],
+        }
 
     return {
         "schema_version": raw_cfg.get(
             "schema_version", "blue_whale_fx_tenor_screening_v1"
         ),
         "status": "complete",
+        "governed_scenario_source": str(scenario_path),
+        "governed_inputs_applied": governed_inputs,
+        "f5_hold_caveat": raw_cfg.get("f5_hold_caveat", DEFAULT_F5_HOLD_CAVEAT),
+        "engine_path_status": raw_cfg.get("engine_path_status", "pending_bw5_l12_d2"),
+        "engine_path_note": raw_cfg.get("engine_path_note", DEFAULT_ENGINE_PATH_NOTE),
         "fx_metrics": fx_metrics,
-        "selected_15year_screening": {
-            "debt_usd": sized_15["debt_usd"],
-            "gearing_decimal": sized_15["gearing_decimal"],
-            "equity_capex_balance_usd": sized_15["equity_capex_balance_usd"],
-            "p50": sized_15["p50"],
-            "p90": sized_15["p90"],
-            "status": sized_15["status"],
-        },
-        "selected_10year_screening": {
-            "debt_usd": sized_10["debt_usd"],
-            "gearing_decimal": sized_10["gearing_decimal"],
-            "equity_capex_balance_usd": sized_10["equity_capex_balance_usd"],
-            "p50": sized_10["p50"],
-            "p90": sized_10["p90"],
-            "status": sized_10["status"],
-        },
+        "governed_basecase_14turbine_15year_screening": _format_screening_block(
+            sized_governed_15, cases["14_governed_basecase"]
+        ),
+        "governed_basecase_14turbine_10year_screening": _format_screening_block(
+            sized_governed_10, cases["14_governed_basecase"]
+        ),
+        "sensitivity_14turbine_15year_screening": _format_screening_block(
+            sized_sensitivity_15, cases["14_handoff_sensitivity"]
+        ),
         "fixed_debt_fx_stress_count": len(stress_results),
         "fixed_debt_fx_stress_summary": stress_results,
         "limitations_count": len(raw_cfg.get("limitations", [])),
-        "disclaimer": "Standalone screening model; not a governed v14 lender commitment or legal tax advice.",
+        "disclaimer": (
+            "HOLD (F-5, #1110, v15.6.1): Standalone screening indicator only; not a "
+            "governed v14 lender commitment, lender verdict, or legal tax advice. "
+            "Core v14 engine path is pending (BW-5 / L-12 D-2)."
+        ),
     }

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Hydra CLI: Blue Whale dual-currency financing and FX screening analysis.
 
-Reads ``conf/blue_whale_fx_tenor_screening.yaml`` and prints one JSON object
-(CLI-01, CLI-03) summarizing the FX CAGR metrics, reconstructed debt sizing,
-tenor-tail compliance, and fixed-debt FX stress test grid. Standalone screening
-utility complementary to ``analytics.evaluation_v14`` and PR #1678. Does NOT
-modify any scenario YAML or execute unverified lender commitments.
+Reads ``conf/blue_whale_fx_tenor_screening.yaml`` and governed basecase inputs
+from ``scenarios/dutchbay_basecase_2025Q4.yaml``, and prints one JSON object
+(CLI-01, CLI-03) summarizing the FX CAGR metrics, 14-turbine screening indicators,
+tenor-tail compliance, and fixed-debt FX stress test grid.
+
+HOLD (F-5, #1110, v15.6.1): Standalone screening utility complementary to
+``analytics.evaluation_v14`` and PR #1678. Core v14 engine path is pending
+(FX feeding the USD OPEX share is BW-5 / L-12 D-2 work). Does NOT modify any
+scenario YAML or execute/represent lender commitments.
 """
 
 from __future__ import annotations
