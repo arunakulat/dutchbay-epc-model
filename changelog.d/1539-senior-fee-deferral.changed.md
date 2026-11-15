@@ -33,6 +33,14 @@
   - Fee the waterfall settles reaches neither the tax deduction, project NPV, LLCR and PLCR,
     nor the three statements. They all read the engine's paid series.
   - The balloon sweep itself still measures cash on the sizing basis.
+  - The engine does not know which arrears the waterfall has settled. When its own later cash
+    pays them again, it takes that cash out of its balloon sweep, and the waterfall hands the
+    same amount back to equity. The fee is still paid once, but in that period cash reaches
+    equity while the balloon, a senior claim, is left unswept. No committed scenario or stress
+    reaches this, because there the sizing-basis cash only declines.
+  - `senior_fee_deferred_residual` names two figures: in `debt_result` the engine's arrears
+    before the waterfall, and on the KPI surface the fee still unpaid after it.
+  - The unpaid-fee warning is logged only when the equity waterfall runs.
 - No figure moves on any committed scenario. Every cash-sweep scenario has a senior fee rate of
   0, and the only fee-bearing scenario, the lender case, refinances. So no committed scenario
   reaches a deferral, and this branch is exercised only by tests, including an end-to-end
