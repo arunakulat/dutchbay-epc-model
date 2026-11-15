@@ -97,6 +97,15 @@ is reported only to show what giving up the function would be worth.
 - **No option beats wind-only.** The cheapest black-start battery is **0.5 MW / 0.5 MWh,
   held**, with the soft (voltage-ramped) energisation the config assumes. It costs about USD 79k
   of project NPV and 0.13 points of equity IRR, and it fits every reading of the 10 MW limit.
+- **That cost is a floor.** Every option is priced at the all-in mode of USD 140.74 per kWh, the
+  price of a 4-hour product. Power-related and per-site costs (the inverter skid, the EMS) do not
+  shrink with the energy, so a 1-hour unit costs more per kWh. Priced bottom-up from the generic
+  supplier's own lines (the skid pro rata by power, the EMS once per site, the DC energy at the
+  offer's DC rate, the same all-in factor; `bottom_up_price` in the summary), the held
+  0.5 MW / 0.5 MWh unit costs about USD 141k all-in instead of 70k, and its project NPV change is
+  about −147k instead of −79k. Cycled 0.5 / 2 becomes −162k, held 1 / 1 −233k and cycled 1 / 4
+  −221k (reading B). The ranking holds: the held unit stays the cheapest black-start option, and
+  no option beats wind-only. A small grid-forming inverter may carry a further premium.
 - **It does not firm a grid down-ramp.** If a wind lull counts against the ramp limit, firming
   needs about the turbine's rated 9.5 MW whatever Blue Whale's allocation is; the allocation
   sets only the energy (see the down-ramp section). If a lull does not count, the turbine's own
@@ -118,7 +127,10 @@ is reported only to show what giving up the function would be worth.
 - **Monte Carlo:** 256 LHS trials of capex, battery RTE, residual fade and wind yield, each
   against wind-only at the same wind yield. No trial of any option beats wind-only. Held
   0.5 / 0.5: P50 −84k, P90 −98k. Cycled 0.5 / 2 with the reserve: P50 −158k, P90 −212k.
-- **Battery RTE:** from 0.80 to 0.90, cycled 0.5 / 2 ranges from −140k to −107k.
+- **Battery RTE:** from 0.80 to 0.90, cycled 0.5 / 2 ranges from −140k to −107k. The grid is
+  not smooth: the scenario's WACC moves in small steps with gearing, so one step between 0.865
+  and 0.88 moves the result by about 5.6k, against about 1.3k per 0.005 elsewhere. The
+  break-evens are found by bisection and can land on such a step.
 - **The all-window-exports reading** is the only basis that turns positive: about +2.90M for
   cycled 0.5 / 2. It pays the battery premium on energy the turbine exports anyway, so it is not
   a battery case. PUCSL would have to say so explicitly.
@@ -134,6 +146,15 @@ Simplifications, each stated rather than modelled:
   favours the battery.
 - The Monte Carlo wind-yield draw scales the engine's energy, not the hourly profile used for
   charging and headroom.
+- **Tariff duration.** PUCSL's methodology (s.5.1.1, s.5.2.1) assumes 4 hours at nominal
+  capacity (`battery.duration_h_for_tariff`, recorded but not read). Revenue here is paid per
+  delivered kWh. An option that keeps the 0.5 MWh reserve delivers under 4 hours at its
+  nameplate power: cycled 0.5 / 2 at most 1.5 MWh a window (3 hours at 0.5 MW), and the cycled
+  smallest block under 2 hours at 9.5 MW. Declaring a lower nominal power for the tariff would
+  leave these figures nearly unchanged, since the revenue follows the delivered energy.
+- The round-trip loss is taken from the wind block's capacity factor, so it inherits the
+  turbine's 0.5%/yr degradation and is slightly understated in later years (about 3k for
+  cycled 0.5 / 2).
 
 ## The open input: the NSO's down-ramp allocation
 
@@ -151,6 +172,9 @@ needs the following firming (the ramp triangle):
 | none | 10 MW/min | 0.95 | 0.075 MWh |
 | 90 MW (illustrative) | 0.955 MW/min | 9.95 | **0.79 MWh at 9.5 MW** |
 
+The triangle treats a lull as an instantaneous loss of rated output, the worst case. Real lulls
+take minutes, so these energies are upper bounds.
+
 Both rows need the full 9.5 MW: a full drop from rated must be firmed at rated power at any
 allowed ramp rate, so the allocation sets only the energy, from 0.075 MWh at the whole
 substation limit to 0.79 MWh at a 0.955 MW/min share. Only the second case is priced below. If
@@ -163,7 +187,9 @@ budgetary offer**:
 - lifted to all-in by the repository's mode over the offer per usable kWh, 140.74 / (90.00 / 0.91),
   using the rounded usable fraction;
 - equipment ratings rounded: one skid of about 10 MW, a smallest block of about 20 MWh DC, and
-  91% of DC energy usable.
+  91% of DC energy usable;
+- long-term service and maintenance at 2% of CIF a year, a generic ASSUMPTION not taken from the
+  offer.
 
 A cycled block keeps 1.29 MWh in hand, the 0.79 MWh ramp energy plus the 0.5 MWh black-start
 reserve, so it keeps both functions after the window. The held power-heavy unit keeps only the
@@ -198,3 +224,10 @@ the 10 MW limit, cycling it recovers most of its cost.
 4. A quotation for a power-heavy (≥ 2C) unit.
 5. The energy the turbine's black-start sequence actually needs, which sets the reserve (0.5 MWh
    assumed). A smaller reserve narrows the gap between the held and cycled options.
+6. Whether CEB lets the turbine be energised from its own battery before the network returns.
+   An embedded generator normally has loss-of-mains protection and may not island or reconnect
+   until the network is back. In that case the battery's role is auxiliary supply during an
+   outage (yaw, pitch, heating), not a faster restart, and its sizing basis changes. No CEB text
+   on islanding is in the repository. It cannot make any option beat wind-only.
+7. A quotation for a small (about 0.5 MW, 1-hour) grid-forming unit, which replaces the
+   bottom-up estimate.
