@@ -454,7 +454,7 @@ SECDEP_01_REQUIRED_CONTROLS = (
     "ambiguous prefixes",
     "every emitted command",
     "each command on its own",
-    "three audit passes",
+    "passes the allowlist to three audit passes",
     "complete command sequence",
     ".ONESHELL alias interception",
     "discards a governed exit status",

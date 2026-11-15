@@ -833,6 +833,13 @@ def test_the_audit_canary_runs_and_can_fail() -> None:
     partial = report(("hydra-core", "GHSA-wf6j-7hvr-gr93", []))
     assert any("msgpack" in m for m in canary.missing_detections(1, partial))
     assert canary.missing_detections(0, report())
+    # The status check needs its own control: a full, correct report with the wrong exit
+    # status must still fail, or weakening the status check hides behind the empty report
+    # above (#1517 F-5).
+    assert canary.missing_detections(0, full)
+    # The status check needs its own control: a full, correct report with the wrong exit
+    # status must still fail, or dropping the status check hides behind the empty report
+    # above (#1517 F-5).
     assert canary.missing_detections(1, report())
     assert canary.missing_detections(2, full)
     assert canary.missing_detections(1, "not json")
@@ -843,6 +850,45 @@ def test_the_audit_canary_runs_and_can_fail() -> None:
     )
     assert any("hydra-core" in m for m in canary.missing_detections(1, other))
     assert canary.canary_requirements() == "hydra-core==1.3.7\nmsgpack==1.2.1\n"
+
+
+def _services_make_security_consults() -> set[str]:
+    """Vulnerability services in ``make -n security``: pip-audit's default is ``pypi``."""
+    services: set[str] = set()
+    for argv in _make_commands("security"):
+        if argv[0] != "pip-audit":
+            continue
+        values = [
+            argv[i + 1]
+            for i, arg in enumerate(argv[:-1])
+            if arg == "--vulnerability-service"
+        ]
+        values += [
+            arg.split("=", 1)[1]
+            for arg in argv
+            if arg.startswith("--vulnerability-service=")
+        ]
+        services.update(values or ["pypi"])
+    return services
+
+
+def test_the_canary_covers_exactly_the_services_make_security_consults() -> None:
+    """``SERVICES`` in the canary is derived from the recipe, not copied from memory.
+
+    Dropping a service from the canary leaves that feed without a negative control, and
+    adding one to the recipe without the canary does the same (#1517 F-4).
+    """
+    spec = importlib.util.spec_from_file_location(
+        "check_audit_canary", REPO_ROOT / "scripts" / "ci" / "check_audit_canary.py"
+    )
+    assert spec is not None and spec.loader is not None
+    canary = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(canary)
+
+    consulted = _services_make_security_consults()
+    assert consulted >= {"pypi", "osv"}, f"recipe oracle looks wrong: {consulted}"
+    assert set(canary.SERVICES) == consulted
+    assert len(canary.SERVICES) == len(set(canary.SERVICES))
 
 
 def test_declared_mode_really_audits_the_pins_resolve_mode_skips() -> None:
