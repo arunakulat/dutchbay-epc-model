@@ -242,6 +242,14 @@ loses value at the margin, so the run returns its grid floor, not an optimum: 10
 which a small battery is unlikely to achieve (L-10). The battery curve, sensitivities and
 break-even values are in `STATUS.md`.
 
+From scenario v0.10 (#1578 L-11) the solar + BESS sizing models the battery's fade and its
+augmentation explicitly, so it takes the NSO 250 augmentation reserve (USD 8.00/kWh before land
+and auxiliaries, 8.89 in the all-in) out of every BESS price: the mode it applies is USD
+131.85/kWh. The blend itself, and the all-in the pricing config states, are unchanged; the
+hybrid and PR 3's sizing still carry the reserve. Each augmentation is priced at the equipment
+line (USD 103.55/kWh added, an assumption). Method and figures: `STATUS.md`, "Battery fade and
+augmentation".
+
 ## 7. References
 
 - Anderson, K. S., Hansen, C. W., Holmgren, W. F., Jensen, A. R., Mikofski, M. A., and
