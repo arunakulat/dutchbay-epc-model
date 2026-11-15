@@ -278,6 +278,10 @@ monte_carlo:
   n_scenarios: 100000
   sampler: lhs
   seed: 42
+  # Lender runs never substitute toy KPIs for a failed trial (#962 item 1; owner ruling
+  # 2026-11-15 extended to this case): a trial whose full v14 evaluation raises stops the
+  # run instead.
+  allow_toy_fallback: false
   weibull_uncertainty_pct: 10.0
   wake_loss_std_pct: 2.0
   availability_std_pct: 1.0
