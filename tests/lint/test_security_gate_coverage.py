@@ -62,7 +62,8 @@ that is not false, or a ``concurrency`` value written wholly as one expression, 
 workflow or job level, and any ``strategy`` on its gate job: a cancelled run leaves no
 audit status for its commit, and an empty matrix expands to zero jobs that GitHub reports
 as skipped (#1512). GitHub still cancels a pending run when a newer run joins the same
-concurrency group; no committed key prevents that, and this guard does not claim to. No guard here binds a preceding step, which
+concurrency group. The default `queue: single` keeps at most one pending run, GitHub's
+`queue: max` keeps up to 100, and this guard requires neither; it does not claim to stop that. No guard here binds a preceding step, which
 can change the checkout or the toolchain while ``run: make security`` stays unchanged;
 SECDEP-01 states that limit. The third blind
 spot's remedy is deliberately HARDENING and names no root cause: whether the cache caused any
@@ -508,6 +509,29 @@ def audit_workflow(workflow: Workflow) -> list[str]:
     return violations
 
 
+def _is_whole_expression(value: str) -> bool:
+    """Return whether ``value`` is exactly one ``${{ ... }}`` expression, as Actions reads it.
+
+    Actions closes an expression at the first ``}}`` outside a single-quoted string literal
+    (``''`` inside a literal is an escaped quote, which the toggle handles), so a ``${{``
+    inside a literal belongs to the same expression. Counting ``${{`` would treat
+    ``${{ fromJSON('{"group":"${{"}') }}`` as two expressions (#1512, domain F3).
+    """
+    text = value.strip()
+    if not text.startswith("${{"):
+        return False
+    in_string = False
+    i = 3
+    while i < len(text) - 1:
+        char = text[i]
+        if char == "'":
+            in_string = not in_string
+        elif not in_string and text.startswith("}}", i):
+            return i + 2 == len(text)
+        i += 1
+    return False
+
+
 def _cancellation_violations(concurrency: object, level: str) -> list[str]:
     """Reject a ``cancel-in-progress`` on the daily main audit that is not proved false.
 
@@ -527,8 +551,7 @@ def _cancellation_violations(concurrency: object, level: str) -> list[str]:
         # A bare group name is accepted, but a value that is wholly one expression can
         # evaluate to a mapping that sets `cancel-in-progress` itself, which the text
         # cannot show; it fails closed (#1512, domain F1).
-        text = concurrency.strip()
-        if text.startswith("${{") and text.endswith("}}") and text.count("${{") == 1:
+        if _is_whole_expression(concurrency):
             return [
                 f"security-audit.yml: {level} `concurrency` must not be written wholly "
                 "as one expression; it can evaluate to a mapping that cancels an "
@@ -812,7 +835,7 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
     # No in-progress cancellation: the false spellings, a mapping or a bare group name
     # (an expression inside a longer name included) with `cancel-in-progress` left at
     # its false default, and no concurrency. GitHub can still cancel a PENDING run in the
-    # same group when a newer one arrives; no committed key prevents that.
+    # same group when a newer one arrives (`queue: max` narrows that, and is not required here).
     for allowed in (False, "false", "${{ false }}"):
         assert audit_workflow(_with_cancel_in_progress(allowed)) == []
         assert (
@@ -825,6 +848,14 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
     assert audit_workflow(_mutate_workflow(concurrency="audit")) == []
     assert audit_workflow(_mutate_workflow(concurrency="audit-${{ github.ref }}")) == []
     assert audit_workflow(_mutate_job(concurrency="audit-${{ github.ref }}")) == []
+    # Two expressions build a string, which cannot be a mapping (domain F3 positives).
+    for name in (
+        "${{ github.workflow }}-${{ github.ref }}",
+        "${{ github.workflow }}${{ github.ref }}",
+        "${{ 'a}}' }}-audit",
+    ):
+        assert audit_workflow(_mutate_workflow(concurrency=name)) == []
+        assert audit_workflow(_mutate_job(concurrency=name)) == []
     workflow = _workflow()
     workflow.pop("concurrency")
     assert audit_workflow(workflow) == []
@@ -1406,6 +1437,22 @@ def _with_duplicated_gate_step() -> Workflow:
             ),
             "job `concurrency` must not be written wholly as one expression",
             id="job concurrency written wholly as an expression",
+        ),
+        # Domain lane on #1729 (F3): Actions does not end an expression at a `}}` inside
+        # a single-quoted literal, so a `${{` inside the literal is still one expression.
+        pytest.param(
+            lambda: _mutate_workflow(
+                concurrency='${{ fromJSON(\'{"group": "${{", "cancel-in-progress": true}\') }}'
+            ),
+            "workflow `concurrency` must not be written wholly as one expression",
+            id="workflow whole expression with a ${{ inside its string literal",
+        ),
+        pytest.param(
+            lambda: _mutate_job(
+                concurrency='${{ fromJSON(\'{"group": "}}${{", "cancel-in-progress": true}\') }}'
+            ),
+            "job `concurrency` must not be written wholly as one expression",
+            id="job whole expression with }} and ${{ inside its string literal",
         ),
         pytest.param(
             lambda: _mutate_job(strategy={"matrix": {"include": []}}),
