@@ -10,8 +10,13 @@
     (which the path already anchors on) is not counted twice.
   - `analytics/evaluation_v14.py` (`evaluate_with_overrides`, `evaluate_scenario_from_dict`) and
     `analytics/evaluate_scenario.py`: every override gateway calls it after merging.
+  - `analytics/mc/engine.py`: a market-calibrated FX driver (`distribution: fx_calibrated`)
+    with `drive_drift` on is refused on a scenario whose USD share has its own FX path. Its
+    drift is a nominal, history-derived rate, and compounding it on the path's own rate would
+    count the inflation differential twice. `drive_drift: false` (spot only) still runs.
   - No committed KPI moves: every scenario's base case is byte-identical, and an `fx` change that
     leaves the curve alone is too. Stress and Monte Carlo outputs on the Blue Whale wind project
     move: a 3%/yr drift stress now gives project IRR 8.98% (was 9.60%). No VERSION bump (#1625).
-  - The FX and tenor screening's engine-path status and the review document's notes now say the
-    engine path exists; the screening still does not call the engine.
+  - The FX and tenor screening's engine-path status and notes now say the engine path exists,
+    and the dated review document gains an addendum saying so; the screening still does not
+    call the engine.

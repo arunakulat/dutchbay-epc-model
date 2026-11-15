@@ -262,3 +262,46 @@ def test_gateway_without_fx_overrides_is_byte_identical() -> None:
     other = _full({"fx.uncertainty_pct": 0.07})
     assert repr(_opex_rows(other)) == repr(_opex_rows(base))
     assert repr(other["kpis"]) == repr(base["kpis"])
+
+
+# ------------------------------------------------------------------ calibrated MC
+
+
+def _calibrated_mc_config(*, drive_drift: bool) -> Dict[str, Any]:
+    cfg = load_scenario_config(WIND)
+    cfg["monte_carlo"] = {
+        "parameters": [
+            {"name": "fx.start_lkr_per_usd", "distribution": "fx_calibrated"}
+        ],
+        "fx_calibration": {
+            "frequency": "weekly",
+            "horizon_years": 1.0,
+            "drive_drift": drive_drift,
+        },
+        "allow_toy_fallback": False,
+    }
+    return cfg
+
+
+def test_calibrated_drift_is_refused_beside_an_own_usd_path() -> None:
+    """The calibrated drift is nominal; compounding it on the PPP path counts twice."""
+    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+
+    with pytest.raises(MonteCarloConfigError, match="count the inflation"):
+        MonteCarloEngine(_calibrated_mc_config(drive_drift=True), seed=1)
+
+
+def test_calibrated_spot_only_driver_still_runs_beside_an_own_usd_path() -> None:
+    from analytics.mc.engine import MonteCarloEngine
+
+    engine = MonteCarloEngine(_calibrated_mc_config(drive_drift=False), seed=1)
+    assert engine._fx_sampler is not None
+
+
+def test_calibrated_drift_still_runs_without_an_own_usd_path() -> None:
+    from analytics.mc.engine import MonteCarloEngine
+
+    cfg = _calibrated_mc_config(drive_drift=True)
+    del cfg["opex"]["currency_split"]["usd_lkr_depreciation_pct"]
+    engine = MonteCarloEngine(cfg, seed=1)
+    assert engine._fx_drive_drift is True

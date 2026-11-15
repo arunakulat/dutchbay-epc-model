@@ -274,6 +274,16 @@ def _inv_cdf_shaped(u: float, kind: str, low: float, high: float, mode: float) -
     return low + u * (high - low)  # uniform fallback (not normally reached)
 
 
+def _has_own_usd_opex_fx_path(config: Mapping[str, Any]) -> bool:
+    """True when ``opex.currency_split`` gives the USD share its own FX path."""
+    opex = config.get("opex")
+    split = opex.get("currency_split") if isinstance(opex, Mapping) else None
+    return (
+        isinstance(split, Mapping)
+        and split.get("usd_lkr_depreciation_pct") is not None
+    )
+
+
 class MonteCarloEngine:
     """Canonical Monte Carlo engine.
 
@@ -453,13 +463,29 @@ class MonteCarloEngine:
                 "A distribution: fx_calibrated parameter requires fx.start_lkr_per_usd "
                 "(the pinned anchor spot the calibrated shocks scale around)."
             )
-        calibration = calibrate_from_config(
-            self._base_config, pinned_spot=float(pinned)
-        )
         mc = self._base_config.get("monte_carlo", {})
         fxc = mc.get("fx_calibration", {}) if isinstance(mc, Mapping) else {}
         self._fx_drive_drift = (
             bool(fxc.get("drive_drift", True)) if isinstance(fxc, Mapping) else True
+        )
+        # #1578 L-12: the calibrated drift is a nominal, history-derived rate. On a
+        # scenario whose USD opex share has its own FX path, the override gateways move
+        # that path by the drawn curve's ratio to the authored one, so the nominal
+        # drift would compound on the path's own rate (which already carries the
+        # inflation differential) and count it twice. Refused until the engine nets
+        # the two; a spot-only calibrated driver (drive_drift: false) is unaffected.
+        if self._fx_drive_drift and _has_own_usd_opex_fx_path(self._base_config):
+            raise MonteCarloConfigError(
+                "A distribution: fx_calibrated parameter with "
+                "monte_carlo.fx_calibration.drive_drift true cannot run on a scenario "
+                "whose USD opex share has its own FX path "
+                "(opex.currency_split.usd_lkr_depreciation_pct): the calibrated "
+                "nominal drift would compound on that path's own rate and count the "
+                "inflation differential twice. Set drive_drift: false to draw the spot "
+                "only (#1578 L-12)."
+            )
+        calibration = calibrate_from_config(
+            self._base_config, pinned_spot=float(pinned)
         )
         self._fx_calibration = calibration
         self._fx_sampler = calibration.sampler()
