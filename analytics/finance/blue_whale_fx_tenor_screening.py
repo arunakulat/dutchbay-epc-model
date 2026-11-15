@@ -2,8 +2,8 @@
 
 Standalone screening calculator implementing the dual-currency debt sizing,
 dated FX observations with evidence classification, tenor-tail validation,
-and debt service coverage ratio (DSCR) screening indicators from the 2026-11-14
-research handoff (BW-FIN-COST-20261114, v1.0).
+and debt service coverage ratio (DSCR) screening indicators from the owner's
+private research hand-off of 2026-11-14.
 
 Governance & Scope Boundaries:
 - HOLD (F-5, #1110, v15.6.1): Produces screening indicators only, NOT a lender

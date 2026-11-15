@@ -1,6 +1,6 @@
 # Blue Whale Financing, FX, Tenor-Tail, and Evidence-Status Review
 
-Prepared 14 November 2026 (Refreshed 15 November 2026) | Document ID: `BW-FIN-COST-20261114-REV` | Version 1.1
+Prepared 14 November 2026 (Refreshed 15 November 2026) | Version 1.1
 Complementary to PR #1678 (`#1677`, Equipment-Cost Parity Benchmark & Logistics Buildup)
 
 > **HOLD (F-5, `#1110`, `v15.6.1`) & Scope Caveat:**
@@ -14,7 +14,7 @@ Complementary to PR #1678 (`#1677`, Equipment-Cost Parity Benchmark & Logistics 
 
 ## 1 Executive summary and purpose
 
-This review ingresses and evaluates the financing, foreign exchange (FX), debt tenor-tail, and evidence-status research from the 14 November 2026 research handoff (`Blue_Whale_Research_Handoff_2026-11-14.zip`, document `BW FIN COST 20261114`, v1.0), aligned to the governed 14-turbine DutchBay basecase (`scenarios/dutchbay_basecase_2025Q4.yaml`, `#1587`).
+This review ingresses and evaluates the financing, foreign exchange (FX), debt tenor-tail, and evidence-status research from the owner's private research hand-off of 2026-11-14, aligned to the governed 14-turbine DutchBay basecase (`scenarios/dutchbay_basecase_2025Q4.yaml`, `#1587`).
 
 The review establishes four essential calculation and governance controls for Blue Whale project evaluation:
 1. **Evidence classification (`DATA-01`)**: Categorizes all financial, tariff, permit, and cost assumptions into seven explicit evidence classes to distinguish primary checked facts and governed repository scenarios from unverified assumptions, screening models, conditional rights, and unresolved items.
