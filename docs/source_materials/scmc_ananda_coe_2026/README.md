@@ -19,6 +19,7 @@ and this area links to it for sanitised use.
 | Private location | `arunakulat/DutchBay_RAG`, `corpus/scmc_ananda_coe_2026/held/` |
 | Pinned commit | `e60a1392dfb4178420358d4507f02402fa0d2fca`, on the private repository's `main` since `arunakulat/DutchBay_RAG#41` landed by merge commit `50127dbc` on 8 November 2026 |
 | Files | 175, each checked against `ARTIFACT_REGISTER.tsv` when copied |
+| Added since | 20 Foundation facilitator handbook files (#1558), built in the private corpus and pinned at `9f1d1aeceaf775fed829479b654e55567d8d4f57`, where `arunakulat/DutchBay_RAG#50` landed on 15 November 2026. Their `ARTIFACT_REGISTER.tsv` rows give the path under `held/`. The register now lists 195 held files |
 
 | Material | Where it is | Why |
 |---|---|---|
