@@ -9,8 +9,11 @@
   a balloon-treatment difference.
 - The two capex variants carry a balloon (12.6% and 16.4% of debt), so their equity figures
   move. Equity IRR: EIA prudent -9.09% -> -9.25%, Sinohydro lean -6.26% -> -6.36%. Equity NPV
-  falls by about USD 0.01m and USD 0.06m. Project IRR, project NPV and `min_dscr` are
-  unchanged, because balloon resolution sits below CFADS. The refinanced tranche breaches
+  falls by about USD 0.01m and USD 0.06m. The other equity and debt-cover figures move too:
+  MOIC 0.265 -> 0.262 and 0.436 -> 0.431, cash-on-cash 1.32% -> 1.31% and 2.18% -> 2.16%,
+  total equity distributed falls by about USD 0.44m in each, and LLCR and PLCR rise by less
+  than 0.001. Project IRR, project NPV, `min_dscr` and `balloon_pct` are unchanged, because
+  balloon resolution sits below CFADS. The refinanced tranche breaches
   the scenario's 1.30 covenant in both (minimum coverage 1.08x and 0.82x). Under F-5 that
   block supports no covenant, lender or IC representation.
 - The two hybrids fully amortise under P90-bound sizing (balloon 0%), so the change moves
