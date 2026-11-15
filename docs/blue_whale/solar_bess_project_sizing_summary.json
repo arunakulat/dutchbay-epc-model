@@ -38223,7 +38223,7 @@
   ],
   "effective_evaluations": 151328,
   "export_limit_mw": 10.0,
-  "git_sha": "ed67ed29e45c408509aab81906fe97e59f4b526d",
+  "git_sha": "78a8297973c1397bf98e6d7094609207f9c3eb54",
   "grid_points": 514,
   "grid_points_evaluated": 514,
   "inputs_sha256": {
@@ -38293,8 +38293,8 @@
    "source": "scenario.opex.currency_split.components"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "614e03ea352c99374c961f5f75555390018c2888496b46bc503ed358e1faae4e",
-  "runtime_s": 6101.1,
+  "result_sha256": "6c86839c8c93ed39ed962d82d026ec0930ab39866da5a54207b420345f655b26",
+  "runtime_s": 6138.2,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 20,
