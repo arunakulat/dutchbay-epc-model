@@ -9,6 +9,7 @@ from analytics.contracts_v14 import ScenarioResult
 from analytics.evaluation_v14 import expand_dotted_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from finance.cashflow_v14_params import with_usd_opex_fx_reference
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,9 @@ def evaluate_with_overrides(
     #    solver sweeping "capex.usd_total" through this gateway no-ops while the
     #    optimizer's gateway honours it. Nested-dict overrides pass through unchanged.
     merged_cfg = (
-        _deep_merge_dicts(raw_cfg, expand_dotted_overrides(overrides))
+        with_usd_opex_fx_reference(
+            raw_cfg, _deep_merge_dicts(raw_cfg, expand_dotted_overrides(overrides))
+        )
         if overrides
         else raw_cfg
     )

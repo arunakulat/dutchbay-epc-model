@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -93,6 +93,13 @@ class CashflowParams:
       this rate, advanced through construction exactly as the model curve is) instead of
       the model FX curve. For a scenario whose model curve is held flat as a constant-LKR
       reporting rate.
+    - opex_usd_fx_reference: Optional[dict]. The ``fx`` block the USD share's own path
+      was authored against. None (the default, and every authored scenario) leaves the
+      path as above. Set by the evaluation gateway when an override moved ``fx``
+      (finance.cashflow_v14_params.with_usd_opex_fx_reference): the path is then
+      multiplied, year by year, by the model curve's ratio to the reference curve, each
+      taken relative to its own financial-close spot, so an FX stress or a Monte Carlo
+      drift draw reaches the USD share too.
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
@@ -122,6 +129,7 @@ class CashflowParams:
     opex_usd_escalation_pct: float = 0.0
     opex_lkr_escalation_pct: float = 0.0
     opex_usd_lkr_depreciation_pct: Optional[float] = None
+    opex_usd_fx_reference: Optional[Dict[str, Any]] = None
     opex_pre_cod_years: int = 0
 
 

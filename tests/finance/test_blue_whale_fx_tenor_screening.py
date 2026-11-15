@@ -405,7 +405,7 @@ def test_run_comprehensive_screening_direct() -> None:
     result = run_comprehensive_screening(raw)
     assert result["schema_version"] == "blue_whale_fx_tenor_screening_v1"
     assert result["status"] == "complete"
-    assert result["engine_path_status"] == "pending_bw5_l12_d2"
+    assert result["engine_path_status"] == "delivered_bw5_l12_d2"
     assert "HOLD (F-5, #1110, v15.6.1)" in result["f5_hold_caveat"]
     assert len(result["fx_metrics"]) == 3
     assert result["fixed_debt_fx_stress_count"] == 21
@@ -436,7 +436,7 @@ def test_hydra_cli_smoke() -> None:
     assert (
         payload["governed_scenario_source"] == "scenarios/dutchbay_basecase_2025Q4.yaml"
     )
-    assert payload["engine_path_status"] == "pending_bw5_l12_d2"
+    assert payload["engine_path_status"] == "delivered_bw5_l12_d2"
     assert "HOLD (F-5, #1110, v15.6.1)" in payload["f5_hold_caveat"]
     assert payload["fixed_debt_fx_stress_count"] == 21
 

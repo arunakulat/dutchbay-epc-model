@@ -6,7 +6,7 @@ Complementary to PR #1678 (`#1677`, Equipment-Cost Parity Benchmark & Logistics 
 > **HOLD (F-5, `#1110`, `v15.6.1`) & Scope Caveat:**
 > This document and its companion screening utility (`analytics/finance/blue_whale_fx_tenor_screening.py`) produce **standalone screening indicators only** — **not** a lender verdict, bankability determination, or credit commitment. Lender interest rates (DFI 8.40%, local 12.76%) and DSCR thresholds (1.30x / 1.10x / 1.50x) are **illustrative screening assumptions, not executed lender terms (`#1629`)**.
 >
-> **Pending Engine Path:** The core v14 engine path is **pending** — FX feeding the USD OPEX share is **BW-5 (`L-12 D-2`)** work.
+> **Engine Path:** The core v14 engine now carries an FX override (an FX stress or a Monte Carlo drift draw) to the USD OPEX share's own FX path (**BW-5, `L-12 D-2`**). This screening does not call the engine.
 >
 > **No Measured Wind Data / No P90:** There is **no measured DutchBay wind data and no measured P90**. All downside generation figures (`assumed_downside_gwh = 377.3 GWh`) are **assumed downside screening sensitivities**, not measured P90 estimates.
 
@@ -22,7 +22,7 @@ The review establishes four essential calculation and governance controls for Bl
 3. **Debt tenor-tail screening check**: Evaluates whether illustrative debt maturity stays within contracted revenue duration less an illustrative lender tail (`max(dfi_tenor, local_tenor) <= ppa_years - lender_tail_years`), motivating a 12-year SPPA sensitivity alongside the 20-year reference.
 4. **Dual-currency FX and DSCR screening**: Computes illustrative senior debt sizing indicators under a dual-currency structure (USD DFI tranche translated at payment FX; LKR domestic tranche fixed in LKR at closing FX) across reference P50 and assumed-downside generation, historical FX CAGR paths, and forward shock sensitivities.
 
-This work is standalone analytical screening and review tooling (`analytics/finance/blue_whale_fx_tenor_screening.py`, `conf/blue_whale_fx_tenor_screening.yaml`, `scripts/run_blue_whale_fx_tenor_screening_v14.py`). It reads governed basecase inputs (`capex_usd`, `opex_usd_equivalent_year1`, `tariff_fixed_lkr_per_kwh`, `fx_close_lkr_per_usd`, `fx_depreciation_decimal`, etc.) directly from `scenarios/dutchbay_basecase_2025Q4.yaml`, is complementary to PR #1678, does not modify frozen scenario YAMLs (`scenarios/blue_whale_*.yaml`), and confers no lender, Board, or commercial approval. The core v14 engine path for FX feeding the USD OPEX share remains pending (`BW-5 / L-12 D-2`).
+This work is standalone analytical screening and review tooling (`analytics/finance/blue_whale_fx_tenor_screening.py`, `conf/blue_whale_fx_tenor_screening.yaml`, `scripts/run_blue_whale_fx_tenor_screening_v14.py`). It reads governed basecase inputs (`capex_usd`, `opex_usd_equivalent_year1`, `tariff_fixed_lkr_per_kwh`, `fx_close_lkr_per_usd`, `fx_depreciation_decimal`, etc.) directly from `scenarios/dutchbay_basecase_2025Q4.yaml`, is complementary to PR #1678, does not modify frozen scenario YAMLs (`scenarios/blue_whale_*.yaml`), and confers no lender, Board, or commercial approval. The core v14 engine path for FX feeding the USD OPEX share was delivered separately (`BW-5 / L-12 D-2`); this screening does not call it.
 
 ---
 
@@ -37,7 +37,7 @@ To prevent informal assumptions from masquerading as verified inputs, all data p
 | **Unverified assumption** | Prior-session or secondary figure not independently reproduced from a primary source; treated strictly as an assumption under `DATA-01`. | 2021–2023 year-end FX rates (`200.43`, `363.11`, `323.92`), 2026-11-13 indicative spot (`332.50`), sensitivity O&M (`$3.359M/yr` = `$2.8467M * 1.18` VAT), AWPR `11.01%` observation, illustrative lender margins/rates (`#1629`). |
 | **Reconstructed** | Newly implemented calculation or refreshed screening model; assumptions and boundaries stated. | Standalone dual-currency screening model (`analytics/finance/blue_whale_fx_tenor_screening.py`); 70-iteration bisection screening indicator; 2D FX stress grid. |
 | **Conditional** | Dependent on unsigned agreement, pending regulatory decision, or unverified eligibility. | 20-year SPPA duration; exemption from 10 MW contiguous-site limit; concessional DFI margin; tax holiday/depreciation ruling. |
-| **Unresolved** | Missing source, incomplete scope, inconsistent data, or unpriced major package. | Measured DutchBay wind data and P90 (`assumed_downside_gwh` used as sensitivity only); single-unit EN206 commercial quote; marine delivery/jetty EPC price; BESS replacement and augmentation contract terms; core v14 engine FX-OPEX path (`BW-5 / L-12 D-2`). |
+| **Unresolved** | Missing source, incomplete scope, inconsistent data, or unpriced major package. | Measured DutchBay wind data and P90 (`assumed_downside_gwh` used as sensitivity only); single-unit EN206 commercial quote; marine delivery/jetty EPC price; BESS replacement and augmentation contract terms |
 | **Withheld** | Source identified in private corpus but excluded from public repository under confidentiality. | Private proposal text/binaries; vendor price formulas; sensitive supplier schedules in private RAG. |
 
 ---
@@ -145,7 +145,7 @@ Under moderate FX drift ($\le 8\%$), the local tranche repayment in Year 10 is t
 
 ---
 
-## 7 Complementarity with PR #1678 and pending engine path
+## 7 Complementarity with PR #1678 and the engine path
 
 This pull request is complementary to Draft PR #1678 (`feat/blue-whale-equipment-parity-20261114`):
 
@@ -158,7 +158,7 @@ This pull request is complementary to Draft PR #1678 (`feat/blue-whale-equipment
 | **Documentation** | `docs/blue_whale/EQUIPMENT_PARITY_AND_LOGISTICS_REVIEW_2026-11-14.md` | `docs/blue_whale/FINANCING_FX_AND_EVIDENCE_REVIEW_2026-11-14.md` |
 | **Test suite** | `tests/wind/test_blue_whale_equipment_parity.py` | `tests/finance/test_blue_whale_fx_tenor_screening.py` |
 | **Scenario YAMLs** | Untouched (`$8,899,980` frozen CAPEX preserved) | Untouched (`scenarios/blue_whale_*.yaml` preserved; reads `scenarios/dutchbay_basecase_2025Q4.yaml` read-only) |
-| **Engine path** | Standalone engineering parity | Standalone screening; **core v14 engine path pending (`BW-5 / L-12 D-2` for FX feeding USD OPEX share)** |
+| **Engine path** | Standalone engineering parity | Standalone screening; the core v14 engine carries FX to the USD OPEX share (`BW-5 / L-12 D-2`) |
 | **Path overlap** | Disjoint | Disjoint (zero overlapping files) |
 
 ---

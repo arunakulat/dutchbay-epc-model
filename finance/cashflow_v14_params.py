@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import math
 import numbers
@@ -9,6 +10,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Tuple
 
 from .cashflow_v14_contracts import CashflowParams
+from .cashflow_v14_fx import _financial_close_spot
 from .cashflow_v14_utils import (
     CAPACITY_FACTOR_PATHS,
     CAPACITY_MW_PATHS,
@@ -305,12 +307,18 @@ class OpexCurrencySplit:
         usd_lkr_depreciation: Yearly LKR depreciation for the USD share's own FX path
             (given as a percent, or derived by relative PPP from the two escalation
             rates), or ``None`` to translate the USD share on the model FX curve.
+        usd_fx_reference: The ``fx`` block the USD share's own path was authored
+            against, or ``None``. Set by the evaluation gateway when an override (an FX
+            stress or a Monte Carlo draw) moved the model FX curve: the engine then
+            moves the USD share's path by the same per-year ratio
+            (:func:`with_usd_opex_fx_reference`). ``None`` for an authored scenario.
     """
 
     usd_share: float
     usd_escalation: float
     lkr_escalation: float
     usd_lkr_depreciation: float | None
+    usd_fx_reference: Dict[str, Any] | None = None
 
 
 _OPEX_SPLIT_KEYS = frozenset(
@@ -320,6 +328,7 @@ _OPEX_SPLIT_KEYS = frozenset(
         "usd_escalation_pct",
         "lkr_escalation_pct",
         "usd_lkr_depreciation_pct",
+        "usd_fx_reference",
         "basis",
         "source",
         "note",
@@ -567,7 +576,82 @@ def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | 
         usd_escalation=usd_escalation,
         lkr_escalation=lkr_escalation,
         usd_lkr_depreciation=depreciation,
+        usd_fx_reference=_usd_fx_reference(split, depreciation),
     )
+
+
+USD_FX_REFERENCE = "usd_fx_reference"
+
+
+def _usd_fx_reference(
+    split: Mapping[str, Any], depreciation: float | None
+) -> Dict[str, Any] | None:
+    """Return a validated copy of ``opex.currency_split.usd_fx_reference``, or ``None``.
+
+    The reference is the ``fx`` block the USD share's own path was authored against.
+    It has a meaning only beside that path, and it needs a financial-close spot to
+    anchor its curve, so either gap is refused.
+    """
+    ref = split.get(USD_FX_REFERENCE)
+    if ref is None:
+        return None
+    where = f"opex.currency_split.{USD_FX_REFERENCE}"
+    if not isinstance(ref, Mapping):
+        raise ValueError(f"{where} must be an fx mapping; got {ref!r}")
+    if depreciation is None:
+        raise ValueError(
+            f"{where} applies only when the USD share has its own FX path "
+            "(usd_lkr_depreciation_pct); without one the USD share already follows "
+            "the model FX curve"
+        )
+    out = copy.deepcopy(dict(ref))
+    if _financial_close_spot({"fx": out}) is None:
+        raise ValueError(
+            f"{where} needs a scalar financial-close spot (start_lkr_per_usd) to anchor "
+            "the reference curve"
+        )
+    return out
+
+
+def with_usd_opex_fx_reference(
+    base: Mapping[str, Any], merged: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Pin the base ``fx`` block beside a USD opex path when overrides moved ``fx``.
+
+    A scenario whose USD opex share has its own FX path
+    (``opex.currency_split.usd_lkr_depreciation_pct``) does not read the model FX curve,
+    so an override of ``fx`` (an FX stress, or a Monte Carlo drift draw) would not reach
+    that share. Every override gateway calls this after merging: when the merged
+    ``fx`` block differs from the base one, the base block is recorded as
+    ``opex.currency_split.usd_fx_reference`` and the engine moves the USD path by the
+    model curve's per-year ratio to that reference, net of the spot (the path already
+    anchors on the merged spot).
+
+    The merged config is returned unchanged (the same object) when there is no USD
+    path, when ``fx`` did not change, or when a reference is already set. Otherwise a
+    copy is returned with fresh ``opex`` and ``currency_split`` mappings, so neither
+    input is mutated.
+    """
+    opex = merged.get("opex")
+    if not isinstance(opex, Mapping):
+        return merged
+    split = opex.get("currency_split")
+    if not isinstance(split, Mapping):
+        return merged
+    if split.get("usd_lkr_depreciation_pct") is None:
+        return merged
+    if split.get(USD_FX_REFERENCE) is not None:
+        return merged
+    base_fx = base.get("fx")
+    if not isinstance(base_fx, Mapping) or merged.get("fx") == base_fx:
+        return merged
+    out = dict(merged)
+    out["opex"] = dict(opex)
+    out["opex"]["currency_split"] = {
+        **dict(split),
+        USD_FX_REFERENCE: copy.deepcopy(dict(base_fx)),
+    }
+    return out
 
 
 def _whole_year(value: Any, where: str) -> int:
@@ -845,6 +929,9 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         opex_usd_lkr_depreciation_pct=(
             opex_split.usd_lkr_depreciation if opex_split is not None else None
         ),
+        opex_usd_fx_reference=(
+            opex_split.usd_fx_reference if opex_split is not None else None
+        ),
         opex_pre_cod_years=_resolve_opex_pre_cod_years(raw),
     )
 
@@ -1094,4 +1181,5 @@ __all__ = [
     "_build_cashflow_params",
     "_extract_parameters",
     "validate_parameters",
+    "with_usd_opex_fx_reference",
 ]

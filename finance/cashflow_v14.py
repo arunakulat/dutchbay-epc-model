@@ -272,10 +272,34 @@ def _prepare_cashflow_context(
                     "fx.start_lkr_per_usd (the financial-close spot) to anchor the USD "
                     "share's FX path"
                 )
-            params_dict["opex_usd_fx_path"] = [
+            usd_path = [
                 financial_close_spot * (1.0 + float(depr)) ** (construction_periods + i)
                 for i in range(years)
             ]
+            # An override that moved ``fx`` (an FX stress or a Monte Carlo drift draw)
+            # reaches the USD share through the model curve's per-year ratio to the
+            # curve the path was authored against. Each curve is taken relative to its
+            # own spot, because the path above already anchors on the merged spot. No
+            # reference (every authored scenario) leaves the path as built.
+            reference = params_dict.get("opex_usd_fx_reference")
+            if reference is not None:
+                ref_config = {"fx": reference}
+                ref_spot = _financial_close_spot(ref_config)
+                if ref_spot is None:
+                    raise ValueError(
+                        "opex.currency_split.usd_fx_reference needs a scalar "
+                        "financial-close spot (start_lkr_per_usd)"
+                    )
+                ref_curve = _fx_curve(
+                    ref_config, years, period_offset=construction_periods
+                )
+                usd_path = [
+                    p
+                    * (fx_curve_resolved[i] / financial_close_spot)
+                    / (ref_curve[i] / ref_spot)
+                    for i, p in enumerate(usd_path)
+                ]
+            params_dict["opex_usd_fx_path"] = usd_path
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr

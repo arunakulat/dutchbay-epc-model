@@ -22,10 +22,11 @@ f5_hold_caveat: >-
   bankability determination, or credit commitment. Lender interest rates and DSCR thresholds
   are illustrative screening assumptions, not executed term-sheet terms (#1629).
 
-engine_path_status: "pending_bw5_l12_d2"
+engine_path_status: "delivered_bw5_l12_d2"
 engine_path_note: >-
-  Core v14 engine path is pending: FX feeding the USD OPEX share is BW-5 (L-12 D-2) work;
-  this module is a standalone screening utility.
+  The core v14 engine carries an FX override (an FX stress or a Monte Carlo drift draw) to the
+  USD OPEX share's own FX path (BW-5, L-12 D-2); this module is a standalone screening utility
+  and does not call the engine.
 
 disclosure_note: >-
   Basecase capex, tariff, O&M, and FX-at-close are read at runtime from
@@ -106,7 +107,7 @@ screening_parameters:
   min_downside_dscr: 1.1        # Illustrative screening threshold for assumed downside, not a lender covenant
   average_p50_dscr: 1.5         # Illustrative screening threshold, not a lender covenant
   tariff_om_escalation_decimal: 0.0
-  opex_usd_share: 0.7           # Illustrative screening assumption; engine path pending BW-5 / L-12 D-2
+  opex_usd_share: 0.7           # Illustrative screening assumption; the engine's own path is BW-5 / L-12 D-2
   usd_opex_escalation_decimal: 0.025
   lkr_opex_escalation_decimal: 0.05
   annual_credit_fee_decimal: 0.0175  # Illustrative screening assumption, not a guarantee quote
@@ -166,7 +167,7 @@ stress_grid:
 # Explicit limitations of the standalone screening model
 limitations:
   - "HOLD (F-5, #1110, v15.6.1): Screening indicators only; lender rates and DSCR thresholds are assumptions, not terms (#1629)"
-  - "Core v14 engine path is pending: FX feeding the USD OPEX share is BW-5 (L-12 D-2) work"
+  - "Standalone: the core v14 engine carries FX to the USD OPEX share (BW-5, L-12 D-2), but this screening does not call it"
   - "No measured DutchBay wind data and no measured P90; assumed_downside_gwh is an assumed downside sensitivity only"
   - "Annual end-period payments; no construction draw profile or IDC capitalization"
   - "20-year straight-line tax allowance is a screening assumption, not legal tax advice"

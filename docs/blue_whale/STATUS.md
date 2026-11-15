@@ -912,6 +912,15 @@ the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is 
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
 
+**FX stress and Monte Carlo reach the USD share (#1578 L-12).** The USD share's own FX path is set
+by the inputs above, so an override of `fx` (an FX drift stress, or a Monte Carlo drift draw) used
+to move the model curve but leave the USD opex alone, which understated the FX risk on it. Every
+override gateway now moves that path by the model curve's per-year ratio to the authored curve,
+net of the spot (the path already anchors on the spot). The base case does not move. On the wind
+project a 3%/yr drift stress now gives project IRR 8.98% (9.60% before) and equity IRR 5.83%
+(6.74%), and life-of-project opex rises from LKR 6,013M to 7,321M. A spot-only stress is unchanged.
+The solar + BESS project's USD share is 0%, so its stresses do not move.
+
 **One construction period.** Both projects declare a 1-year construction period (input B30,
 `timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
 none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX

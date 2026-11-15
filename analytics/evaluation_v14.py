@@ -12,6 +12,7 @@ from analytics.contracts_v14 import SensitivitySuite
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from finance.capex_price_basis import apply_capex_price_basis
+from finance.cashflow_v14_params import with_usd_opex_fx_reference
 from finance.cashflow_v14_utils import pct_to_decimal
 from finance.self_curtailment_v14 import (
     compose_curtailment,
@@ -381,7 +382,10 @@ def evaluate_scenario_from_dict(
         >>> kpis["project_irr"]
         0.142
     """
-    merged_config = _deep_merge_config(config, expand_dotted_overrides(overrides or {}))
+    merged_config = with_usd_opex_fx_reference(
+        config,
+        _deep_merge_config(config, expand_dotted_overrides(overrides or {})),
+    )
     result = _run_pipeline_with_config(merged_config)
 
     raw_kpis = result.get("kpis")
@@ -461,6 +465,9 @@ def evaluate_with_overrides(
     merged_config = _deep_merge_config(
         base_config, expand_dotted_overrides(overrides or {})
     )
+    # An override of ``fx`` must also reach a USD opex share that has its own FX
+    # path (opex.currency_split.usd_lkr_depreciation_pct; #1578 L-12).
+    merged_config = with_usd_opex_fx_reference(base_config, merged_config)
 
     # Run pipeline
     full_result = _run_pipeline_with_config(
