@@ -18,6 +18,7 @@ Context:
 
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
@@ -540,3 +541,87 @@ def test_an_undefined_constraint_cannot_be_proved_compliant(
     assert res.best is not None
     # 0.8 has the highest objective but no provable covenant, so 0.5 wins.
     assert res.best.value == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# #1456 / #1522 assurance A-3: ranking on equity IRR is warned about
+# ---------------------------------------------------------------------------
+
+_IRR_WARNING = "equity IRR can rank options in the opposite order to equity NPV"
+
+
+def _irr_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [r for r in caplog.records if _IRR_WARNING in r.getMessage()]
+
+
+def _npv_and_irr_eval(
+    config_path: str,
+    *,
+    overrides: Optional[Mapping[str, Any]] = None,
+    **_kwargs: Any,
+) -> Dict[str, Any]:
+    x = float((overrides or {})["Financing_Terms.debt_ratio"])
+    return {"equity_irr": -x, "equity_npv": x}
+
+
+@pytest.mark.parametrize("method", ["grid", "bounded"])
+def test_ranking_on_equity_irr_logs_the_1456_warning_once(
+    method: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``optimize_parameter`` warns as the capital-structure optimisers do."""
+    monkeypatch.setattr(opt_mod, "evaluate_with_overrides", _npv_and_irr_eval)
+    with caplog.at_level(logging.WARNING):
+        optimize_parameter(
+            config_path=LENDER_CONFIG,
+            param_path="Financing_Terms.debt_ratio",
+            objective_key="equity_irr",
+            lower=0.3,
+            upper=0.8,
+            n_steps=6,
+            method=method,
+        )
+    warnings = _irr_warnings(caplog)
+    assert len(warnings) == 1 and warnings[0].levelno == logging.WARNING
+    message = warnings[0].getMessage()
+    assert message.startswith("parameter optimizer ranking on 'equity_irr'")
+    assert "objective_key='equity_npv'" in message and "#1456" in message
+
+
+@pytest.mark.parametrize("objective_key", ["equity_npv", "project_npv", "min_dscr"])
+def test_other_objectives_log_no_irr_warning(
+    objective_key: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def _fake(config_path: str, **kwargs: Any) -> Dict[str, Any]:
+        kpis = _npv_and_irr_eval(config_path, **kwargs)
+        return {**kpis, "project_npv": kpis["equity_npv"], "min_dscr": 1.5}
+
+    monkeypatch.setattr(opt_mod, "evaluate_with_overrides", _fake)
+    with caplog.at_level(logging.WARNING):
+        optimize_parameter(
+            config_path=LENDER_CONFIG,
+            param_path="Financing_Terms.debt_ratio",
+            objective_key=objective_key,
+            lower=0.3,
+            upper=0.8,
+            n_steps=6,
+        )
+    assert not _irr_warnings(caplog)
+
+
+def test_an_invalid_call_is_refused_before_any_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING), pytest.raises(ValueError):
+        optimize_parameter(
+            config_path=LENDER_CONFIG,
+            param_path="Financing_Terms.debt_ratio",
+            objective_key="equity_irr",
+            lower=0.3,
+            upper=0.8,
+            direction="sideways",
+        )
+    assert not _irr_warnings(caplog)

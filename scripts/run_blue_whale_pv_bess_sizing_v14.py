@@ -6,7 +6,9 @@ pricing config and the Blue Whale scenario) and prints one JSON object (CLI-01, 
 the run spec with its seed and its requested and effective evaluation counts
 (``MRM-01``, ``TEST-03``), every grid point's fit, inverter match, base case and
 distribution summary, the recommendation and the curtailment scenario. Per-trial values
-are not written; ``output.summary_json`` writes the same summary to a file.
+are not written; ``output.summary_json`` writes the same summary to a file. The spec names
+the code that ran by content (``code_sha256``) as well as by commit (``git_sha``), because a
+squash merge leaves the run's commit outside ``main`` (MRM-02).
 
 Usage::
 
@@ -23,12 +25,9 @@ PR 4 sizes the separate solar + BESS project from its own config (schema
         --config-name blue_whale_solar_bess_project_sizing \\
         output.summary_json=docs/blue_whale/solar_bess_project_sizing_summary.json
 
-PR 7 chooses the PV DC for the owner's 5 MW / 20 MWh battery with the same schema (a Hydra
-child of the project config)::
-
-    .venv/bin/python scripts/run_blue_whale_pv_bess_sizing_v14.py \\
-        --config-name blue_whale_solar_bess_fixed_bess_sizing \\
-        output.summary_json=docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json
+Since 2026-11-07 that run also chooses the battery (the owner's 5 MW / 20 MWh of PR 7 is
+no longer fixed, and its child config is retired); its ``sensitivities`` block adds the
+one-at-a-time cases and the break-even values to the summary.
 """
 
 from __future__ import annotations
@@ -37,9 +36,10 @@ import hashlib
 import json
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Iterable, Mapping
 
 import hydra
 import yaml
@@ -81,6 +81,72 @@ def _git_head() -> str:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+
+
+def code_sha256(files: Iterable[Path], root: Path = REPO_ROOT) -> Dict[str, Any]:
+    """Digest the repository code a run executed (MRM-02).
+
+    ``git_sha`` names the commit a run started from, but a squash merge leaves that commit
+    outside ``main`` (#1568's summaries cite f5b45904, held only by its pull-request ref). The
+    file digests are checkable against any checkout: ``tree`` is the SHA-256 of the
+    ``sha256sum`` listing (``"<sha256>  <path>"`` lines, sorted by path, newline-terminated),
+    so ``sha256sum -c`` verifies each file and the listing reproduces ``tree``.
+    ``uncommitted`` names the files that differed from ``git_sha`` when the run ended (empty
+    for a clean run; ``None`` when git could not be asked).
+    """
+    rels = sorted({p.resolve().relative_to(root.resolve()).as_posix() for p in files})
+    digests = {r: hashlib.sha256((root / r).read_bytes()).hexdigest() for r in rels}
+    listing = "".join(f"{digests[r]}  {r}\n" for r in rels)
+    try:
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", *rels],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        uncommitted: list[str] | None = sorted(
+            line[3:] for line in dirty.splitlines() if line.strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        uncommitted = None
+    return {
+        "tree": hashlib.sha256(listing.encode()).hexdigest(),
+        "files": digests,
+        "uncommitted": uncommitted,
+    }
+
+
+def loaded_repo_modules(root: Path = REPO_ROOT) -> list[Path]:
+    """The source files of every imported module that lives in this repository.
+
+    Modules under a virtual environment or ``site-packages`` inside the checkout are third
+    party and are left out (the lock file pins them). A module of one of this repository's
+    top-level packages that was imported from outside ``root`` (another checkout reached
+    through an editable install, say) is refused, not dropped: ``code_sha256`` would
+    otherwise omit code that ran (#1691 assurance A-4).
+    """
+    base = root.resolve()
+    packages = {p.name for p in base.iterdir() if (p / "__init__.py").is_file()}
+    out: list[Path] = []
+    for key, mod in list(sys.modules.items()):
+        name = getattr(mod, "__file__", None)
+        if not name:
+            continue
+        path = Path(name).resolve()
+        if not path.is_relative_to(base):
+            if key.split(".")[0] in packages:
+                raise RuntimeError(
+                    f"repository module {key} was imported from {path}, outside {base}"
+                )
+            continue
+        if path.suffix != ".py":
+            continue
+        rel = path.relative_to(base).parts
+        if rel[0].startswith(".") or "site-packages" in rel:
+            continue
+        out.append(path)
+    return out
 
 
 PROJECT_SCHEMA = "blue_whale_solar_bess_project_sizing_v1"
@@ -133,6 +199,7 @@ def run(
         ).encode()
     ).hexdigest()
     spec["git_sha"] = _git_head()
+    spec["code_sha256"] = code_sha256([*loaded_repo_modules(), Path(__file__)])
     spec["model_version"] = (REPO_ROOT / "VERSION").read_text().strip()
     spec["limitations"] = [
         "Placeholder site (PR 1) and placeholder O&M, financing and grid inputs.",
@@ -233,7 +300,10 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
     Every grid point is one row of ``grid`` (size, fit, eligibility, base case and the
     distribution summaries). The full point, with the base case's engine fields and year-1
     energy, is kept in ``named_points`` only for the sizes the recommendation names.
-    ``spec.result_sha256`` still identifies the full output the CLI printed.
+    ``spec.result_sha256`` still identifies the full output the CLI printed. It hashes
+    the spec too (``git_sha``, ``code_sha256``, input digests), so two runs on different
+    commits never share it even when their results agree: to show that a re-run
+    reproduced, compare ``points``, ``grid`` and ``recommendation`` (#1691 assurance A-6).
     """
     rec = out["recommendation"]
     named = set()
@@ -263,8 +333,9 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
         "year1_unit_revenue_lkr",
     )
     for name, block in out["sensitivities"].items():
-        if block is None:
-            sens[name] = None
+        if not isinstance(block, Mapping) or "rows" not in block:
+            # None, or a block that is already compact (one_at_a_time, break_even).
+            sens[name] = block
             continue
         sens[name] = {k: v for k, v in block.items() if k != "rows"}
         sens[name]["columns"] = list(sens_cols)
