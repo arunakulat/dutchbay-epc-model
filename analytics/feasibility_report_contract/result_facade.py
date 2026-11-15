@@ -756,6 +756,10 @@ for _path, _disposition in (
             "balloon_interest",
             # #1505: the part of it settled in cash in each period.
             "balloon_interest_paid",
+            # #1539: senior fee a cash sweep could not pay, carried forward per period,
+            # and any still unpaid at the horizon. Opaque with the other balloon series.
+            "senior_fee_deferred_usd",
+            "senior_fee_deferred_residual",
         )
     ),
     (

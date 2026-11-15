@@ -159,6 +159,8 @@ def plan_debt(
     balloon_residual = balloon_path["residual"]
     balloon_interest = balloon_path["interest"]
     balloon_interest_paid = balloon_path["interest_paid"]
+    senior_fee_deferred = balloon_path["senior_fee_deferred"]
+    senior_fee_deferred_residual = balloon_path["senior_fee_deferred_residual"]
 
     # After maturity the engine's own series still hold the STRUCTURAL balloon: the
     # layer amortises scheduled principal only, so it cannot see the sweep, bullet
@@ -381,4 +383,11 @@ def plan_debt(
         # sweep that capitalises. The levered tax pass deducts this series when
         # `tax.balloon_interest_tax_basis` is `paid`.
         "balloon_interest_paid": balloon_interest_paid,
+        # ── Deferred senior fee (#1539; additive, appended last) ────────────
+        # On a cash sweep, fee the period's cash could not pay is deferred and carried
+        # forward without interest, paid first from later cash; `senior_fee_usd` holds
+        # the fee actually paid. PERIOD-indexed carried balance (None where the balloon
+        # path does not govern), and any fee still unpaid at the horizon.
+        "senior_fee_deferred_usd": senior_fee_deferred,
+        "senior_fee_deferred_residual": senior_fee_deferred_residual,
     }
