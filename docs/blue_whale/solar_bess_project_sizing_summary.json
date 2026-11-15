@@ -38083,7 +38083,7 @@
    "augment_below_soh": 0.8,
    "augmentation_basis": "ASSUMPTION: the pricing config's BESS equipment line (2026 prices) per kWh added, paid as stated in the event year",
    "augmentation_usd_per_kwh": 103.55,
-   "fade_basis": "OEM state-of-health performance curve (private corpus), linear from beginning of life to its last year; extended linearly past it",
+   "fade_basis": "OEM state-of-health performance curve (private corpus); one linear rate derived from it, applied in every operating year",
    "fade_pct_per_year": 1.5533,
    "price_reserve_removed_usd_per_kwh": 8.88888888888889,
    "replaces_price_reserve": true,
@@ -38195,13 +38195,13 @@
     "solar_resource/loss_model.py": "9b9d6e9361251a7cb943c80dbf98e02ddce00a117a5d4c23ff0f9daafdce57da",
     "solar_resource/pv_array_turbine_shading.py": "747a74794d2c3129a26383df653b0fd9e5b07b179ec1a76b3f08b5a352cd36f6",
     "solar_resource/pv_bess_dispatch.py": "222c2dd6d2e1c666130ae529cd110cc9bc15ff19e830061f67954cf765fd32ff",
-    "solar_resource/pv_bess_sizing.py": "4f54d1ceba6848cc86025b7cbc7699fc525fb45c7636f179e85dc654ab112e30",
+    "solar_resource/pv_bess_sizing.py": "fb4edc42951bf2cbbf416fa3208709289ba14420c957f6140db3d9e84f1f261a",
     "solar_resource/pv_producer.py": "36796a7eb431bd2457f12d17a9e90c114dc6d12d10c98eef4f935a83da0fe69c",
     "solar_resource/soiling_profile.py": "c95c3746c6970d05f7bb1732422fa71028aa1373ed53d9319fc016497cca4e85",
     "solar_resource/source_quality.py": "215f79cca0198bdfdac41360dcba88c826b4ebdb0be6257bc52f2141a3a0d8bb",
     "solar_resource/turbine_shading.py": "1a8e33bb324f9e07afdc63da106b14cadfb3d9421c4610065337c2c0f507fe21"
    },
-   "tree": "e782e95846ae3d9e16625b1ac617886e77ea5cb6c86d94de282edad8ccebd788",
+   "tree": "9aed63dc34f57b8fcf4272926ce2d0c9b2eb33323afb577766bd90e787a7530b",
    "uncommitted": []
   },
   "common_random_numbers": true,
@@ -38223,14 +38223,14 @@
   ],
   "effective_evaluations": 151328,
   "export_limit_mw": 10.0,
-  "git_sha": "3bf14dc9b64363b62f9b134127bf86373b0192f6",
+  "git_sha": "b6b05824333f2a6b994ce833675ce36f48ae4138",
   "grid_points": 514,
   "grid_points_evaluated": 514,
   "inputs_sha256": {
    "conf/blue_whale_pucsl_fit_2026.yaml": "e45ad203388b910fcd7cf22b5559ccdad913ceaaf0ff829b38a087e06158ba20",
    "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
    "conf/blue_whale_solar_bess.yaml": "7bd055cafe5c844643cfe8c695144d491220a9afb76b424e9176de60dbc15ba9",
-   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "0dd5bd8293ecbb480a64b2b569432e8465c4361e1b7be7d19dc613219aa7d551"
+   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "ab561d236dbb74842936567c87e12ac98be257acf2c55ee960aa2e3f58e361f8"
   },
   "land_max_tables_by_bess_power_mw": {
    "0.1": 188,
@@ -38293,12 +38293,12 @@
    "source": "scenario.opex.currency_split.components"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "28153d03adba2955e2f94b6e7c10ca9ed4f8f0f5627a8126988ff668d774c135",
-  "runtime_s": 6039.7,
+  "result_sha256": "956d65f2eed71a334340ad297e45a20534e9905a4f3371ded6a5968c75f081cb",
+  "runtime_s": 6187.7,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 20,
-  "sizing_config_sha256": "ddeb36f150203a5e3fa6be63ff6b59378a6b03ff42fe8f8a27494f89dc8f663f",
+  "sizing_config_sha256": "b4cc33a17c7092945cb710ddf52aa41a6e9dbced02a9cf6ded592b4b64b2ca52",
   "summary": "concise: one grid row per point; the full point only for the named sizes",
   "years": 20
  },
