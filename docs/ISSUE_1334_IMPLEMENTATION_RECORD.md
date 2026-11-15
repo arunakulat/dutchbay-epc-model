@@ -462,3 +462,32 @@ statements closed are lines 1353, 1368 and the `except`/`raise` pair at 1654-166
 Of the uncovered 29, the assurance lane's classification still holds: they are overwhelmingly
 `raise` statements and the `except` clauses that lead to them. The decisive fail-open path it
 identified is now controlled; the remainder are not, and this record does not claim they are.
+
+## Formal delivery closure (#1334)
+
+**Record date: 2026-11-14.** Closure of Issue #1334 was conditioned on the owner decision
+recorded in issue comment `6407662666` ("Closure waits on #1404"): close #1334 once #1404
+either makes `full_reconciliation_residual_kwh` a genuine cross-check or records it as an
+identity.
+
+Both antecedent dependencies have since landed on `origin/main`:
+1. **Issue #1404** was delivered by PR #1461 (`a0431eb4`), establishing that D4's full
+   reconciliation zero is formally disclosed as an arithmetic identity
+   (`full_reconciliation_semantics: arithmetic_identity_not_independent_check`), and #1404
+   was closed on 2026-11-07.
+2. **Issue #1511** (the residual F-1 from #1404) was delivered by PR #1639 (`d4934e07`),
+   adding the negative control demonstrating that un-cross-checked category `method_model`
+   shifts `unknown_residual_kwh` while `full_reconciliation_residual_kwh` stays zero.
+
+This delivery completes the final acceptance requirements for #1334:
+- Comprehensive negative controls in `tests/contracts/test_eya_bridge_refusal_controls.py`
+  directly verify that `FinanceUpdateProposal` rejects any deviation across all 17 fields
+  (`decision`, `default_off`, `proposed_updates`, `target_scenario_id`,
+  `candidate_capacity_factor`, `candidate_p50`, `candidate_p90`, `candidate_debt`,
+  `candidate_tariff`, `apply_authorized`, `requires_separate_r3_rebaseline`,
+  `issue_1110_state`, `canonical_finance_eligible`, `bankable`, `lender_eligible`,
+  `board_eligible`, and `release_eligible`), rejects malformed digest strings, and enforces
+  frozen immutability so post-construction tampering fails closed on `model_dump()`.
+- The finance proposal remains strictly default-off, inert data only, and non-canonical.
+  It cannot enable itself, mutate any scenario, debt, tariff, or financial model, or bypass
+  the Board/lender HOLD on Issue #1110. Issue #1110 remains `OPEN_HOLD`.
