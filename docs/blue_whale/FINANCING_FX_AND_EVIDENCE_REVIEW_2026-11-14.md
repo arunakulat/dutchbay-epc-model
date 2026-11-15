@@ -8,7 +8,7 @@ Complementary to PR #1678 (`#1677`, Equipment-Cost Parity Benchmark & Logistics 
 >
 > **Pending Engine Path:** The core v14 engine path is **pending** — FX feeding the USD OPEX share is **BW-5 (`L-12 D-2`)** work.
 >
-> **Addendum (BW-5, `#1578` L-12):** The core v14 engine now carries an FX override to the USD OPEX share: an FX drift stress or a Monte Carlo drift draw replaces that share's own FX path with the stressed model curve. This review is kept as written on its dates; where it calls that engine path pending, it describes the state then. The screening still does not call the engine.
+> **Addendum (BW-5, `#1578` L-12):** The core v14 engine's Python override gateways now carry an FX override to the USD OPEX share (the web API's `/run-pipeline` overrides do not yet): an FX drift stress or a Monte Carlo drift draw replaces that share's own FX path with the stressed model curve. This review is kept as written on its dates; where it calls that engine path pending, it describes the state then. The screening still does not call the engine.
 >
 > **No Measured Wind Data / No P90:** There is **no measured DutchBay wind data and no measured P90**. All downside generation figures (`assumed_downside_gwh = 377.3 GWh`) are **assumed downside screening sensitivities**, not measured P90 estimates.
 

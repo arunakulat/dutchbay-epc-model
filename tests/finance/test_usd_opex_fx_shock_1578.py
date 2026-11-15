@@ -6,7 +6,7 @@ as a constant-LKR reporting rate. Before this change an override of ``fx`` (an F
 or a Monte Carlo drift draw) moved the model curve but never that path, so the stress
 understated the FX risk on the USD share (#1557 DOM-4).
 
-Every override gateway now records the base ``fx`` block beside the path when an
+The Python override gateways now record the base ``fx`` block beside the path when an
 override moved ``fx`` (``with_usd_opex_fx_reference``). When the override changed the
 model curve's shape (its path relative to its own spot), the stressed model curve REPLACES
 the USD share's own path, so a drift of x runs the share at x, not at x on top of the

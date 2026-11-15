@@ -7,7 +7,8 @@
 # research hand-off of 2026-11-14.
 #
 # Standalone screening tool complementary to analytics.evaluation_v14 and PR #1678.
-# Core v14 engine path is PENDING: FX feeding the USD OPEX share is BW-5 (L-12 D-2) work.
+# Core v14 engine path delivered (BW-5, L-12 D-2): an FX drift override at the Python override
+# gateways replaces the USD OPEX share's own path. This screening does not call the engine.
 # Does NOT modify frozen scenario YAMLs (scenarios/blue_whale_*.yaml) or publish confidential terms.
 #
 # HOLD (F-5, #1110, v15.6.1): Screening indicators only — not a lender verdict or term sheet (#1629).

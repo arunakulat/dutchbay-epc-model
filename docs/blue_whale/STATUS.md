@@ -914,15 +914,19 @@ constant-rate translation of LKR.
 
 **FX stress and Monte Carlo reach the USD share (#1578 L-12).** The USD share's own FX path is set
 by the inputs above, so an override of `fx` (an FX drift stress, or a Monte Carlo drift draw) used
-to move the model curve but leave the USD opex alone, which understated the FX risk on it. Every
-override gateway now records the authored `fx` block, and when a stress changes the curve's drift
+to move the model curve but leave the USD opex alone, which understated the FX risk on it. The
+Python override gateways (`evaluate_with_overrides`, `evaluate_scenario_from_dict` and
+`analytics.evaluate_scenario`, which the Monte Carlo and sensitivity tools use) now record the
+authored `fx` block, and when a stress changes the curve's drift
 the stressed model curve replaces the USD share's own path: a drift stress of x runs the USD share
 at x, not at x on top of the 2.44%/yr PPP rate (the owner's ruling of 2026-11-15). The base case
 does not move. On the wind project a 3%/yr drift stress now gives project IRR 9.50% (9.60% before)
 and equity IRR 6.61% (6.74%), with life-of-project opex LKR 6,213M (6,013M); at 5.89%/yr, 6.35%
 (7.04%) and LKR 7,523M. A drift below 2.44% now lowers the USD opex (1%/yr: LKR 5,563M). A
 spot-only stress is unchanged, since the path already anchors on the spot. The solar + BESS
-project's USD share is 0%, so its stresses do not move.
+project's USD share is 0%, so its stresses do not move. The web API's `/run-pipeline` overrides do
+not yet pass through this step, so an FX drift sent there still leaves the USD share on its own
+path (a follow-up on #1578).
 
 **One construction period.** Both projects declare a 1-year construction period (input B30,
 `timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with

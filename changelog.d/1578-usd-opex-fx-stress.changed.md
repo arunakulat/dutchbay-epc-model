@@ -11,7 +11,10 @@
     on top of the authored rate (owner ruling, 2026-11-15). A spot-only or curve-neutral change
     keeps the own path, which already anchors on the merged spot.
   - `analytics/evaluation_v14.py` (`evaluate_with_overrides`, `evaluate_scenario_from_dict`) and
-    `analytics/evaluate_scenario.py`: every override gateway calls it after merging.
+    `analytics/evaluate_scenario.py`: these Python override gateways, which the Monte Carlo and
+    sensitivity tools use, call it after merging. The web API's `/run-pipeline` overrides
+    (`api/pipeline_api.py`) do not yet, so an FX drift sent there still leaves the USD share on
+    its own path; that is a follow-up on #1578.
   - No committed KPI moves: every scenario's base case is byte-identical, and an `fx` change that
     leaves the curve alone is too. Stress and Monte Carlo outputs on the Blue Whale wind project
     move: a 3%/yr drift stress now gives project IRR 9.50% (was 9.60%), and 5.89%/yr gives 6.35%

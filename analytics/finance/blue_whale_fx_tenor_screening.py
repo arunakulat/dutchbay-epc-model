@@ -9,8 +9,9 @@ Governance & Scope Boundaries:
 - HOLD (F-5, #1110, v15.6.1): Produces screening indicators only, NOT a lender
   verdict, bankability determination, or credit commitment. Lender interest rates
   and DSCR thresholds are illustrative screening assumptions, not terms (#1629).
-- Core v14 engine path is PENDING: FX feeding the USD OPEX share is BW-5
-  (L-12 D-2) work.
+- Core v14 engine path delivered (BW-5, L-12 D-2): an FX drift override at the
+  Python override gateways replaces the USD OPEX share's own path. This
+  screening does not call the engine.
 - Basecase capex, tariff, O&M, and FX-at-close are read from
   ``scenarios/dutchbay_basecase_2025Q4.yaml``; divergent cases are explicitly
   labeled as sensitivities.

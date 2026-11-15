@@ -622,7 +622,9 @@ def with_usd_opex_fx_reference(
     A scenario whose USD opex share has its own FX path
     (``opex.currency_split.usd_lkr_depreciation_pct``) does not read the model FX curve,
     so an override of ``fx`` (an FX stress, or a Monte Carlo drift draw) would not reach
-    that share. Every override gateway calls this after merging: when the merged
+    that share. The Python override gateways (``evaluate_with_overrides``,
+    ``evaluate_scenario_from_dict`` and ``analytics.evaluate_scenario``) call this after
+    merging; the web API's ``/run-pipeline`` overrides do not yet. When the merged
     ``fx`` block differs from the base one, the base block is recorded as
     ``opex.currency_split.usd_fx_reference``. The engine compares the merged model
     curve with that reference, each relative to its own spot. When the shape changed
