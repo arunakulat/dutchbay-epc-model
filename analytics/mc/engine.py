@@ -279,8 +279,7 @@ def _has_own_usd_opex_fx_path(config: Mapping[str, Any]) -> bool:
     opex = config.get("opex")
     split = opex.get("currency_split") if isinstance(opex, Mapping) else None
     return (
-        isinstance(split, Mapping)
-        and split.get("usd_lkr_depreciation_pct") is not None
+        isinstance(split, Mapping) and split.get("usd_lkr_depreciation_pct") is not None
     )
 
 
