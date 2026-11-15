@@ -22,7 +22,7 @@ import tempfile
 from typing import Any, Callable, List, Mapping, Optional
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from analytics.contracts_v14 import SensitivitySuite
 from analytics.core.sensitivity_runner import run_sensitivity_analysis
@@ -49,6 +49,22 @@ class TornadoBlock(BaseModel):
 
     metric: str
     rows: List[TornadoRow]
+    undefined_base: bool = False
+    undefined_points: int = 0
+    undefined_drivers: List[str] = Field(default_factory=list)
+
+    @property
+    def has_undefined(self) -> bool:
+        """True when base, swing, or any point in the tornado arrived undefined (#1488)."""
+        if self.undefined_base or self.undefined_points > 0 or self.undefined_drivers:
+            return True
+        return any(
+            row.base is None
+            or row.low_case is None
+            or row.high_case is None
+            or row.impact_abs is None
+            for row in self.rows
+        )
 
 
 def _defined(value: Optional[float]) -> Optional[float]:
@@ -124,4 +140,24 @@ def compute_report_tornado(
     )
     if not rows:
         return None
-    return TornadoBlock(metric=metric, rows=rows)
+    md = getattr(suite, "metadata", None) or {}
+    undefined_base = bool(md.get("undefined_base", False)) or any(
+        r.base is None for r in rows
+    )
+    inferred_undefined_points = (1 if undefined_base else 0) + sum(
+        int(r.low_case is None) + int(r.high_case is None) for r in rows
+    )
+    raw_undefined_points = int(md.get("undefined_points", 0) or 0)
+    undefined_points = max(raw_undefined_points, inferred_undefined_points)
+    raw_drivers = md.get("undefined_drivers")
+    if isinstance(raw_drivers, list):
+        undefined_drivers = [str(d) for d in raw_drivers]
+    else:
+        undefined_drivers = [r.label for r in rows if r.impact_abs is None]
+    return TornadoBlock(
+        metric=metric,
+        rows=rows,
+        undefined_base=undefined_base,
+        undefined_points=undefined_points,
+        undefined_drivers=undefined_drivers,
+    )
