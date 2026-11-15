@@ -588,6 +588,9 @@ monte_carlo:
   n_scenarios: 100000
   sampler: lhs  # Latin Hypercube Sampling
   seed: 42
+  # Lender runs never substitute toy KPIs for a failed trial (#962 item 1, owner ruling
+  # 2026-11-15): a trial whose full v14 evaluation raises stops the run instead.
+  allow_toy_fallback: false
 
   # Wind resource uncertainty (dominant risk driver)
   weibull_uncertainty_pct: 10.0  # ±10% on A and k
