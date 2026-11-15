@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping
 
 from finance.debt.capex import _extract_capex_base_usd, _extract_capex_usd
+from finance.debt.constants import DSRA_TARGET_BASIS
 from finance.debt.helpers import _as_float, _section_case_insensitive, _truthy_flag
 from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
 
@@ -39,6 +40,16 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
         ),
         6.0,
     )
+    # #920: say where the target came from, so a reader can tell a declared assumption
+    # from the engine's 6-month fallback. Same precedence as the read above.
+    if dsra_cfg.get("target_months") is not None:
+        target_source = "Financing_Terms.dsra.target_months"
+    elif fin.get("dsra_months") is not None:
+        target_source = "Financing_Terms.dsra_months"
+    elif reserves.get("dsra_months") is not None:
+        target_source = "Financing_Terms.reserves.dsra_months"
+    else:
+        target_source = "code_default"
 
     construction_periods = int(_as_float(core.get("construction_periods"), 0))
     ds = core.get("debt_service_total", []) or []
@@ -100,6 +111,8 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     return {
         "fund_at_close": fund_at_close,
         "dsra_target_months": round(target_months, 2),
+        "dsra_target_source": target_source,
+        "dsra_target_basis": DSRA_TARGET_BASIS,
         "initial_dsra_usd": round(initial_dsra, 2),
         "dsra_at_close_basis": (
             "funded_at_close" if fund_at_close else "none_built_from_operating_cash"

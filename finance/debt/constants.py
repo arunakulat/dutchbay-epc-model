@@ -96,3 +96,8 @@ _SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt per
 #: Published label for the refinanced tranche's terms: they are a modelling
 #: assumption read from YAML, not a lender term sheet (#1396, P3-COV-03).
 REFINANCE_TERMS_BASIS = "assumption_no_term_sheet"
+
+#: Basis of the DSRA target months (#920, owner ruling 2026-11-15). No financing term sheet
+#: has been executed for any committed scenario, so the reserve target is an assumption
+#: until one sets it. Change this, with its evidence, when a term sheet does.
+DSRA_TARGET_BASIS = "assumption_no_term_sheet"
