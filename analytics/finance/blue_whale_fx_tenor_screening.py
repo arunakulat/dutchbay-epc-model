@@ -703,7 +703,9 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
         "governed_scenario_source": str(scenario_path),
         "governed_inputs_applied": governed_inputs,
         "f5_hold_caveat": raw_cfg.get("f5_hold_caveat", DEFAULT_F5_HOLD_CAVEAT),
-        "engine_path_status": raw_cfg.get("engine_path_status", DEFAULT_ENGINE_PATH_STATUS),
+        "engine_path_status": raw_cfg.get(
+            "engine_path_status", DEFAULT_ENGINE_PATH_STATUS
+        ),
         "engine_path_note": raw_cfg.get("engine_path_note", DEFAULT_ENGINE_PATH_NOTE),
         "fx_metrics": fx_metrics,
         "governed_basecase_14turbine_15year_screening": _format_screening_block(
