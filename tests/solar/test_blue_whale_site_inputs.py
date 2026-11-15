@@ -263,7 +263,12 @@ def test_cases_are_ordered_and_respond_to_their_drivers(
 def test_committed_capex_summary_is_internally_consistent() -> None:
     doc = json.loads(CAPEX_SUMMARY.read_text(encoding="utf-8"))
     assert doc["config_sha256"] == hashlib.sha256(CONF.read_bytes()).hexdigest()
-    assert "a reader may be able to back out a private input" in doc["disclosure_note"]
+    # W-4 (#1578): the wording #1560 settled, the same as the scenarios and the methods note.
+    note = " ".join(str(_yaml(CONF)["disclosure_note"]).split())
+    assert doc["disclosure_note"] == note
+    assert "those inputs can be recovered exactly from the published figures" in note
+    assert "6702419885" in note
+    assert "a reader may be able to back out" not in note
     land = _yaml(CONF)["bess"]["land_and_auxiliaries_share"]
     for c in si.CASES:
         w = doc["wind_usd_per_kw"][c]
@@ -303,7 +308,7 @@ def test_committed_capex_summary_is_internally_consistent() -> None:
 def test_pricing_config_and_scenarios_carry_the_blend() -> None:
     doc = json.loads(CAPEX_SUMMARY.read_text(encoding="utf-8"))
     assert doc["schema"] == "dutchbay.epc.blue_whale_capex_blend.v1"
-    assert doc["model_version"] == "15.18.0"
+    assert doc["model_version"] == "15.27.0"
     assert doc["config"] == "conf/blue_whale_capex_solar_resource.yaml"
     pricing = _yaml(PRICING)
     bess = doc["bess_usd_per_kwh_contracted"]
@@ -462,7 +467,7 @@ def _assert_nested_approx(
 def test_committed_solar_outputs_match_a_rerun(solar: Dict[str, Any]) -> None:
     doc = json.loads(SOLAR_SUMMARY.read_text(encoding="utf-8"))
     assert doc["schema"] == "dutchbay.epc.blue_whale_solar_resource.v1"
-    assert doc["model_version"] == "15.18.0"
+    assert doc["model_version"] == "15.27.0"
     assert doc["config"] == "conf/blue_whale_capex_solar_resource.yaml"
     assert doc["scenario"] == "scenarios/blue_whale_solar_bess_lot5b_2026.yaml"
     assert doc["config_sha256"] == hashlib.sha256(CONF.read_bytes()).hexdigest()
@@ -480,3 +485,73 @@ def test_committed_solar_outputs_match_a_rerun(solar: Dict[str, Any]) -> None:
     site = doc["site"]
     assert site["distance_to_turbine_m"] < 200.0
     assert site["tmy_database"].startswith("PVGIS-ERA5")
+
+
+# ---------------------------------------------------------------------------
+# #1578 L-16: the turbine point comes from the siting config, not a third copy
+# ---------------------------------------------------------------------------
+SITING = REPO_ROOT / "conf" / "blue_whale_wind_siting.yaml"
+
+
+def _haversine_closed_form(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6_371_008.8
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+def test_turbine_point_is_where_the_siting_config_places_the_turbine(
+    cfg: Dict[str, Any],
+) -> None:
+    pytest.importorskip("shapely")
+    site = cfg["solar_resource"]["site"]
+    assert not {"turbine_latitude", "turbine_longitude"} & set(site)
+    assert site["turbine_siting_config"] == "conf/blue_whale_wind_siting.yaml"
+    siting = _yaml(SITING)["site"]
+    assert siting["turbine_placement"] == "reference_point"
+    lat, lon = _cli().siting_turbine_point(site)
+    # The reference_point rule puts the tower on DutchBay T2's recorded position.
+    assert (lat, lon) == pytest.approx(
+        (siting["reference_lat_deg"], siting["reference_lon_deg"]), abs=1e-9
+    )
+    doc = json.loads(SOLAR_SUMMARY.read_text(encoding="utf-8"))
+    assert doc["site"]["distance_to_turbine_m"] == pytest.approx(
+        _haversine_closed_form(site["latitude"], site["longitude"], lat, lon), rel=1e-6
+    )
+
+
+def test_turbine_point_follows_the_siting_rule(
+    cfg: Dict[str, Any], tmp_path: Path
+) -> None:
+    # Responsiveness (TEST-01): under the coastal_setback rule the siting config places the
+    # tower at #1530's setback spot, west of T2, and the point read here moves with it.
+    pytest.importorskip("shapely")
+    siting = _yaml(SITING)
+    siting["site"]["turbine_placement"] = "coastal_setback"
+    moved = tmp_path / "siting.yaml"
+    moved.write_text(yaml.safe_dump(siting), encoding="utf-8")
+    site = {**cfg["solar_resource"]["site"], "turbine_siting_config": str(moved)}
+    lat, lon = _cli().siting_turbine_point(site)
+    # The local-frame round trip carries about 1e-8 deg (1 mm) of projection noise.
+    assert lat == pytest.approx(siting["site"]["reference_lat_deg"], abs=1e-7)
+    assert lon < siting["site"]["reference_lon_deg"] - 1e-3
+    assert lon == pytest.approx(79.752666, abs=1e-4)
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"turbine_latitude": 8.2925}, "must not repeat the turbine point"),
+        ({"turbine_longitude": 79.752666}, "must not repeat the turbine point"),
+        ({"turbine_siting_config": None}, "turbine_siting_config is required"),
+    ],
+)
+def test_a_turbine_point_copy_or_no_siting_config_is_refused(
+    cfg: Dict[str, Any], changes: Dict[str, Any], message: str
+) -> None:
+    pytest.importorskip("shapely")
+    site = cfg["solar_resource"]["site"]
+    _cli().siting_turbine_point(site)
+    with pytest.raises(ValueError, match=message):
+        _cli().siting_turbine_point({**site, **changes})

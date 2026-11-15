@@ -211,6 +211,20 @@ def test_default_tornado_keeps_native_capex_bar() -> None:
         {"name": "fx_spot_driver", "distribution": "fx_calibrated"},
         {"name": " Capex.USD_Total ", "low": 1.0, "high": 2.0},
         {"name": "FX.Start_LKR_per_USD", "low": 300.0, "high": 330.0},
+        {"name": "CAPEX", "low": 1.0, "high": 2.0},
+        {"name": " capex ", "low": 1.0, "high": 2.0},
+        {"name": "capex.contingency_pct", "low": 0.0, "high": 0.1},
+        {"name": "Capex.Contingency_Pct", "low": 0.0, "high": 0.1},
+        {
+            "name": "capex.input.conversion.rate_lkr_per_usd",
+            "low": 300.0,
+            "high": 330.0,
+        },
+        {
+            "name": "CAPEX.Input.Conversion.Rate_LKR_per_USD",
+            "low": 300.0,
+            "high": 330.0,
+        },
     ],
     ids=[
         "usd_total",
@@ -219,6 +233,12 @@ def test_default_tornado_keeps_native_capex_bar() -> None:
         "fx_calibrated_any_name",
         "usd_total_spelling",
         "fx_spot_spelling",
+        "capex_alias",
+        "capex_alias_spelling",
+        "contingency_pct",
+        "contingency_pct_spelling",
+        "conversion_rate",
+        "conversion_rate_spelling",
     ],
 )
 def test_mc_refuses_sweeps_every_native_trial_would_reject(
@@ -233,7 +253,12 @@ def test_mc_refuses_sweeps_every_native_trial_would_reject(
         cfg["monte_carlo"] = {"parameters": [param]}
         with pytest.raises(MonteCarloConfigError, match="native-CAPEX.*#1629"):
             MonteCarloEngine(cfg)
-    if param["name"].strip().lower() == "capex.usd_total":
+    if param["name"].strip().lower() in {
+        "capex",
+        "capex.usd_total",
+        "capex.contingency_pct",
+    }:
+        # The guard is native-only: the USD twin's engine is not refused.
         usd["monte_carlo"] = {"parameters": [param]}
         MonteCarloEngine(usd)
     native["monte_carlo"] = {
