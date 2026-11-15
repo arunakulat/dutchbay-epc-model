@@ -595,7 +595,8 @@ monte_carlo:
   # financial close (#962 item 4, owner ruling 2026-11-15), rather than only against
   # debt re-sized for that trial. Internal model metadata only, under
   # metadata.fixed_debt_stress, on an unfolded per-period basis that is not the covenant
-  # basis; the F-5 HOLD still applies.
+  # basis; the F-5 HOLD still applies. Web-app Monte Carlo jobs turn it off (owner
+  # decision 2026-11-15; app/jobs/analysis_runner.py).
   fixed_debt_stress: true
 
   # Wind resource uncertainty (dominant risk driver)

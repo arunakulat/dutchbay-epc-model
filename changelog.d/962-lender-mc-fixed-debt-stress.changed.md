@@ -3,7 +3,14 @@
   `monte_carlo.fixed_debt_stress: true`, so each trial's CFADS is also tested against the debt
   service committed at financial close, not only against debt re-sized for that trial. The
   result is internal model metadata, written only to the run's `metadata.fixed_debt_stress`.
-  No report, KPI or summary reads it, and no summary or trial value changes. The one other
+  No report, KPI or summary reads it, and no summary or trial value changes.
+- Web-app Monte Carlo jobs never run the stress (owner decision 2026-11-15). They are seeded
+  from the lender case, but they are screening runs, and the job returns the whole metadata
+  block to API clients with no basis label. `app/jobs/analysis_runner.py` therefore sends the
+  engine a copy of the assessed scenario with `monte_carlo.fixed_debt_stress` set to false, so
+  a web job's result is as before this change. The stress stays on the main lender case only:
+  the 5 US-cent variant and the Kalpitiya lender case do not declare it (owner decision
+  2026-11-15). The one other
   metadata change is that `metadata.var_cvar` no longer lists `wacc_is_real`, a boolean flag
   with no meaningful VaR, because the stress path evaluates full results.
 - What the diagnostic measures: the minimum, over the periods with committed debt service, of
@@ -17,4 +24,4 @@
   (#1728). Under F-5 the diagnostic supports no covenant, lender or IC representation.
 - The fixed-debt test fixture's "off" case now sets the stress off explicitly, since the lender
   case turns it on. A new test pins that turning the stress on leaves the lender case's Monte
-  Carlo summary and trials unchanged.
+  Carlo summary and trials unchanged, and another that a web job sends the stress off.
