@@ -85,6 +85,8 @@ _ISSUE_1456_EQUITY_CF = [
         ([-100.0, 10.0, 10.0, 120.0], 1),
         ([-100.0, 0.0, 0.0, 50.0, 60.0], 1),  # construction zeros are ignored
         ([-100.0, 50.0, -20.0, 80.0], 3),
+        ([-100.0, 150.0, -40.0], 2),
+        ([-100.0, 50.0, 0.0, 60.0], 1),  # a zero year between positives is skipped
         ([100.0, -50.0], 1),
         ([-100.0, float("nan"), 50.0], 1),  # non-finite entries are ignored
         ([-100.0, math.inf, 50.0], 1),
@@ -95,10 +97,67 @@ def test_count_cashflow_sign_changes(cashflows: list, expected: int) -> None:
     assert count_cashflow_sign_changes(cashflows) == expected
 
 
-def test_ranks_reliably_only_with_at_most_one_sign_change() -> None:
-    assert equity_irr_ranks_reliably([-100.0, 30.0, 30.0, 60.0])
-    assert equity_irr_ranks_reliably([-100.0])
-    assert not equity_irr_ranks_reliably(_ISSUE_1456_EQUITY_CF)
+@pytest.mark.parametrize(
+    ("cashflows", "expected"),
+    [
+        ([-100.0, 30.0, 30.0, 60.0], True),
+        ([-100.0, 50.0, 0.0, 60.0], True),  # the zero year does not add a change
+        ([], False),  # no IRR exists (#1522 D-1)
+        ([-100.0], False),
+        ([-100.0, -5.0, 0.0], False),
+        ([-100.0, 150.0, -40.0], False),  # exactly two changes is the boundary
+        (_ISSUE_1456_EQUITY_CF, False),
+    ],
+)
+def test_ranks_reliably_only_with_exactly_one_sign_change(
+    cashflows: list, expected: bool
+) -> None:
+    assert equity_irr_ranks_reliably(cashflows) is expected
+
+
+@pytest.mark.parametrize(
+    ("operating_cf", "changes", "flag", "warns"),
+    [
+        ([1.5e8], 1, True, False),
+        ([5.0e7, 0.0, 6.0e7], 1, True, False),
+        (
+            [0.0, 0.0],
+            0,
+            False,
+            False,
+        ),  # no IRR: not rankable, and no multi-root warning
+        ([1.5e8, -4.0e7], 2, False, True),
+    ],
+)
+def test_pipeline_flag_is_the_helper_predicate(
+    caplog: pytest.LogCaptureFixture,
+    operating_cf: list,
+    changes: int,
+    flag: bool,
+    warns: bool,
+) -> None:
+    """The equity summary uses the helper, including at 0 and at exactly 2 changes."""
+    from finance.equity_distribution_v14_hydra import (
+        calculate_equity_distribution_from_pipeline,
+    )
+
+    with caplog.at_level(
+        logging.WARNING, logger="finance.equity_distribution_v14_hydra"
+    ):
+        result = calculate_equity_distribution_from_pipeline(
+            config={"capex": {"usd_total": 2.0e8}},
+            annual_rows=[
+                {"year": i + 1, "cf_pre_debt": v} for i, v in enumerate(operating_cf)
+            ],
+            debt_result={"debt_total": 1.2e8},
+        )
+    summary = result["equity_summary"]
+    cashflows = result["equity_cashflows_usd"]
+    assert summary["equity_cashflow_sign_changes"] == changes
+    assert summary["equity_irr_ranks_reliably"] is flag
+    assert equity_irr_ranks_reliably(cashflows) is flag
+    multi_root = [r for r in caplog.records if "change sign" in r.getMessage()]
+    assert bool(multi_root) is warns
 
 
 # ---------------------------------------------------------------------------

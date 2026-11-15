@@ -38,6 +38,7 @@ from finance.equity_v14 import (
     calculate_moic,
     calculate_payback_period,
     count_cashflow_sign_changes,
+    equity_irr_ranks_reliably,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,6 +170,9 @@ def _extract_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     on. The flat multi-section lookup below is unchanged for scenarios that do neither
     (levy-free flat configs), so they stay byte-identical.
     """
+    from finance.native_cost_inputs import normalize_native_capex
+
+    config = normalize_native_capex(config)
     from finance.import_levies import has_taxes_indirect
 
     capex_section = _section_case_insensitive(config, "capex")
@@ -479,6 +483,7 @@ def build_equity_distribution_schedule(
     """Build annual equity distributions from debt-enriched annual rows."""
     debt_service_series = list(debt_result.get("debt_service_total") or [])
     debt_outstanding_series = list(debt_result.get("debt_outstanding") or [])
+    row_period_map = list(debt_result.get("annual_row_debt_period_map") or [])
     # When the DSRA is funded at close it is already full at t0, so the operating top-up
     # only has to REBUILD it after a drawdown rather than fund it from year-1 cash.
     # Default-off -> seed 0 (the reserve is built from operating cash, as before).
@@ -652,9 +657,17 @@ def build_equity_distribution_schedule(
         # above decided about distributions (a cured year is usually also covenant-locked).
         equity_distribution -= sponsor_cure
 
+        # debt_outstanding_series is period-indexed (construction + bridge + operating);
+        # resolve via annual_row_debt_period_map when present so operating rows read
+        # their own period rather than three periods earlier (#1506).
+        outstanding_idx = index
+        if index < len(row_period_map) and isinstance(row_period_map[index], Mapping):
+            mapped_period = row_period_map[index].get("debt_period")
+            if mapped_period is not None:
+                outstanding_idx = int(mapped_period)
         debt_outstanding = (
-            _as_float(debt_outstanding_series[index])
-            if index < len(debt_outstanding_series)
+            _as_float(debt_outstanding_series[outstanding_idx])
+            if 0 <= outstanding_idx < len(debt_outstanding_series)
             else None
         )
 
@@ -803,9 +816,12 @@ def calculate_equity_distribution_from_pipeline(
     # called back after distributions (e.g. a refinanced tail serviced from equity), the
     # series changes sign more than once and the IRR can rank alternatives backwards.
     # The IRR is still reported; the count and the flag below are its caveat.
+    # The flag is the helper's own predicate, so the summary and any direct caller agree:
+    # it is False both for more than one sign change and for none (no IRR exists, #1522).
+    # The warning is about multiple roots, so it fires only for more than one.
     sign_changes = count_cashflow_sign_changes(cashflows)
-    irr_ranks_reliably = sign_changes <= 1
-    if not irr_ranks_reliably:
+    irr_ranks_reliably = equity_irr_ranks_reliably(cashflows)
+    if sign_changes > 1:
         logger.warning(
             "Equity cashflows for %r change sign %d times; equity IRR (%s) may have "
             "several roots or be dominated by late equity calls, and can rank options "
