@@ -78,3 +78,22 @@ def test_lender_case_runs_fixed_debt_stress() -> None:
         _lender()["constraints"]["min_dscr_covenant"]
     )
     assert 0.0 <= stress["breach_probability"] <= 1.0
+
+
+def test_fixed_debt_stress_is_metadata_only_on_the_lender_case() -> None:
+    """Turning the stress on changes no summary, trial or other non-metadata field (#1724)."""
+    runs = {}
+    logging.disable(logging.WARNING)
+    try:
+        for on in (True, False):
+            config = _lender()
+            config["monte_carlo"]["fixed_debt_stress"] = on
+            runs[on] = run_monte_carlo_analysis(
+                base_config=config, n_trials=4, seed=42
+            ).model_dump()
+    finally:
+        logging.disable(logging.NOTSET)
+    meta_on, meta_off = runs[True].pop("metadata"), runs[False].pop("metadata")
+    assert runs[True] == runs[False]
+    assert "fixed_debt_stress" in meta_on
+    assert "fixed_debt_stress" not in meta_off
