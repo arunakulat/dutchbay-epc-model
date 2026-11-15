@@ -9,12 +9,12 @@
 - What the diagnostic measures: the minimum, over the periods with committed debt service, of
   trial CFADS divided by that period's committed service, on an unfolded per-period basis. It
   is not the covenant basis. The covenant test folds the bridge period's service into
-  operating year 1, and the deterministic minimum DSCR comes from the balloon test; the stress
-  applies neither. At the base case the stress minimum sits exactly at the 1.30x covenant,
-  because debt is sculpted to leave no headroom in 13 operating years, so any trial with a
-  CFADS shortfall in one of those years shows as a breach. Bringing the stress onto the
-  covenant basis is a separate engine change (#1728). Under F-5 the diagnostic supports no
-  covenant, lender or IC representation.
+  operating year 1, which is where the deterministic case's 1.22x minimum DSCR comes from; the
+  stress does not fold, so it reads that year at about 2.4x. At the base case the stress
+  minimum sits exactly at the 1.30x covenant, because debt is sculpted to leave no headroom in
+  operating years 2 to 14, so any trial with a CFADS shortfall in one of those 13 years shows
+  as a breach. Bringing the stress onto the covenant basis is a separate engine change
+  (#1728). Under F-5 the diagnostic supports no covenant, lender or IC representation.
 - The fixed-debt test fixture's "off" case now sets the stress off explicitly, since the lender
   case turns it on. A new test pins that turning the stress on leaves the lender case's Monte
   Carlo summary and trials unchanged.
