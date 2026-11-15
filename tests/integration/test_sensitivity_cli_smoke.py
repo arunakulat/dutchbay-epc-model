@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 
-def test_sensitivity_hydra_cli_runs() -> None:
+def test_sensitivity_hydra_cli_runs(tmp_path: Path) -> None:
     proc = subprocess.run(
         [
             sys.executable,
@@ -25,6 +25,8 @@ def test_sensitivity_hydra_cli_runs() -> None:
             "analytics.cli.cli_sensitivity_hydra",
             f"config={LENDER}",
             "write_artifacts=false",
+            # Hydra's run dir goes to tmp_path, not outputs/ in the checkout (#1659).
+            f"hydra.run.dir={tmp_path / 'hydra'}",
         ],
         cwd=str(REPO_ROOT),  # makes `analytics` importable + relative paths resolve
         capture_output=True,
