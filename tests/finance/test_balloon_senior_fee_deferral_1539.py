@@ -12,12 +12,19 @@ The oracles are hand-computed on a small schedule, independent of the engine.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import pytest
+import yaml
 
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from finance.debt_v14 import _balloon_resolution_path
+from finance.equity_distribution_v14_hydra import (
+    EquityDistributionConfig,
+    build_equity_distribution_schedule,
+)
 
 # Index 0 construction, 1-2 scheduled service, maturity at period 3, then 3-6 post-maturity.
 _DS = [0.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0]
@@ -109,3 +116,160 @@ def test_debt_result_publishes_the_deferral_for_the_lender_case() -> None:
     debt = run_v14_pipeline("scenarios/dutchbay_lendercase_2025Q4.yaml")["debt_result"]
     assert "senior_fee_deferred_usd" in debt
     assert debt["senior_fee_deferred_residual"] == 0.0
+
+
+def test_a_negative_cash_period_pays_no_fee_and_defers_it_all() -> None:
+    """Assurance A-2, mutant M1: a negative period must not book a negative fee."""
+    # p3: fee due 20, cash -10 -> pay 0, defer 20; balloon capitalises 10 -> 110.
+    # p4: fee due 22 + 20 = 42, cash 5 -> pay 5, defer 37; balloon -> 121.
+    # p5: fee due 24.2 + 37 = 61.2, cash 100 -> pay it; 38.8 settles the 21
+    #     capitalised and 12.1 accrued interest first -> 94.3.
+    # p6: fee due 18.86, cash 100 -> pay it; 81.14 sweeps 103.73 due -> 22.59 left.
+    cfads = [0.0, 0.0, 0.0, -10.0, 5.0, 100.0, 100.0]
+    path = _path("cash_sweep", cfads, fee_rate=0.20)
+    assert path["senior_fee"][3:] == pytest.approx([0.0, 5.0, 61.2, 18.86])
+    assert path["senior_fee_deferred"][3:] == pytest.approx([20.0, 37.0, 0.0, 0.0])
+    assert path["resolution"][3:] == pytest.approx([0.0, 0.0, 38.8, 81.14])
+    assert path["residual"] == pytest.approx(22.59)
+
+
+# ── The equity waterfall settles the arrears ahead of equity (domain DOM-1) ────────
+
+
+def _waterfall(
+    deferred: List[Optional[float]],
+    cash: List[float],
+    *,
+    service: Optional[List[float]] = None,
+    **config: Any,
+) -> List[Dict[str, Any]]:
+    service = service or [0.0] * len(cash)
+    rows = []
+    for i, (d, c, ds) in enumerate(zip(deferred, cash, service, strict=True)):
+        row: Dict[str, Any] = {
+            "year": i + 1,
+            "cf_pre_debt": c,
+            "debt_service_total": ds,
+        }
+        row["senior_fee_deferred_usd"] = d
+        rows.append(row)
+    settings = {"min_reserve_months": 0, "min_dscr_threshold": 0.0}
+    settings.update(config)
+    return build_equity_distribution_schedule(
+        annual_rows=rows,
+        debt_result={},
+        distribution_config=EquityDistributionConfig(**settings),
+    )
+
+
+def _col(schedule: List[Dict[str, Any]], key: str) -> List[float]:
+    return [row[key] for row in schedule]
+
+
+def test_waterfall_pays_arrears_before_any_distribution() -> None:
+    # y1: no arrears -> 10 to equity. y2: 4 owed -> paid, 6 to equity.
+    # y3: the engine carries 15, 11 of it new; 10 of cash pays 10 -> 1 owed, nothing
+    #     to equity. y4: the row is not governed, so 15 carries; 1 paid, 9 to equity.
+    schedule = _waterfall([None, 4.0, 15.0, None], [10.0] * 4)
+    assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx(
+        [0.0, 4.0, 10.0, 1.0]
+    )
+    assert _col(schedule, "senior_fee_arrears_usd") == pytest.approx(
+        [0.0, 0.0, 1.0, 0.0]
+    )
+    assert _col(schedule, "equity_distribution_usd") == pytest.approx(
+        [10.0, 6.0, 0.0, 9.0]
+    )
+
+
+def test_waterfall_returns_arrears_the_engine_pays_again() -> None:
+    # y1: 5 owed -> paid from equity cash. y2: the engine's own later cash paid the
+    # arrears (its balance is 0), so the 5 is handed back rather than paid twice.
+    schedule = _waterfall([5.0, 0.0], [10.0, 10.0])
+    assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx(
+        [5.0, -5.0]
+    )
+    assert _col(schedule, "equity_distribution_usd") == pytest.approx([5.0, 15.0])
+
+
+def test_waterfall_uses_spv_held_cash_and_never_calls_equity() -> None:
+    # 50% holdback: y1 and y2 each retain 5. y3 owes 30: 10 of cash, then the 10
+    # retained -> 10 still owed, no distribution and no cash call.
+    schedule = _waterfall([None, None, 30.0], [10.0] * 3, holdback_pct=50.0)
+    assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx(
+        [0.0, 0.0, 20.0]
+    )
+    assert schedule[-1]["senior_fee_arrears_usd"] == pytest.approx(10.0)
+    assert _col(schedule, "equity_distribution_usd") == pytest.approx([5.0, 5.0, 0.0])
+
+
+def test_horizon_arrears_take_the_terminal_release_first_and_warn(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # 12-month reserve on 6 of service: y1 funds 6 and distributes 8. y2's cash meets
+    # only its service, so the 10 owed stays. At the horizon the reserve's 6 pays the
+    # arrears before any release -> 4 unpaid, nothing released to the sponsor.
+    with caplog.at_level(logging.WARNING):
+        schedule = _waterfall(
+            [None, 10.0], [20.0, 6.0], service=[6.0, 6.0], min_reserve_months=12
+        )
+    assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx([0.0, 6.0])
+    assert schedule[-1]["senior_fee_arrears_usd"] == pytest.approx(4.0)
+    assert schedule[-1]["terminal_release_usd"] == 0.0
+    assert _col(schedule, "equity_distribution_usd") == pytest.approx([8.0, 0.0])
+    assert "still unpaid at the horizon" in caplog.text
+
+
+def test_no_arrears_leave_the_waterfall_unchanged() -> None:
+    cash = [10.0, -3.0, 12.0]
+    service = [4.0, 4.0, 4.0]
+    base = _waterfall([None] * 3, cash, service=service, holdback_pct=20.0)
+    zero = _waterfall([0.0] * 3, cash, service=service, holdback_pct=20.0)
+    assert base == zero
+    assert all(row["senior_fee_arrears_settled_usd"] == 0.0 for row in base)
+
+
+# ── End to end: a cash sweep with a fee its cash cannot pay (A-2, DOM-1, DOM-2) ─────
+
+
+@pytest.fixture(scope="module")
+def stressed_run(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Any]:
+    """The base case on a cash sweep with a 5% guarantee fee. A synthetic stress, not
+    a committed scenario: no committed scenario reaches a deferral."""
+    config = yaml.safe_load(Path("scenarios/dutchbay_basecase_2025Q4.yaml").read_text())
+    terms = config["Financing_Terms"]
+    terms["balloon_treatment"] = "cash_sweep"
+    fees = terms.setdefault("fees", {})
+    fees["guarantee_fee_pct_per_year"] = 0.05
+    fees["pri_premium_pct_per_year"] = 0.0
+    path = tmp_path_factory.mktemp("fee1539") / "stress.yaml"
+    path.write_text(yaml.safe_dump(config, sort_keys=False))
+    return run_v14_pipeline(str(path))
+
+
+def test_plan_debt_publishes_a_real_deferral(stressed_run: Dict[str, Any]) -> None:
+    """Assurance A-2, mutant M4: plan_debt must publish the path's deferral."""
+    debt = stressed_run["debt_result"]
+    assert any((v or 0.0) > 0.0 for v in debt["senior_fee_deferred_usd"])
+    assert debt["senior_fee_deferred_residual"] > 0.0
+
+
+def test_no_distribution_while_arrears_are_owed(stressed_run: Dict[str, Any]) -> None:
+    rows = stressed_run["equity_distribution"]["annual_distributions"]
+    assert sum(row["senior_fee_arrears_settled_usd"] for row in rows) > 0.0
+    for row in rows:
+        if row["senior_fee_arrears_usd"] > 1e-6:
+            assert row["equity_distribution_usd"] <= 0.0, row["year"]
+
+
+def test_unpaid_fee_is_on_the_kpi_surface(stressed_run: Dict[str, Any]) -> None:
+    debt = stressed_run["debt_result"]
+    summary = stressed_run["equity_distribution"]["equity_summary"]
+    unpaid = stressed_run["kpis"]["senior_fee_deferred_residual"]
+    assert unpaid == pytest.approx(summary["senior_fee_unpaid_at_horizon_usd"])
+    # Charged = paid by the engine + settled by the waterfall + unpaid.
+    assert unpaid == pytest.approx(
+        debt["senior_fee_deferred_residual"]
+        - summary["total_senior_fee_arrears_settled_usd"]
+    )
+    assert unpaid > 0.0

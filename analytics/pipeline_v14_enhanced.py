@@ -250,6 +250,10 @@ def _enrich_annual_rows_with_debt(
     # touches cf_after_debt.
     balloon_interest_accrued = list(debt_result.get("balloon_interest") or [])
     balloon_interest_paid = list(debt_result.get("balloon_interest_paid") or [])
+    # Senior fee a cash sweep could not pay, carried at the end of each balloon period
+    # (#1539). Same PERIOD index; None where the balloon path does not govern. Surfaced
+    # on each row so the equity waterfall settles the arrears ahead of any distribution.
+    senior_fee_deferred = list(debt_result.get("senior_fee_deferred_usd") or [])
     # debt_service_total is PERIOD-indexed (offset by the construction + bridge
     # lead-in). Align each annual row to its debt period via the canonical map;
     # positional indexing attributed each year an earlier (higher-CFADS) year's
@@ -401,6 +405,16 @@ def _enrich_annual_rows_with_debt(
         )
         out["balloon_interest_paid_usd"] = _period_value(
             balloon_interest_paid, period_idx
+        )
+        # None (not 0.0) where the balloon path does not govern this period: the
+        # waterfall then carries the last governed balance forward (#1539).
+        deferred_value = (
+            senior_fee_deferred[period_idx]
+            if 0 <= period_idx < len(senior_fee_deferred)
+            else None
+        )
+        out["senior_fee_deferred_usd"] = (
+            None if deferred_value is None else float(deferred_value)
         )
         out["cf_after_debt"] = (
             cf_pre_debt - debt_service_value - balloon_resolution_value
@@ -1054,6 +1068,9 @@ def _update_kpis_with_equity_distribution(
         # P2-F3-01 (#1398): a DSCR<1 year's shortfall and the sponsor cure that funded it.
         ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
         ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
+        # #1539: the deferred senior fee still unpaid after the waterfall settled what
+        # its cash could. Overwrites the engine-level figure metrics.py published.
+        ("senior_fee_unpaid_at_horizon_usd", "senior_fee_deferred_residual"),
     ):
         value = summary_raw.get(source_key)
         if value is not None:

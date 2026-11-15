@@ -92,10 +92,16 @@ def plan_debt(
       canonical surface; see :func:`_build_dscr_periods`.
     - ``debt_service_total``, ``interest_total``, ``total_service``,
       ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution``,
-      ``balloon_interest``, ``balloon_interest_paid`` — PERIOD-indexed, positional, aligned 1:1 with
-      ``dscr_series``. ``debt_outstanding`` is each period's OPENING balance; after
-      maturity it is the balloon actually outstanding under its treatment, and
-      ``senior_fee_usd`` is charged on that balance (see
+      ``balloon_interest``, ``balloon_interest_paid``, ``senior_fee_deferred_usd`` —
+      PERIOD-indexed, positional, aligned 1:1 with ``dscr_series``.
+      ``debt_outstanding`` is each period's OPENING balance; after maturity it is the
+      balloon actually outstanding under its treatment. After maturity
+      ``senior_fee_usd`` is the fee PAID in cash on that balance: it equals the fee
+      charged except under ``cash_sweep`` when the period's cash cannot pay the fee due.
+      The unpaid part is deferred (#1539): ``senior_fee_deferred_usd`` is the balance
+      carried at the end of each balloon period (``None`` where the balloon path does
+      not govern), and ``senior_fee_deferred_residual`` the balance still deferred at
+      the horizon, before the equity waterfall settles what it can (see
       :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
       only; the balloon's post-maturity interest is ``balloon_interest`` (accrued)
       and ``balloon_interest_paid`` (settled in cash, capitalised interest first).

@@ -159,9 +159,13 @@ def _balloon_resolution_path(
       the period generates, and an unpaid balance shows as ``residual``. The fee due
       (this period's fee on the opening balance plus any fee deferred earlier) is paid
       first, up to the period's cash; whatever the cash cannot pay is deferred and
-      carried forward, without interest, as the first claim on later cash (owner
-      ruling on #1539, 2026-11-15). Before #1539 the full fee was charged even when it
-      exceeded the period's cash.
+      carried forward as the first claim on later cash (owner ruling on #1539,
+      2026-11-15). ASSUMPTION: the deferred fee bears no interest; the ruling does not
+      say, and the owner may change it. Before #1539 the full fee was charged even when
+      it exceeded the period's cash. The cash here is the sizing-basis ``cfads_ext``,
+      which can be lower than the cash the equity waterfall holds, so the waterfall
+      also settles the deferred balance from its own cash ahead of any distribution
+      (``finance.equity_distribution_v14_hydra``).
     - ``bullet``: the balloon and one period's interest are repaid in the maturity
       period, which may exceed the period's cash (a sponsor cash call).
     - ``refinance``: a level annuity over ``refi_tenor_years`` at ``avg_rate`` plus
@@ -266,7 +270,8 @@ def _balloon_resolution_path(
     # `remaining` (capitalised) and is the first claim on a later payment.
     capitalised_interest = 0.0
     # Senior fee charged but not yet paid (#1539). It is senior to the sweep: the fee
-    # due is paid before any cash reaches the balloon. It carries no interest.
+    # due is paid before any cash reaches the balloon. It carries no interest (an
+    # ASSUMPTION; see the docstring).
     deferred_fee = 0.0
     for p in range(maturity, n):
         available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
