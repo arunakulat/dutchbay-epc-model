@@ -48,8 +48,8 @@ from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
-    CovenantSource,
     Covenants,
+    CovenantSource,
     KpiKind,
     LimitationItem,
     ReportConfig,
