@@ -56,7 +56,13 @@ execution equality: workflow or job environment, run defaults, a job container, 
 shell or working directory can skip or interpose the gate while leaving ``run: make
 security`` unchanged, and so can a self-hosted ``runs-on`` label or a ``needs`` on a job
 that never runs, which skips the gate without failing it. The shared workflow guard therefore
-pins those declarative context channels for both committed invocations. The third blind
+pins those declarative context channels for both committed invocations. The daily main
+audit has no summary job behind it, so its guard also rejects a ``cancel-in-progress``
+that is not false, at workflow or job level, and any ``strategy`` on its gate job: a
+cancelled run leaves no audit status for its commit, and an empty matrix expands to zero
+jobs that GitHub reports as skipped (#1512). No guard here binds a preceding step, which
+can change the checkout or the toolchain while ``run: make security`` stays unchanged;
+SECDEP-01 states that limit. The third blind
 spot's remedy is deliberately HARDENING and names no root cause: whether the cache caused any
 particular verdict is not asserted here. It cannot re-measure coverage - that needs the
 network and a resolve - so the numbers above stay in the pull request's receipts and in the
@@ -64,7 +70,7 @@ network and a resolve - so the numbers above stay in the pull request's receipts
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: all are pure functions over text, exercised against mutated
-copies rather than trusted - 89 controls: 15 over the ``Makefile``, 32 over the main audit
+copies rather than trusted - 97 controls: 15 over the ``Makefile``, 40 over the main audit
 workflow, 12 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
 hygiene (twelve shapes against each workflow file: cache, pins and canary), and 6 over the
 tooling pins against the lock. The canary's own verdict function carries its negative
@@ -473,6 +479,23 @@ def audit_workflow(workflow: Workflow) -> list[str]:
             )
         )
 
+    # Two more committed keys reach the silent outcome the `needs` ban exists to prevent
+    # (#1512). The pull-request gate has Test Summary behind it, which exits 1 on any
+    # non-success; the daily main audit has nothing behind it, so these bind here only.
+    violations.extend(_cancellation_violations(workflow.get("concurrency"), "workflow"))
+    for job, _step in gate_steps:
+        if "concurrency" in job:
+            violations.extend(_cancellation_violations(job["concurrency"], "job"))
+        # Any strategy, not only an empty one: a matrix can be written as an expression
+        # (`${{ fromJSON('[]') }}`) that is empty only at run time, so emptiness cannot be
+        # proved from the text, and the audit job has no reason to fan out.
+        if "strategy" in job:
+            violations.append(
+                "security-audit.yml: security job must not set `strategy`; an empty "
+                "matrix expands to zero jobs and GitHub reports skipped rather than "
+                f"failed, got {job['strategy']!r}"
+            )
+
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
     if "Security Scan" in names:
         violations.append(
@@ -481,6 +504,27 @@ def audit_workflow(workflow: Workflow) -> list[str]:
         )
 
     return violations
+
+
+def _cancellation_violations(concurrency: object, level: str) -> list[str]:
+    """Reject a ``cancel-in-progress`` on the daily main audit that is not proved false.
+
+    A cancelled run leaves no audit status for its commit, and GitHub reports it as
+    cancelled rather than failed. ``concurrency`` takes a bare group name or a mapping, and
+    a missing ``cancel-in-progress`` defaults to false, so only those shapes and the false
+    spellings are accepted. Actions takes an expression here too, so a list of bad
+    literals would miss ``${{ true }}`` and a condition that cancels only some runs.
+    """
+    if not isinstance(concurrency, dict) or "cancel-in-progress" not in concurrency:
+        return []
+    cancel = concurrency["cancel-in-progress"]
+    if str(cancel).strip().lower() in {"false", "${{ false }}"}:
+        return []
+    return [
+        f"security-audit.yml: {level} `concurrency` must keep `cancel-in-progress` "
+        "false; a cancelled run leaves no audit status for its commit, got "
+        f"{cancel!r}"
+    ]
 
 
 def audit_gate_hygiene(workflow: Workflow, label: str) -> list[str]:
@@ -745,6 +789,21 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
     assert (
         audit_workflow(_with_trigger("push", {"branches": ["main", "release/*"]})) == []
     )
+    # A run that is never cancelled: the false spellings, a mapping or a bare group
+    # name with `cancel-in-progress` left at its false default, and no concurrency.
+    for allowed in (False, "false", "${{ false }}"):
+        assert audit_workflow(_with_cancel_in_progress(allowed)) == []
+        assert (
+            audit_workflow(
+                _mutate_job(concurrency={"group": "a", "cancel-in-progress": allowed})
+            )
+            == []
+        )
+    assert audit_workflow(_mutate_workflow(concurrency={"group": "audit"})) == []
+    assert audit_workflow(_mutate_workflow(concurrency="audit")) == []
+    workflow = _workflow()
+    workflow.pop("concurrency")
+    assert audit_workflow(workflow) == []
 
 
 def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
@@ -1085,6 +1144,13 @@ def _with_never_run_dependency() -> Workflow:
     return workflow
 
 
+def _with_cancel_in_progress(value: object) -> Workflow:
+    """Set the workflow-level `cancel-in-progress`, keeping the committed group."""
+    workflow = _workflow()
+    workflow["concurrency"] = {**workflow["concurrency"], "cancel-in-progress": value}
+    return workflow
+
+
 def _with_duplicated_gate_step() -> Workflow:
     workflow = _workflow()
     for job in workflow["jobs"].values():
@@ -1269,6 +1335,54 @@ def _with_duplicated_gate_step() -> Workflow:
             _with_duplicated_gate_step,
             "exactly once",
             id="gate step duplicated",
+        ),
+        # Found by the domain lane on #1500 (#1512): two committed keys that reach a
+        # silent skip or cancel of the daily audit while `audit_workflow` returned [].
+        # The first and the empty-matrix shape are the lane's own probes; the rest are
+        # the other values Actions accepts in those fields.
+        pytest.param(
+            lambda: _with_cancel_in_progress(True),
+            "must keep `cancel-in-progress` false",
+            id="workflow cancel-in-progress flipped to true",
+        ),
+        pytest.param(
+            lambda: _with_cancel_in_progress("${{ true }}"),
+            "must keep `cancel-in-progress` false",
+            id="workflow cancel-in-progress written as an expression",
+        ),
+        pytest.param(
+            lambda: _with_cancel_in_progress("True"),
+            "must keep `cancel-in-progress` false",
+            id="workflow cancel-in-progress written as a capitalised string",
+        ),
+        pytest.param(
+            lambda: _with_cancel_in_progress("${{ github.event_name == 'push' }}"),
+            "must keep `cancel-in-progress` false",
+            id="workflow cancel-in-progress cancels only push runs",
+        ),
+        pytest.param(
+            lambda: _mutate_job(
+                concurrency={"group": "audit", "cancel-in-progress": True}
+            ),
+            "job `concurrency` must keep `cancel-in-progress` false",
+            id="job concurrency cancels an in-progress audit",
+        ),
+        pytest.param(
+            lambda: _mutate_job(strategy={"matrix": {"include": []}}),
+            "must not set `strategy`",
+            id="empty matrix expands the audit to zero jobs",
+        ),
+        pytest.param(
+            lambda: _mutate_job(
+                strategy={"matrix": {"python": "${{ fromJSON('[]') }}"}}
+            ),
+            "must not set `strategy`",
+            id="matrix empty only at run time through an expression",
+        ),
+        pytest.param(
+            lambda: _mutate_job(strategy={"fail-fast": False}),
+            "must not set `strategy`",
+            id="any strategy on the audit job",
         ),
     ],
 )
