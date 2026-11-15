@@ -20,7 +20,6 @@ is skipped unless the three private inputs are configured on the host.
 
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
 import math
@@ -1235,6 +1234,89 @@ def test_summary_publishes_aggregates_only() -> None:
     assert longest(json.loads(SUMMARY.read_text())) <= 64
 
 
+# The private re-run is compared without ``model_version`` (the committed summary keeps the
+# version it was pinned at, by design) and with floats at a relative tolerance of 1e-9. The
+# owner's Mac reproduces every figure byte for byte except receptor-to-tower distances, which
+# differ by about 5e-13 relative because the Mac and Linux geometry builds round differently
+# (#1578, L-4 receipt). Every other key, string, integer, boolean and list length must match
+# exactly.
+_RERUN_UNPINNED_KEYS = frozenset({"model_version"})
+_RERUN_FLOAT_REL = 1e-9
+
+
+def _rerun_differences(got: Any, want: Any, path: str = "") -> list[str]:
+    """Return where a re-run summary departs from the committed one; empty when they agree."""
+    if isinstance(want, dict) and isinstance(got, dict):
+        if not path:
+            got = {k: v for k, v in got.items() if k not in _RERUN_UNPINNED_KEYS}
+            want = {k: v for k, v in want.items() if k not in _RERUN_UNPINNED_KEYS}
+        if set(got) != set(want):
+            return [f"{path or '/'}: keys {sorted(set(got) ^ set(want))} differ"]
+        return [
+            d
+            for k in sorted(want)
+            for d in _rerun_differences(got[k], want[k], f"{path}/{k}")
+        ]
+    if isinstance(want, list) and isinstance(got, list):
+        if len(got) != len(want):
+            return [f"{path}: length {len(got)} != {len(want)}"]
+        return [
+            d
+            for i, (g, w) in enumerate(zip(got, want, strict=True))
+            for d in _rerun_differences(g, w, f"{path}[{i}]")
+        ]
+    if isinstance(want, float) and isinstance(got, float):
+        if math.isfinite(want) and math.isfinite(got):
+            close = math.isclose(got, want, rel_tol=_RERUN_FLOAT_REL, abs_tol=0.0)
+        else:
+            close = got == want or (math.isnan(got) and math.isnan(want))
+        return [] if close else [f"{path}: {got!r} != {want!r}"]
+    if type(got) is not type(want) or got != want:
+        return [f"{path}: {got!r} != {want!r}"]
+    return []
+
+
+def test_rerun_comparison_tolerates_only_float_rounding_and_the_version() -> None:
+    want = {
+        "model_version": "15.18.0",
+        "n": 8,
+        "label": "mast",
+        "flag": True,
+        "receptors": [{"distance_m": 53.21}, {"distance_m": 0.0}],
+    }
+    noisy = json.loads(json.dumps(want))
+    noisy["model_version"] = "15.27.0"
+    noisy["receptors"][0]["distance_m"] = 53.21 * (1 + 4.5e-13)
+    assert _rerun_differences(noisy, want) == []
+
+    def changed(path: tuple[Any, ...], value: Any) -> Dict[str, Any]:
+        out: Dict[str, Any] = json.loads(json.dumps(want))
+        node: Any = out
+        for step in path[:-1]:
+            node = node[step]
+        node[path[-1]] = value
+        return out
+
+    assert _rerun_differences(
+        changed(("receptors", 0, "distance_m"), 53.21 * (1 + 1e-8)), want
+    )
+    assert _rerun_differences(changed(("receptors", 1, "distance_m"), 1e-15), want)
+    assert _rerun_differences(changed(("n",), 9), want)
+    assert _rerun_differences(changed(("n",), 8.0), want)
+    assert _rerun_differences(changed(("flag",), 1), want)
+    assert _rerun_differences(changed(("label",), "Mast"), want)
+    assert _rerun_differences(changed(("receptors",), [{"distance_m": 53.21}]), want)
+    assert _rerun_differences({**want, "extra": 1}, want)
+    nested_version = changed(("receptors", 0, "model_version"), "15.27.0")
+    assert _rerun_differences(nested_version, want)
+    assert (
+        _rerun_differences(
+            {k: v for k, v in want.items() if k != "model_version"}, want
+        )
+        == []
+    )
+
+
 _PRIVATE = (
     "DUTCHBAY_MET_MAST_617725_SOURCE",
     "DUTCHBAY_NASA_POWER_DIR",
@@ -1255,8 +1337,4 @@ def test_rerun_reproduces_the_committed_summary() -> None:
     out = cli.run(raw)
     committed = json.loads(SUMMARY.read_text())
     got = json.loads(json.dumps(out, sort_keys=True))
-    assert got == committed
-    assert (
-        hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest()
-        == hashlib.sha256(json.dumps(committed, sort_keys=True).encode()).hexdigest()
-    )
+    assert _rerun_differences(got, committed) == []

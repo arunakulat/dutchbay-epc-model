@@ -76,6 +76,12 @@ array:
   # (scenarios/dutchbay_hybrid_bess_2025Q4.yaml resource.solar.dc_ac_ratio, the 0.1685 P50),
   # inside the usual 1.1-1.3 for fixed tilt in the tropics. Inverter clipping is computed,
   # not assumed. A higher ratio would feed the battery more; it is a PR 3 sizing variable.
+  # PR 2's ILLUSTRATIVE UNIT (L-6, #1578): this ratio, ac_capacity_mw and the bess power and
+  # energy below are PR 2's unit, the fixture of its tests and committed outputs, not the
+  # project's size. Every sizing run replaces them at each point (a test checks that changing
+  # them leaves a run unchanged). The committed size is the scenario's
+  # (scenarios/blue_whale_solar_bess_lot5b_2026.yaml, generation.technologies), chosen by
+  # conf/blue_whale_solar_bess_project_sizing.yaml; it is not restated here so it cannot go stale.
   dc_ac_ratio: 1.2
   # Fixed tilt near the PR 1 site latitude (8.29 N), equal to the DutchBay basis (8 deg).
   tilt_deg: 8.0
@@ -164,7 +170,8 @@ pv_yield:
     annual_ghi_kwh_m2: 1871.0         # informational when tmy_path is set
     # The DutchBay 14% soiling/wiring/mismatch/availability stack behind the 0.1685 P50.
     system_loss_pct: 14.0
-    inverter_eff_nom: 0.96            # PVWatts nominal; the inverter is chosen in PR 3
+    inverter_eff_nom: 0.96            # PVWatts nominal, PR 2's unit only: the sizing runs use the chosen
+                                      # inverter's 0.988 (conf/blue_whale_pv_bess_pricing.yaml)
     tmy_path: "inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv"
   # Not modelled, declared:
   # - bifacial rear gain: no measured ground albedo or row-height basis for this site, and
@@ -204,8 +211,11 @@ pv_yield:
   degradation_years: 20               # path reported for the PPA term
 
 bess:
+  # PR 2's illustrative battery (L-6, above). The PUCSL 2026 rules fix 4 h (energy = 4 x power),
+  # and the sizing replaces power and energy at each point; only the efficiencies and SoC limits
+  # below reach a sizing run.
   power_mw: 5.0
-  energy_mwh: 30.0                    # 5 MW x 6 h (owner)
+  energy_mwh: 30.0                    # 5 MW x 6 h (owner's brief, before the 4 h rule)
   # AC-AC round-trip efficiency: the repository value (finance.bess_revenue
   # _DEFAULT_ROUND_TRIP_EFFICIENCY, NREL ATB 2024 basis, #588).
   round_trip_efficiency: 0.85

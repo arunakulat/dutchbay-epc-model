@@ -20,6 +20,7 @@ from app.reports.report_model import (
     fmt_pct,
     fmt_pp,
     fmt_ratio_pct,
+    fmt_ratio_pct_or_undefined,
     fmt_usd,
     fmt_x,
 )
@@ -75,6 +76,7 @@ def _environment() -> Environment:
         fmt_gwh=fmt_gwh,
         fmt_x=fmt_x,
         fmt_ratio_pct=fmt_ratio_pct,
+        fmt_ratio_pct_or_undefined=fmt_ratio_pct_or_undefined,
         fmt_pct=fmt_pct,
         fmt_pp=fmt_pp,
     )
