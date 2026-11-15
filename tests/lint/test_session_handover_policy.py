@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -74,8 +75,17 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _skip_if_shallow_unless_gate(repo_root: Path = REPO_ROOT) -> None:
+    """Skip live-history tests on shallow checkouts unless HANDOVER_GATE=1."""
+    if os.environ.get("HANDOVER_GATE") == "1":
+        return
+    if _git(repo_root, "rev-parse", "--is-shallow-repository") == "true":
+        pytest.skip("needs full history; runs in handover-resolver.yml")
+
+
 def test_handover_resolver_live_history_execution() -> None:
     """Item 1: Run the handover resolver against this repository's own full history in CI."""
+    _skip_if_shallow_unless_gate()
     result = subprocess.run(
         [sys.executable, str(RESOLVER_SCRIPT)],
         cwd=REPO_ROOT,
@@ -100,6 +110,7 @@ def test_handover_resolver_live_history_execution() -> None:
 
 def test_committed_handover_records_declare_startup_and_carried_forward_state() -> None:
     """Item 3 (Positive): All active post-v15.6.1 session handover records declare startup and carried-forward state."""
+    _skip_if_shallow_unless_gate()
     docs_dir = REPO_ROOT / "docs"
     # Check all active handover records from v15.6.1 (2026-10-05) onwards
     recent_handover_files = sorted(docs_dir.glob("SESSION_HANDOVER_2026-1[0-9]*.md"))
@@ -247,3 +258,26 @@ def test_handover_resolver_refuses_uncommitted_near_family_record(
         or "uncommitted" in stderr_lower
         or "resolutionerror" in stderr_lower
     )
+
+
+def test_shallow_clone_guard_respects_handover_gate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Shallow-clone guard skips when shallow and HANDOVER_GATE is unset, and does not skip when HANDOVER_GATE=1."""
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "_git",
+        lambda cwd, *args: (
+            "true" if args == ("rev-parse", "--is-shallow-repository") else ""
+        ),
+    )
+
+    monkeypatch.delenv("HANDOVER_GATE", raising=False)
+    with pytest.raises(
+        pytest.skip.Exception,
+        match="needs full history; runs in handover-resolver.yml",
+    ):
+        _skip_if_shallow_unless_gate(tmp_path)
+
+    monkeypatch.setenv("HANDOVER_GATE", "1")
+    _skip_if_shallow_unless_gate(tmp_path)
