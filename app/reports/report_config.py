@@ -8,7 +8,7 @@ only validates and exposes them. No finance logic (Dolphin).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,6 +37,19 @@ ClimateRiskCategory = Literal["physical", "transition"]
 #: fallback mitigation after the resolved scenario is proven to match the run manifest.
 MethodologyKey = Literal["fx_path"]
 
+#: Where a covenant threshold came from (#1668): the scenario's own ``constraints``
+#: block, or this file's report-level default when the scenario declares none.
+CovenantSource = Literal["scenario", "report_defaults"]
+
+#: What the minimum-DSCR threshold is called, by source. A scenario's
+#: ``constraints.min_dscr_covenant`` is its lock-up covenant (owner wording, #1668,
+#: 2026-11-15); this file's default is a presentation floor. The covenant table, the
+#: verdict note and the IC flag all read this one mapping.
+DSCR_THRESHOLD_NAME: Dict[CovenantSource, str] = {
+    "scenario": "lock-up covenant",
+    "report_defaults": "lender floor",
+}
+
 
 class ReportMeta(BaseModel):
     """Branding / front-matter for the rendered report."""
@@ -59,6 +72,15 @@ class Covenants(BaseModel):
     min_dscr_floor: float
     min_dscr_target: float
     max_balloon_pct: float
+    #: Set by the report from the scenario (#1668); the YAML defaults leave both
+    #: as ``report_defaults``.
+    min_dscr_floor_source: CovenantSource = "report_defaults"
+    max_balloon_pct_source: CovenantSource = "report_defaults"
+
+    @property
+    def min_dscr_floor_name(self) -> str:
+        """The minimum-DSCR threshold's name for its source (#1668)."""
+        return DSCR_THRESHOLD_NAME[self.min_dscr_floor_source]
 
 
 class KpiSpec(BaseModel):
