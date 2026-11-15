@@ -643,6 +643,46 @@ def place_turbine(
     )
 
 
+def placed_turbine_lat_lon(
+    site: Mapping[str, Any],
+    coastal_setback: Mapping[str, Any],
+    coastline_doc: Mapping[str, Any],
+) -> Tuple[float, float]:
+    """Where a siting config places the turbine, as ``(latitude, longitude)`` in WGS84.
+
+    The one reading of the turbine point for tools outside the siting run (#1578 L-16): a
+    tool that needs the point takes the siting config's ``site`` and ``coastal_setback``
+    blocks rather than keeping a copy of the coordinates.
+
+    Args:
+        site: The siting config's ``site`` block (reference point, placement rule, search
+            limit and sea-side bearing).
+        coastal_setback: The siting config's ``coastal_setback`` block.
+        coastline_doc: The GeoJSON document that ``site.coastline_geojson`` names.
+
+    Returns:
+        The placed tower's latitude and longitude.
+
+    Raises:
+        ValueError: If the placement rule is unknown or cannot place the tower.
+    """
+    frame = LocalFrame(
+        float(site["reference_lat_deg"]), float(site["reference_lon_deg"])
+    )
+    lines = coastline_lines_east_north(coastline_doc, frame)
+    placement = place_turbine(
+        lines,
+        rule=str(site["turbine_placement"]),
+        min_distance_m=CoastalSetbackConfig.from_mapping(
+            coastal_setback
+        ).tower_distance_from_coastline_m,
+        search_east_m=float(site["placement_search_east_m"]),
+        sea_side_bearing_deg=float(site["sea_side_bearing_deg"]),
+    )
+    lon, lat = frame.to_lon_lat(placement.turbine_east_m, placement.turbine_north_m)
+    return float(lat), float(lon)
+
+
 # ---------------------------------------------------------------------------
 # Placeholder lot: a square whose seaward edge lies along the coastline
 # ---------------------------------------------------------------------------
@@ -1376,6 +1416,7 @@ __all__ = [
     "place_at_coastal_setback",
     "place_at_reference_point",
     "place_turbine",
+    "placed_turbine_lat_lon",
     "receptor_as_dict",
     "oriented_shadow_mask",
     "receptor_flicker",
