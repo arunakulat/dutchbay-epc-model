@@ -142,7 +142,9 @@ def test_every_pytest_marker_the_runner_selects_is_registered() -> None:
 def test_every_hydra_config_name_entry_point_and_repo_path_exists() -> None:
     text = _runner_text()
     names = _CONFIG_NAME.findall(text)
-    assert len(names) >= 2
+    # Non-vacuous: the runner names at least the Blue Whale project sizing config. (Two until
+    # #1691 retired the fixed-battery child config the runner also named.)
+    assert "blue_whale_solar_bess_project_sizing" in names
     entry_points = _ENTRY_POINT.findall(text)
     assert "run_full_pipeline_v14.py" in entry_points
     repo_paths = _REPO_VAR_PATH.findall(text)
