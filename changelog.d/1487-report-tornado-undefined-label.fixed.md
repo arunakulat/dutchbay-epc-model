@@ -1,0 +1,1 @@
+The lender report's sensitivity tornado now prints an undefined sweep point as "undefined", following the KPI table's #1436 convention, instead of the em-dash the report uses for an absent value. A note under the table gives the number of undefined points and names the drivers (#1487).
