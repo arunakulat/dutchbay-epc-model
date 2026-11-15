@@ -1,6 +1,6 @@
 # SCMC / STEAM Hub work record
 
-Recorded 7 November 2026 for issue #1554. The evidence cutoff for the programme content is the
+Recorded 7 November 2026 for issue #1554, and updated 15 November 2026 for #1558. The evidence cutoff for the programme content is the
 5 August 2026 corrected pack, plus the 5 September 2026 cross-centre feedback.
 
 The commercial figures, individuals and source terms are deliberately left out. See
@@ -52,7 +52,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 | 5 Aug 2026 | Design critique, reference audit and corrected release | v2.0, 90 pages, PDF/UA-1 |
 | 5 Sep 2026 | Ingested the COE building consultant's AV and ELV package and advised on the interface | Cross-centre feedback and paste-ready replies |
 | 5 Sep 2026 | Issued that feedback as a DBPL PDF. This exposed a renderer crash, since fixed in #1235 and recorded in #1553 | 6-page DBPL PDF |
-| 15 Nov 2026 | Foundation phase facilitator handbook, in the Discovery handbook's format, on the Mallorca workflow, checked against v2.0 (#1558). Reviewed by independent domain and assurance lanes; their findings were fixed before it landed in the private corpus | Draft v0.4 handbook, its build sources and a build log, 20 files held privately |
+| 15 Nov 2026 | Foundation phase facilitator handbook, in the Discovery handbook's format, on the Mallorca workflow, checked against v2.0 (#1558). Reviewed by independent domain and assurance lanes; their blocking findings were fixed before it landed in the private corpus, and three wording points were carried forward | Draft v0.4 handbook, its build sources and a build log, 20 files held privately |
 
 ## Decisions that shape the work
 
@@ -82,7 +82,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 
 | Host | Session | Dates | Role |
 |---|---|---|---|
-| Claude Code | "STEAM Hub Foundation Program" (`local_e25a0508-e17a-443d-93e3-e50ce2db652b`) | 20 Jul–7 Nov 2026 | Primary. All work above except the 5 August review and v2.0 |
+| Claude Code | "STEAM Hub Foundation Program" (`local_e25a0508-e17a-443d-93e3-e50ce2db652b`) | 20 Jul–7 Nov 2026 | Primary. All work above except the 5 August review, v2.0 and the Foundation handbook |
 | Codex | `019fd034-e0ad-7f52-b6a5-00776faea626` | 5 Aug 2026 | Design critique, reference audit and v2.0 |
 | Codex | `019fc272-9ef3-7a91-841d-17910b5b9dd1` | 2 Aug 2026 | Opens with the same prompts as the primary session. No SCMC file writes detected |
 | Claude Code | Project thread "Build the SCMC facilitator handbook" | 15 Nov 2026 | The Foundation handbook (#1558): private build, then this entry |
