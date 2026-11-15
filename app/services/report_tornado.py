@@ -70,8 +70,8 @@ class TornadoBlock(BaseModel):
 def _defined(value: Optional[float]) -> Optional[float]:
     """``None`` for a value the sweep could not define (#1457: it arrives as ``nan``).
 
-    The report renders ``None`` as an em-dash; a ``nan`` would print as ``nan%`` and,
-    as a sort key, scramble the widest-first order of every defined row.
+    The report renders ``None`` here as "undefined" (#1487); a ``nan`` would print as
+    ``nan%`` and, as a sort key, scramble the widest-first order of every defined row.
     """
     return value if value is not None and math.isfinite(value) else None
 
