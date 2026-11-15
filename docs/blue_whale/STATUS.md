@@ -1344,8 +1344,8 @@ applied under the owner's delegation of 2026-11-07.
 - **Trigger.** "Below 80%" is strict: a year that starts at exactly 0.80 SoH runs unaugmented,
   and the event falls in the next year (`tests/solar/test_battery_health.py` pins the boundary).
   The trigger takes no account of the priority term left: in the base case it buys cells before
-  year 14 of the 15-year premium. Whether to skip an event near the term's end is an open
-  question for the owner (#1711 assurance N-5); the model follows the owner's words as given.
+  year 14 of the 15-year premium. Asked whether to skip an event near the term's end (#1711
+  assurance N-5), the owner kept the year-14 augmentation (2026-11-15).
 - **Not modelled.** The RTE's decline with age (the curve shows it), the curve's duty scaled to
   this battery's cycling, and O&M on the added cells.
 
