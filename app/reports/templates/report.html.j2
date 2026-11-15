@@ -400,7 +400,7 @@
   <section class="page">
     <h2>Sensitivity Tornado &mdash; Project IRR</h2>
     <p class="muted">One-at-a-time sensitivity of the project IRR to each driver
-      (base {{ fmt_ratio_pct(ctx.tornado.rows[0].base) }}); drivers ordered by swing
+      (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered by swing
       magnitude, widest first.</p>
     <table>
       <thead>
@@ -415,13 +415,21 @@
         {% for r in ctx.tornado.rows %}
         <tr>
           <td>{{ r.label }}</td>
-          <td class="num">{{ fmt_ratio_pct(r.low_case) }}</td>
-          <td class="num">{{ fmt_ratio_pct(r.high_case) }}</td>
-          <td class="num">{{ fmt_ratio_pct(r.impact_abs) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.low_case) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.high_case) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.impact_abs) }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.tornado.has_undefined %}
+    <p class="muted tornado-undefined-note">&ldquo;undefined&rdquo; marks a point where the
+      IRR solver resolved no single rate for that case&rsquo;s project cash flows, as in
+      the KPI table. It is not zero and not a value left out.
+      {%- if ctx.tornado.undefined_points %} Undefined points: {{ ctx.tornado.undefined_points }}.{% endif %}
+      {%- if ctx.tornado.undefined_drivers %} Drivers with an undefined point:
+      {{ ctx.tornado.undefined_drivers | join(", ") }}.{% endif %}</p>
+    {% endif %}
   </section>
   {% endif %}
 

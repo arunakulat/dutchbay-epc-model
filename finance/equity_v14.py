@@ -94,13 +94,16 @@ def count_cashflow_sign_changes(cashflows: Sequence[Number]) -> int:
 
 
 def equity_irr_ranks_reliably(cashflows: Sequence[Number]) -> bool:
-    """Return True when the IRR of ``cashflows`` is safe to rank alternatives on.
+    """Return True when ``cashflows`` has exactly one sign change, so its IRR is unique.
 
-    True means at most one sign change (the conventional invest-then-receive shape).
-    False means the series changes sign more than once, so rank on equity NPV instead
-    and present the IRR only with a caveat (#1456).
+    One sign change is the conventional invest-then-receive shape, and by Descartes'
+    rule its IRR, where one exists, is unique. That does not make the IRR the ranking
+    metric: rank alternatives on equity NPV regardless, because IRR and NPV can order
+    options of different scale or timing differently. False means either no sign change,
+    where there is no IRR to rank, or more than one, where the IRR may have several roots
+    or be dominated by late equity calls; present it only with a caveat (#1456, #1522).
     """
-    return count_cashflow_sign_changes(cashflows) <= 1
+    return count_cashflow_sign_changes(cashflows) == 1
 
 
 def calculate_equity_npv(
