@@ -77,3 +77,89 @@ def test_routines_run_and_produce_sane_results(tmp_path: Path) -> None:
     # The key DSCR finding: the unlevered project IRR is INVARIANT to the DSCR target.
     proj_irrs = {round(d["projIRR"], 5) for d in R["dscr"]["sweep"]}
     assert len(proj_irrs) == 1, f"project IRR should be DSCR-invariant, got {proj_irrs}"
+
+    # The narrative is filled from this run (#1578, BW-10), and the claims its prose
+    # makes in words still hold on the run's figures.
+    import json
+    import string
+
+    values = m.narrative_values(R)
+    narrative = json.loads(
+        (_SCRIPT.parent / "assets" / "solar_assessment_narrative.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    def paragraphs(node):
+        if isinstance(node, dict):
+            for v in node.values():
+                yield from paragraphs(v)
+        elif isinstance(node, list):
+            for v in node:
+                yield from paragraphs(v)
+        elif isinstance(node, str):
+            yield node
+
+    for para in paragraphs(narrative):
+        fields = {f for _, f, _, _ in string.Formatter().parse(para) if f}
+        assert fields <= set(values), sorted(fields - set(values))
+        text = para.format_map(values)
+        assert "{" not in text and "}" not in text
+
+    _assert_narrative_claims(R)
+
+
+def _assert_narrative_claims(R) -> None:
+    """The directional claims the narrative states in words, checked on a run."""
+    fit, cc = R["case_fit"], R["case_competitive"]
+    disc = cc["discount_rate_used"]
+    # "a negative unlevered return ... under both regimes", NPV strongly negative.
+    assert fit["project_irr"] < cc["project_irr"] < 0.0 < disc
+    assert fit["project_npv"] < cc["project_npv"] < 0.0
+    # The competitive case lifts the DSCR, still far below the 1.30x covenant.
+    assert fit["min_dscr"] < cc["min_dscr"] < 1.30
+
+    # Breakevens: the IRR test needs a higher tariff than the DSCR test, and both
+    # sit above the competitive tariff.
+    be = R["breakeven"]
+    assert be["dscr_tariff_lkr"] is not None and be["irr_tariff_lkr"] is not None
+    comp = R["site"]["competitive_tariff_lkr"]
+    assert comp < be["dscr_tariff_lkr"] < be["irr_tariff_lkr"]
+
+    # "no trial reaches the discount rate".
+    assert max(R["mc"]["_irr_trials"]) < disc
+
+    # Tornado: CF and tariff equal and on top, capex third, opex and tax second
+    # order, tenor zero.
+    t = {d["param"]: d["impact"] for d in R["sensitivity"]}
+    assert abs(t["Capacity Factor"] - t["Tariff"]) < 1e-3
+    assert min(t["Capacity Factor"], t["Tariff"]) > t["CAPEX"]
+    assert t["CAPEX"] > max(t["OPEX"], t["Corporate Tax Rate"])
+    assert abs(t["Debt Tenor"]) < 1e-9
+
+    # Gearing: no feasible point; the DSCR falls and equity NPV improves with leverage.
+    opt = R["optimization"]
+    assert opt["best"] is None
+    gear = sorted(opt["curve"], key=lambda p: p["x"])
+    assert gear[0]["constraint"] < 1.30
+    assert gear[-1]["constraint"] < gear[0]["constraint"]
+    assert gear[-1]["obj"] > gear[0]["obj"]
+
+    # DSCR sweep: a lower target gears up, lowers equity IRR and edges equity NPV up,
+    # so the NPV ranking picks the lowest target.
+    sweep = sorted(R["dscr"]["sweep"], key=lambda d: d["target_dscr"])
+    lo, hi = sweep[0], sweep[-1]
+    assert lo["gearing"] > hi["gearing"]
+    assert lo["eqIRR"] < hi["eqIRR"]
+    assert len({round(d["npv"], 0) for d in sweep}) == 1
+    curve = sorted(R["dscr"]["opt_curve"], key=lambda p: p["x"])
+    assert curve[0]["obj"] > curve[-1]["obj"]
+    assert R["dscr"]["opt_best"]["target"] == curve[0]["x"]
+
+    # The first half of the narrative keeps its resource figures literal.
+    res = R["resource"]
+    assert round(res["cf_mono"], 3) == 0.171
+    assert round(res["cf_bifacial"], 3) in (0.182, 0.183)
+    assert round(res["yield_mono"]) == 1496
+    assert round(res["poa"]) == 1913
+    assert round(res["aep_gwh"], 1) == 16.0

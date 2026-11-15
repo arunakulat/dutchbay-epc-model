@@ -257,7 +257,7 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
 
     # --- 2/7. Breakeven sweeps ---
     R["tariff_sweep"] = []
-    for t in (fit, 20, comp, 30, 35, 40, 45, 50, 55, 60):
+    for t in (fit, 20, comp, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90):
         k = kpis(make(t))
         R["tariff_sweep"].append(
             {
@@ -269,6 +269,21 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
                 "dscr": k["min_dscr"],
             }
         )
+    # Breakevens solved directly rather than read off the sweep's grid, so the
+    # narrative can state them even when they lie beyond its last point.
+    disc = float(R["case_competitive"]["discount_rate_used"])
+    R["breakeven"] = {
+        "dscr_target": 1.30,
+        "dscr_tariff_lkr": _breakeven_tariff(
+            lambda t: kpis(make(t))["min_dscr"], 1.30, fit
+        ),
+        "irr_target": disc,
+        "irr_tariff_lkr": _breakeven_tariff(
+            lambda t: kpis(make(t))["project_irr"], disc, fit
+        ),
+    }
+    R["inputs"] = _model_inputs(make(comp))
+
     R["capex_sweep"] = []
     for cxx in (9_000_000, 10_500_000, 12_000_000, 13_200_000, 15_000_000):
         k = kpis(make(comp, capex=cxx))
@@ -401,6 +416,14 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     R["dscr"] = {
         "sweep": dscr_sweep,
         "objective_key": OPTIMISATION_OBJECTIVE,
+        "opt_curve": [
+            {
+                "x": float(p.value),
+                "obj": float(p.objective),
+                "feasible": bool(p.feasible),
+            }
+            for p in dopt.curve
+        ],
         "opt_best": (
             {
                 "target": float(dopt.best.value),
@@ -411,6 +434,77 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         ),
     }
     return R
+
+
+def _breakeven_tariff(
+    metric: Any,
+    target: float,
+    lo: float,
+    hi: float = 400.0,
+    tol: float = 0.01,
+) -> float | None:
+    """The fixed LKR tariff at which ``metric(tariff)`` reaches ``target``.
+
+    ``metric`` must rise with the tariff, as the minimum DSCR and the project IRR do.
+    Returns ``None`` when the target is not reached by ``hi``, and ``lo`` when it is
+    already met there. A metric that is undefined (``None``) counts as not met. The
+    comparison allows 1e-9 of slack: once the tariff is high enough, the sculpted
+    minimum DSCR sits exactly on 1.30 give or take rounding (1.2999999999999998).
+    """
+
+    def met(t: float) -> bool:
+        value = metric(t)
+        return value is not None and float(value) >= target - 1e-9
+
+    if met(lo):
+        return lo
+    if not met(hi):
+        return None
+    while hi - lo > tol:
+        mid = (lo + hi) / 2.0
+        if met(mid):
+            hi = mid
+        else:
+            lo = mid
+    return round(hi, 2)
+
+
+def _model_inputs(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """The financing and FX inputs the narrative quotes, read from the run's config."""
+    from finance.wacc_v14 import compute_wacc_from_config
+
+    ft = cfg["Financing_Terms"]
+    rates = ft.get("rates", {})
+    wacc = compute_wacc_from_config(copy.deepcopy(cfg)) or {}
+    return {
+        "fx_annual_depr": float(cfg["fx"]["annual_depr"]),
+        "lkr_rate": float(rates["lkr_nominal"]),
+        "dfi_rate": float(rates["dfi_nominal"]),
+        "usd_rate": float(rates["usd_nominal"]),
+        "lkr_max": float(ft["mix"]["lkr_max"]),
+        "dfi_max": float(ft["mix"]["dfi_max"]),
+        "usd_min": float(ft["mix"]["usd_commercial_min"]),
+        "tenor_years": int(ft["tenor_years"]),
+        "interest_only_years": int(ft["interest_only_years"]),
+        "construction_years": int(cfg["timeline"]["construction_years"]),
+        "debt_ratio": float(ft["debt_ratio"]),
+        "cfads_haircut": float(cfg["risk_adjustment"]["cfads_haircut_pct"]),
+        "tax_rate": float(cfg["tax"]["corporate_tax_rate"]),
+        "loss_carryforward_years": int(cfg["tax"]["loss_carryforward_years"]),
+        "project_discount_rate": float(cfg["returns"]["project_discount_rate"]),
+        "equity_discount_rate": float(cfg["returns"]["equity_discount_rate"]),
+        "wacc_drives_discount": bool(cfg.get("wacc", {}).get("drives_discount_rate")),
+        "wacc_built": (
+            float(wacc["wacc_nominal"])
+            if wacc.get("wacc_nominal") is not None
+            else None
+        ),
+        "cost_of_equity_built": (
+            float(wacc["cost_of_equity"])
+            if wacc.get("cost_of_equity") is not None
+            else None
+        ),
+    }
 
 
 def _optimisation_caption(opt: Dict[str, Any]) -> str:
@@ -433,6 +527,131 @@ def _optimisation_caption(opt: Dict[str, Any]) -> str:
         f"Best feasible gearing {best['x']:.0%}, "
         f"equity NPV USD {best['obj'] / 1e6:.2f}M."
     )
+
+
+def _pct(x: float, dp: int = 1) -> str:
+    return f"{x * 100:.{dp}f}%"
+
+
+def _usd_m(x: float) -> str:
+    return f"-USD {abs(x) / 1e6:.2f}M" if x < 0 else f"USD {x / 1e6:.2f}M"
+
+
+def narrative_values(R: Dict[str, Any]) -> Dict[str, str]:
+    """Every figure the narrative quotes, formatted from this run's results.
+
+    ``solar_assessment_narrative.json`` names these values as ``{placeholders}``
+    and ``render_pdf`` fills them, so the prose cannot drift from the engine
+    again (BW-10: the old prose quoted figures from a superseded baseline).
+    """
+    S, inp = R["site"], R["inputs"]
+    fit, cc = R["case_fit"], R["case_competitive"]
+    mc, be = R["mc"], R["breakeven"]
+    disc = float(cc["discount_rate_used"])
+    usc = S["fx"] / 100.0
+    torn = {t["param"]: t["impact"] for t in R["sensitivity"]}
+    gear = sorted(R["optimization"]["curve"], key=lambda p: p["x"])
+    sweep = sorted(R["dscr"]["sweep"], key=lambda d: d["target_dscr"])
+    dcurve = sorted(R["dscr"]["opt_curve"], key=lambda p: p["x"])
+    dbest = R["dscr"]["opt_best"]
+    trials = [float(x) for x in mc["_irr_trials"]]
+    eq_cov = mc["coverage"]["equity_irr"]
+
+    def be_values(key: str, tariff: float | None) -> Dict[str, str]:
+        if tariff is None:  # not reached by the solver's 400 LKR/kWh ceiling
+            return {
+                f"be_{key}_lkr": "more than 400",
+                f"be_{key}_usc": f"more than {400 / usc:.0f}",
+                f"be_{key}_x_fit": f"more than {400 / S['fit_tariff_lkr']:.0f}",
+                f"be_{key}_x_comp": f"more than {400 / S['competitive_tariff_lkr']:.0f}",
+            }
+        return {
+            f"be_{key}_lkr": f"{tariff:.1f}",
+            f"be_{key}_usc": f"{tariff / usc:.1f}",
+            f"be_{key}_x_fit": f"{tariff / S['fit_tariff_lkr']:.1f}",
+            f"be_{key}_x_comp": f"{tariff / S['competitive_tariff_lkr']:.1f}",
+        }
+
+    v: Dict[str, str] = {
+        "fit_lkr": f"{S['fit_tariff_lkr']:.2f}",
+        "comp_lkr": f"{S['competitive_tariff_lkr']:.2f}",
+        "comp_usc": f"{S['competitive_usc']:.2f}",
+        "fit_irr": _pct(fit["project_irr"]),
+        "comp_irr": _pct(cc["project_irr"]),
+        "fit_npv": _usd_m(fit["project_npv"]),
+        "comp_npv": _usd_m(cc["project_npv"]),
+        "fit_dscr": f"{fit['min_dscr']:.2f}",
+        "comp_dscr": f"{cc['min_dscr']:.2f}",
+        "fit_dscr_pct": _pct(fit["min_dscr"], 0),
+        "comp_dscr_pct": _pct(cc["min_dscr"], 0),
+        "comp_eq_irr": (
+            _pct(cc["equity_irr"]) if cc["equity_irr"] is not None else "undefined"
+        ),
+        "irr_lift_pp": f"{(cc['project_irr'] - fit['project_irr']) * 100:.1f}",
+        "npv_lift": _usd_m(cc["project_npv"] - fit["project_npv"]),
+        "gap_pp": f"{(disc - cc['project_irr']) * 100:.1f}",
+        "disc": _pct(disc, 0),
+        "eq_disc": _pct(inp["equity_discount_rate"], 0),
+        "wacc_built": (
+            _pct(inp["wacc_built"]) if inp["wacc_built"] is not None else "not built"
+        ),
+        "fx_depr": _pct(inp["fx_annual_depr"], 2),
+        "lkr_rate": _pct(inp["lkr_rate"], 2),
+        "dfi_rate": _pct(inp["dfi_rate"]),
+        "usd_rate": _pct(inp["usd_rate"]),
+        "lkr_max": _pct(inp["lkr_max"], 0),
+        "dfi_max": _pct(inp["dfi_max"], 0),
+        "usd_min": _pct(inp["usd_min"], 0),
+        "tenor": str(inp["tenor_years"]),
+        "io_years": str(inp["interest_only_years"]),
+        "constr_years": str(inp["construction_years"]),
+        "gearing": _pct(inp["debt_ratio"], 0),
+        "haircut": _pct(inp["cfads_haircut"], 0),
+        "tax": _pct(inp["tax_rate"], 0),
+        "lcf_years": str(inp["loss_carryforward_years"]),
+        "mc_n": f"{mc['n']:,}",
+        "mc_failed": f"{mc['failed']:,}",
+        "mc_p10": _pct(mc["proj_irr"]["p10"]),
+        "mc_p50": _pct(mc["proj_irr"]["p50"]),
+        "mc_p90": _pct(mc["proj_irr"]["p90"]),
+        "mc_mean": _pct(mc["proj_mean"]),
+        "mc_best": _pct(max(trials)),
+        "mc_p_neg": _pct(mc["p_below_0"], 0),
+        "mc_reach": f"{sum(1 for x in trials if x >= disc):,}",
+        "eq_defined": f"{eq_cov['defined_trials']:,}",
+        "eq_undefined": f"{eq_cov['unavailable_trials']:,}",
+        "eq_p50": _pct(mc["eq_p50"]) if mc["eq_p50"] is not None else "undefined",
+        "eq_p_neg": (
+            _pct(mc["eq_p_below_0"], 0) if mc["eq_p_below_0"] is not None else "n/a"
+        ),
+        "t_cf_pp": f"{torn['Capacity Factor'] * 100:.1f}",
+        "t_tariff_pp": f"{torn['Tariff'] * 100:.1f}",
+        "t_capex_pp": f"{torn['CAPEX'] * 100:.1f}",
+        "t_opex_pp": f"{torn['OPEX'] * 100:.1f}",
+        "t_tax_pp": f"{torn['Corporate Tax Rate'] * 100:.1f}",
+        "t_tenor_pp": f"{torn['Debt Tenor'] * 100:.1f}",
+        "opt_lo": _pct(gear[0]["x"], 0),
+        "opt_hi": _pct(gear[-1]["x"], 0),
+        "opt_dscr_lo": f"{gear[0]['constraint']:.2f}",
+        "opt_dscr_hi": f"{gear[-1]['constraint']:.2f}",
+        "opt_npv_lo": _usd_m(gear[0]["obj"]),
+        "opt_npv_hi": _usd_m(gear[-1]["obj"]),
+        "dscr_lo": f"{sweep[0]['target_dscr']:.2f}",
+        "dscr_hi": f"{sweep[-1]['target_dscr']:.2f}",
+        "dscr_gear_lo": _pct(sweep[0]["gearing"]),
+        "dscr_gear_hi": _pct(sweep[-1]["gearing"]),
+        "dscr_eq_lo": _pct(sweep[0]["eqIRR"]),
+        "dscr_eq_hi": _pct(sweep[-1]["eqIRR"]),
+        "dscr_proj_irr": _pct(sweep[0]["projIRR"]),
+        "dscr_proj_npv": _usd_m(sweep[0]["npv"]),
+        "dscr_eqnpv_lo": _usd_m(dcurve[0]["obj"]),
+        "dscr_eqnpv_hi": _usd_m(dcurve[-1]["obj"]),
+        "dscr_best": f"{dbest['target']:.2f}" if dbest else "none",
+        "dscr_best_eqnpv": _usd_m(dbest[OPTIMISATION_OBJECTIVE]) if dbest else "none",
+    }
+    v.update(be_values("dscr", be["dscr_tariff_lkr"]))
+    v.update(be_values("irr", be["irr_tariff_lkr"]))
+    return v
 
 
 def load_cfg(path: Path) -> Dict[str, Any]:
@@ -800,17 +1019,29 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     ax2 = ax.twinx()
     ax.plot(t, pi, "-o", color=NAVY, lw=2)
     ax2.plot(t, dscr, "-s", color=AMBER, lw=1.6)
-    ax.axhline(10, color=RED, ls=":", lw=1.4)
-    ax.text(15, 10.4, "WACC ~ 10%", color=RED, fontsize=8)
+    disc_pct = R["case_competitive"]["discount_rate_used"] * 100
+    ax.axhline(disc_pct, color=RED, ls=":", lw=1.4)
+    x_lab = t[len(t) // 3]  # clear of the legend in the upper-left corner
+    ax.text(
+        x_lab, disc_pct + 0.4, f"discount rate {disc_pct:.0f}%", color=RED, fontsize=8
+    )
     ax2.axhline(1.30, color=TEAL, ls=":", lw=1.4)
-    ax2.text(55, 1.33, "DSCR 1.30", color=TEAL, fontsize=8)
-    for xv, lab in (
+    ax2.text(x_lab, 1.33, "DSCR 1.30", color=TEAL, fontsize=8)
+    ax.set_ylim(min(pi) - 1.5, max(max(pi), disc_pct) + 1.5)
+    ax2.set_ylim(0.0, max(1.5, max(dscr) + 0.1))
+    be = R["breakeven"]
+    marks = [
         (SITE["fit_tariff_lkr"], "FiT"),
         (SITE["competitive_tariff_lkr"], "USc8"),
-        (50, "b/e ~50"),
-    ):
+    ]
+    if be["dscr_tariff_lkr"] is not None:
+        marks.append((be["dscr_tariff_lkr"], f"DSCR b/e ~{be['dscr_tariff_lkr']:.0f}"))
+    if be["irr_tariff_lkr"] is not None:
+        marks.append((be["irr_tariff_lkr"], f"IRR b/e ~{be['irr_tariff_lkr']:.0f}"))
+    y_lab = ax.get_ylim()[0] + 0.5
+    for xv, lab in marks:
         ax.axvline(xv, color=GREY, ls="--", lw=1)
-        ax.text(xv + 0.3, -3.5, lab, rotation=90, fontsize=7, color=GREY, va="bottom")
+        ax.text(xv + 0.3, y_lab, lab, rotation=90, fontsize=7, color=GREY, va="bottom")
     ax.set_xlabel("Fixed PPA tariff (LKR/kWh)")
     ax.set_ylabel("Project IRR (%)", color=NAVY)
     ax2.set_ylabel("min DSCR", color=AMBER)
@@ -819,8 +1050,6 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
         fontweight="bold",
         color=NAVY,
     )
-    ax.set_ylim(-6, 10.5)
-    ax2.set_ylim(0.2, 1.5)
     ax.legend(["Project IRR"], loc="upper left", fontsize=8)
     save(fig, "02_tariff_breakeven")
 
@@ -843,11 +1072,12 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
             fontsize=7,
             color=col,
         )
-    ax.axvline(10, color=RED, ls=":", lw=1.6)
+    disc_pct = R["case_competitive"]["discount_rate_used"] * 100
+    ax.axvline(disc_pct, color=RED, ls=":", lw=1.6)
     ax.text(
-        10,
+        disc_pct,
         ax.get_ylim()[1] * 0.6,
-        "WACC 10%",
+        f"discount rate {disc_pct:.0f}%",
         rotation=90,
         color=RED,
         fontsize=8,
@@ -932,7 +1162,7 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
         fontweight="bold",
         color=NAVY,
     )
-    ax.legend(loc="lower left", fontsize=8)
+    ax.legend(loc="upper left", fontsize=8)
     save(fig, "05_optimization")
 
     # 06 capex
@@ -944,7 +1174,9 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     ax2 = ax.twinx()
     ax.plot(ck, cpi, "-o", color=NAVY, lw=2)
     ax2.plot(ck, cd, "-s", color=AMBER, lw=1.5)
-    ax.axhline(10, color=RED, ls=":", lw=1.2)
+    ax.axhline(
+        R["case_competitive"]["discount_rate_used"] * 100, color=RED, ls=":", lw=1.2
+    )
     ax2.axhline(1.30, color=TEAL, ls=":", lw=1.2)
     ax.set_xlabel("Capex (USD/kW)")
     ax.set_ylabel("Project IRR (%)", color=NAVY)
@@ -966,10 +1198,12 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     ax.plot(td, ei, "-s", color=RED, lw=2, label="Equity IRR (levered)")
     ax2.plot(td, gg, "--^", color=AMBER, lw=1.6, label="Solved gearing (RHS)")
     ax.axvline(1.30, color=GREY, ls=":", lw=1.2)
+    lo_y = min(pi2 + ei) - 1.0
+    hi_y = max(pi2 + ei) + 3.0
     ax.annotate(
         "Project IRR INVARIANT to the DSCR target",
         xy=(1.30, pi2[3]),
-        xytext=(1.12, 3.2),
+        xytext=(1.33, pi2[3] + 1.4),
         fontsize=7.5,
         color=NAVY,
         arrowprops=dict(arrowstyle="->", color=NAVY, lw=0.8),
@@ -977,8 +1211,8 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     ax.set_xlabel("Minimum-DSCR sizing target (x)")
     ax.set_ylabel("IRR (%)")
     ax2.set_ylabel("Solved gearing (%)", color=AMBER)
-    ax.set_ylim(-7, 5)
-    ax2.set_ylim(20, 55)
+    ax.set_ylim(lo_y, hi_y)
+    ax2.set_ylim(min(gg) - 5, max(gg) + 10)
     ax.set_title(
         "Is the 1.30x DSCR limiting?  Effect of the DSCR target",
         fontweight="bold",
@@ -1154,13 +1388,15 @@ def render_pdf(
         story.append(t)
         story.append(Spacer(1, 8))
 
+    V = narrative_values(R)
+
     def render_section(key):
         sec = narrative[key]
         H1(sec["title"])
         for sh in sec["subheads"]:
             H2(sh["title"])
             for para in sh["paragraphs"]:
-                P(para)
+                P(para.format_map(V))
 
     # ---- page templates ----
     def hf(canvas, doc):
@@ -1364,7 +1600,7 @@ def render_pdf(
         f"<b>Headline finding: the project is not viable at any tariff currently available to a standalone 10&nbsp;MW plant.</b> "
         f"Under the best realistically-achievable revenue &mdash; a competitive USD PPA at USc&nbsp;8.0/kWh "
         f"(LKR&nbsp;{S['competitive_tariff_lkr']:.2f}) &mdash; the unlevered project IRR is just <b>{pc(cc['project_irr'])}</b> "
-        f"against a ~{pc(cc['discount_rate_used'])} cost of capital, with a project NPV of <b>{usd(cc['project_npv'])}</b>. Under "
+        f"against the {V['disc']} discount rate, with a project NPV of <b>{usd(cc['project_npv'])}</b>. Under "
         f"the regime a standalone plant would most likely receive &mdash; the LKR&nbsp;{S['fit_tariff_lkr']:.2f}/kWh feed-in tariff "
         f"&mdash; the project IRR is <b>{pc(cf['project_irr'])}</b> (NPV {usd(cf['project_npv'])}). The Monte&nbsp;Carlo confirms "
         f"robustness: the project IRR has a P50 of <b>{pc(mc['proj_irr']['p50'])}</b> (P10 {pc(mc['proj_irr']['p10'])} / P90 "
@@ -1372,9 +1608,11 @@ def render_pdf(
         f"{pc(1 - mc['p_below_0'])}."
     )
     P(
-        "The breakeven analysis shows the plant needs ~<b>LKR&nbsp;50/kWh</b> for a 1.30&times; DSCR and ~<b>LKR&nbsp;60/kWh</b> "
-        "for the project return to reach the cost of capital &mdash; roughly 2&ndash;4&times; the tariffs on offer. The "
-        "optimisation shows no capital structure rescues the equity (negative carry), and a dedicated test confirms the "
+        f"The breakeven analysis shows the plant needs ~<b>LKR&nbsp;{V['be_dscr_lkr']}/kWh</b> for a 1.30&times; DSCR and "
+        f"~<b>LKR&nbsp;{V['be_irr_lkr']}/kWh</b> for the project return to reach the {V['disc']} discount rate &mdash; "
+        f"roughly {V['be_dscr_x_comp']}&ndash;{V['be_irr_x_fit']}&times; the tariffs on offer. The capital-structure "
+        f"optimisation, ranked on equity NPV, finds no gearing that meets the covenant, and equity stays deeply negative "
+        f"on every structure tested. A dedicated test confirms the "
         "<b>1.30&times; DSCR covenant is not the limiting factor</b> &mdash; the unlevered project IRR is invariant to it. "
         "<b>Recommendation: do not proceed</b> at this site under current terms; the technology specification (a Tier-1 bifacial "
         "n-TOPCon module) is sound and is not the problem. The project should be reconsidered only with a dry-zone site "
@@ -1473,14 +1711,18 @@ def render_pdf(
         ["Metric", "Base / Regulatory (FiT 14.46)", "Investment (USc 8.0 / 26.70)"],
         [
             ["Project IRR (unlevered)", pc(cf["project_irr"]), pc(cc["project_irr"])],
-            ["Project NPV @ WACC", usd(cf["project_npv"]), usd(cc["project_npv"])],
             [
-                "Minimum DSCR (70% gearing)",
+                "Project NPV @ discount rate",
+                usd(cf["project_npv"]),
+                usd(cc["project_npv"]),
+            ],
+            [
+                f"Minimum DSCR ({V['gearing']} gearing)",
                 f"{cf['min_dscr']:.2f}",
                 f"{cc['min_dscr']:.2f}",
             ],
             [
-                "WACC / discount rate",
+                "Discount rate",
                 pc(cf["discount_rate_used"]),
                 pc(cc["discount_rate_used"]),
             ],
@@ -1499,7 +1741,7 @@ def render_pdf(
     render_section("risk")
     FIG("03_mc_irr")
     CAP(
-        f"Monte Carlo distribution of project IRR ({mc['n']:,} LHS trials); the whole distribution lies far below the ~10% WACC."
+        f"Monte Carlo distribution of project IRR ({mc['n']:,} LHS trials); the whole distribution lies far below the {V['disc']} discount rate."
     )
     FIG("04_tornado")
     CAP(
@@ -1524,7 +1766,7 @@ def render_pdf(
     )
     FIG("07_dscr")
     CAP(
-        "Effect of the DSCR sizing target. Project IRR is flat (financing cannot change the asset return); equity IRR improves as the structure deleverages - the signature of negative carry."
+        "Effect of the DSCR sizing target. Project IRR is flat (financing cannot change the asset return); equity IRR improves as the structure deleverages - the signature of negative carry - while equity NPV, the ranking measure, edges the other way."
     )
 
     render_section("discussion")
@@ -1584,18 +1826,18 @@ def render_pdf(
             ],
             [
                 "Exchange rate",
-                f"LKR {S['fx']}/USD, 3%/yr depr.",
+                f"LKR {S['fx']}/USD, {V['fx_depr']}/yr depr.",
                 "DutchBay canonical FX",
             ],
             [
                 "Gearing / tenor / min-DSCR",
-                "70% (sized) / 15 yr / 1.30x",
+                f"{V['gearing']} (sized) / {V['tenor']} yr / 1.30x",
                 "DutchBay base financing",
             ],
             [
-                "WACC / cost of equity",
-                f"{pc(cc['discount_rate_used'])} / ~12%",
-                "Build-up, rupee environment",
+                "Discount rate / built WACC",
+                f"{V['disc']} / {V['wacc_built']}",
+                "Declared rate; CAPM WACC informational",
             ],
         ],
         [4.6 * cm, 5.4 * cm, 5.5 * cm],
