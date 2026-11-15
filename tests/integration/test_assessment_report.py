@@ -68,6 +68,12 @@ def test_routines_run_and_produce_sane_results(tmp_path: Path) -> None:
     labels = {d["param"] for d in R["sensitivity"]}
     assert {"Capacity Factor", "Tariff", "CAPEX"} <= labels
 
+    # Both optimisations rank on equity NPV (#1456, #1522 assurance A-3).
+    assert R["optimization"]["objective_key"] == "equity_npv"
+    assert R["dscr"]["objective_key"] == "equity_npv"
+    best = R["dscr"]["opt_best"]
+    assert best is not None and set(best) == {"target", "equity_npv"}
+
     # The key DSCR finding: the unlevered project IRR is INVARIANT to the DSCR target.
     proj_irrs = {round(d["projIRR"], 5) for d in R["dscr"]["sweep"]}
     assert len(proj_irrs) == 1, f"project IRR should be DSCR-invariant, got {proj_irrs}"

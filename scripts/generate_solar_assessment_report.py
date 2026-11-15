@@ -43,6 +43,10 @@ from typing import Any, Dict, cast
 _REPO = Path(__file__).resolve().parents[1]
 _ASSETS = Path(__file__).resolve().parent / "assets"
 
+# The capital-structure and DSCR-target optimisations rank on equity NPV (#1456,
+# #1522 assurance A-3). ``optimize_parameter`` warns when a caller ranks on IRR.
+OPTIMISATION_OBJECTIVE = "equity_npv"
+
 
 # ---------------------------------------------------------------------------
 # SITE / PROJECT CONFIGURATION (the single source of report parameters)
@@ -327,10 +331,13 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     R["sensitivity_base"] = torn[0]["base"] if torn else None
 
     # --- 5. Optimisation: gearing ---
+    # Rank on equity NPV, not equity IRR (#1456): the IRR can order candidates
+    # backwards, and here the two measures move in opposite directions with
+    # leverage (#1522 assurance A-3).
     opt = optimize_parameter(
         str(scen_path),
         param_path="Financing_Terms.debt_ratio",
-        objective_key="equity_irr",
+        objective_key=OPTIMISATION_OBJECTIVE,
         lower=0.30,
         upper=0.75,
         direction="max",
@@ -345,6 +352,7 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         constraint_min=1.30,
     )
     R["optimization"] = {
+        "objective_key": OPTIMISATION_OBJECTIVE,
         "curve": [
             {
                 "x": float(p.value),
@@ -384,7 +392,7 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     dopt = optimize_parameter(
         str(sp),
         param_path="Financing_Terms.target_dscr",
-        objective_key="equity_irr",
+        objective_key=OPTIMISATION_OBJECTIVE,
         lower=1.05,
         upper=1.60,
         direction="max",
@@ -392,13 +400,39 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     )
     R["dscr"] = {
         "sweep": dscr_sweep,
+        "objective_key": OPTIMISATION_OBJECTIVE,
         "opt_best": (
-            {"target": float(dopt.best.value), "eqirr": float(dopt.best.objective)}
+            {
+                "target": float(dopt.best.value),
+                OPTIMISATION_OBJECTIVE: float(dopt.best.objective),
+            }
             if dopt.best
             else None
         ),
     }
     return R
+
+
+def _optimisation_caption(opt: Dict[str, Any]) -> str:
+    """Caption for the gearing chart, stated from the run rather than fixed text.
+
+    The optimiser ranks on equity NPV (#1456). The caption says which gearing it
+    chose, or that no gearing in the sweep met the covenant.
+    """
+    curve = opt.get("curve") or []
+    lo = min((p["x"] for p in curve), default=float("nan"))
+    hi = max((p["x"] for p in curve), default=float("nan"))
+    text = (
+        "Equity NPV vs gearing under the 1.30x minimum per-period DSCR constraint; "
+        "the optimiser ranks on equity NPV, not equity IRR (#1456). "
+    )
+    best = opt.get("best")
+    if best is None:
+        return text + f"No gearing from {lo:.0%} to {hi:.0%} meets the covenant."
+    return text + (
+        f"Best feasible gearing {best['x']:.0%}, "
+        f"equity NPV USD {best['obj'] / 1e6:.2f}M."
+    )
 
 
 def load_cfg(path: Path) -> Dict[str, Any]:
@@ -857,7 +891,7 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     # 05 optimisation
     oc = R["optimization"]["curve"]
     g = [p["x"] * 100 for p in oc]
-    eq = [p["obj"] * 100 for p in oc]
+    eq = [p["obj"] / 1e6 for p in oc]  # equity NPV, USD millions
     feas = [p["feasible"] for p in oc]
     fig, ax = plt.subplots(figsize=(7, 3.6))
     ax.plot(g, eq, "-", color=NAVY, lw=1.5, alpha=0.5)
@@ -882,7 +916,7 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     if b:
         ax.scatter(
             [b["x"] * 100],
-            [b["obj"] * 100],
+            [b["obj"] / 1e6],
             edgecolor=AMBER,
             facecolor="none",
             s=180,
@@ -891,11 +925,10 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
             label=f"best {b['x']:.0%}",
         )
     ax.axhline(0, color="k", lw=0.8)
-    ax.set_ylim(-30, 5)
     ax.set_xlabel("Gearing (debt ratio, %)")
-    ax.set_ylabel("Equity IRR (%)")
+    ax.set_ylabel("Equity NPV (USD M)")
     ax.set_title(
-        "Capital-Structure Optimisation - Equity IRR vs Gearing",
+        "Capital-Structure Optimisation - Equity NPV vs Gearing",
         fontweight="bold",
         color=NAVY,
     )
@@ -1300,7 +1333,7 @@ def render_pdf(
         "Capex sensitivity",
         "Monte Carlo distribution of project IRR",
         "One-way sensitivity (tornado)",
-        "Capital-structure optimisation (equity IRR vs gearing)",
+        "Capital-structure optimisation (equity NPV vs gearing)",
         "Effect of the DSCR sizing target",
     ]
     for i, f in enumerate(figs, 1):
@@ -1473,9 +1506,7 @@ def render_pdf(
         "Tornado: impact of each driver on project IRR. Capacity factor and tariff dominate."
     )
     FIG("05_optimization")
-    CAP(
-        "Equity IRR vs gearing under the 1.30x DSCR constraint; feasible only below ~35% gearing."
-    )
+    CAP(_optimisation_caption(R["optimization"]))
 
     render_section("dscr")
     datatable(
