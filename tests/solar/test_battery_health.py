@@ -110,6 +110,27 @@ def test_soh_path_without_fade_never_augments_and_refuses_negative_fade() -> Non
         _health().soh_path(-0.001, 20)
 
 
+def test_augmentation_boundary_is_strictly_below_80() -> None:
+    """The trigger is "below 80%": a year at or just above 0.80 is not augmented.
+
+    Closed form: year 14 starts at ``1 - 13 f``. At 0.801 the battery runs year 14 unaugmented;
+    at 0.799 the event falls in year 14. A year that starts at exactly 0.80 (``f = 0.1``,
+    year 3; ``1 - 0.1 * 2`` is exactly 0.8 in binary floating point) is not augmented either,
+    and the event falls in the next year.
+    """
+    h = _health()
+    soh, events = h.soh_path(0.199 / 13.0, 14)
+    assert soh[13] == pytest.approx(0.801, abs=1e-12)
+    assert events == []
+    soh, events = h.soh_path(0.201 / 13.0, 14)
+    assert [year for year, _ in events] == [14]
+    assert events[0][1] == pytest.approx(0.201, abs=1e-12)
+    assert soh[13] == 1.0
+    soh, events = h.soh_path(0.1, 5)
+    assert soh[2] == 0.8
+    assert events[0][0] == 4
+
+
 def test_fade_rate_from_a_synthetic_curve() -> None:
     curve = [100.0, 97.0, 95.0, 92.0, 90.0, 88.0, 86.0, 84.0, 82.0, 80.5, 79.0]
     got = sz.fade_rate_from_soh_curve(curve)

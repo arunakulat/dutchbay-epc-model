@@ -1190,6 +1190,79 @@ def test_solar_bess_scenario_carries_the_committed_base_case() -> None:
         assert "contiguous" in path.read_text(), path.name
 
 
+def test_live_floor_point_reproduces_the_pins_through_the_l11_wiring(
+    site: Dict[str, Any],
+) -> None:
+    """#1578 L-11, live: the committed floor point's base case, evaluated now (#1711 N-1).
+
+    The other L-11 tests call the pieces directly or read the committed summary, which is
+    static. This one runs the sizing path for one trial at the floor (107 tables, 3.5 MW AC,
+    0.1 MW / 0.4 MWh) and checks what reaches the engine against oracles that do not come from
+    the sizing code:
+
+    * the base case's project NPV equals ``SOLAR_BESS_PINS`` (the committed scenario through
+      the engine, no override) to a few dollars (the scenario rounds its inputs);
+    * the BESS capex is 400 kWh at the pricing config's all-in mode less its augmentation
+      reserve grossed up by land and auxiliaries (8.00 / 0.90);
+    * the engine's schedule is one event before year 14, which would start at ``1 - 13 f``
+      (``f`` the config's fade), adding ``13 f`` of the nameplate at the config's
+      augmentation price per kWh (closed form);
+    * the one trial, whose residual fade is positive, moves the event earlier than the base.
+    """
+    seen: list[Dict[str, Any]] = []
+
+    def capturing(**kw: Any) -> Any:
+        seen.append(kw["overrides"])
+        return evaluate_with_overrides(**kw)
+
+    cfg = _quiet(_project_cfg())
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [107],
+        "pv_ac_mw": [3.5],
+        "bess_power_mw": [0.1],
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    cfg["curtailment_scenario"] = {**cfg["curtailment_scenario"], "enabled": False}
+    run = _run(cfg, site, capturing)
+    # One point x (base + 1 trial) + its RTE-sensitivity case.
+    assert run.effective_evaluations == len(seen) == 3 <= _hard_cap()
+
+    project = _project_cfg()
+    health = project["battery_health"]
+    bess_price = _yaml(PRICING_CONF)["bess"]
+    reserve = bess_price["augmentation_reserve_usd_per_kwh_base"] / (
+        1.0 - bess_price["land_and_auxiliaries_share_base"]
+    )
+    kwh = 0.4 * 1000.0
+    added = 13.0 * health["fade_pct_per_year"] / 100.0
+    expected_event = added * kwh * health["augmentation_usd_per_kwh"]
+    # Year 13 starts at or above the trigger, year 14 below it.
+    assert added - 1.0 / 13.0 * added <= 1.0 - health["augment_below_soh"] < added
+
+    point = run.points[0]
+    base = point["base"]
+    assert base["project_npv"] == pytest.approx(SOLAR_BESS_PINS["project_npv"], abs=5.0)
+    assert base["min_dscr"] == pytest.approx(SOLAR_BESS_PINS["min_dscr"], abs=1e-5)
+
+    schedule_key = "generation.technologies.bess_1.revenue.augmentation_schedule"
+    capex_key = "generation.technologies.bess_1.capex_usd"
+    # The base case is the point's first evaluation (row 0 of the trials).
+    base_overrides = seen[0]
+    assert base_overrides[capex_key] == pytest.approx(
+        kwh * (bess_price["all_in_usd_per_kwh"]["mode"] - reserve), abs=0.01
+    )
+    base_events = base_overrides[schedule_key]
+    assert [e["year"] for e in base_events] == [14]
+    assert base_events[0]["capex_usd"] == pytest.approx(expected_event, abs=0.01)
+
+    trial_overrides = [o for o in seen if o[schedule_key] != base_events]
+    assert len(trial_overrides) == 1
+    trial_events = trial_overrides[0][schedule_key]
+    assert trial_events and trial_events[0]["year"] < 14
+    assert trial_events[0]["capex_usd"] > 0.0
+
+
 def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> list:
     """The hourly dispatcher's revenue with the Annex 2 escalable O&M parts indexed (L-9).
 

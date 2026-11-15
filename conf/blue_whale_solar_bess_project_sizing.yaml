@@ -113,7 +113,9 @@ uncertainty:
   rte_high: 0.88
   # #1578 L-11: fade ON TOP of battery_health.fade_pct_per_year, percent of nameplate per year.
   # ASSUMPTION: the base rate is the OEM's own curve, so the mode adds nothing; the high end
-  # covers cycling faster than the curve's rated duty and a site hotter than its basis.
+  # covers a site hotter than the curve's basis and calendar ageing the curve may not carry.
+  # This battery cycles less than the curve's rated duty, which partly offsets them, so the
+  # range is one-sided.
   # Was low 0, mode 0, high 2 (PR 3: the fade the price's augmentation reserve did not cover).
   residual_fade_pct_per_year:
     low: 0.0
@@ -130,7 +132,8 @@ battery_health:
   # DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE names the private file). The rate and the curve both
   # first fall below 80% in year 13, so both put the augmentation before operating year 14. The
   # rate is applied in every operating year, and the curve's duty is not scaled to this
-  # battery's cycling (residual_fade_pct_per_year above carries that).
+  # battery's cycling, which is lighter than that duty (residual_fade_pct_per_year above
+  # carries the heat and calendar uncertainty).
   fade_pct_per_year: 1.5533
   fade_basis: "OEM state-of-health performance curve (private corpus); one linear rate derived from it, applied in every operating year"
   augment_below_soh: 0.80        # owner, 2026-11-14: "when capacity falls below 80%"

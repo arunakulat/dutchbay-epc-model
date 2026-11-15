@@ -1315,9 +1315,15 @@ applied under the owner's delegation of 2026-11-07.
   The rate is applied in every operating year.
 - **Augmentation.** Before any operating year that would start below 80% SoH, cells are added to
   restore the nameplate, and the battery fades again from there. In the base case that is once,
-  before year 14: 20.19% of the nameplate. The battery is dispatched every year on its faded
-  energy, so the evening export, and the priority premium on it, fall with the cells and recover
-  after the event.
+  before year 14: 20.19% of the nameplate. The dispatcher runs the battery every year on its
+  faded energy, so its evening export, and the priority premium on it, fall with the cells and
+  recover after the event. The engine, which computes the ranked NPV, does not follow that
+  sawtooth: it carries the battery as one geometric fade matched to the 15-year sum of the
+  priority export, and the event moves its cash only. Its year-by-year revenue therefore departs
+  from the dispatcher's by up to 0.47% at the chosen floor and 6.69% at the largest battery among
+  the named points (186 tables, 5.0 MW), where its discounted revenue is about 0.2% above the
+  dispatcher's. The bias favours larger batteries, so the floor's lead is if anything understated
+  and the choice does not change (#1711 assurance N-2).
 - **Augmentation price (ASSUMPTION).** USD 103.55 per kWh added: the pricing config's BESS
   equipment line (DC block, PCS and EMS landed, with duties and its EPC margin), paid as stated in
   the event year, neither escalated nor reduced for falling cell prices (assumed to cancel). It
@@ -1329,10 +1335,17 @@ applied under the owner's delegation of 2026-11-07.
   131.85/kWh. The one-at-a-time prices and the break-even value below stay on the pricing
   config's published basis, which includes the reserve.
 - **Uncertainty.** Each trial adds a residual fade, triangular 0 / 0 / 0.5%/yr (ASSUMPTION; was
-  0 / 0 / 2 under PR 3, when it stood for the fade the reserve did not cover). It stands for
-  cycling faster than the curve's rated duty and a hotter site. Three one-at-a-time cases move
+  0 / 0 / 2 under PR 3, when it stood for the fade the reserve did not cover). It stands for a
+  site hotter than the curve's basis and for calendar ageing the curve may not carry. This
+  battery cycles less than the curve's rated duty, which partly offsets them. Three
+  one-at-a-time cases move
   the assumptions: fade 2.0%/yr, the augmentation at half price (USD 51.78/kWh) and at the all-in
   less the reserve (USD 131.85/kWh).
+- **Trigger.** "Below 80%" is strict: a year that starts at exactly 0.80 SoH runs unaugmented,
+  and the event falls in the next year (`tests/solar/test_battery_health.py` pins the boundary).
+  The trigger takes no account of the priority term left: in the base case it buys cells before
+  year 14 of the 15-year premium. Whether to skip an event near the term's end is an open
+  question for the owner (#1711 assurance N-5); the model follows the owner's words as given.
 - **Not modelled.** The RTE's decline with age (the curve shows it), the curve's duty scaled to
   this battery's cycling, and O&M on the added cells.
 
