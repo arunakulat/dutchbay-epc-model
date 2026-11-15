@@ -145,8 +145,10 @@ CIF (89.19) is 10% below the Envision restatement.
 ## 5. Solar resource and efficacy at the site
 
 **Site.** The area centroid of the 160 PV tables in `docs/blue_whale/pv_bess_layout_lot5b.geojson`:
-8.291526 N, 79.753204 E. It is 123 m from the turbine (8.2925 N, 79.752666 E) and 2.42 km from
-the TMY's grid point (8.27 N, 79.75 E). Over 123 m the resource is the same as at the turbine;
+8.291526 N, 79.753204 E. It is 197 m from the turbine (DutchBay T2, 8.2925 N, 79.7547 E, read
+from `conf/blue_whale_wind_siting.yaml` since #1578 L-16; until then a stale copy, 79.752666 E,
+gave 123 m) and 2.42 km from the TMY's grid point (8.27 N, 79.75 E). Over 197 m the resource is
+the same as at the turbine;
 the geometry changes the annual POA by 0.002%.
 
 **Irradiance record.** `inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv` (SHA-256
