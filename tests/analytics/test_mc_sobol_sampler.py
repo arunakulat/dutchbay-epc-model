@@ -154,6 +154,8 @@ class TestCliTopLevelNTrialsMatchesMetadata:
                 "seed=123",
                 f"output_dir={out_dir}",
                 "write_artifacts=true",
+                # Hydra's run dir goes to tmp_path, not outputs/ in the checkout (#1659).
+                f"hydra.run.dir={tmp_path / 'hydra'}",
             ],
             cwd=str(_REPO_ROOT),  # makes `analytics` importable
             capture_output=True,

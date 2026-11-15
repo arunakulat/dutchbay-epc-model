@@ -109,6 +109,21 @@ def fmt_ratio_pct(value: Optional[float]) -> str:
     return _ABSENT if value is None else f"{value * 100:.2f}%"
 
 
+#: Display for a value the engine says is undefined (#1436): present, but no number.
+_UNDEFINED = "undefined"
+
+
+def fmt_ratio_pct_or_undefined(value: Optional[float]) -> str:
+    """Display a RATIO as a percentage, or ``undefined`` for None (#1487).
+
+    For tables where None means the engine could not define the value, not that it
+    was left out. The report tornado is one: #1457 maps an undefined sweep point
+    (``nan``) to None. It follows the KPI table's #1436 convention, so a reader can
+    tell "undefined" from the em-dash the report uses for an absent value.
+    """
+    return _UNDEFINED if value is None else fmt_ratio_pct(value)
+
+
 def fmt_pct(value: Optional[float]) -> str:
     """Display an ALREADY-percentage number, e.g. ``13.39 -> 13.39%`` (None -> em-dash)."""
     return _ABSENT if value is None else f"{value:.2f}%"
