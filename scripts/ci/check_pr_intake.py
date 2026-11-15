@@ -7,7 +7,7 @@ import os
 import re
 import sys
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -211,6 +211,44 @@ def evaluate(
     )
 
 
+#: GitHub returns at most this many issue comments per page.
+_PAGE_SIZE = 100
+
+
+def _comment_pages(count: object) -> int:
+    """Return how many comment pages the tracker has, refusing a missing count."""
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        raise ValueError(f"tracker comment count is missing or invalid: {count!r}")
+    return -(-count // _PAGE_SIZE)
+
+
+def scan_tracker_comments(
+    fetch_page: Callable[[int], list[dict[str, Any]]],
+    comment_count: object,
+    verdict: Callable[[list[dict[str, Any]]], tuple[int, str]],
+) -> tuple[int, str]:
+    """Read the tracker's comments newest page first and stop once intake passes.
+
+    Every tracker-comment test in :func:`evaluate` asks whether *some* comment
+    qualifies, so a verdict that passes on the comments read so far also passes on
+    all of them. The scan therefore stops at the first passing verdict, which for a
+    new PR is usually the newest page, and otherwise reads every page the tracker's
+    own comment count names before failing. There is no fixed page ceiling (#1418):
+    the previous ten-page bound failed every PR once #1353 passed 1,000 comments.
+    """
+    comments: list[dict[str, Any]] = []
+    code, message = verdict(comments)
+    for page in range(_comment_pages(comment_count), 0, -1):
+        if code == 0:
+            break
+        batch = fetch_page(page)
+        if not isinstance(batch, list):
+            raise ValueError(f"tracker comment page {page} is not a list")
+        comments = batch + comments
+        code, message = verdict(comments)
+    return code, message
+
+
 def _get_json(repository: str, path: str, token: str) -> Any:
     """Read GitHub REST JSON with a bounded request; errors block intake."""
     request = Request(
@@ -261,18 +299,6 @@ def main() -> int:
                     else None
                 )
                 tracker = _get_json(repository, f"issues/{TRACKER_NUMBER}", token)
-                tracker_comments: list[dict[str, Any]] = []
-                for page in range(1, 11):
-                    batch = _get_json(
-                        repository,
-                        f"issues/{TRACKER_NUMBER}/comments?per_page=100&page={page}",
-                        token,
-                    )
-                    tracker_comments.extend(batch)
-                    if len(batch) < 100:
-                        break
-                else:
-                    raise ValueError("tracker comments exceed bounded ten-page scan")
                 open_prs: list[dict[str, Any]] = []
                 for page in range(1, 11):
                     batch = _get_json(
@@ -283,17 +309,30 @@ def main() -> int:
                         break
                 else:
                     raise ValueError("open PR list exceeds bounded ten-page sweep")
-                code, message = evaluate(
-                    body,
-                    os.environ.get("PR_AUTHOR", ""),
-                    os.environ.get("PR_AUTHOR_TYPE", ""),
-                    os.environ.get("PR_CREATED_AT", ""),
-                    int(os.environ.get("PR_NUMBER", "0")),
-                    issue,
-                    tracker,
-                    tracker_comments,
-                    work_comment,
-                    open_prs,
+
+                def _verdict(comments: list[dict[str, Any]]) -> tuple[int, str]:
+                    return evaluate(
+                        body,
+                        os.environ.get("PR_AUTHOR", ""),
+                        os.environ.get("PR_AUTHOR_TYPE", ""),
+                        os.environ.get("PR_CREATED_AT", ""),
+                        int(os.environ.get("PR_NUMBER", "0")),
+                        issue,
+                        tracker,
+                        comments,
+                        work_comment,
+                        open_prs,
+                    )
+
+                code, message = scan_tracker_comments(
+                    lambda page: _get_json(
+                        repository,
+                        f"issues/{TRACKER_NUMBER}/comments"
+                        f"?per_page={_PAGE_SIZE}&page={page}",
+                        token,
+                    ),
+                    tracker.get("comments"),
+                    _verdict,
                 )
             except (
                 HTTPError,
