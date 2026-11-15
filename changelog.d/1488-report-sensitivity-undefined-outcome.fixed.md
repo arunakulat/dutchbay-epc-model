@@ -1,0 +1,1 @@
+- Carry ``undefined_base``, ``undefined_points``, and ``undefined_drivers`` onto ``TornadoBlock`` and record tornado ``outcome`` as ``partial`` (or ``degraded`` when no point solved) instead of ``completed`` when any sweep point arrived undefined (#1488).

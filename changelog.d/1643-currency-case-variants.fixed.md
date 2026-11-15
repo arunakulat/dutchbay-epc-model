@@ -1,0 +1,1 @@
+Reject native-LKR costs hidden in any case-variant CAPEX or OPEX section in strict preflight and direct finance paths (#1643). Preserve the exact canonical legacy LKR-only tax fallback and existing USD/explicit-tax behavior; no committed scenario or financial formula changes.
