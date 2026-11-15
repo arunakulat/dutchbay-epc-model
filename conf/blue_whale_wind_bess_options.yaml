@@ -158,15 +158,16 @@ down_ramp:
     ac_skid_mw: 10.0                       # about 10 MW per skid (rounded)
     ems_usd: 41126.89                      # SCADA and EMS, per site
     install_transport_share: 0.072450      # installation guidance, commissioning and CIF transport
-    ltsa_share_of_supply_per_year: 0.02    # the offer's LTSA: 30% of supply over 15 years
+    # ASSUMPTION (generic, not from any offer): long-term service and maintenance at 2% of CIF a year.
+    service_share_of_cif_per_year: 0.02
     usable_per_dc: 0.91                    # usable at the connection point per DC kWh (rounded)
     smallest_block_dc_mwh: 20.0            # the smallest DC block offered with one skid, about 0.5C (rounded)
     # ASSUMPTION: 9.5 MW from under 1 MWh is about 11C, beyond the offered energy cells; a
     # power-cell premium on the DC rate brackets it. No supplier has quoted such a unit.
     power_cell_premium: [1.0, 3.0]
-    # Landed all-in = CIF x battery.usd_per_kwh.mode / this (the offer per contracted kWh):
-    # duties, BoP, EPC margin, augmentation reserve and land as in the repository's mode.
-    cif_usd_per_contracted_kwh: 99.5001
+    # Landed all-in = CIF x battery.usd_per_kwh.mode / (offer_usd_per_dc_kwh / usable_per_dc), the
+    # offer per usable kWh from the rounded usable fraction (owner decision, 2026-11-15): duties,
+    # BoP, EPC margin, augmentation reserve and land as in the repository's mode.
 
 monte_carlo:
   seed: 20261101

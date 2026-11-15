@@ -160,20 +160,24 @@ budgetary offer**:
 
 - CIF, excluding duty and taxes, priced for many sites;
 - flat at USD 90.00 per DC kWh, split into lines;
-- lifted to all-in by the repository's mode (140.74 / 99.50);
+- lifted to all-in by the repository's mode over the offer per usable kWh, 140.74 / (90.00 / 0.91),
+  using the rounded usable fraction;
 - equipment ratings rounded: one skid of about 10 MW, a smallest block of about 20 MWh DC, and
   91% of DC energy usable.
 
 A cycled block keeps 1.29 MWh in hand, the 0.79 MWh ramp energy plus the 0.5 MWh black-start
-reserve, so it keeps both functions after the window.
+reserve, so it keeps both functions after the window. The held power-heavy unit keeps only the
+0.79 MWh ramp energy. That covers a down-ramp or a black start, but not one straight after the
+other before the unit recharges. Holding both would need about 0.5 MWh more cells, roughly USD
+60k more all-in at the offer's DC rate (the assurance review's estimate; not run here).
 
 | Firming unit | CIF | All-in | Project NPV change | Equity IRR |
 |---|---:|---:|---:|---:|
-| 9.5 MW / 0.79 MWh power-heavy, cells at the offer's DC rate | USD 357k | 505k | −547k | 9.66% |
-| Same, power cells at 3× (assumption) | 492k | 696k | −754k | 9.35% |
-| Supplier's smallest block with one skid (about 18 MWh usable), held | 1.80M | 2.55M | −2.73M | 6.84% |
-| Same block, cycled at the whole rate with the 1.29 MWh reserve, reading C | 1.80M | 2.55M | **−0.83M** | 9.09% |
-| Same block, cycled with the reserve, reading B | 1.80M | 2.55M | −1.37M | 8.42% |
+| 9.5 MW / 0.79 MWh power-heavy, cells at the offer's DC rate | USD 357k | 508k | −550k | 9.65% |
+| Same, power cells at 3× (assumption) | 492k | 700k | −758k | 9.34% |
+| Supplier's smallest block with one skid (about 18 MWh usable), held | 1.80M | 2.56M | −2.74M | 6.83% |
+| Same block, cycled at the whole rate with the 1.29 MWh reserve, reading C | 1.80M | 2.56M | **−0.84M** | 9.07% |
+| Same block, cycled with the reserve, reading B | 1.80M | 2.56M | −1.39M | 8.40% |
 
 The power-heavy price is weak, for three reasons:
 

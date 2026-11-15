@@ -103,11 +103,10 @@ SUPPLIER_KEYS = (
     "ac_skid_mw",
     "ems_usd",
     "install_transport_share",
-    "ltsa_share_of_supply_per_year",
+    "service_share_of_cif_per_year",
     "usable_per_dc",
     "smallest_block_dc_mwh",
     "power_cell_premium",
-    "cif_usd_per_contracted_kwh",
 )
 SCHEMA_VERSION = "blue_whale_wind_bess_options_v1"
 OPTION_KEYS = ("name", "power_mw", "energy_mwh", "operation")
@@ -636,8 +635,9 @@ def firming_unit_prices(
     DC energy for ``energy_mwh`` usable at the offer's DC rate times a power-cell premium ``k``,
     plus the installation and transport share. ``smallest_block``: the supplier's smallest
     block with one skid at the flat offer rate per DC kWh. All-in = CIF x
-    ``all_in_usd_per_contracted_kwh`` / the offer's CIF per contracted kWh; O&M = the LTSA share
-    of CIF per year.
+    ``all_in_usd_per_contracted_kwh`` / the offer's CIF per usable kWh, which is the offer per DC
+    kWh over the published (rounded) usable fraction. O&M = a generic service share of CIF a
+    year (an assumption, not from the offer).
 
     Raises:
         ValueError: If the power exceeds one skid or an input is not positive.
@@ -647,10 +647,11 @@ def firming_unit_prices(
         raise ValueError("firming power must be in (0, one skid] and energy positive")
     usable = float(supplier["usable_per_dc"])
     soft = 1.0 + float(supplier["install_transport_share"])
-    factor = all_in_usd_per_contracted_kwh / float(
-        supplier["cif_usd_per_contracted_kwh"]
+    # The offer per usable kWh, from the published (rounded) usable fraction.
+    factor = all_in_usd_per_contracted_kwh / (
+        float(supplier["offer_usd_per_dc_kwh"]) / usable
     )
-    ltsa = float(supplier["ltsa_share_of_supply_per_year"])
+    service = float(supplier["service_share_of_cif_per_year"])
     dc_kwh = energy_mwh / usable * 1000.0
     out: Dict[str, Dict[str, float]] = {}
     for k in supplier["power_cell_premium"]:
@@ -664,7 +665,7 @@ def firming_unit_prices(
             "energy_mwh": energy_mwh,
             "cif_usd": cif,
             "all_in_usd": cif * factor,
-            "om_usd_per_year": cif * ltsa,
+            "om_usd_per_year": cif * service,
         }
     block_dc = float(supplier["smallest_block_dc_mwh"])
     cif = block_dc * 1000.0 * float(supplier["offer_usd_per_dc_kwh"])
@@ -673,7 +674,7 @@ def firming_unit_prices(
         "energy_mwh": block_dc * usable,
         "cif_usd": cif,
         "all_in_usd": cif * factor,
-        "om_usd_per_year": cif * ltsa,
+        "om_usd_per_year": cif * service,
     }
     return out
 

@@ -29,7 +29,7 @@ import json
 import math
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pytest
@@ -449,9 +449,7 @@ def test_firming_unit_prices_follow_the_hand_build_up() -> None:
     ) * (1 + supplier["install_transport_share"])
     unit = prices["power_heavy_cells_x1"]
     assert unit["cif_usd"] == pytest.approx(cif)
-    assert unit["all_in_usd"] == pytest.approx(
-        cif * 140.0 / supplier["cif_usd_per_contracted_kwh"]
-    )
+    assert unit["all_in_usd"] == pytest.approx(cif * 140.0 / (90.0009 / 0.91))
     assert unit["om_usd_per_year"] == pytest.approx(cif * 0.02)
     assert prices["power_heavy_cells_x3"]["cif_usd"] > unit["cif_usd"]
     block = prices["smallest_block"]
@@ -599,6 +597,16 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
     cfg["options"] = [
         o for o in cfg["options"] if o["name"] in ("held_0_5_0_5", "cycled_0_5_2")
     ]
+    # A tiny held battery above 0.5 MW: the cheapest option, but outside reading A, so it
+    # must never be the recommendation.
+    cfg["options"].append(
+        {
+            "name": "held_0_6_0_1",
+            "power_mw": 0.6,
+            "energy_mwh": 0.1,
+            "operation": "held",
+        }
+    )
     cfg["monte_carlo"] |= {"n_trials": 8, "rte_grid": [0.85]}
     out = cli.json_clean(cli.run(cfg))
     json.dumps(out, allow_nan=False)
@@ -641,7 +649,34 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
             rr["without_reserve_base_basis"]["delivered_mwh_per_year"]
             >= rr["delivered_mwh_per_year"]
         )
-    assert out["recommended_option_reading_A"] in {"held_0_5_0_5", "cycled_0_5_2"}
+    # The recommendation is the best base-basis option that fits reading A, read off the rows.
+    fitting = {
+        name: r["readings"]["B"]["bases"]["whole_wind_peak_rate"][
+            "delta_project_npv_vs_wind_only"
+        ]
+        for name, r in out["options"].items()
+        if r["fits_reading_A_turbine_plus_battery_le_limit"]
+    }
+    assert out["recommended_option_reading_A"] == max(fitting, key=fitting.__getitem__)
+    cheapest = out["options"]["held_0_6_0_1"]
+    assert cheapest["fits_reading_A_turbine_plus_battery_le_limit"] is False
+    assert cheapest["readings"]["B"]["bases"]["whole_wind_peak_rate"][
+        "delta_project_npv_vs_wind_only"
+    ] > max(fitting.values())
+    # The pinned column re-runs the engine with the discount rate held at wind-only's.
+    rate = out["wind_only"]["discount_rate_used"]
+    pinned = {"wacc.drives_discount_rate": False, "returns.project_discount_rate": rate}
+    for name in ("held_0_5_0_5", "cycled_0_5_2"):
+        rr = out["options"][name]["readings"]["B"]
+        value = _engine_project_value(
+            _option_scenario(out["options"][name], rr, overrides=pinned)
+        )
+        assert value - out["wind_only"]["project_npv"] == pytest.approx(
+            rr["pinned_discount_rate_delta_project_npv_base_basis"], rel=1e-9
+        )
+        assert rr["pinned_discount_rate_delta_project_npv_base_basis"] != pytest.approx(
+            rr["bases"]["whole_wind_peak_rate"]["delta_project_npv_vs_wind_only"]
+        )
     # Every Monte Carlo trial is measured against wind-only at the same wind yield, so a held
     # battery (capex and O&M only) never beats it.
     held_mc = out["monte_carlo_base_basis"]["held_0_5_0_5"][
@@ -676,32 +711,41 @@ def test_committed_summary_pins_the_committed_inputs() -> None:
     )
 
 
-def test_committed_option_figures_reproduce_through_the_engine() -> None:
-    summary = json.loads(SUMMARY.read_text())
+def _option_scenario(
+    row: Dict[str, Any],
+    reading: Dict[str, Any],
+    overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """The wind scenario with one summary option, built from its reported energies."""
     cfg = _cfg()
     rates = wbo.derive_rates(cfg["tariff"])
     bcfg = cfg["battery"]
-    scenario = _scenario()
+    return wbo.scenario_with_battery(
+        _scenario(),
+        power_mw=row["power_mw"],
+        energy_mwh=row["energy_mwh"],
+        operation=row["operation"],
+        usd_per_kwh=bcfg["usd_per_kwh"]["mode"],
+        om_usd_per_dc_kwh_year=bcfg["om_usd_per_dc_kwh_year"],
+        dc_per_nominal=bcfg["dc_per_nominal"],
+        round_trip_efficiency=bcfg["round_trip_efficiency"],
+        delivered_mwh=reading["delivered_mwh_per_year"],
+        charged_mwh=reading["charged_mwh_per_year"],
+        peak_rate=rates["whole_wind_peak_rate"],
+        wind_rate=rates["wind"],
+        contract_years=cfg["tariff"]["contract_years"],
+        scenario_overrides=overrides,
+    )
+
+
+def test_committed_option_figures_reproduce_through_the_engine() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    bcfg = _cfg()["battery"]
     wind_only = summary["wind_only"]["project_npv"]
     for name in ("cycled_0_5_2", "held_0_5_0_5"):
         row = summary["options"][name]
         rr = row["readings"]["B"]
-        s = wbo.scenario_with_battery(
-            scenario,
-            power_mw=row["power_mw"],
-            energy_mwh=row["energy_mwh"],
-            operation=row["operation"],
-            usd_per_kwh=bcfg["usd_per_kwh"]["mode"],
-            om_usd_per_dc_kwh_year=bcfg["om_usd_per_dc_kwh_year"],
-            dc_per_nominal=bcfg["dc_per_nominal"],
-            round_trip_efficiency=bcfg["round_trip_efficiency"],
-            delivered_mwh=rr["delivered_mwh_per_year"],
-            charged_mwh=rr["charged_mwh_per_year"],
-            peak_rate=rates["whole_wind_peak_rate"],
-            wind_rate=rates["wind"],
-            contract_years=cfg["tariff"]["contract_years"],
-        )
-        delta = _engine_project_value(s) - wind_only
+        delta = _engine_project_value(_option_scenario(row, rr)) - wind_only
         committed = rr["bases"]["whole_wind_peak_rate"][
             "delta_project_npv_vs_wind_only"
         ]
