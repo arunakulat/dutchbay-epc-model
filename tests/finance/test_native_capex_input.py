@@ -592,3 +592,132 @@ def test_conversion_must_be_dated_at_close_not_just_in_its_year() -> None:
     cfg["capex"]["input"]["conversion"]["date"] = "2027-06-01"
     with pytest.raises(ValueError, match="dated financial_close rate"):
         normalize_native_capex(cfg)
+
+
+def _resolved(with_cod: bool = False) -> dict[str, Any]:
+    """Resolve the synthetic input; optionally pin COD so the close year is checked."""
+    cfg = config()
+    if with_cod:
+        cfg["project"] = {"cod_year": 2029}
+    return normalize_native_capex(cfg)
+
+
+def _saved(cfg: dict[str, Any]) -> dict[str, Any]:
+    """The authored input as saved in the resolved provenance."""
+    saved: dict[str, Any] = cfg["capex"]["native_input_applied"]["input"]
+    return saved
+
+
+def _underflow_resolved(cfg: dict[str, Any]) -> None:
+    """Save an amount that converts to zero USD, consistently with its provenance."""
+    _saved(cfg).update(amount=5e-324)
+    cfg["capex"]["native_input_applied"].update(usd_at_price_date=0.0)
+    cfg["capex"].update(usd_total=0.0)
+
+
+def _tiny_rate(cfg: dict[str, Any]) -> None:
+    """Pin spot and conversion to a rate small enough that the USD amount overflows."""
+    cfg["fx"].update(start_lkr_per_usd=5e-324)
+    cfg["capex"]["input"]["conversion"].update(rate_lkr_per_usd=5e-324)
+
+
+# A resolved config re-checks its saved provenance on every normalization. Each row
+# below breaks one check on a resolved config, so a check skipped on that path fails
+# here with a different message or none (#1629, ASSURANCE-1645-R8 and -R10).
+RESOLVED_REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
+    (
+        "resolved close year after COD moves",
+        lambda: _resolved(with_cod=True),
+        lambda c: c["project"].update(cod_year=2030),
+        "financial_close_date must match the model financial-close year",
+    ),
+    (
+        "priced resolved close year after COD moves",
+        priced_resolved,
+        lambda c: c["project"].update(cod_year=2030),
+        "financial_close_date must match the model financial-close year",
+    ),
+    (
+        "resolved price date after close",
+        _resolved,
+        lambda c: _saved(c).update(price_date="2027-02-01"),
+        "price_date cannot be after financial close",
+    ),
+    (
+        "resolved conversion dated off close",
+        _resolved,
+        lambda c: _saved(c)["conversion"].update(date="2027-06-01"),
+        "conversion must be the dated financial_close rate",
+    ),
+    (
+        "resolved conversion on a quote-date basis",
+        _resolved,
+        lambda c: _saved(c)["conversion"].update(basis="quote_date"),
+        "conversion must be the dated financial_close rate",
+    ),
+    (
+        "authored basis in another case",
+        config,
+        lambda c: c["capex"]["input"]["conversion"].update(basis="Financial_Close"),
+        "conversion must be the dated financial_close rate",
+    ),
+    (
+        "resolved basis in another case",
+        _resolved,
+        lambda c: _saved(c)["conversion"].update(basis="Financial_Close"),
+        "conversion must be the dated financial_close rate",
+    ),
+    (
+        "resolved cost basis year off the price date",
+        _resolved,
+        lambda c: c["capex"].update(cost_basis_year=2027),
+        "capex.cost_basis_year must match capex.input.price_date",
+    ),
+    (
+        "authored amount underflows to zero USD",
+        config,
+        lambda c: c["capex"]["input"].update(amount=5e-324),
+        "capex.input resolves to a nonfinite or zero USD amount",
+    ),
+    (
+        "resolved amount underflows to zero USD",
+        _resolved,
+        _underflow_resolved,
+        "capex.input resolves to a nonfinite or zero USD amount",
+    ),
+    (
+        "authored rate so small the USD amount overflows",
+        config,
+        _tiny_rate,
+        "capex.input resolves to a nonfinite or zero USD amount",
+    ),
+    (
+        "resolved USD total removed",
+        _resolved,
+        lambda c: c["capex"].pop("usd_total"),
+        "native CAPEX resolved USD is stale",
+    ),
+    (
+        "priced resolved USD total removed",
+        priced_resolved,
+        lambda c: c["capex"].pop("usd_total"),
+        "native CAPEX resolved USD is stale",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("build", "mutation", "message"),
+    [pytest.param(b, m, msg, id=name) for name, b, m, msg in RESOLVED_REFUSALS],
+)
+def test_resolved_provenance_is_rechecked(
+    build: Callable[[], dict[str, Any]],
+    mutation: Mutation,
+    message: str,
+) -> None:
+    """Each check also runs on a resolved config, at its own message."""
+    cfg = build()
+    assert normalize_native_capex(copy.deepcopy(cfg)) is not None
+    mutation(cfg)
+    with pytest.raises(ValueError, match=re.escape(message)):
+        normalize_native_capex(cfg)
