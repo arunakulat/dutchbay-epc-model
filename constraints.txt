@@ -25,12 +25,11 @@ black<27
 # together with the accompanying type fixes):
 pandas-stubs==2.3.3.260113
 requests==2.34.2
-# Document-ingestion output and hook behaviour are reproducibility surfaces. Hold
-# the versions migrated from the retired 3.11 environment until a dedicated upgrade
-# dolphin revalidates conversion, extraction, rendering, hooks, audit, and the suite.
+# Document-ingestion output and hook behaviour are reproducibility surfaces. Pymupdf
+# upgraded to 2.1 via dedicated ingestion upgrade dolphin (unblocking #1596/#1597).
 markitdown==0.1.9
 pdfplumber==0.11.10
-pymupdf==2.0
+pymupdf==2.1
 pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
 # versions were migrated from the retiring 3.11 environment and cleared together

@@ -33,7 +33,12 @@ from pydantic import BaseModel, Field
 #: ``kpis.project_irr_status`` (``computed`` | ``undefined`` | ``not_computed``). A project
 #: IRR with no root in the solver's range is now ``null`` there and in ``CaseResult.kpis``,
 #: where it was a false ``0.0``; both fields were already nullable, so no field is retyped.
-API_CONTRACT_VERSION = "2.1"
+#: 2.2 (#1629): MINOR, additive. ``POST /v1/run-pipeline`` gains the optional
+#: ``manifest.native_capex`` (the authored native-CAPEX input and its conversion
+#: provenance, schema 1.1 manifests only; the key is left out for a USD-authored run).
+#: The bump also covers the optional ``DebtScheduleRow`` fields ``debt_period``,
+#: ``operating_year`` and ``phase``, which #1640 added to the same response without one.
+API_CONTRACT_VERSION = "2.2"
 
 
 class WindAssessment(BaseModel):

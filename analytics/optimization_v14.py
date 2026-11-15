@@ -55,6 +55,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import numpy as np
 from scipy.optimize import minimize_scalar
 
+from analytics.capital_structure_optimizer_v14 import _warn_if_irr_objective
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.infeasibility_diagnostics import (
     InfeasibilityDiagnostics,
@@ -438,7 +439,9 @@ def optimize_parameter(
             ``Financing_Terms.debt_ratio``).
         objective_key: KPI key to optimize (e.g. ``equity_npv``). Prefer equity
             NPV to ``equity_irr`` for ranking: the IRR can order candidates
-            backwards when equity cashflows change sign more than once (#1456).
+            backwards when equity cashflows change sign more than once (#1456),
+            so ranking on ``equity_irr`` logs the same warning as the
+            capital-structure optimisers do.
         lower, upper: Inclusive bounds for the parameter. The bounded method
             additionally requires a finite bracket with ``lower < upper``.
         direction: ``"max"`` or ``"min"``.
@@ -471,6 +474,7 @@ def optimize_parameter(
         raise ValueError(f"direction must be one of {_DIRECTIONS}, got {direction!r}")
     if method not in _METHODS:
         raise ValueError(f"method must be one of {_METHODS}, got {method!r}")
+    _warn_if_irr_objective(objective_key, "parameter")
 
     base: Dict[str, Any] = dict(base_overrides or {})
 

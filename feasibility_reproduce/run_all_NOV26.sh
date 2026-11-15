@@ -380,10 +380,8 @@ if [[ "$PROFILE" == full ]]; then
     "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py \
     --config-name blue_whale_solar_bess_project_sizing \
     "$(hydra_dir blue-whale-project-monte-carlo)"
-  run_step "blue-whale-fixed-bess-monte-carlo" capture_json "$OUT/blue_whale_sizing_fixed.json" \
-    "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py \
-    --config-name blue_whale_solar_bess_fixed_bess_sizing \
-    "$(hydra_dir blue-whale-fixed-bess-monte-carlo)"
+  # The fixed-battery child config (PR 7) is retired: the battery is a search variable of
+  # the project run above (#1691).
 fi
 
 # Optional analytical-study screening runs against current files and the current

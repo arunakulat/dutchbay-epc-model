@@ -145,8 +145,10 @@ CIF (89.19) is 10% below the Envision restatement.
 ## 5. Solar resource and efficacy at the site
 
 **Site.** The area centroid of the 160 PV tables in `docs/blue_whale/pv_bess_layout_lot5b.geojson`:
-8.291526 N, 79.753204 E. It is 123 m from the turbine (8.2925 N, 79.752666 E) and 2.42 km from
-the TMY's grid point (8.27 N, 79.75 E). Over 123 m the resource is the same as at the turbine;
+8.291526 N, 79.753204 E. It is 197 m from the turbine (DutchBay T2, 8.2925 N, 79.7547 E, read
+from `conf/blue_whale_wind_siting.yaml` since #1578 L-16; until then a stale copy, 79.752666 E,
+gave 123 m) and 2.42 km from the TMY's grid point (8.27 N, 79.75 E). Over 197 m the resource is
+the same as at the turbine;
 the geometry changes the annual POA by 0.002%.
 
 **Irradiance record.** `inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv` (SHA-256
@@ -233,6 +235,14 @@ after-tax project NPV, which chooses the same 107 tables, 3.5 MW AC and 1.0 MW /
 the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC
 (152 tables, 5.70304 MWp, from 15.22.0 with the turbine on DutchBay T2). The cost of that
 choice and the PV curve are in `STATUS.md`.
+
+From 2026-11-14 (owner, 2026-11-07: "Whatever the optimiser picks") the battery is a decision
+variable again, searched with the PV on the current opex and tariff basis. Every component
+loses value at the margin, so the run returns its grid floor, not an optimum: 107 tables
+(4.01464 MWp), 3.5 MW AC and 0.1 MW / 0.4 MWh, the battery floor the owner chose (2026-11-14:
+"Battery floor 0.1 MW, PV unchanged"). The blended BESS price is applied per kWh at that size,
+which a small battery is unlikely to achieve (L-10). The battery curve, sensitivities and
+break-even values are in `STATUS.md`.
 
 ## 7. References
 
