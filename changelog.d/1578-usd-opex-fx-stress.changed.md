@@ -5,18 +5,18 @@
   - `finance/cashflow_v14_params.py`: `with_usd_opex_fx_reference` records the base `fx` block
     as `opex.currency_split.usd_fx_reference` when an override changed `fx`. The resolver
     validates the key: a mapping with a financial-close spot, and only beside an own USD path.
-  - `finance/cashflow_v14.py`: with a reference, the USD path is multiplied year by year by the
-    model curve's ratio to the reference curve, each relative to its own spot, so a spot change
-    (which the path already anchors on) is not counted twice.
+  - `finance/cashflow_v14.py`: with a reference, the engine compares the model curve with it,
+    each relative to its own spot. When the shape changed (a drift stress or draw), the stressed
+    model curve replaces the USD share's own path, so a drift of x runs the share at x, not at x
+    on top of the authored rate (owner ruling, 2026-11-15). A spot-only or curve-neutral change
+    keeps the own path, which already anchors on the merged spot.
   - `analytics/evaluation_v14.py` (`evaluate_with_overrides`, `evaluate_scenario_from_dict`) and
     `analytics/evaluate_scenario.py`: every override gateway calls it after merging.
-  - `analytics/mc/engine.py`: a market-calibrated FX driver (`distribution: fx_calibrated`)
-    with `drive_drift` on is refused on a scenario whose USD share has its own FX path. Its
-    drift is a nominal, history-derived rate, and compounding it on the path's own rate would
-    count the inflation differential twice. `drive_drift: false` (spot only) still runs.
   - No committed KPI moves: every scenario's base case is byte-identical, and an `fx` change that
     leaves the curve alone is too. Stress and Monte Carlo outputs on the Blue Whale wind project
-    move: a 3%/yr drift stress now gives project IRR 8.98% (was 9.60%). No VERSION bump (#1625).
+    move: a 3%/yr drift stress now gives project IRR 9.50% (was 9.60%), and 5.89%/yr gives 6.35%
+    (was 7.04%). A market-calibrated Monte Carlo drift, a nominal rate, replaces the path too,
+    so it does not double count inflation. No VERSION bump (#1625).
   - The FX and tenor screening's engine-path status and notes now say the engine path exists,
     and the dated review document gains an addendum saying so; the screening still does not
     call the engine.

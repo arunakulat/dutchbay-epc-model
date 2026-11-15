@@ -37,9 +37,9 @@ DEFAULT_F5_HOLD_CAVEAT = (
 )
 DEFAULT_ENGINE_PATH_STATUS = "delivered_bw5_l12_d2"
 DEFAULT_ENGINE_PATH_NOTE = (
-    "The core v14 engine carries an FX override (an FX stress or a Monte Carlo drift draw) "
-    "to the USD OPEX share's own FX path (BW-5, L-12 D-2); this module is a standalone "
-    "screening utility and does not call the engine."
+    "The core v14 engine carries an FX override to the USD OPEX share: a drift stress or a "
+    "Monte Carlo drift draw replaces its own FX path (BW-5, L-12 D-2); this module is a "
+    "standalone screening utility and does not call the engine."
 )
 
 

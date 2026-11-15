@@ -96,10 +96,11 @@ class CashflowParams:
     - opex_usd_fx_reference: Optional[dict]. The ``fx`` block the USD share's own path
       was authored against. None (the default, and every authored scenario) leaves the
       path as above. Set by the evaluation gateway when an override moved ``fx``
-      (finance.cashflow_v14_params.with_usd_opex_fx_reference): the path is then
-      multiplied, year by year, by the model curve's ratio to the reference curve, each
-      taken relative to its own financial-close spot, so an FX stress or a Monte Carlo
-      drift draw reaches the USD share too.
+      (finance.cashflow_v14_params.with_usd_opex_fx_reference). When the model curve's
+      shape (each curve relative to its own financial-close spot) differs from the
+      reference's, the stressed model curve replaces the own path, so an FX drift stress
+      or a Monte Carlo drift draw runs the USD share at the drawn rate. A spot-only or
+      curve-neutral change keeps the own path.
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams

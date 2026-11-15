@@ -7,9 +7,11 @@ or a Monte Carlo drift draw) moved the model curve but never that path, so the s
 understated the FX risk on the USD share (#1557 DOM-4).
 
 Every override gateway now records the base ``fx`` block beside the path when an
-override moved ``fx`` (``with_usd_opex_fx_reference``). The engine then moves the path by
-the model curve's per-year ratio to the reference curve, each relative to its own spot,
-because the path already anchors on the merged spot. Nothing here names a site: the
+override moved ``fx`` (``with_usd_opex_fx_reference``). When the override changed the
+model curve's shape (its path relative to its own spot), the stressed model curve REPLACES
+the USD share's own path, so a drift of x runs the share at x, not at x on top of the
+authored rate (owner ruling, 2026-11-15). A spot-only or curve-neutral change keeps the
+own path, which already anchors on the merged spot. Nothing here names a site: the
 fixture is a committed scenario with its inputs moved by the test.
 """
 
@@ -167,39 +169,60 @@ def test_resolver_refuses_a_malformed_reference(mutate: Any, message: str) -> No
 # --------------------------------------------------------------------------- engine
 
 
-def test_drift_override_moves_the_usd_path_by_the_model_curve_ratio() -> None:
+def test_drift_override_replaces_the_own_path_with_the_stressed_curve() -> None:
     base = _cfg()
     curve0, path0 = _paths(base)
     curve1, path1 = _paths(_with_fx(base, annual_depr=0.03))
 
-    spot = float(base["fx"]["start_lkr_per_usd"])
     assert curve1 != curve0
-    for i, (p0, p1) in enumerate(zip(path0, path1, strict=True)):
-        expected = p0 * (curve1[i] / spot) / (curve0[i] / spot)
-        assert p1 == pytest.approx(expected, rel=1e-12), i
-    # A flat base curve, so the ratio is the drawn drift through construction.
-    assert path1[-1] / path0[-1] == pytest.approx(curve1[-1] / curve0[-1], rel=1e-12)
-    assert path1[0] > path0[0]
+    assert path1 == curve1
+    # Closed form: the financial-close spot advanced at the drawn drift through the
+    # construction year and every operating year, not at 2.44% on top of it.
+    spot = float(base["fx"]["start_lkr_per_usd"])
+    for i, p1 in enumerate(path1):
+        assert p1 == pytest.approx(spot * 1.03 ** (1 + i), rel=1e-12), i
+    # 3% is above the authored 2.44%/yr PPP rate, so the path ends above the authored
+    # one by the rate gap alone, compounded over the construction and operating years.
+    assert path1[-1] / path0[-1] == pytest.approx(
+        (1.03 / (1.05 / 1.025)) ** len(path0), rel=1e-12
+    )
 
 
-def test_per_year_drift_list_reaches_the_usd_path() -> None:
+def test_drift_below_the_ppp_rate_lowers_the_usd_path() -> None:
+    """A replacement, not an increment: a 1% drift runs the share below its 2.44% path."""
+    base = _cfg()
+    _, path0 = _paths(base)
+    curve1, path1 = _paths(_with_fx(base, annual_depr=0.01))
+    assert path1 == curve1
+    assert all(p1 < p0 for p1, p0 in zip(path1, path0, strict=True))
+
+
+def test_per_year_drift_list_replaces_the_own_path() -> None:
     base = _cfg()
     years = len(_paths(base)[1]) + 10
-    _, path0 = _paths(base)
     curve1, path1 = _paths(_with_fx(base, annual_depr=[0.02] * years))
-    curve0, _ = _paths(base)
-    for i in range(len(path0)):
-        assert path1[i] == pytest.approx(path0[i] * curve1[i] / curve0[i], rel=1e-12), i
+    assert path1 == curve1
 
 
-def test_spot_only_override_is_not_counted_twice() -> None:
+def test_spot_and_drift_together_use_the_stressed_curve_once() -> None:
+    """A calibrated Monte Carlo draw moves both; the spot enters once, via the curve."""
+    base = _cfg()
+    spot0 = float(base["fx"]["start_lkr_per_usd"])
+    curve1, path1 = _paths(
+        _with_fx(base, start_lkr_per_usd=spot0 * 1.1, annual_depr=0.05)
+    )
+    assert path1 == curve1
+    assert path1[0] == pytest.approx(spot0 * 1.1 * 1.05, rel=1e-12)
+
+
+def test_spot_only_override_keeps_the_own_path_on_the_new_spot() -> None:
     base = _cfg()
     _, path0 = _paths(base)
     spot0 = float(base["fx"]["start_lkr_per_usd"])
     shocked = _with_fx(base, start_lkr_per_usd=spot0 * 1.1)
     assert USD_FX_REFERENCE in _split(shocked)
     _, path1 = _paths(shocked)
-    # The path anchors on the merged spot once; the spot-normalised ratio is 1.
+    # The path anchors on the merged spot once; the curve's shape is unchanged.
     for i, (p0, p1) in enumerate(zip(path0, path1, strict=True)):
         assert p1 == pytest.approx(p0 * 1.1, rel=1e-12), i
 
@@ -209,6 +232,32 @@ def test_fx_change_that_leaves_the_curve_alone_is_byte_identical() -> None:
     shocked = _with_fx(base, uncertainty_pct=0.07)
     assert USD_FX_REFERENCE in _split(shocked)
     assert _paths(shocked) == _paths(base)
+
+
+def _non_flat(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    out = copy.deepcopy(cfg)
+    out["fx"]["annual_depr"] = 0.0317
+    return out
+
+
+def test_non_flat_base_curve_spot_only_and_curve_neutral_keep_the_own_path() -> None:
+    """The construction offset and the spot normalisation, on a curve that is not flat."""
+    base = _non_flat(_cfg())
+    _, path0 = _paths(base)
+    spot0 = float(base["fx"]["start_lkr_per_usd"])
+    _, path_spot = _paths(_with_fx(base, start_lkr_per_usd=spot0 * 1.1))
+    for i, (p0, p1) in enumerate(zip(path0, path_spot, strict=True)):
+        assert p1 == pytest.approx(p0 * 1.1, rel=1e-12), i
+    assert _paths(_with_fx(base, uncertainty_pct=0.07)) == _paths(base)
+
+
+def test_non_flat_base_curve_drift_override_uses_the_stressed_curve() -> None:
+    base = _non_flat(_cfg())
+    curve1, path1 = _paths(_with_fx(base, annual_depr=0.05))
+    assert path1 == curve1
+    spot = float(base["fx"]["start_lkr_per_usd"])
+    # One construction period: year 1 is the spot advanced one step at the drawn rate.
+    assert path1[0] == pytest.approx(spot * 1.05, rel=1e-12)
 
 
 def test_without_an_own_path_the_reference_is_never_set_and_model_curve_rules() -> None:
@@ -267,7 +316,10 @@ def test_gateway_without_fx_overrides_is_byte_identical() -> None:
 # ------------------------------------------------------------------ calibrated MC
 
 
-def _calibrated_mc_config(*, drive_drift: bool) -> Dict[str, Any]:
+def test_calibrated_drift_driver_runs_beside_an_own_usd_path() -> None:
+    """Its nominal drift replaces the own path (no double count), so it is not refused."""
+    from analytics.mc.engine import MonteCarloEngine
+
     cfg = load_scenario_config(WIND)
     cfg["monte_carlo"] = {
         "parameters": [
@@ -276,32 +328,9 @@ def _calibrated_mc_config(*, drive_drift: bool) -> Dict[str, Any]:
         "fx_calibration": {
             "frequency": "weekly",
             "horizon_years": 1.0,
-            "drive_drift": drive_drift,
+            "drive_drift": True,
         },
         "allow_toy_fallback": False,
     }
-    return cfg
-
-
-def test_calibrated_drift_is_refused_beside_an_own_usd_path() -> None:
-    """The calibrated drift is nominal; compounding it on the PPP path counts twice."""
-    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
-
-    with pytest.raises(MonteCarloConfigError, match="count the inflation"):
-        MonteCarloEngine(_calibrated_mc_config(drive_drift=True), seed=1)
-
-
-def test_calibrated_spot_only_driver_still_runs_beside_an_own_usd_path() -> None:
-    from analytics.mc.engine import MonteCarloEngine
-
-    engine = MonteCarloEngine(_calibrated_mc_config(drive_drift=False), seed=1)
-    assert engine._fx_sampler is not None
-
-
-def test_calibrated_drift_still_runs_without_an_own_usd_path() -> None:
-    from analytics.mc.engine import MonteCarloEngine
-
-    cfg = _calibrated_mc_config(drive_drift=True)
-    del cfg["opex"]["currency_split"]["usd_lkr_depreciation_pct"]
     engine = MonteCarloEngine(cfg, seed=1)
     assert engine._fx_drive_drift is True

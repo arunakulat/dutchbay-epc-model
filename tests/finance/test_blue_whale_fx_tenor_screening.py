@@ -3,7 +3,7 @@
 Covers the 14-turbine DutchBay (#1587) governed basecase alignment to
 ``scenarios/dutchbay_basecase_2025Q4.yaml``, explicit sensitivity labeling,
 F-5 HOLD caveat and screening-indicator status, assumed-downside labeling
-(no measured P90), pending engine path disclosure, TEST-01 closed-form oracles,
+(no measured P90), engine path disclosure, TEST-01 closed-form oracles,
 monotonicity invariants, and Hydra CLI smoke test.
 """
 

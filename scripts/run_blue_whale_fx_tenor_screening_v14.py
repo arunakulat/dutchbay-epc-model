@@ -8,8 +8,8 @@ tenor-tail compliance, and fixed-debt FX stress test grid.
 
 HOLD (F-5, #1110, v15.6.1): Standalone screening utility complementary to
 ``analytics.evaluation_v14`` and PR #1678. The core v14 engine carries an FX
-override to the USD OPEX share's own FX path (BW-5 / L-12 D-2); this utility does
-not call it. Does NOT modify any
+override to the USD OPEX share, replacing its own FX path under a drift stress
+(BW-5 / L-12 D-2); this utility does not call it. Does NOT modify any
 scenario YAML or execute/represent lender commitments.
 """
 

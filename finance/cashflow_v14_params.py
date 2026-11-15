@@ -309,9 +309,10 @@ class OpexCurrencySplit:
             rates), or ``None`` to translate the USD share on the model FX curve.
         usd_fx_reference: The ``fx`` block the USD share's own path was authored
             against, or ``None``. Set by the evaluation gateway when an override (an FX
-            stress or a Monte Carlo draw) moved the model FX curve: the engine then
-            moves the USD share's path by the same per-year ratio
-            (:func:`with_usd_opex_fx_reference`). ``None`` for an authored scenario.
+            stress or a Monte Carlo draw) changed ``fx``: when the model curve's shape
+            changed, the engine translates the USD share on the stressed model curve
+            in place of its own path (:func:`with_usd_opex_fx_reference`). ``None``
+            for an authored scenario.
     """
 
     usd_share: float
@@ -623,9 +624,12 @@ def with_usd_opex_fx_reference(
     so an override of ``fx`` (an FX stress, or a Monte Carlo drift draw) would not reach
     that share. Every override gateway calls this after merging: when the merged
     ``fx`` block differs from the base one, the base block is recorded as
-    ``opex.currency_split.usd_fx_reference`` and the engine moves the USD path by the
-    model curve's per-year ratio to that reference, net of the spot (the path already
-    anchors on the merged spot).
+    ``opex.currency_split.usd_fx_reference``. The engine compares the merged model
+    curve with that reference, each relative to its own spot. When the shape changed
+    (a drift stress or draw), the stressed model curve replaces the USD share's own path,
+    so a drift of x runs the share at x, not at x on top of the authored rate (owner
+    ruling, 2026-11-15). When only the spot or a curve-neutral key changed, the own path
+    is kept; it already anchors on the merged spot.
 
     The merged config is returned unchanged (the same object) when there is no USD
     path, when ``fx`` did not change, or when a reference is already set. Otherwise a

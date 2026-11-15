@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -276,11 +277,14 @@ def _prepare_cashflow_context(
                 financial_close_spot * (1.0 + float(depr)) ** (construction_periods + i)
                 for i in range(years)
             ]
-            # An override that moved ``fx`` (an FX stress or a Monte Carlo drift draw)
-            # reaches the USD share through the model curve's per-year ratio to the
-            # curve the path was authored against. Each curve is taken relative to its
-            # own spot, because the path above already anchors on the merged spot. No
-            # reference (every authored scenario) leaves the path as built.
+            # An override that moved the model FX curve (an FX stress or a Monte Carlo
+            # drift draw) REPLACES the USD share's own path: the share is then
+            # translated on the stressed model curve, so a drift of x runs it at x, not
+            # at x on top of the authored rate (owner ruling, 2026-11-15). The reference
+            # is the fx block the path was authored against. Each curve is compared
+            # relative to its own spot: a spot-only or curve-neutral change leaves the
+            # shape equal, and the own path (already anchored on the merged spot) is
+            # kept. No reference (every authored scenario) leaves the path as built.
             reference = params_dict.get("opex_usd_fx_reference")
             if reference is not None:
                 ref_config = {"fx": reference}
@@ -293,12 +297,17 @@ def _prepare_cashflow_context(
                 ref_curve = _fx_curve(
                     ref_config, years, period_offset=construction_periods
                 )
-                usd_path = [
-                    p
-                    * (fx_curve_resolved[i] / financial_close_spot)
-                    / (ref_curve[i] / ref_spot)
-                    for i, p in enumerate(usd_path)
+                model_shape = [
+                    fx_curve_resolved[i] / financial_close_spot for i in range(years)
                 ]
+                ref_shape = [ref_curve[i] / ref_spot for i in range(years)]
+                # Compared to a relative tolerance: the same curve anchored on two
+                # different spots can differ in the last bit once divided back out.
+                if any(
+                    not math.isclose(m, r, rel_tol=1e-12, abs_tol=0.0)
+                    for m, r in zip(model_shape, ref_shape, strict=True)
+                ):
+                    usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
             params_dict["opex_usd_fx_path"] = usd_path
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
