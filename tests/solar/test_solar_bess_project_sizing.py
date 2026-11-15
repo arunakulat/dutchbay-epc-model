@@ -13,15 +13,19 @@
   eligible under reading A has PV AC + BESS power above 10 MW;
 * the seeded run reproduces itself, and a different seed changes the draws.
 
-PR 7 (the owner's 5 MW / 20 MWh battery, ranked on the after-tax project NPV) adds:
+PR 7 (ranked on the after-tax project NPV) adds:
 
 * ``finance.irr.npv`` over the capex and the engine's post-tax CFADS reproduces the objective
   on the committed scenario, and CFADS = pre-tax CFADS - tax - haircut year by year;
 * reading A at its limit (PV AC + BESS power = 10 MW exactly) and E = 4P at every point of
-  the fixed-battery run; the choice is the best P50 of the metric the config names;
-* at production scale, the fixed-battery run and the full grid (two runs, one seed) carry
-  identical statistics at every size both evaluate;
-* the cost of the owner's choice is recomputed from the two committed summaries.
+  a one-battery run; the choice is the best P50 of the metric the config names.
+
+The battery optimisation (owner, 2026-11-07: "Whatever the optimiser picks") adds:
+
+* the battery's O&M on DC kWh matches the scenario's ``bess_om`` component;
+* a shifted case moves only its named input, and refuses the rest;
+* the one-at-a-time cases and the break-even searches are counted, and respond to their
+  inputs; the committed scenario reproduces the chosen point's base case with no override.
 
 ``TEST-03``: every test here runs at most 200 model evaluations, asserted against
 ``config/stochastic_test_policy.yaml``.
@@ -53,10 +57,6 @@ SOLAR_BESS = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 WIND = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
 HYBRID = REPO_ROOT / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
 SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "solar_bess_project_sizing_summary.json"
-FIXED_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess_fixed_bess_sizing.yaml"
-FIXED_SUMMARY = (
-    REPO_ROOT / "docs" / "blue_whale" / "solar_bess_fixed_bess_sizing_summary.json"
-)
 UNIT_CLI = REPO_ROOT / "scripts" / "run_blue_whale_solar_bess_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
@@ -96,27 +96,18 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # sponsor cures in years 16-20 outweigh the distributions at any negative rate). Before, at
 # 15.24.0 (v0.7): project NPV -4439999.608625973, equity NPV -5075831.700126602, equity IRR
 # -0.04998720726172046, min DSCR 0.8681005901376199.
+# Re-pinned for the battery search (v0.9: 107 tables, 3.5 MW AC and 0.1 MW / 0.4 MWh, the
+# search grid's floor on every decision variable, sized on this scenario's own basis; owner,
+# 2026-11-07: "Whatever the optimiser picks"; 2026-11-14: "Battery floor 0.1 MW, PV
+# unchanged"). Equity IRR stays undefined. Before (v0.8): project NPV -5579964.010141663,
+# equity NPV -6167136.817522649, min DSCR 0.868213653807526. (A first v0.9 at the 0.5 MW
+# floor, never on main: project NPV -4518152.075386281, equity NPV -4628674.688512776, min
+# DSCR 0.8702721240311019.)
 SOLAR_BESS_PINS = {
-    "project_npv": -5579964.010141663,
-    "equity_npv": -6167136.817522649,
+    "project_npv": -4477786.514808497,
+    "equity_npv": -4557056.390826946,
     "equity_irr": None,
-    "min_dscr": 0.868213653807526,
-}
-# The basis the sizing runs priced (v0.3 to v0.7): opex in one currency, BESS O&M at USD
-# 2.5/kWh-yr, the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1,
-# B30), and flat tariffs (no L-9 indexation of the escalable O&M parts; from 15.21.0 the scenario
-# indexes them). From 15.22.0 the solar O&M is on 152 tables (257,030; was 256,655 on 151).
-SIZING_OPEX_BASIS = {
-    "opex.currency_split": None,
-    "opex.usd_per_year": 257030,
-    "Financing_Terms.construction_periods": 2,
-    # #1570: the count must equal the declared build time, so the basis states both.
-    "timeline.construction_years": 2,
-    "tariff.om_indexation": None,
-    "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
-    # #1569: the sizing priced capex and opex as stated, with no price dates.
-    "capex.price_basis": None,
-    "opex.price_year": None,
+    "min_dscr": 0.8716987467623586,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -427,7 +418,7 @@ def test_array_dispatcher_with_losses_on_charge_reproduces_pr2_on_the_tmy(
 # A small run: truthful counts and seed reproducibility
 # ---------------------------------------------------------------------------
 def _small(seed: int = 20261101) -> Dict[str, Any]:
-    cfg = _project_cfg()
+    cfg = _quiet(_project_cfg())
     cfg["grid"] = {
         **cfg["grid"],
         "pv_tables": ["land_max"],
@@ -576,6 +567,216 @@ def test_project_sizing_refuses_the_turbine_and_a_bad_duration(
 
 
 # ---------------------------------------------------------------------------
+# 2026-11-07: the battery as a decision variable, its sensitivities and break-even values
+# ---------------------------------------------------------------------------
+def _context() -> sz.Context:
+    """The project's base context, built without the site (no evaluation needed)."""
+    unit = _project_unit()
+    return sz.Context(
+        scenario=_yaml(SOLAR_BESS),
+        bess_template=pbd.BessConfig.from_mapping(unit["bess"]),
+        dispatch=pbd.DispatchConfig.from_mapping(unit["dispatch"]),
+        tariff=pbd.TariffConfig.from_mapping(unit["tariff"]),
+        wind=pbd.WindBlock(capacity_mw=0.0, capacity_factor=0.0, degradation_pct=0.0),
+        pricing=sz.Pricing.from_mapping(_yaml(PRICING_CONF)),
+        grid_civils_development_usd=2.0e6,
+        fixed_opex_usd_per_year=150000.0,
+        losses_on_charge=True,
+        project_opex=sz.project_opex_basis(
+            _yaml(SOLAR_BESS),
+            _project_cfg()["plant"]["bess_dc_per_nominal"],
+            150000.0,
+        ),
+    )
+
+
+def _base_trial(ctx: sz.Context) -> sz.Trials:
+    trials = sz.draw_trials(
+        n_trials=1,
+        seed=20261101,
+        pricing=ctx.pricing,
+        uncertainty=sz.Uncertainty.from_mapping(_project_cfg()["uncertainty"]),
+        base_rte=ctx.bess_template.round_trip_efficiency,
+        with_base=True,
+    )
+    return sz.Trials(values={k: v[:1] for k, v in trials.values.items()})
+
+
+def test_shifted_case_moves_only_the_named_input_and_refuses_the_rest() -> None:
+    ctx = _context()
+    base = _base_trial(ctx)
+
+    def shift(**kw: Any) -> tuple[sz.Context, sz.Trials]:
+        return sz.shifted_case(ctx, base, kw, where="t")
+
+    c, t = shift(bess_usd_per_kwh=99.0)
+    assert float(t.values["bess_usd_per_kwh"][0]) == 99.0 and c == ctx
+    # The battery O&M shift replaces the scenario bess_om rate per DC kWh (#1646's basis),
+    # so the priced O&M at a size moves by the rate change x nominal x the DC ratio.
+    assert ctx.project_opex is not None
+    c, t = shift(bess_opex_usd_per_dc_kwh_year=2.0)
+    assert c.project_opex is not None
+    assert c.project_opex.components[1]["usd_per_unit_year"] == 2.0
+    assert c.project_opex.components[0] == ctx.project_opex.components[0]
+    assert c.project_opex.components[2] == ctx.project_opex.components[2]
+    rate = ctx.project_opex.components[1]["usd_per_unit_year"]
+    ratio = ctx.project_opex.dc_per_nominal
+    total, _, _ = c.project_opex.at_size(4.0, 2.0)
+    before, _, _ = ctx.project_opex.at_size(4.0, 2.0)
+    assert total - before == pytest.approx((2.0 - rate) * 2000.0 * ratio)
+    assert c.pricing == ctx.pricing
+    assert c.tariff == ctx.tariff and c.scenario == ctx.scenario
+    c, t = shift(priority_lkr_per_kwh=60.0, priority_term_years=20)
+    assert (c.tariff.priority_lkr_per_kwh, c.tariff.priority_term_years) == (60.0, 20)
+    assert c.tariff.other_lkr_per_kwh == ctx.tariff.other_lkr_per_kwh
+    c, t = shift(round_trip_efficiency=0.82)
+    assert float(t.values["round_trip_efficiency"][0]) == 0.82
+    c, t = shift(scenario={"tax.corporate_tax_rate": 0.0})
+    assert c.scenario["tax"]["corporate_tax_rate"] == 0.0
+    assert ctx.scenario["tax"]["corporate_tax_rate"] == 0.30  # the base is not mutated
+    # Every other trial input keeps its base value.
+    for key, arr in t.values.items():
+        assert np.array_equal(arr, base.values[key]), key
+    # Negative controls, each observed to fire.
+    for bad, match in (
+        ({"bess_capex": 99.0}, "unknown inputs"),
+        ({}, "moves no input"),
+        ({"scenario": {"tax.no_such_rate": 0.0}}, "not in the scenario"),
+        ({"priority_lkr_per_kwh": 10.0}, "below the other rate"),
+        ({"round_trip_efficiency": 1.2}, "not physical"),
+        ({"priority_term_years": 1.5}, "positive integer"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            sz.shifted_case(ctx, base, bad, where="t")
+    import dataclasses
+
+    with pytest.raises(ValueError, match="scenario O&M basis"):
+        sz.shifted_case(
+            dataclasses.replace(ctx, project_opex=None),
+            base,
+            {"bess_opex_usd_per_dc_kwh_year": 2.0},
+            where="t",
+        )
+    for raw, match in (
+        ([{"name": "a", "bess_usd_per_kwh": 1.0}] * 2, "duplicate"),
+        ([{"name": "a"}], "unknown inputs"),
+        ([{"bess_usd_per_kwh": 1.0}], "string name"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            sz._one_at_a_time_cases(raw)
+    for raw, match in (
+        ([{"input": "tax", "low": 0.0, "high": 1.0, "tolerance": 0.1}], "input"),
+        (
+            [{"input": "bess_usd_per_kwh", "low": 2.0, "high": 1.0, "tolerance": 0.1}],
+            "low",
+        ),
+        ([{"input": "bess_usd_per_kwh", "low": 1.0, "high": 2.0}], "break_even"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            sz._break_even_specs(raw)
+
+
+def test_battery_sensitivities_and_break_even_are_counted_and_responsive(
+    site: Dict[str, Any],
+) -> None:
+    calls = {"n": 0}
+
+    def counting(**kw: Any) -> Any:
+        calls["n"] += 1
+        return evaluate_with_overrides(**kw)
+
+    cfg = _project_cfg()
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [107],
+        "pv_ac_mw": [3.5],
+        "bess_power_mw": [0.5, 2.0],
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    cfg["curtailment_scenario"] = {**cfg["curtailment_scenario"], "enabled": False}
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [
+            {"name": "tariff_up", "priority_lkr_per_kwh": 60.0},
+            {"name": "capex_up", "bess_usd_per_kwh": 250.0},
+        ],
+        "break_even": [
+            # Brackets the sign change: 3 bisection steps to a 20 USD/kWh bracket.
+            {
+                "input": "bess_usd_per_kwh",
+                "low": 60.0,
+                "high": 202.51,
+                "tolerance": 20.0,
+            },
+            # No sign change in a narrow range: two sweeps, no value.
+            {
+                "input": "priority_lkr_per_kwh",
+                "low": 50.1,
+                "high": 50.2,
+                "tolerance": 1.0,
+            },
+        ],
+    }
+    run = _run(cfg, site, counting)
+    # 2 points x (1 trial + base) + 2 RTE cases + 2 cases x 2 points + break-even
+    # (5 + 2 sweeps of the 2 points).
+    assert run.spec["break_even_evaluations"] == (5 + 2) * 2
+    assert run.effective_evaluations == calls["n"] == 2 * 2 + 2 + 2 * 2 + 14
+    assert calls["n"] <= _hard_cap()
+    sens = run.curtailment
+    assert sens is not None
+    oat = sens["one_at_a_time"]
+    base = {
+        r["size"]["bess_power_mw"]: r["project_npv"]
+        for r in oat["base"]["battery_profile"]["A"]
+    }
+    assert base == {p["bess_power_mw"]: p["base"]["project_npv"] for p in run.points}
+    up = {
+        r["size"]["bess_power_mw"]: r["project_npv"]
+        for r in oat["cases"]["tariff_up"]["battery_profile"]["A"]
+    }
+    dear = {
+        r["size"]["bess_power_mw"]: r["project_npv"]
+        for r in oat["cases"]["capex_up"]["battery_profile"]["A"]
+    }
+    for p in (0.5, 2.0):
+        assert up[p] > base[p]  # a higher evening rate pays the battery more
+        assert dear[p] < base[p]  # a dearer battery costs more
+    # The dearer battery hurts the larger one more (capex scales with energy).
+    assert base[2.0] - dear[2.0] > base[0.5] - dear[0.5] > 0.0
+    chosen = run.recommendation["by_reading"]["A"]["size"]["bess_power_mw"]
+    found, none = sens["break_even"]
+    assert found["chosen_bess_power_mw"] == chosen
+    lo, hi = found["bracket"]
+    assert hi - lo <= 20.0 and lo <= found["value"] <= hi
+    # Cheap storage favours the other battery; the dearest favours the chosen one.
+    assert found["gap_at_low"] > 0.0 > found["gap_at_high"]
+    assert found["other_battery_takes_over_at"]["bess_power_mw"] != chosen
+    assert none["value"] is None and none["bracket"] is None
+    assert (none["gap_at_low"] > 0.0) == (none["gap_at_high"] > 0.0)
+    # The battery value curve: one row per battery, the chosen one paired against each.
+    profile = run.recommendation["by_reading"]["A"]["battery_profile"]
+    assert [r["size"]["bess_power_mw"] for r in profile] == [0.5, 2.0]
+    for r in profile:
+        point = next(p for p in run.points if _key(p) == _key(r["size"]))
+        assert r["p50"] == point["metrics"]["project_npv"]["p50"]
+        if r["size"]["bess_power_mw"] == chosen:
+            assert r["choice_against_this"] is None
+        else:
+            assert (
+                0.0
+                <= r["choice_against_this"]["share_of_trials_at_least_as_good"]
+                <= 1.0
+            )
+    # Every decision variable's grid edge is flagged (DOM-1691-04). PV is a single value,
+    # so it is at both edges; the battery is at exactly one edge or neither.
+    edge = run.recommendation["by_reading"]["A"]["any_pv"]["at_grid_edge"]
+    assert set(edge) == {"pv_tables", "pv_ac_mw", "bess_power_mw"}
+    assert edge["pv_tables"] == edge["pv_ac_mw"] == {"minimum": True, "maximum": True}
+    assert edge["bess_power_mw"] == {"minimum": chosen == 0.5, "maximum": chosen == 2.0}
+
+
+# ---------------------------------------------------------------------------
 # The committed run and the scenarios it writes
 # ---------------------------------------------------------------------------
 def _summary() -> Dict[str, Any]:
@@ -590,7 +791,16 @@ def test_committed_summary_is_truthful_and_matches_the_config() -> None:
     cfg = _project_cfg()
     n = spec["requested_trials_per_point"]
     pts = spec["grid_points_evaluated"]
-    assert spec["effective_evaluations"] == pts * (n + 1) + 2 * pts
+    # Each point: the trials and the base case, then the RTE case, the curtailment case and
+    # the one-at-a-time cases (sensitivity_cases_per_point); then the break-even searches.
+    oat = len(cfg["sensitivities"]["one_at_a_time"])
+    assert spec["sensitivity_cases_per_point"] == 2 + oat == 17
+    assert (
+        spec["effective_evaluations"]
+        == pts * (n + 1)
+        + spec["sensitivity_cases_per_point"] * pts
+        + spec["break_even_evaluations"]
+    )
     assert spec["git_sha"] != "unknown" and spec["result_sha256"]
     assert spec["seed"] == cfg["monte_carlo"]["seed"] == 20261101
     assert n == cfg["monte_carlo"]["n_trials"] == 256
@@ -603,10 +813,10 @@ def test_committed_summary_is_truthful_and_matches_the_config() -> None:
         "statistic": cfg["objective"]["statistic"],
     }
     assert spec["objective"] == {"metric": "project_npv", "statistic": "p50"}
-    # PR 7: this full-grid run is the value-based reference; the scenario commits the owner's
-    # 5 MW / 20 MWh from the fixed-battery run (test_fixed_bess_*). Before PR 7 the roles were
-    # "committed" and "alternative".
-    for role in ("value_based", "value_based_other_reading"):
+    # 2026-11-07 (owner: "Whatever the optimiser picks"): this run's choice is committed to
+    # the scenario. Under PR 7 the roles were "value_based" and "value_based_other_reading"
+    # (reported only), and before PR 7 "committed" and "alternative".
+    for role in ("committed", "other_reading"):
         want = cfg["recommendation"][role]
         got = summary["recommendation"]["by_reading"][want["reading"]]["size"]
         assert (got["pv_tables"], got["pv_ac_mw"], got["bess_power_mw"]) == (
@@ -614,9 +824,7 @@ def test_committed_summary_is_truthful_and_matches_the_config() -> None:
             want["pv_ac_mw"],
             want["bess_power_mw"],
         ), role
-    assert (
-        cfg["recommendation"]["value_based"]["reading"] == cfg["readings"]["committed"]
-    )
+    assert cfg["recommendation"]["committed"]["reading"] == cfg["readings"]["committed"]
     import hashlib
 
     for rel in (
@@ -683,150 +891,32 @@ def test_every_committed_point_obeys_the_4h_rule_and_its_readings() -> None:
         assert rev["size"]["pv_ac_mw"] + rev["size"]["bess_power_mw"] > limit
 
 
-# ---------------------------------------------------------------------------
-# PR 7: the owner's 5 MW / 20 MWh battery, its PV DC and the cost of the choice
-# ---------------------------------------------------------------------------
-def _fixed_cfg() -> Dict[str, Any]:
-    """The fixed-battery config as Hydra composes it: the project config, then this file."""
-    from omegaconf import OmegaConf
-
-    child = _yaml(FIXED_CONF)
-    assert child["defaults"] == ["blue_whale_solar_bess_project_sizing", "_self_"]
-    merged = OmegaConf.merge(
-        OmegaConf.create(_project_cfg()),
-        OmegaConf.create({k: v for k, v in child.items() if k != "defaults"}),
-    )
-    out = OmegaConf.to_container(merged, resolve=True)
-    assert isinstance(out, dict)
-    return {str(k): v for k, v in out.items()}
-
-
-def _fixed_summary() -> Dict[str, Any]:
-    data = json.loads(FIXED_SUMMARY.read_text())
-    assert isinstance(data, dict)
-    return data
-
-
-def _rows_of(summary: Dict[str, Any]) -> list[Dict[str, Any]]:
-    grid = summary["grid"]
-    return [dict(zip(grid["columns"], row, strict=True)) for row in grid["rows"]]
-
-
 def _key(entry: Dict[str, Any]) -> tuple[Any, Any, Any]:
     return (entry["pv_tables"], entry["pv_ac_mw"], entry["bess_power_mw"])
 
 
-def test_fixed_bess_config_composes_as_hydra_does() -> None:
-    from hydra import compose, initialize_config_dir
-    from omegaconf import OmegaConf
-
-    with initialize_config_dir(config_dir=str(REPO_ROOT / "conf"), version_base="1.3"):
-        composed = compose(config_name="blue_whale_solar_bess_fixed_bess_sizing")
-    raw = OmegaConf.to_container(composed, resolve=True)
-    assert isinstance(raw, dict)
-    raw.pop("hydra", None)
-    fixed = _fixed_cfg()
-    assert raw == fixed
-    # Only the grid and the recommendation differ from the full project config: the same
-    # seed, trials, ranges, plant lines, readings and objective.
-    project = _project_cfg()
-    assert {k for k in project if project[k] != fixed[k]} == {"grid", "recommendation"}
-    grid = fixed["grid"]
-    assert grid["bess_power_mw"] == [5.0] and grid["pv_ac_mw"] == [5.0]
-    assert grid["bess_duration_h"] == 4.0
-    assert (grid["min_dc_ac_ratio"], grid["max_dc_ac_ratio"]) == (1.0, 1.5)
-
-
-def test_fixed_bess_summary_holds_the_owners_battery_and_chooses_the_pv() -> None:
-    summary = _fixed_summary()
-    spec = summary["spec"]
-    cfg = _fixed_cfg()
-    n = spec["requested_trials_per_point"]
-    pts = spec["grid_points_evaluated"]
-    assert summary["config"] == "conf/blue_whale_solar_bess_fixed_bess_sizing.yaml"
-    assert spec["effective_evaluations"] == pts * (n + 1) + 2 * pts
-    assert spec["seed"] == cfg["monte_carlo"]["seed"] == 20261101
-    assert spec["seed"] == _summary()["spec"]["seed"]
-    assert n == cfg["monte_carlo"]["n_trials"] == 256
-    assert spec["objective"] == {"metric": "project_npv", "statistic": "p50"}
-    # The turbine on DutchBay T2 (15.22.0) moves its crane pad onto the lot's west side and
-    # its shadow onto the array, so the lot holds 186 tables (191 before).
-    assert spec["land_max_tables_by_bess_power_mw"] == {"5.0": 186}
-    rows = _rows_of(summary)
-    # Every whole table count from DC/AC 1.0 at 5 MW AC to 191, once each; the five above the
-    # lot's maximum are listed as not fitting and are not evaluated.
-    assert sorted(r["pv_tables"] for r in rows) == list(range(134, 192))
-    assert {r["pv_tables"] for r in rows if not r["fits"]} == set(range(187, 192))
-    assert 133 * 37.52 / 5000.0 < 1.0 <= 134 * 37.52 / 5000.0
-    for r in rows:
-        # The owner's battery, E = 4P: 5 MW / 20 MWh.
-        assert (r["bess_power_mw"], r["bess_energy_mwh"]) == (5.0, 20.0)
-        assert r["bess_energy_mwh"] == 4.0 * r["bess_power_mw"]
-        # Reading A at its limit: PV AC + BESS power equals 10 MW exactly, and is allowed.
-        assert r["pv_ac_mw"] + r["bess_power_mw"] == 10.0
-        assert r["eligible_A"] == r["fits"]
-        assert 1.0 <= r["dc_ac_ratio"] <= 1.5 and r["meets_4h_rule"]
-    eligible = [r for r in rows if r["eligible_A"]]
-    assert len(eligible) == pts
-    best = max(eligible, key=lambda r: r["project_npv_p50"])
-    rec = summary["recommendation"]["by_reading"]["A"]
-    assert _key(best) == _key(rec["size"])
-    for role in ("committed", "alternative"):
-        want = cfg["recommendation"][role]
-        got = summary["recommendation"]["by_reading"][want["reading"]]["size"]
-        assert _key(got) == _key(want), role
-    assert cfg["recommendation"]["committed"]["reading"] == cfg["readings"]["committed"]
-    # The objective's P50 and P90 at the choice are that row's, and the unit's pre-tax NPV
-    # is reported beside it.
-    stats = rec["objective_statistics"]
-    assert (stats["p50"], stats["p90"]) == (
-        best["project_npv_p50"],
-        best["project_npv_p90"],
-    )
-    beside = rec["reported_beside"]
-    assert set(beside) == set(cfg["objective"]["report_beside"])
-    assert beside["unit_pretax_npv_usd"]["p50"] == best["unit_pretax_npv_usd_p50"]
-    assert beside["unit_pretax_npv_usd"]["p90"] == best["unit_pretax_npv_usd_p90"]
-
-
-def test_fixed_bess_run_reproduces_the_full_grid_at_every_shared_point() -> None:
-    """MRM-01 at production scale: two runs with the same seed draw the same trials, so the
-    sizes both evaluate (5 MW AC, 5 MW / 20 MWh at 134, 147, 160, 174 and 186 tables) carry
-    identical statistics."""
-    full = {_key(r): r for r in _grid_rows()}
-    shared = [r for r in _rows_of(_fixed_summary()) if _key(r) in full]
-    assert sorted(r["pv_tables"] for r in shared) == [134, 147, 160, 174, 186]
-    for r in shared:
-        assert r == full[_key(r)], _key(r)
-
-
-def test_strategic_cost_is_the_gap_between_the_two_summaries() -> None:
-    rec = _fixed_cfg()["recommendation"]
-    vb = rec["value_based"]
-    full = _summary()
-    assert vb["summary"] == str(SUMMARY.relative_to(REPO_ROOT))
-    assert _key(full["recommendation"]["by_reading"][vb["reading"]]["size"]) == _key(vb)
-    value = next(r for r in _grid_rows() if _key(r) == _key(vb))
-    committed = next(
-        r for r in _rows_of(_fixed_summary()) if _key(r) == _key(rec["committed"])
-    )
-    cost = rec["strategic_cost_usd"]
-    assert set(cost) == {
-        "project_npv_p50",
-        "project_npv_p90",
-        "unit_pretax_npv_usd_p50",
-        "unit_pretax_npv_usd_p90",
+def _quiet(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """``cfg`` without the one-at-a-time cases and break-even searches (counted runs)."""
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [],
+        "break_even": [],
     }
-    for key, recorded in cost.items():
-        assert recorded == pytest.approx(value[key] - committed[key], abs=0.5), key
-    # The value-based size is the full grid's best, so the owner's battery costs value.
-    assert value["project_npv_p50"] >= committed["project_npv_p50"]
-    assert cost["project_npv_p50"] > 0.0
+    return cfg
 
 
 def _small_fixed(seed: int = 20261101, metric: str | None = None) -> Dict[str, Any]:
-    cfg = _fixed_cfg()
-    cfg["grid"] = {**cfg["grid"], "pv_tables": [134, 160, "land_max"]}
+    """One battery (5 MW / 20 MWh at 5 MW AC, reading A at its limit), three PV sizes.
+
+    PR 7's fixed battery, kept as a reduced grid that puts reading A exactly at its limit.
+    """
+    cfg = _quiet(_project_cfg())
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [134, 160, "land_max"],
+        "pv_ac_mw": [5.0],
+        "bess_power_mw": [5.0],
+    }
     cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 4, "seed": seed}
     if metric is not None:
         cfg["objective"] = {**cfg["objective"], "metric": metric}
@@ -848,7 +938,7 @@ def test_objective_follows_the_config_and_pr4s_objective_stays_selectable(
     other = _run(_small_fixed(seed=7), site, counting)
     # 4 runs x (3 points x (4 trials + base) + 3 curtailment + 3 RTE cases).
     assert calls["n"] == 4 * (3 * 5 + 3 + 3) <= _hard_cap()
-    beside = _fixed_cfg()["objective"]["report_beside"]
+    beside = _project_cfg()["objective"]["report_beside"]
     for run, metric in ((new, "project_npv"), (old, "unit_pretax_npv_usd")):
         assert run.spec["objective"] == {"metric": metric, "statistic": "p50"}
         rec = run.recommendation["by_reading"]["A"]
@@ -924,41 +1014,34 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
             (r["posttax_cfads_lkr"] - r["risk_haircut_amount_lkr"]) / r["fx_rate"],
             rel=1e-12,
         )
-    assert sum(r["tax_lkr"] for r in rows) > 0.0
-    # Responsiveness at a held discount rate: a higher tax rate lowers the objective. (With
-    # the build-up WACC driving the rate, tax also lowers the rate; see the PR's challenge
-    # points.)
-    held = {"wacc.drives_discount_rate": False}
+    # At v0.9's grid-floor size the project never has a taxable profit, so its after-tax
+    # objective equals the pre-tax one (#1691: disclosed in STATUS). Under v0.8 tax was paid.
+    assert sum(r["tax_lkr"] for r in rows) == 0.0
+    # Responsiveness at a held discount rate, where tax bites (a 30 LKR/kWh generation tariff):
+    # tax is paid, and a higher tax rate lowers the objective. (With the build-up WACC driving
+    # the rate, tax also lowers the rate; see the PR's challenge points.)
+    held = {"wacc.drives_discount_rate": False, "tariff.lkr_per_kwh": 30.0}
+    dear = evaluate_with_overrides(
+        str(SOLAR_BESS), overrides=held, return_full_result=True
+    )
+    assert isinstance(dear, dict)
+    assert sum(r["tax_lkr"] for r in dear["annual_rows"]) > 0.0
     untaxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.0})
     taxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.30})
     assert taxed["project_npv"] < untaxed["project_npv"]
-    # The scenario reproduces the committed point's base case through the engine, on the
-    # opex basis the sizing priced (v0.3: one currency, BESS O&M at USD 2.5/kWh-yr). From
-    # v0.5 the scenario carries the opex currency split and the new BESS O&M rate (lower, and in
-    # LKR); from v0.6 it indexes the PUCSL escalable O&M parts (L-9). The sizing has not been
-    # re-run on either (scenario comments, opex and tariff blocks).
+    # The scenario reproduces the committed point's base case through the engine as it
+    # stands: from v0.8 the sizing prices the scenario's own basis (opex currency split, BESS
+    # O&M at USD 1.80/kWh-yr DC, one construction period, the indexed O&M tariff parts), so
+    # no override is needed (under v0.3-v0.7 the sizing basis had to be re-imposed). The
+    # residual is the rounding of the scenario's derived fields.
     point = _committed_point()
-    sized = _kpis(SOLAR_BESS, SIZING_OPEX_BASIS)
-    assert sized["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-4)
-    # On the stated prices the v0.5+ opex and L-9 indexation beat the sizing basis; the 2026
-    # price dates (#1569: capex escalated to the 2028 draw, opex and the O&M index from 2026)
-    # then lower the scenario below it.
-    undated = _kpis(
-        SOLAR_BESS,
-        {
-            "capex.price_basis": None,
-            "opex.price_year": None,
-            "tariff.om_indexation.pre_operation_years": 0,
-        },
-    )
-    assert undated["project_npv"] > sized["project_npv"]
-    assert kpis["project_npv"] < undated["project_npv"]
+    assert kpis["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-6)
 
 
 def _committed_point() -> Dict[str, Any]:
-    # PR 7: the committed size comes from the fixed-battery run (owner decision 1); before
-    # PR 7 it came from the full grid's choice under reading A (SUMMARY).
-    summary = _fixed_summary()
+    # The full grid's choice under reading A (SUMMARY), written to the scenario from v0.8.
+    # Under PR 7 it came from the retired fixed-battery run (the owner's 5 MW / 20 MWh).
+    summary = _summary()
     size = summary["recommendation"]["by_reading"]["A"]["size"]
     return next(
         p

@@ -66,7 +66,7 @@ sources:
       - "s.3 [Power Plants with BESS]: Ground Mounted Solar PV 47.08 3.02 [At Prioritized Feed in Time: non-escalable, escalable O&M] 18.00 2.72 [At Other Periods]"
       - "s.3, note [2]: Prioritized Feed in Time tariff above is applicable only for the first 15 years of the SPPA. The standalone power plant feed in tariff (Given as Other Period Tariff above) is applicable for the remainder of the SPPA period."
       - "s.2, note [2] [prosumers]: Total exports for BESS schemes are capped at a maximum of 123kWh/kW of contracted capacity, during a 30 day billing cycle"
-    note: "Converted by the coordinator session from the PUCSL approved-tariff annex (scratchpad copy annex2.md); the annex's download URL was not recorded with it, so it is cited by title and the SHA-256 of the PDF read. The s.2 export cap is in the prosumer section and is NOT applied to this power plant. The O&M component's yearly indexation and the month-12 adjustment of the non-escalable component are not modelled."
+    note: "Converted by the coordinator session from the PUCSL approved-tariff annex (scratchpad copy annex2.md); the annex's download URL was not recorded with it, so it is cited by title and the SHA-256 of the PDF read. The s.2 export cap is in the prosumer section and is NOT applied to this power plant. The O&M component's yearly indexation is modelled in the scenarios from model 15.21.0 (tariff.om_indexation, audit residual L-9), so the sizing's engine evaluations carry it; the month-12 adjustment of the non-escalable component is not modelled."
   SL-ELECTRICITY-ACT-36-2024:
     title: "Sri Lanka Electricity Act, No. 36 of 2024"
     publisher: "Parliament of Sri Lanka"
