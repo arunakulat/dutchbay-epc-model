@@ -48,6 +48,7 @@ from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_config import (
+    DSCR_THRESHOLD_NAME,
     Covenants,
     CovenantSource,
     KpiKind,
@@ -1024,13 +1025,30 @@ _COVENANT_SOURCE_NOTE: Dict[str, str] = {
     "report_defaults": "report default",
 }
 
-# What the minimum-DSCR threshold is called. A scenario's `constraints.min_dscr_covenant`
-# is its lock-up covenant (owner wording, #1668, 2026-11-15); the report default is a
-# presentation floor (config/report_defaults.yaml).
-_DSCR_THRESHOLD_NAME: Dict[str, str] = {
-    "scenario": "lock-up covenant",
-    "report_defaults": "lender floor",
-}
+# What the minimum-DSCR threshold is called (one mapping, shared with the covenant table).
+_DSCR_THRESHOLD_NAME = DSCR_THRESHOLD_NAME
+
+
+def _dscr_against(value: float, threshold: Optional[float]) -> str:
+    """A minimum DSCR to 2 dp, with more places only where 2 dp would print the threshold.
+
+    A DSCR just under a 1.30x covenant would otherwise read "1.30x breaches the 1.30x
+    lock-up covenant" (#1668 AF-1). Only a value below the threshold by more than the
+    lock-up tolerance gets more places (up to 9, which always separates them); a value
+    within the tolerance meets the threshold and keeps 2 dp. The verdict is unchanged.
+    """
+    text = f"{value:.2f}"
+    if (
+        threshold is None
+        or value >= threshold - _DSCR_COVENANT_EPS
+        or text != f"{threshold:.2f}"
+    ):
+        return text
+    for places in range(3, 10):
+        text = f"{value:.{places}f}"
+        if text != f"{threshold:.{places}f}":
+            break
+    return text
 
 
 def _scenario_number(value: Any) -> Optional[float]:
@@ -1168,7 +1186,7 @@ def _build_verdict(
     if min_dscr is not None:
         rel = "meets" if dscr_covenant_met else "breaches"
         notes.append(
-            f"Minimum DSCR {min_dscr:.2f}x {rel} the "
+            f"Minimum DSCR {_dscr_against(min_dscr, covenants.min_dscr_floor)}x {rel} the "
             f"{covenants.min_dscr_floor:.2f}x "
             f"{_DSCR_THRESHOLD_NAME[covenants.min_dscr_floor_source]} "
             f"({_COVENANT_SOURCE_NOTE[covenants.min_dscr_floor_source]}; "
@@ -1221,6 +1239,7 @@ def _build_ic_summary(
     scenario_config: Optional[Mapping[str, Any]],
     readiness_rows: Sequence[ReadinessRow],
     dscr_threshold_source: CovenantSource = "report_defaults",
+    dscr_threshold: Optional[float] = None,
 ) -> IcSummaryBlock:
     """Project the run's explicit negative signals into the IC red-flag block (#706).
 
@@ -1245,7 +1264,7 @@ def _build_ic_summary(
                 kind="covenant_breach",
                 severity="high",
                 detail=(
-                    f"Minimum DSCR {min_dscr:.2f}x breaches the "
+                    f"Minimum DSCR {_dscr_against(min_dscr, dscr_threshold)}x breaches the "
                     f"{_DSCR_THRESHOLD_NAME[dscr_threshold_source]}."
                 ),
                 source="engine KPI min_dscr vs configured DSCR covenant",
@@ -2794,6 +2813,7 @@ def build_report_context(
             scenario_config,
             readiness_rows,
             dscr_threshold_source=covenants.min_dscr_floor_source,
+            dscr_threshold=covenants.min_dscr_floor,
         ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(

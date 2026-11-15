@@ -718,8 +718,8 @@
         </tr>
         <tr>
           <td>Minimum DSCR</td>
-          <td>&ge; {{ "%.2f"|format(ctx.covenants.min_dscr_floor) }}x floor
-            ({{ "scenario covenant" if ctx.covenants.min_dscr_floor_source == "scenario" else "report default" }})</td>
+          <td>&ge; {{ "%.2f"|format(ctx.covenants.min_dscr_floor) }}x {{ ctx.covenants.min_dscr_floor_name }}
+            ({{ "scenario" if ctx.covenants.min_dscr_floor_source == "scenario" else "report default" }})</td>
           <td>
             {% if ctx.verdict.dscr_covenant_met %}<span class="badge pass">Met</span>
             {% else %}<span class="badge fail">Breach</span>{% endif %}

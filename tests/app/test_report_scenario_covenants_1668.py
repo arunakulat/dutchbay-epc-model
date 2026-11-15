@@ -81,6 +81,9 @@ def test_one_declared_threshold_does_not_pull_in_the_other() -> None:
     assert covenants.min_dscr_floor_source == "scenario"
     assert covenants.max_balloon_pct == pytest.approx(0.40)
     assert covenants.max_balloon_pct_source == "report_defaults"
+    # Assurance AF-2: a scenario floor never overwrites the report-default target.
+    assert covenants.min_dscr_target == pytest.approx(_defaults().min_dscr_target)
+    assert covenants.min_dscr_target != pytest.approx(1.25)
 
 
 def test_a_min_dscr_between_the_two_floors_now_breaches() -> None:
@@ -134,7 +137,7 @@ def test_lender_case_report_tests_the_scenario_covenant() -> None:
     assert not any("lender floor" in note for note in ctx.verdict.notes)
 
     text = " ".join(render_report_html(ctx).split())
-    assert "&ge; 1.30x floor (scenario covenant)" in text
+    assert "&ge; 1.30x lock-up covenant (scenario)" in text
     assert "&le; 10% ceiling (scenario covenant)" in text
 
 
@@ -171,10 +174,50 @@ def test_a_scenario_without_constraints_renders_report_default_labels() -> None:
         run_result=full,
     )
     text = " ".join(render_report_html(ctx).split())
-    assert "&ge; 1.20x floor (report default)" in text
+    assert "&ge; 1.20x lender floor (report default)" in text
     assert "&le; 40% ceiling (report default)" in text
     # The report default keeps its own name, and the target says where it comes from.
     assert any(
         "1.20x lender floor (report default; report-default target 1.30x)" in note
         for note in ctx.verdict.notes
     )
+
+
+@pytest.mark.parametrize(
+    ("min_dscr", "shown"),
+    [
+        (1.2973, "1.297"),  # assurance AF-1: the web lendercase route's value
+        (1.3 - 1e-8, "1.29999999"),
+        (1.2999999999999998, "1.30"),  # within the tolerance: met, kept at 2 dp
+        (1.22, "1.22"),
+    ],
+)
+def test_a_breach_never_prints_the_covenant_as_the_dscr(
+    min_dscr: float, shown: str
+) -> None:
+    """A DSCR just under 1.30x must not read "1.30x breaches the 1.30x ..." (AF-1)."""
+    case = CaseResult(
+        status="success", scenario_variant="near", kpis={"min_dscr": min_dscr}
+    )
+    ctx = build_report_context(
+        case,
+        generated_at=GENERATED_AT,
+        scenario_config={"constraints": {"min_dscr_covenant": 1.3}},
+    )
+    rel = "meets" if ctx.verdict.dscr_covenant_met else "breaches"
+    assert any(
+        note.startswith(f"Minimum DSCR {shown}x {rel} the 1.30x lock-up covenant")
+        for note in ctx.verdict.notes
+    )
+    assert ctx.ic_summary is not None
+    flags = [
+        flag.detail
+        for flag in ctx.ic_summary.red_flags
+        if flag.kind == "covenant_breach" and "Minimum DSCR" in flag.detail
+    ]
+    expected = (
+        []
+        if ctx.verdict.dscr_covenant_met
+        else [f"Minimum DSCR {shown}x breaches the lock-up covenant."]
+    )
+    assert flags == expected
