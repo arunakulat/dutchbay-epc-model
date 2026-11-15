@@ -3,8 +3,8 @@
 # Read by scripts/run_blue_whale_equipment_parity_v14.py (Hydra, one JSON object on stdout:
 # CLI-01, CLI-03) through analytics.wind.blue_whale_equipment_parity.
 # Incorporates the public benchmark arithmetic and unpriced buildup structure from
-# Blue_Whale_Review_Package_2026-11-14.zip (BW-COST-AEP-REVIEW-2026-11-14, v1.1) without
-# modifying the frozen screening scenario CAPEX or publishing confidential draft terms.
+# the owner's private review brief of 2026-11-14 without modifying the frozen
+# screening scenario CAPEX or publishing confidential draft terms.
 
 schema_version: blue_whale_equipment_parity_v1
 

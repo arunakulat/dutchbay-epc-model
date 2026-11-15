@@ -1,8 +1,8 @@
 """Blue Whale equipment-cost parity benchmark and unpriced cost-buildup evaluation.
 
-Implements the exact ``Decimal`` / ``Fraction`` arithmetic from the 2026-11-14
-Blue Whale review package (``BW-COST-AEP-REVIEW-2026-11-14``, v1.1) and enforces
-``None``-safe validation for itemized road vs. marine cost-buildup packages.
+Implements the exact ``Decimal`` / ``Fraction`` arithmetic from the owner's
+private review brief of 2026-11-14 and enforces ``None``-safe validation
+for itemized road vs. marine cost-buildup packages.
 
 This module computes conditional equipment-cost parity thresholds and
 uncalibrated sensitivities; it does **not** predict OEM commercial quotes or

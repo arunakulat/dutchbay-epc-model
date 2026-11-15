@@ -28,8 +28,8 @@ def _load_cfg() -> dict[str, Any]:
     return {str(k): v for k, v in loaded.items()}
 
 
-def test_equipment_parity_matches_2026_11_14_review_package() -> None:
-    """Reproduces exact Decimal outputs from BW-COST-AEP-REVIEW-2026-11-14 v1.1."""
+def test_equipment_parity_matches_2026_11_14_review_brief() -> None:
+    """Reproduces exact Decimal outputs from the owner's private review brief of 2026-11-14."""
     cfg = _load_cfg()
     out = compute_equipment_parity(cfg, REPO_ROOT)
     res = out["results"]

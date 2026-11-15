@@ -1,7 +1,7 @@
 # Blue Whale Equipment-Cost Parity & Logistics Review (`2026-11-14`)
 
 - **Work item:** [#1677](https://github.com/arunakulat/dutchbay-epc-model/issues/1677)
-- **Source package:** `Blue_Whale_Review_Package_2026-11-14.zip` (`BW-COST-AEP-REVIEW-2026-11-14`, v1.1, owner-authorized private review brief)
+- **Source:** Owner's private review brief of 2026-11-14 (owner-authorized non-confidential benchmark calculations and unpriced buildup structure)
 - **Code & Config:** [`analytics/wind/blue_whale_equipment_parity.py`](../../analytics/wind/blue_whale_equipment_parity.py), [`conf/blue_whale_equipment_parity.yaml`](../../conf/blue_whale_equipment_parity.yaml), [`scripts/run_blue_whale_equipment_parity_v14.py`](../../scripts/run_blue_whale_equipment_parity_v14.py)
 - **Status:** Conditional benchmark and unpriced buildup guard only. **No scenario CAPEX is revised.**
 

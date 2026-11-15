@@ -1,1 +1,1 @@
-- Add Blue Whale equipment-cost parity benchmark, uncalibrated sensitivity calculator, and ``None``-safe road/marine cost-buildup guard from the 2026-11-14 review package without altering frozen scenario CAPEX (#1677).
+- Add Blue Whale equipment-cost parity benchmark, uncalibrated sensitivity calculator, and ``None``-safe road/marine cost-buildup guard from the owner's private review brief of 2026-11-14 without altering frozen scenario CAPEX (#1677).
