@@ -17,6 +17,10 @@ sizing pass of the levered-tax fixed point, the P90 bind and the amortize bisect
 The bisection also returns a config that shares no dict or list with its caller's
 (#1521 O-1): callers keep that config and may hand it on.
 
+Anchored YAML aliases of ``Financing_Terms`` are not twin-synchronized (#1521 O-2):
+the path-copy updates the canonical ``Financing_Terms`` section specifically,
+leaving sibling aliases and the caller's config unmutated.
+
 The engine's code lives behind the ``finance.debt_v14`` façade in ``finance.debt``, and
 each function there reads its collaborators from its own module's globals. A seam is
 therefore wrapped in every engine module that binds it (``tests/_debt_seams.py``),
@@ -237,3 +241,167 @@ def test_config_at_debt_ratio_writes_where_the_deep_copy_did() -> None:
     flat: dict[str, Any] = {"debt_ratio": 0.7, "Financing_Terms": None}
     assert debt_v14._config_at_debt_ratio(flat, 0.25) == _deepcopy_config_at(flat, 0.25)
     assert flat["debt_ratio"] == 0.7
+
+
+def test_resize_for_amortization_returns_full_deep_copy() -> None:
+    """Direct pin that _resize_for_amortization returns a full deep copy (#1521 O-1).
+
+    The config returned by a bisecting amortization resize is kept by callers and
+    may be handed on, so it must share no dict or list by identity with the caller's
+    input config. When no balloon exists, it returns (config, core) as a no-op.
+    """
+    import yaml
+
+    with open(LENDER_CONFIG, encoding="utf-8") as stream:
+        config: dict[str, Any] = yaml.safe_load(stream)
+
+    # 1. No-op branch: balloon <= _BALLOON_TOL returns input objects directly
+    noop_core = {"balloon_remaining": 0.0}
+    noop_cfg, noop_out_core = debt_v14._resize_for_amortization(config, [], noop_core)
+    assert noop_cfg is config
+    assert noop_out_core is noop_core
+
+    # 2. Bisecting branch: balloon > _BALLOON_TOL reduces gearing and returns a deep copy
+    years = 15
+    rows = [
+        {
+            "cfads": 5_000_000.0,
+            "cfads_lkr": 1_500_000_000.0,
+            "revenue_usd": 8_000_000.0,
+        }
+        for _ in range(years)
+    ]
+    balloon_core = {"balloon_remaining": 10_000_000.0, "debt_ratio": 0.70}
+
+    resized_cfg, resized_core = debt_v14._resize_for_amortization(
+        config, rows, balloon_core
+    )
+
+    # Must be a new object that shares zero dicts or lists with input config (#1521 O-1)
+    assert resized_cfg is not config
+    assert _shared_containers(config, resized_cfg) == 0
+
+    # Solved gearing is strictly reduced to eliminate the balloon
+    orig_ratio = debt_v14._as_float(
+        config.get("Financing_Terms", {}).get("debt_ratio"), 0.70
+    )
+    new_ratio = debt_v14._as_float(
+        resized_cfg.get("Financing_Terms", {}).get("debt_ratio"), 0.0
+    )
+    assert 0.0 <= new_ratio < orig_ratio
+
+    # Caller's input config is completely unmutated
+    assert (
+        debt_v14._as_float(config.get("Financing_Terms", {}).get("debt_ratio"), 0.0)
+        == orig_ratio
+    )
+
+
+def test_resize_for_amortization_deep_copy_negative_control() -> None:
+    """Negative control (VERIFY-01) for the O-1 deep-copy object identity guard.
+
+    Simulates the domain lane's control C3 (omitting copy.deepcopy before returning
+    the bisected config, as in `_config_at_debt_ratio(config, lo)`), and proves that
+    the object-identity assertion detects the shared containers and fails loudly.
+    """
+    config: dict[str, Any] = {
+        "Financing_Terms": {
+            "debt_ratio": 0.70,
+            "tenor": 15,
+            "nested_terms": {"margin_bps": 250},
+        },
+        "unrelated_dict": {"field": "value"},
+        "unrelated_list": [10, 20, 30],
+    }
+
+    # Proper deep-copy path: 0 shared containers
+    proper_resized = debt_v14._config_at_debt_ratio(copy.deepcopy(config), 0.50)
+    assert _shared_containers(config, proper_resized) == 0
+
+    # Lane control C3 mutant (shallow path copy without deep copy)
+    mutant_c3_resized = debt_v14._config_at_debt_ratio(config, 0.50)
+    shared_count = _shared_containers(config, mutant_c3_resized)
+    assert shared_count > 0, "control C3 mutant must share containers"
+
+    # Prove that the O-1 assertion fails on the mutant
+    with pytest.raises(AssertionError):
+        assert _shared_containers(config, mutant_c3_resized) == 0
+
+
+def test_anchored_financing_terms_alias_semantics() -> None:
+    """Pin the semantic contract for anchored Financing_Terms aliases (#1521 O-2).
+
+    When a YAML anchor links Financing_Terms to another section (e.g. &terms ... *terms),
+    the path-copy in `_config_at_debt_ratio` updates only the canonical Financing_Terms
+    section, leaving sibling aliases unmutated and un-synchronized. All downstream debt
+    engine readers consume Financing_Terms, which correctly reflects the trial ratio.
+    """
+    terms: dict[str, Any] = {
+        "debt_ratio": 0.70,
+        "tenor": 15,
+        "rates": {"usd_nominal": 0.08},
+    }
+    # Simulate YAML anchor: 'Financing_Terms' and 'Other_Terms_Alias' share identity
+    config: dict[str, Any] = {
+        "Financing_Terms": terms,
+        "Other_Terms_Alias": terms,
+        "unrelated": [1, 2, 3],
+    }
+    assert config["Financing_Terms"] is config["Other_Terms_Alias"]
+
+    trial = debt_v14._config_at_debt_ratio(config, 0.55)
+
+    # 1. Canonical Financing_Terms section receives the trial debt_ratio
+    assert trial["Financing_Terms"]["debt_ratio"] == 0.55
+    assert trial["Financing_Terms"] is not terms
+
+    # 2. Sibling alias is un-synchronized and retains the original debt_ratio
+    assert trial["Other_Terms_Alias"] is terms
+    assert trial["Other_Terms_Alias"]["debt_ratio"] == 0.70
+
+    # 3. Caller's original dictionary is untouched
+    assert config["Financing_Terms"]["debt_ratio"] == 0.70
+    assert config["Other_Terms_Alias"]["debt_ratio"] == 0.70
+
+    # 4. The sections are no longer identical in the trial config
+    assert trial["Financing_Terms"] is not trial["Other_Terms_Alias"]
+
+
+def test_anchored_financing_terms_alias_negative_controls() -> None:
+    """Negative controls (VERIFY-01) for anchored alias isolation (#1521 O-2).
+
+    Proves that inadvertent caller-mutation or sibling alias corruption would fail
+    the alias isolation assertions.
+    """
+    terms: dict[str, Any] = {
+        "debt_ratio": 0.70,
+        "tenor": 15,
+    }
+    config: dict[str, Any] = {
+        "Financing_Terms": terms,
+        "Other_Terms_Alias": terms,
+    }
+
+    trial = debt_v14._config_at_debt_ratio(config, 0.45)
+
+    # 1. Negative control: if caller was mutated, immutability check fails
+    mutated_caller = copy.deepcopy(config)
+    mutated_caller["Financing_Terms"]["debt_ratio"] = 0.45
+    with pytest.raises(AssertionError):
+        assert mutated_caller["Financing_Terms"]["debt_ratio"] == 0.70
+
+    # 2. Negative control: if sibling alias was twin-mutated, alias check fails
+    mutated_sibling = copy.copy(trial)
+    mutated_sibling["Other_Terms_Alias"] = copy.copy(terms)
+    mutated_sibling["Other_Terms_Alias"]["debt_ratio"] = 0.45
+    with pytest.raises(AssertionError):
+        assert mutated_sibling["Other_Terms_Alias"]["debt_ratio"] == 0.70
+
+    # 3. Negative control: if sibling alias retained reference identity with trial, check fails
+    mutated_identity = copy.copy(trial)
+    mutated_identity["Other_Terms_Alias"] = trial["Financing_Terms"]
+    with pytest.raises(AssertionError):
+        assert (
+            mutated_identity["Financing_Terms"]
+            is not mutated_identity["Other_Terms_Alias"]
+        )
