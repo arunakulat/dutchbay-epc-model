@@ -24,7 +24,9 @@
   - KPI: `senior_fee_deferred_residual`, beside `balloon_residual`. It is the fee still unpaid
     after the waterfall, or the engine's figure when no waterfall runs.
 
-  A warning is logged when any fee is unpaid at the horizon.
+  A warning is logged when any fee is unpaid at the horizon. The new KPI takes the lender
+  vector from 42 to 43 keys, so the TRAIN-01 KPI schema in the steward skill and its policy
+  test move with it.
 - An unpaid fee at the horizon is charged to no one. Against paying it, it raises project NPV,
   equity NPV and PLCR.
 - Limits (follow-up #1736):
