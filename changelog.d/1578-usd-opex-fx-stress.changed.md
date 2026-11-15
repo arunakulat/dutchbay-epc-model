@@ -20,6 +20,12 @@
     move: a 3%/yr drift stress now gives project IRR 9.50% (was 9.60%), and 5.89%/yr gives 6.35%
     (was 7.04%). A market-calibrated Monte Carlo drift, a nominal rate, replaces the path too,
     so it does not double count inflation. No VERSION bump (#1625).
+  - These are cost-side stresses: the tariff's escalable O&M index (`tariff.om_indexation`, 70%
+    weighted to LKR/USD depreciation at the same 2.44%/yr) is not moved by an `fx` override, so
+    above 2.44%/yr the stressed IRRs are lower, and below it higher, than a stress that also
+    moved the index would give. The neutral drift for the USD share is 2.44%/yr, not zero, so a
+    drift near zero gives an IRR above the base case. Moving the index too is a separate owner
+    decision.
   - The FX and tenor screening's engine-path status and notes now say the engine path exists,
     and the dated review document gains an addendum saying so; the screening still does not
     call the engine.

@@ -914,7 +914,7 @@ constant-rate translation of LKR.
 
 **FX stress and Monte Carlo reach the USD share (#1578 L-12).** The USD share's own FX path is set
 by the inputs above, so an override of `fx` (an FX drift stress, or a Monte Carlo drift draw) used
-to move the model curve but leave the USD opex alone, which understated the FX risk on it. The
+to move the model curve but leave the USD opex on its own path. The
 Python override gateways (`evaluate_with_overrides`, `evaluate_scenario_from_dict` and
 `analytics.evaluate_scenario`, which the Monte Carlo and sensitivity tools use) now record the
 authored `fx` block, and when a stress changes the curve's drift
@@ -927,6 +927,15 @@ spot-only stress is unchanged, since the path already anchors on the spot. The s
 project's USD share is 0%, so its stresses do not move. The web API's `/run-pipeline` overrides do
 not yet pass through this step, so an FX drift sent there still leaves the USD share on its own
 path (a follow-up on #1578).
+
+These are cost-side stresses. The tariff's escalable O&M index (`tariff.om_indexation`, described
+above) gives LKR/USD depreciation a 70% weight and derives it from the same 2.44%/yr, but no `fx`
+override reaches it, before or after this change: under a drift stress the index stays at its
+authored rate while the USD opex moves. So above 2.44%/yr the stressed IRRs are lower, and below
+it higher, than a stress that also moved the index would give. Whether a drift stress should also
+move the index is a separate owner decision. Because the base case runs the USD share at 2.44%/yr
+on a flat model curve, the neutral drift for that share is 2.44%/yr, not zero: any drift override
+below it, however small, lowers the USD opex, so a drift near zero gives an IRR above the base case.
 
 **One construction period.** Both projects declare a 1-year construction period (input B30,
 `timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
