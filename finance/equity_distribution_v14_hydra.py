@@ -38,6 +38,7 @@ from finance.equity_v14 import (
     calculate_moic,
     calculate_payback_period,
     count_cashflow_sign_changes,
+    equity_irr_ranks_reliably,
 )
 
 logger = logging.getLogger(__name__)
@@ -815,9 +816,12 @@ def calculate_equity_distribution_from_pipeline(
     # called back after distributions (e.g. a refinanced tail serviced from equity), the
     # series changes sign more than once and the IRR can rank alternatives backwards.
     # The IRR is still reported; the count and the flag below are its caveat.
+    # The flag is the helper's own predicate, so the summary and any direct caller agree:
+    # it is False both for more than one sign change and for none (no IRR exists, #1522).
+    # The warning is about multiple roots, so it fires only for more than one.
     sign_changes = count_cashflow_sign_changes(cashflows)
-    irr_ranks_reliably = sign_changes <= 1
-    if not irr_ranks_reliably:
+    irr_ranks_reliably = equity_irr_ranks_reliably(cashflows)
+    if sign_changes > 1:
         logger.warning(
             "Equity cashflows for %r change sign %d times; equity IRR (%s) may have "
             "several roots or be dominated by late equity calls, and can rank options "

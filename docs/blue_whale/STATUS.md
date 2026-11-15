@@ -731,7 +731,7 @@ the owner accepted the exact recoverability on 2026-11-07 (#1353 comment 6702419
 Wind turbine capex USD 8,899,980 (was 12,350,000); wind project capex USD 10.90M with the B26
 line (1,147 USD/kW). PV prices are unchanged from PR 3.
 
-**Solar resource at the PV centroid (8.291526 N, 79.753204 E; 123 m from the turbine)**, pvlib
+**Solar resource at the PV centroid (8.291526 N, 79.753204 E; 197 m from the turbine at DutchBay T2)**, pvlib
 0.16.1 on the frozen TMY, which is PVGIS-ERA5 2005-2023 (its README's "SARAH3" was wrong:
 SARAH3 does not cover the site; the README is corrected in PR 7):
 
