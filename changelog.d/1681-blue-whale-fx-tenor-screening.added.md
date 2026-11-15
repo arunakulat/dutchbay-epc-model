@@ -1,0 +1,1 @@
+- Add Blue Whale dual-currency financing, FX drift/shock, debt tenor-tail, and evidence-status screening module and Hydra CLI from the owner's private research hand-off of 2026-11-14 complementary to PR #1678 (#1681).

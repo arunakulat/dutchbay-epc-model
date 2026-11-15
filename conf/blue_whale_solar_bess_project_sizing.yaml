@@ -14,9 +14,13 @@
 #   band"; objective "Max value, MC decides (Recommended)"; 10 MW reading "Model both, flag
 #   it"; turbine "Separate, risk flagged".
 # PR 7 (2026-11-01, #1353 comment 6563070978, verbatim): objective "After-tax project NPV
-#   (Recommended)"; committed size "Fix 5 MW / 20 MWh". This full grid now gives the
-#   value-based size under the after-tax objective; the committed size is the owner's
-#   strategic choice, sized for its PV by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml.
+#   (Recommended)"; committed size "Fix 5 MW / 20 MWh".
+# 2026-11-07 (owner, verbatim): "This should not be a fixed choice. It needs an MC run and a
+#   sensitivity analyze to optimize"; then, on the decision card for the scenario's battery,
+#   "Whatever the optimiser picks". The battery is a decision variable again: this run's
+#   choice under the committed reading is written to the scenario, and the one-at-a-time
+#   sensitivities and break-even values below report how robust that choice is. The
+#   fixed-battery child config of PR 7 is retired.
 #
 # The PUCSL and statutory figures are frozen once, with sources, in
 # conf/blue_whale_pucsl_fit_2026.yaml; the parser checks this config against them.
@@ -65,7 +69,16 @@ grid:
   min_dc_ac_ratio: 1.0
   max_dc_ac_ratio: 1.5      # ASSUMPTION: above PR 3's 1.4 grid edge; the inverter match also binds
   # BESS power (MW); energy = bess_duration_h x power (PUCSL 4 h at nominal capacity).
-  bess_power_mw: [1.0, 2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0]
+  # 2026-11-07: 0.5 MW steps from 0.5 to 6.5 (reading A's range at 3.5 MW AC), then 7-10
+  # (reading B only). 2026-11-14 (owner: "lower the floor", after the #1691 domain lane found
+  # 0.5 MW was the grid floor, not an optimum): 0.1 MW steps from 0.1 to 0.5. 0.1 MW is an
+  # ASSUMPTION, not a regulatory or technical minimum (B18 asks for one): the battery loses
+  # value at every size tested, so the run picks whichever floor this list sets. A zero
+  # battery is outside the model (the dispatcher needs energy > 0) and outside the PUCSL
+  # "Power Plants with BESS" category. The 4 h duration is regulatory, so power is the
+  # battery's one variable.
+  bess_power_mw: [0.1, 0.2, 0.3, 0.4, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5,
+    6.0, 6.5, 7.0, 8.0, 9.0, 10.0]
   bess_duration_h: 4.0
 
 readings:
@@ -156,29 +169,59 @@ sensitivities:
   # Base case at every evaluated point with the RTE of the PUCSL consultation's reference case
   # (0.90). The base and the Monte Carlo keep the repository's 0.85 and PR 3's 0.82-0.88.
   round_trip_efficiency: 0.90
+  # 2026-11-07: one input moved at a time from the base case, at every evaluated point; the
+  # summary reports each case's best size and its battery value curve (the best objective at
+  # each battery, at that battery's best PV). Every other input keeps its base value.
+  one_at_a_time:
+    - {name: bess_capex_low, bess_usd_per_kwh: 129.13}       # the pricing range's low
+    - {name: bess_capex_high, bess_usd_per_kwh: 202.51}      # the pricing range's high
+    - {name: bess_om_half, bess_opex_usd_per_dc_kwh_year: 0.90}
+    - {name: bess_om_x1_5, bess_opex_usd_per_dc_kwh_year: 2.70}
+    - {name: priority_tariff_minus_10pct, priority_lkr_per_kwh: 45.09}   # 50.10 x 0.9
+    - {name: priority_tariff_plus_10pct, priority_lkr_per_kwh: 55.11}    # 50.10 x 1.1
+    - {name: other_tariff_minus_10pct, other_lkr_per_kwh: 18.648}        # 20.72 x 0.9
+    - {name: other_tariff_plus_10pct, other_lkr_per_kwh: 22.792}         # 20.72 x 1.1
+    - {name: priority_term_20_years, priority_term_years: 20}  # the premium for the whole SPPA
+    - {name: rte_0_82, round_trip_efficiency: 0.82}            # PR 3's low
+    - {name: rte_0_88, round_trip_efficiency: 0.88}            # PR 3's high
+    - {name: corporate_tax_zero, scenario: {tax.corporate_tax_rate: 0.0}}  # a tax-holiday bound
+    - {name: no_cfads_haircut, scenario: {risk_adjustment.cfads_haircut_pct: 0.0}}
+    - {name: cost_of_equity_10pct, scenario: {wacc.cost_of_equity: 0.10}}
+    - {name: cost_of_equity_14pct, scenario: {wacc.cost_of_equity: 0.14}}
+  # The value of one input, all else at base, at which the base case's best battery (at its
+  # best PV, under the committed reading) stops being the battery this run chose. Bisection
+  # to the tolerance; null when the gap does not change sign within [low, high].
+  break_even:
+    - {input: bess_usd_per_kwh, low: 60.0, high: 202.51, tolerance: 0.5}
+    - {input: priority_lkr_per_kwh, low: 50.10, high: 80.0, tolerance: 0.05}
+    - {input: bess_opex_usd_per_dc_kwh_year, low: 0.0, high: 5.0, tolerance: 0.05}
 
 recommendation:
-  # PR 7: the VALUE-BASED size, reported and NOT written to the scenario. The owner fixed the
-  # battery at 5 MW / 20 MWh as a strategic choice ("Fix 5 MW / 20 MWh", #1353 comment
-  # 6563070978); the scenario takes the PV DC for that battery from
-  # conf/blue_whale_solar_bess_fixed_bess_sizing.yaml, which records the cost of the choice
-  # against the size below. Each entry is the primary objective's choice under its reading in
-  # docs/blue_whale/solar_bess_project_sizing_summary.json (a test checks they agree).
-  # PR 7 re-run (after-tax project NPV P50; seed 20261101, 325 points x 256 trials): BOTH
-  # readings choose 107 tables (4.01464 MWp), 3.5 MW AC and a 1.0 MW / 4.0 MWh BESS, the smallest
-  # PV and the smallest battery on the grid, as PR 6's unit pre-tax NPV did.
-  # PR 4's run (NSO 250 price 135.00, unit pre-tax NPV): reading A 160 tables, 5.0 MW AC,
-  # 4.5 MW / 18 MWh; reading B 191 tables, 6.0 MW AC, 5.5 MW / 22 MWh.
-  value_based:
+  # 2026-11-07 (owner: "Whatever the optimiser picks"): the COMMITTED size, written to
+  # scenarios/blue_whale_solar_bess_lot5b_2026.yaml (a test checks they agree). Each entry is
+  # the primary objective's choice under its reading in
+  # docs/blue_whale/solar_bess_project_sizing_summary.json (a test checks that too).
+  # Committed run (seed 20261101, 256 trials, 514 points): both readings choose 107 tables
+  # (4.01464 MWp), 3.5 MW AC and 0.1 MW / 0.4 MWh, the grid's lowest value of all three
+  # decision variables: a FLOOR, not an optimum (every component loses value at the margin;
+  # owner, 2026-11-14: "Battery floor 0.1 MW, PV unchanged"). P50 after-tax project NPV USD
+  # -4,441,537, P90 -4,721,153 (STATUS.md, "The battery searched"). A first run with a 0.5 MW
+  # floor (414 points) chose 0.5 MW / 2.0 MWh, P50 -4,534,558; it was not landed.
+  # PR 7 re-run (after-tax project NPV P50; 1.0-10 MW grid, BESS O&M at the 2.5 placeholder):
+  # both readings chose 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, then reported only; the
+  # scenario carried the owner's fixed 5 MW / 20 MWh. PR 4's run (NSO 250 price 135.00, unit
+  # pre-tax NPV): reading A 160 tables, 5.0 MW AC, 4.5 MW / 18 MWh; reading B 191 tables,
+  # 6.0 MW AC, 5.5 MW / 22 MWh.
+  committed:
     reading: A
     pv_tables: 107
     pv_ac_mw: 3.5
-    bess_power_mw: 1.0
-  value_based_other_reading:
+    bess_power_mw: 0.1
+  other_reading:
     reading: B
     pv_tables: 107
     pv_ac_mw: 3.5
-    bess_power_mw: 1.0
+    bess_power_mw: 0.1
 
 output:
   # Optional, relative to the repository root; null writes nothing. The committed summary is
