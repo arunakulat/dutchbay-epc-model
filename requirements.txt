@@ -350,6 +350,6 @@ widgetsnbextension==4.0.16
 windpowerlib==0.2.2
 xarray==2026.7.0
 xlrd==2.0.2
-xlsxwriter==3.2.9
+xlsxwriter==3.3.1
 xyzservices==2026.3.0
 zopfli==0.4.3
