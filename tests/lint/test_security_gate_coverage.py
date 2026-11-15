@@ -58,9 +58,11 @@ security`` unchanged, and so can a self-hosted ``runs-on`` label or a ``needs`` 
 that never runs, which skips the gate without failing it. The shared workflow guard therefore
 pins those declarative context channels for both committed invocations. The daily main
 audit has no summary job behind it, so its guard also rejects a ``cancel-in-progress``
-that is not false, at workflow or job level, and any ``strategy`` on its gate job: a
-cancelled run leaves no audit status for its commit, and an empty matrix expands to zero
-jobs that GitHub reports as skipped (#1512). No guard here binds a preceding step, which
+that is not false, or a ``concurrency`` value written wholly as one expression, at
+workflow or job level, and any ``strategy`` on its gate job: a cancelled run leaves no
+audit status for its commit, and an empty matrix expands to zero jobs that GitHub reports
+as skipped (#1512). GitHub still cancels a pending run when a newer run joins the same
+concurrency group; no committed key prevents that, and this guard does not claim to. No guard here binds a preceding step, which
 can change the checkout or the toolchain while ``run: make security`` stays unchanged;
 SECDEP-01 states that limit. The third blind
 spot's remedy is deliberately HARDENING and names no root cause: whether the cache caused any
@@ -70,7 +72,7 @@ network and a resolve - so the numbers above stay in the pull request's receipts
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: all are pure functions over text, exercised against mutated
-copies rather than trusted - 97 controls: 15 over the ``Makefile``, 40 over the main audit
+copies rather than trusted - 99 controls: 15 over the ``Makefile``, 42 over the main audit
 workflow, 12 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
 hygiene (twelve shapes against each workflow file: cache, pins and canary), and 6 over the
 tooling pins against the lock. The canary's own verdict function carries its negative
@@ -513,8 +515,26 @@ def _cancellation_violations(concurrency: object, level: str) -> list[str]:
     cancelled rather than failed. ``concurrency`` takes a bare group name or a mapping, and
     a missing ``cancel-in-progress`` defaults to false, so only those shapes and the false
     spellings are accepted. Actions takes an expression here too, so a list of bad
-    literals would miss ``${{ true }}`` and a condition that cancels only some runs.
+    literals would miss ``${{ true }}`` and a condition that cancels only some runs. A
+    ``concurrency`` value that is wholly one expression is rejected for the same reason:
+    it can evaluate to a mapping with ``cancel-in-progress`` true.
+
+    Limit: this bounds only ``cancel-in-progress``. GitHub still cancels a PENDING run
+    when a newer run joins the same concurrency group, whatever this key says, so a
+    committed group keeps that exposure.
     """
+    if isinstance(concurrency, str):
+        # A bare group name is accepted, but a value that is wholly one expression can
+        # evaluate to a mapping that sets `cancel-in-progress` itself, which the text
+        # cannot show; it fails closed (#1512, domain F1).
+        text = concurrency.strip()
+        if text.startswith("${{") and text.endswith("}}") and text.count("${{") == 1:
+            return [
+                f"security-audit.yml: {level} `concurrency` must not be written wholly "
+                "as one expression; it can evaluate to a mapping that cancels an "
+                f"in-progress run, got {concurrency!r}"
+            ]
+        return []
     if not isinstance(concurrency, dict) or "cancel-in-progress" not in concurrency:
         return []
     cancel = concurrency["cancel-in-progress"]
@@ -789,8 +809,10 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
     assert (
         audit_workflow(_with_trigger("push", {"branches": ["main", "release/*"]})) == []
     )
-    # A run that is never cancelled: the false spellings, a mapping or a bare group
-    # name with `cancel-in-progress` left at its false default, and no concurrency.
+    # No in-progress cancellation: the false spellings, a mapping or a bare group name
+    # (an expression inside a longer name included) with `cancel-in-progress` left at
+    # its false default, and no concurrency. GitHub can still cancel a PENDING run in the
+    # same group when a newer one arrives; no committed key prevents that.
     for allowed in (False, "false", "${{ false }}"):
         assert audit_workflow(_with_cancel_in_progress(allowed)) == []
         assert (
@@ -801,6 +823,8 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
         )
     assert audit_workflow(_mutate_workflow(concurrency={"group": "audit"})) == []
     assert audit_workflow(_mutate_workflow(concurrency="audit")) == []
+    assert audit_workflow(_mutate_workflow(concurrency="audit-${{ github.ref }}")) == []
+    assert audit_workflow(_mutate_job(concurrency="audit-${{ github.ref }}")) == []
     workflow = _workflow()
     workflow.pop("concurrency")
     assert audit_workflow(workflow) == []
@@ -1366,6 +1390,22 @@ def _with_duplicated_gate_step() -> Workflow:
             ),
             "job `concurrency` must keep `cancel-in-progress` false",
             id="job concurrency cancels an in-progress audit",
+        ),
+        # Domain lane on #1729 (F1): a concurrency value that is wholly one expression
+        # can evaluate to a mapping that cancels, at workflow and at job level.
+        pytest.param(
+            lambda: _mutate_workflow(
+                concurrency='${{ fromJSON(\'{"group": "a", "cancel-in-progress": true}\') }}'
+            ),
+            "workflow `concurrency` must not be written wholly as one expression",
+            id="workflow concurrency written wholly as an expression",
+        ),
+        pytest.param(
+            lambda: _mutate_job(
+                concurrency='${{ fromJSON(\'{"group": "a", "cancel-in-progress": true}\') }}'
+            ),
+            "job `concurrency` must not be written wholly as one expression",
+            id="job concurrency written wholly as an expression",
         ),
         pytest.param(
             lambda: _mutate_job(strategy={"matrix": {"include": []}}),
