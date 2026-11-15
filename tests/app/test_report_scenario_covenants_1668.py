@@ -121,6 +121,14 @@ def test_lender_case_report_tests_the_scenario_covenant() -> None:
     assert ctx.covenants.max_balloon_pct == pytest.approx(0.10)
     assert ctx.verdict.dscr_covenant_met is False
     assert ctx.verdict.balloon_within_limit is False
+    # The breach also raises the IC summary's high-severity covenant flag (#706).
+    assert ctx.ic_summary is not None
+    dscr_flags = [
+        flag
+        for flag in ctx.ic_summary.red_flags
+        if flag.kind == "covenant_breach" and "Minimum DSCR" in flag.detail
+    ]
+    assert [flag.severity for flag in dscr_flags] == ["high"]
 
     text = " ".join(render_report_html(ctx).split())
     assert "&ge; 1.30x floor (scenario covenant)" in text
@@ -129,7 +137,9 @@ def test_lender_case_report_tests_the_scenario_covenant() -> None:
 
 @pytest.mark.parametrize(
     ("min_dscr", "met"),
-    [(1.2999999999999998, True), (1.30, True), (1.2999, False)],
+    # Assurance AS-4: the tolerance is the engine's 1e-9, so 1e-8 below the covenant
+    # is a breach.
+    [(1.2999999999999998, True), (1.30, True), (1.3 - 1e-8, False), (1.2999, False)],
 )
 def test_a_dscr_sculpted_to_the_covenant_meets_it(min_dscr: float, met: bool) -> None:
     """Sculpt noise (1.2999999999999998) at a 1.30 covenant is not a breach."""
@@ -142,3 +152,21 @@ def test_a_dscr_sculpted_to_the_covenant_meets_it(min_dscr: float, met: bool) ->
         scenario_config={"constraints": {"min_dscr_covenant": 1.3}},
     )
     assert ctx.verdict.dscr_covenant_met is met
+
+
+def test_a_scenario_without_constraints_renders_report_default_labels() -> None:
+    """Assurance AS-4: the "report default" label is rendered, not only stored."""
+    scenario = yaml.safe_load(_LENDER_CFG.read_text(encoding="utf-8"))
+    full = evaluate_with_overrides(str(_LENDER_CFG), return_full_result=True)
+    case = CaseResult.from_pipeline_result(full, scenario_variant="lendercase")
+    scenario.pop("constraints", None)
+    ctx = build_report_context(
+        case,
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
+        debt_result=full["debt_result"],
+        run_result=full,
+    )
+    text = " ".join(render_report_html(ctx).split())
+    assert "&ge; 1.20x floor (report default)" in text
+    assert "&le; 40% ceiling (report default)" in text
