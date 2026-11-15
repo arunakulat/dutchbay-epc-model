@@ -718,7 +718,8 @@
         </tr>
         <tr>
           <td>Minimum DSCR</td>
-          <td>&ge; {{ "%.2f"|format(ctx.covenants.min_dscr_floor) }}x floor</td>
+          <td>&ge; {{ "%.2f"|format(ctx.covenants.min_dscr_floor) }}x {{ ctx.covenants.min_dscr_floor_name }}
+            ({{ "scenario" if ctx.covenants.min_dscr_floor_source == "scenario" else "report default" }})</td>
           <td>
             {% if ctx.verdict.dscr_covenant_met %}<span class="badge pass">Met</span>
             {% else %}<span class="badge fail">Breach</span>{% endif %}
@@ -726,7 +727,8 @@
         </tr>
         <tr>
           <td>Balloon / bullet share</td>
-          <td>&le; {{ "%.0f"|format(ctx.covenants.max_balloon_pct * 100) }}% ceiling</td>
+          <td>&le; {{ "%.0f"|format(ctx.covenants.max_balloon_pct * 100) }}% ceiling
+            ({{ "scenario covenant" if ctx.covenants.max_balloon_pct_source == "scenario" else "report default" }})</td>
           <td>
             {% if ctx.verdict.balloon_within_limit %}<span class="badge pass">Within</span>
             {% else %}<span class="badge fail">Exceeds</span>{% endif %}
