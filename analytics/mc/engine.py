@@ -614,14 +614,25 @@ class MonteCarloEngine:
         ``normalize_native_capex`` inside each trial, so a permissive failure policy would
         report fallback KPIs instead of a risk distribution (DOM-1645-02). Fail before
         sampling instead. Sweep ``capex.input.amount`` to vary native CAPEX; FX sweeps on
-        native scenarios are the open #1629 design question.
+        native scenarios are the open #1629 design question. The "capex" alias,
+        ``capex.contingency_pct`` and the conversion rate are refused for the same reason
+        (#1629, DOM-1645-R5-01).
         """
         capex = cfg.get("capex") if isinstance(cfg, Mapping) else None
         if not isinstance(capex, Mapping) or not (
             "input" in capex or "native_input_applied" in capex
         ):
             return
-        blocked = {"capex.usd_total", "fx.start_lkr_per_usd"}
+        # Every name here fails each native trial: the USD total and its "capex" alias,
+        # the FX spot, a contingency percentage (capex.input owns the whole amount) and
+        # the conversion rate (pinned to fx.start). Names are matched case-insensitively.
+        blocked = {
+            "capex",
+            "capex.usd_total",
+            "capex.contingency_pct",
+            "capex.input.conversion.rate_lkr_per_usd",
+            "fx.start_lkr_per_usd",
+        }
         for name, kind in zip(names, kinds, strict=True):
             if kind == "fx_calibrated" or name.strip().lower() in blocked:
                 raise MonteCarloConfigError(
