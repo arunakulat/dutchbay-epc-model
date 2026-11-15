@@ -19,9 +19,9 @@
     3.5 MW AC and 0.1 MW / 0.4 MWh, still the grid floor. P50 after-tax project NPV USD
     -4,440,814 (was -4,441,537), P90 -4,721,216 (was -4,721,153). The floor beats 0.2 MW by
     USD 17,539 and 1.0 MW by 164,883 (paired P50, 100% of trials). 17 of 18 one-at-a-time
-    cases keep it; a 10% higher priority rate picks 0.3 MW by USD 418, a near tie. 0.2 MW
-    overtakes it at a BESS all-in of USD 115.8/kWh (published basis) or a priority rate of
-    LKR 54.99/kWh. The sizing config's recommendation comment no longer restates run figures,
+    cases keep it; a 10% higher priority rate picks 0.3 MW by USD 418, a near tie. In the base
+    case, 0.2 MW overtakes it at a BESS all-in of USD 115.8/kWh (published basis) or a priority
+    rate of LKR 54.99/kWh. The sizing config's recommendation comment no longer restates run figures,
     because the summary records its digest.
   - Solar + BESS scenario v0.10: bess_1 capex 56,296 -> 52,740 (USD 131.85/kWh); an
     augmentation of USD 8,363.90 before year 14; fade 0.0004990 -> 0.0110508; solar degradation

@@ -780,6 +780,88 @@ def test_battery_sensitivities_and_break_even_are_counted_and_responsive(
     assert edge["bess_power_mw"] == {"minimum": chosen == 0.5, "maximum": chosen == 2.0}
 
 
+def test_break_even_bracket_straddles_the_crossing_on_an_independent_path(
+    site: Dict[str, Any],
+) -> None:
+    """#1691 assurance N-1: the bisection's final bracket must straddle the sign change.
+
+    The search's own ``gap_at_low``/``gap_at_high`` are the endpoint gaps, so they cannot
+    show a wrong bracket. The check re-prices the battery at the two bracket ends through
+    the one-at-a-time cases (a separate code path) and recomputes the gap from their
+    battery profiles. Two PV sizes make the chosen battery's own value the best of its PVs;
+    a third battery outside reading A must stay out of the committed reading's gap.
+    """
+    cfg = _project_cfg()
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [107, 120],
+        "pv_ac_mw": [3.5],
+        "bess_power_mw": [0.5, 1.0, 1.5, 2.0],
+    }
+    cfg["readings"] = {
+        **cfg["readings"],
+        # 3.5 MW AC + 2.0 MW > 5.0 MW: 2.0 MW is outside reading A, inside reading B.
+        "A": {**cfg["readings"]["A"], "max_pv_ac_plus_bess_mw": 5.0},
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    cfg["curtailment_scenario"] = {**cfg["curtailment_scenario"], "enabled": False}
+    spec = {"input": "bess_usd_per_kwh", "low": 40.0, "high": 202.51, "tolerance": 4.0}
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [],
+        "break_even": [spec],
+    }
+    run = _run(cfg, site, evaluate_with_overrides)
+    committed = run.recommendation["committed_reading"]
+    assert committed == "A"
+    outside_a = [
+        p for p in run.points if p["bess_power_mw"] == 2.0 and p["metrics"] is not None
+    ]
+    assert outside_a and not any(p["eligible_by_reading"]["A"] for p in outside_a)
+    assert any(p["eligible_by_reading"]["B"] for p in outside_a)
+    (found,) = run.curtailment["break_even"]
+    chosen = found["chosen_bess_power_mw"]
+    lo, hi = found["bracket"]
+    assert hi - lo <= spec["tolerance"] and lo <= found["value"] <= hi
+
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [
+            {"name": "at_low", "bess_usd_per_kwh": lo},
+            {"name": "at_high", "bess_usd_per_kwh": hi},
+            {"name": "search_low", "bess_usd_per_kwh": spec["low"]},
+            {"name": "search_high", "bess_usd_per_kwh": spec["high"]},
+        ],
+        "break_even": [],
+    }
+    check = _run(cfg, site, evaluate_with_overrides)
+    cases = check.curtailment["one_at_a_time"]["cases"]
+
+    def gap_and_other(case: str) -> tuple[float, Dict[str, Any]]:
+        rows = cases[case]["battery_profile"][committed]
+        assert 2.0 not in {r["size"]["bess_power_mw"] for r in rows}
+        own = next(r for r in rows if r["size"]["bess_power_mw"] == chosen)
+        other = max(
+            (r for r in rows if r["size"]["bess_power_mw"] != chosen),
+            key=lambda r: r["project_npv"],
+        )
+        return other["project_npv"] - own["project_npv"], other["size"]
+
+    # The search's endpoint gaps, recomputed under reading A only: a battery outside
+    # the committed reading must not enter the gap.
+    for case, key in (("search_low", "gap_at_low"), ("search_high", "gap_at_high")):
+        assert gap_and_other(case)[0] == pytest.approx(found[key], rel=1e-12, abs=1e-6)
+    g_lo, other_lo = gap_and_other("at_low")
+    g_hi, other_hi = gap_and_other("at_high")
+    # Opposite signs: the crossing lies inside the reported bracket.
+    assert (g_lo > 0.0) != (g_hi > 0.0)
+    assert (g_lo > 0.0) == (found["gap_at_low"] > 0.0)
+    # The battery that takes over is the best other battery on the side where it wins.
+    assert found["other_battery_takes_over_at"] == (
+        other_lo if g_lo > 0.0 else other_hi
+    )
+
+
 # ---------------------------------------------------------------------------
 # The committed run and the scenarios it writes
 # ---------------------------------------------------------------------------

@@ -1148,7 +1148,13 @@ of 0.1 MW is the owner's choice, not a regulatory or technical minimum: the froz
 set the 4 h duration but no minimum size for a "Power Plant with BESS" (input B18, reopened). A
 smaller battery would lose less: a reduced probe at 0.05 MW beats 0.1 MW by about USD 5k in the
 base case. A zero battery is outside the model (the dispatcher needs energy > 0) and outside that
-tariff category; extrapolated, it is the economic answer. The PV is also on its floor: in a
+tariff category; extrapolated, it is the economic answer. It is a real option, not only a model
+limit: without a battery the plant is PUCSL's ground-mounted solar category (s.1, LKR 18.00 +
+2.72/kWh), the rate this model already pays outside the priority window. PUCSL's own prosumer
+section (s.3.2 of the August 2026 decision) offers BESS-inclusive tariffs only above 250 kW,
+because the control centres cannot see small batteries and they cost more below that size. That
+does not bind a "Power Plant with BESS", but it is the regulator's own reference point for B18,
+2.5 times the committed 0.1 MW, and its own statement of the small-size premium in L-10. The PV is also on its floor: in a
 reduced probe below the grid (4 trials), 67 tables at 2.5 MW AC beat 107 tables at 3.5 MW AC by
 about USD 220k. This runs against the owner's 2026-11-01 direction to "Maximize BESS ... to gain
 the maximum benefit from the PUCSL evening tariff band", so the floor (B18) is an owner decision.
@@ -1353,9 +1359,13 @@ Seventeen of the 18 one-at-a-time cases keep 0.1 MW, including the three new one
 the all-in less the reserve (11,409). A 10% higher priority rate flattens the curve from 0.1
 to 0.4 MW to within USD 500 and picks 0.3 MW, by USD 418 over 0.1 MW (a near tie; under v0.9 it
 picked 0.5 MW by 636). The curtailment case and PUCSL's 0.90 RTE keep 0.1 MW. Break-even values
+(base case, so without the trials' residual fade; the choice itself is ranked on the paired P50)
 at which 0.2 MW overtakes 0.1 MW: BESS all-in USD 115.8/kWh on the published basis (106.9 after
 the reserve; was 118.9) and a priority rate of LKR 54.99/kWh (was 54.14). No BESS O&M rate from
-0 to USD 5/kWh-yr DC changes the choice.
+0 to USD 5/kWh-yr DC changes the choice. The value curve is shallow near the floor: in the
+base case, 0.1 to 1.0 MW costs USD 106,595 (about 2.4% of the project NPV), so the economics
+barely separate small batteries, and B18 and the owner's strategy (2026-11-01, "Maximize BESS")
+decide the size more than the NPV does.
 
 **KPIs** (scenario v0.10 against v0.9, base case, `run_v14_pipeline(strict)`):
 
