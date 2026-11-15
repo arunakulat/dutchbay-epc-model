@@ -107,17 +107,25 @@ def test_routines_run_and_produce_sane_results(tmp_path: Path) -> None:
         assert "{" not in text and "}" not in text
 
     _assert_narrative_claims(R)
+    _assert_values_are_wired_to_the_run(R, tmp_path / "solar_scenario_competitive.yaml")
 
 
 def _assert_narrative_claims(R) -> None:
-    """The directional claims the narrative states in words, checked on a run."""
+    """The claims the narrative states in words, checked on a run."""
     fit, cc = R["case_fit"], R["case_competitive"]
     disc = cc["discount_rate_used"]
+    inp = R["inputs"]
     # "a negative unlevered return ... under both regimes", NPV strongly negative.
     assert fit["project_irr"] < cc["project_irr"] < 0.0 < disc
     assert fit["project_npv"] < cc["project_npv"] < 0.0
     # The competitive case lifts the DSCR, still far below the 1.30x covenant.
     assert fit["min_dscr"] < cc["min_dscr"] < 1.30
+    # "undefined under the feed-in tariff".
+    assert fit["equity_irr"] is None
+    # At standard gearing the sponsor funds debt service and the equity receives
+    # "only" a token amount (results 7.1).
+    assert cc["equity_sponsor_cure_usd"] > 0.0
+    assert cc["equity_inflows_usd"] < 0.01 * R["site"]["capex_usd"]
 
     # Breakevens: the IRR test needs a higher tariff than the DSCR test, and both
     # sit above the competitive tariff.
@@ -137,24 +145,65 @@ def _assert_narrative_claims(R) -> None:
     assert t["CAPEX"] > max(t["OPEX"], t["Corporate Tax Rate"])
     assert abs(t["Debt Tenor"]) < 1e-9
 
-    # Gearing: no feasible point; the DSCR falls and equity NPV improves with leverage.
+    # Discounting (6.2): the equity rate is flat and below the declared hurdle; the
+    # built WACC is above the declared project rate, so it would deepen every
+    # project NPV; the CAPM block does not drive discounting.
+    assert inp["equity_npv_discount_rate"] < inp["equity_discount_rate"]
+    assert inp["wacc_built"] > disc
+    assert not inp["wacc_drives_discount"]
+
+    # The financing-rate spread (8.3): DFI and USD debt cost less than the equity
+    # rate, and the LKR rate is the USD rate plus the expected depreciation.
+    assert max(inp["dfi_rate"], inp["usd_rate"]) < inp["equity_npv_discount_rate"]
+    assert abs(inp["lkr_rate"] - (inp["usd_rate"] + inp["fx_annual_depr"])) < 1e-9
+
+    # Gearing (8.3): no feasible point; the DSCR falls, equity IRR falls, equity NPV
+    # rises and sponsor cures rise with leverage. The re-run matches the optimiser.
     opt = R["optimization"]
     assert opt["best"] is None
     gear = sorted(opt["curve"], key=lambda p: p["x"])
     assert gear[0]["constraint"] < 1.30
     assert gear[-1]["constraint"] < gear[0]["constraint"]
     assert gear[-1]["obj"] > gear[0]["obj"]
+    assert gear[-1]["eqIRR"] < gear[0]["eqIRR"]
+    assert gear[-1]["cure"] > gear[0]["cure"]
+    for p in gear:
+        assert abs(p["eqNPV"] - p["obj"]) < 1.0
+    # The sign sentence: elsewhere the equity cash flows change sign at most once.
+    assert all(int(d["sign_changes"]) <= 1 for d in R["dscr"]["sweep"])
 
-    # DSCR sweep: a lower target gears up, lowers equity IRR and edges equity NPV up,
-    # so the NPV ranking picks the lowest target.
+    # DSCR sweep (9): between the ends, a lower target gears up, lowers equity IRR
+    # and edges equity NPV up; project returns are invariant.
     sweep = sorted(R["dscr"]["sweep"], key=lambda d: d["target_dscr"])
     lo, hi = sweep[0], sweep[-1]
     assert lo["gearing"] > hi["gearing"]
     assert lo["eqIRR"] < hi["eqIRR"]
+    assert lo["eqNPV"] > hi["eqNPV"]
     assert len({round(d["npv"], 0) for d in sweep}) == 1
+    # The lock-up step: distributions are locked below the threshold and not at or
+    # above it; stepping just below it raises equity IRR and lowers equity NPV.
+    cov = sweep[0]["lockup_threshold"]
+    assert all(d["locked_years"] > 0 for d in sweep if d["target_dscr"] < cov - 1e-9)
+    assert all(d["locked_years"] == 0 for d in sweep if d["target_dscr"] >= cov - 1e-9)
+    below = [d for d in sweep if d["target_dscr"] < cov - 1e-9][-1]
+    at_cov = min(sweep, key=lambda d: abs(d["target_dscr"] - cov))
+    assert below["eqIRR"] > at_cov["eqIRR"]
+    assert below["eqNPV"] < at_cov["eqNPV"]
+    # The NPV-ranked optimum is the lowest target, worth "only" a little over the
+    # covenant; the curve is not monotonic and dips below the covenant.
     curve = sorted(R["dscr"]["opt_curve"], key=lambda p: p["x"])
-    assert curve[0]["obj"] > curve[-1]["obj"]
-    assert R["dscr"]["opt_best"]["target"] == curve[0]["x"]
+    best = R["dscr"]["opt_best"]
+    assert best["target"] == curve[0]["x"]
+    cov_obj = min(curve, key=lambda p: abs(p["x"] - cov))["obj"]
+    assert 0.0 < best["equity_npv"] - cov_obj < 0.25e6
+    steps = [b["obj"] - a["obj"] for a, b in zip(curve, curve[1:], strict=False)]
+    assert any(d > 0 for d in steps) and any(d < 0 for d in steps)
+    dip = min(curve, key=lambda p: p["obj"])
+    assert dip["x"] < cov
+    for d in sweep:
+        point = min(curve, key=lambda p: abs(p["x"] - d["target_dscr"]))
+        if abs(point["x"] - d["target_dscr"]) < 1e-9:
+            assert abs(point["obj"] - d["eqNPV"]) < 1.0
 
     # The first half of the narrative keeps its resource figures literal.
     res = R["resource"]
@@ -163,3 +212,38 @@ def _assert_narrative_claims(R) -> None:
     assert round(res["yield_mono"]) == 1496
     assert round(res["poa"]) == 1913
     assert round(res["aep_gwh"], 1) == 16.0
+
+
+def _assert_values_are_wired_to_the_run(R, scenario: Path) -> None:
+    """The figures the narrative quotes are the run's own (assurance lane A-2)."""
+    import yaml
+
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+
+    cfg = yaml.safe_load(scenario.read_text(encoding="utf-8"))
+    inp, ft = R["inputs"], cfg["Financing_Terms"]
+    assert inp["fx_annual_depr"] == cfg["fx"]["annual_depr"]
+    assert inp["lkr_rate"] == ft["rates"]["lkr_nominal"]
+    assert inp["dfi_rate"] == ft["rates"]["dfi_nominal"]
+    assert inp["usd_rate"] == ft["rates"]["usd_nominal"]
+    assert inp["debt_ratio"] == ft["debt_ratio"]
+    assert inp["tenor_years"] == ft["tenor_years"]
+    assert inp["tax_rate"] == cfg["tax"]["corporate_tax_rate"]
+    assert inp["project_discount_rate"] == cfg["returns"]["project_discount_rate"]
+    assert inp["wacc_drives_discount"] == bool(
+        (cfg.get("wacc") or {}).get("drives_discount_rate")
+    )
+
+    def kpi(tariff: float, key: str):
+        c = yaml.safe_load(scenario.read_text(encoding="utf-8"))
+        c["tariff"]["lkr_per_kwh"] = tariff
+        return run_v14_pipeline(config=c)["kpis"][key]
+
+    # Each solved breakeven meets its target, and 0.1 LKR below it does not.
+    be = R["breakeven"]
+    for key, target, tariff in (
+        ("min_dscr", be["dscr_target"], be["dscr_tariff_lkr"]),
+        ("project_irr", be["irr_target"], be["irr_tariff_lkr"]),
+    ):
+        assert kpi(tariff, key) >= target - 1e-9
+        assert kpi(tariff - 0.1, key) < target - 1e-9

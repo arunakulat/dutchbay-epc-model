@@ -88,6 +88,9 @@ def _results(*, dscr_breakeven: float | None = 73.04) -> Dict[str, Any]:
         "wacc_drives_discount": False,
         "wacc_built": 0.116,
         "cost_of_equity_built": 0.20,
+        "wacc_cost_of_debt": 0.08,
+        "wacc_target_gearing": 0.70,
+        "equity_npv_discount_rate": 0.10,
     }
     case = {
         "discount_rate_used": 0.10,
@@ -95,7 +98,38 @@ def _results(*, dscr_breakeven: float | None = 73.04) -> Dict[str, Any]:
         "project_npv": -8.06e6,
         "min_dscr": 0.32,
         "equity_irr": -0.463,
+        "equity_sponsor_cure_usd": 7.0e6,
+        "equity_inflows_usd": 1_200.0,
     }
+
+    def gear(
+        x: float, dscr: float, npv: float, irr: float, cure: float, sc: int
+    ) -> Dict[str, Any]:
+        return {
+            "x": x,
+            "constraint": dscr,
+            "obj": npv,
+            "eqNPV": npv,
+            "eqIRR": irr,
+            "cure": cure,
+            "sign_changes": sc,
+        }
+
+    def sweep(
+        t: float, g: float, irr: float, npv: float, locked: int
+    ) -> Dict[str, Any]:
+        return {
+            "target_dscr": t,
+            "gearing": g,
+            "eqIRR": irr,
+            "projIRR": -0.026,
+            "npv": -8.06e6,
+            "eqNPV": npv,
+            "locked_years": locked,
+            "lockup_threshold": 1.30,
+            "sign_changes": 1,
+        }
+
     trials = [-0.037, -0.027, -0.019]
     return {
         "site": site,
@@ -138,30 +172,23 @@ def _results(*, dscr_breakeven: float | None = 73.04) -> Dict[str, Any]:
         ],
         "optimization": {
             "curve": [
-                {"x": 0.75, "constraint": 0.30, "obj": -6.45e6},
-                {"x": 0.30, "constraint": 0.98, "obj": -7.91e6},
+                gear(0.75, 0.30, -6.45e6, -0.468, 8.06e6, 1),
+                gear(0.35, 0.69, -7.63e6, -0.257, 0.12e6, 3),
+                gear(0.30, 0.98, -7.91e6, -0.151, 0.0, 1),
             ],
             "best": None,
         },
         "dscr": {
             "sweep": [
-                {
-                    "target_dscr": 1.60,
-                    "gearing": 0.19,
-                    "eqIRR": -0.069,
-                    "projIRR": -0.026,
-                    "npv": -8.06e6,
-                },
-                {
-                    "target_dscr": 1.05,
-                    "gearing": 0.29,
-                    "eqIRR": -0.088,
-                    "projIRR": -0.026,
-                    "npv": -8.06e6,
-                },
+                sweep(1.60, 0.19, -0.069, -8.49e6, 0),
+                sweep(1.30, 0.235, -0.078, -8.44e6, 0),
+                sweep(1.20, 0.255, -0.074, -8.62e6, 14),
+                sweep(1.05, 0.29, -0.088, -8.36e6, 14),
             ],
             "opt_curve": [
                 {"x": 1.60, "obj": -8.49e6, "feasible": True},
+                {"x": 1.3000000000000003, "obj": -8.44e6, "feasible": True},
+                {"x": 1.25, "obj": -8.70e6, "feasible": True},
                 {"x": 1.05, "obj": -8.36e6, "feasible": True},
             ],
             "opt_best": {"target": 1.05, "equity_npv": -8.36e6},
@@ -206,10 +233,43 @@ def test_the_values_are_formatted_from_the_results() -> None:
     assert (v["dscr_best"], v["dscr_best_eqnpv"]) == ("1.05", "-USD 8.36M")
 
 
+def test_the_covenant_step_and_the_leverage_mechanism_come_from_the_run() -> None:
+    # BW-10 domain lane R-1 and R-2: the DSCR curve steps at the lock-up threshold,
+    # and the equity NPV gain with gearing comes with sponsor-funded debt service.
+    v = _load_module().narrative_values(_results())
+    assert (v["dscr_cov"], v["dscr_lock_years"]) == ("1.30", "14")
+    assert (v["dscr_below"], v["dscr_eq_below"], v["dscr_eqnpv_below"]) == (
+        "1.20",
+        "-7.4%",
+        "-USD 8.62M",
+    )
+    assert (v["dscr_eq_cov"], v["dscr_eqnpv_cov"]) == ("-7.8%", "-USD 8.44M")
+    assert (v["dscr_dip"], v["dscr_eqnpv_dip"]) == ("1.25", "-USD 8.70M")
+    assert v["dscr_best_margin"] == "USD 0.08M"
+    assert v["dscr_npv_span"] == "USD 0.34M"
+    assert (v["opt_eq_lo"], v["opt_eq_hi"]) == ("-15.1%", "-46.8%")
+    assert (v["opt_cure_lo"], v["opt_cure_hi"]) == ("USD 0.00M", "USD 8.06M")
+    assert v["opt_npv_gain"] == "USD 1.46M"
+    assert (v["comp_cure"], v["comp_eq_dist"]) == ("USD 7.00M", "USD 1k")
+    assert (v["eq_npv_disc"], v["wacc_kd"], v["wacc_gear"]) == ("10%", "8.0%", "70%")
+
+
+def test_the_sign_sentence_names_the_multi_root_gearing_points() -> None:
+    mod = _load_module()
+    v = mod.narrative_values(_results())
+    assert v["eq_sign_sentence"].startswith(
+        "Here the equity cash flows change sign three times at 35% gearing,"
+    )
+    R = _results()
+    for point in R["optimization"]["curve"]:
+        point["sign_changes"] = 1
+    assert "at most once in every case" in mod.narrative_values(R)["eq_sign_sentence"]
+
+
 def test_an_unreached_breakeven_reads_as_more_than_the_ceiling() -> None:
     v = _load_module().narrative_values(_results(dscr_breakeven=None))
-    assert v["be_dscr_lkr"] == "more than 400"
-    assert v["be_dscr_x_fit"] == "more than 28"
+    assert v["be_dscr_lkr"] == "400+"
+    assert v["be_dscr_x_fit"] == "28+"
 
 
 def test_an_undefined_equity_irr_reads_as_undefined() -> None:
@@ -262,3 +322,17 @@ def test_breakeven_allows_rounding_slack_on_a_capped_dscr() -> None:
         lambda t: min(t / 50.0, capped), 1.30, lo=10.0
     )
     assert be == pytest.approx(65.0, abs=0.01)
+
+
+def test_render_pdf_fills_every_section_and_hard_codes_no_tariff() -> None:
+    # Assurance lane A-2: the run-to-prose wiring is in render_pdf, which the unit
+    # tests above do not reach. The narrative sections are filled from the values,
+    # and the executive summary quotes no literal rupee figure.
+    import re
+
+    source = _SCRIPT.read_text(encoding="utf-8")
+    assert "P(para.format_map(V))" in source
+    start = source.index("Headline finding")
+    summary = source[start : source.index("story.append(PageBreak())", start)]
+    assert not re.search(r"LKR(&nbsp;|\s)\d", summary), "literal LKR figure in summary"
+    assert "{V['be_dscr_lkr']}" in summary and "{V['be_irr_lkr']}" in summary

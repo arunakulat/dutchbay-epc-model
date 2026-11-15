@@ -248,6 +248,28 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
                 "discount_rate_used",
             )
         }
+        for kk in (
+            "equity_npv",
+            "equity_covenant_locked_years",
+            "equity_sponsor_cure_usd",
+            "total_equity_distributed_usd",
+        ):
+            out[kk] = k.get(kk)
+        # The equity waterfall's own discount rate, lock-up threshold and sign count:
+        # the equity NPV is discounted at the waterfall's rate, which need not be the
+        # project rate (BW-10 domain lane N-1).
+        eq = res.get("equity_distribution") or {}
+        summ = eq.get("equity_summary") or {}
+        out["equity_discount_rate_used"] = (eq.get("metadata") or {}).get(
+            "discount_rate"
+        )
+        out["lockup_threshold"] = summ.get("min_dscr_threshold")
+        out["equity_sign_changes"] = summ.get("equity_cashflow_sign_changes")
+        # What the equity actually receives after the initial outlay (sponsor cures
+        # are negative flows and are reported separately).
+        out["equity_inflows_usd"] = sum(
+            max(float(x), 0.0) for x in (eq.get("equity_cashflows_usd") or [])[1:]
+        )
         out["_cfads"] = [float(r.get("cfads_usd", 0)) for r in res["annual_rows"]]
         return out
 
@@ -283,6 +305,9 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         ),
     }
     R["inputs"] = _model_inputs(make(comp))
+    R["inputs"]["equity_npv_discount_rate"] = R["case_competitive"][
+        "equity_discount_rate_used"
+    ]
 
     R["capex_sweep"] = []
     for cxx in (9_000_000, 10_500_000, 12_000_000, 13_200_000, 15_000_000):
@@ -383,6 +408,17 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
             else None
         ),
     }
+    # The same gearing points re-run for what the optimiser does not return: the
+    # equity IRR, the sponsor cures that fund debt service the asset cannot cover,
+    # and the equity NPV again as a cross-check on the optimiser's objective.
+    for point in R["optimization"]["curve"]:
+        c = make(comp)
+        c["Financing_Terms"]["debt_ratio"] = point["x"]
+        k = kpis(c)
+        point["eqIRR"] = k["equity_irr"]
+        point["eqNPV"] = k["equity_npv"]
+        point["cure"] = float(k["equity_sponsor_cure_usd"] or 0.0)
+        point["sign_changes"] = k["equity_sign_changes"]
 
     # --- 6. DSCR investigation (sculpted sizing) ---
     sculpt = make(comp)
@@ -393,15 +429,19 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     for td in (1.05, 1.10, 1.20, 1.30, 1.40, 1.50, 1.60):
         c = copy.deepcopy(sculpt)
         c["Financing_Terms"]["target_dscr"] = td
-        k = run_v14_pipeline(config=c)["kpis"]
+        k = kpis(c)
         dscr_sweep.append(
             {
                 "target_dscr": td,
-                "gearing": k.get("max_debt_usd", 0) / SITE["capex_usd"],
+                "gearing": (k.get("max_debt_usd") or 0) / SITE["capex_usd"],
                 "min_dscr": k["min_dscr"],
                 "projIRR": k["project_irr"],
                 "eqIRR": k["equity_irr"],
                 "npv": k["project_npv"],
+                "eqNPV": k["equity_npv"],
+                "locked_years": int(k["equity_covenant_locked_years"] or 0),
+                "lockup_threshold": k["lockup_threshold"],
+                "sign_changes": k["equity_sign_changes"],
             }
         )
     dopt = optimize_parameter(
@@ -475,7 +515,9 @@ def _model_inputs(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     ft = cfg["Financing_Terms"]
     rates = ft.get("rates", {})
+    wacc_cfg = cfg.get("wacc") or {}
     wacc = compute_wacc_from_config(copy.deepcopy(cfg)) or {}
+    de = wacc_cfg.get("target_debt_to_equity")
     return {
         "fx_annual_depr": float(cfg["fx"]["annual_depr"]),
         "lkr_rate": float(rates["lkr_nominal"]),
@@ -493,7 +535,16 @@ def _model_inputs(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "loss_carryforward_years": int(cfg["tax"]["loss_carryforward_years"]),
         "project_discount_rate": float(cfg["returns"]["project_discount_rate"]),
         "equity_discount_rate": float(cfg["returns"]["equity_discount_rate"]),
-        "wacc_drives_discount": bool(cfg.get("wacc", {}).get("drives_discount_rate")),
+        "wacc_drives_discount": bool(wacc_cfg.get("drives_discount_rate")),
+        # The CAPM block's own debt assumptions, not the tranche terms above.
+        "wacc_cost_of_debt": (
+            float(wacc_cfg["cost_of_debt"])
+            if wacc_cfg.get("cost_of_debt") is not None
+            else None
+        ),
+        "wacc_target_gearing": (
+            float(de) / (1.0 + float(de)) if de is not None else None
+        ),
         "wacc_built": (
             float(wacc["wacc_nominal"])
             if wacc.get("wacc_nominal") is not None
@@ -524,8 +575,7 @@ def _optimisation_caption(opt: Dict[str, Any]) -> str:
     if best is None:
         return text + f"No gearing from {lo:.0%} to {hi:.0%} meets the covenant."
     return text + (
-        f"Best feasible gearing {best['x']:.0%}, "
-        f"equity NPV USD {best['obj'] / 1e6:.2f}M."
+        f"Best feasible gearing {best['x']:.0%}, " f"equity NPV {_usd_m(best['obj'])}."
     )
 
 
@@ -535,6 +585,15 @@ def _pct(x: float, dp: int = 1) -> str:
 
 def _usd_m(x: float) -> str:
     return f"-USD {abs(x) / 1e6:.2f}M" if x < 0 else f"USD {x / 1e6:.2f}M"
+
+
+def _times(n: int) -> str:
+    words = {1: "once", 2: "twice", 3: "three times", 4: "four times"}
+    return words.get(n, f"{n} times")
+
+
+def _usd_abs(x: float) -> str:
+    return f"USD {abs(x) / 1e6:.2f}M"
 
 
 def narrative_values(R: Dict[str, Any]) -> Dict[str, str]:
@@ -560,10 +619,10 @@ def narrative_values(R: Dict[str, Any]) -> Dict[str, str]:
     def be_values(key: str, tariff: float | None) -> Dict[str, str]:
         if tariff is None:  # not reached by the solver's 400 LKR/kWh ceiling
             return {
-                f"be_{key}_lkr": "more than 400",
-                f"be_{key}_usc": f"more than {400 / usc:.0f}",
-                f"be_{key}_x_fit": f"more than {400 / S['fit_tariff_lkr']:.0f}",
-                f"be_{key}_x_comp": f"more than {400 / S['competitive_tariff_lkr']:.0f}",
+                f"be_{key}_lkr": "400+",
+                f"be_{key}_usc": f"{400 / usc:.0f}+",
+                f"be_{key}_x_fit": f"{400 / S['fit_tariff_lkr']:.0f}+",
+                f"be_{key}_x_comp": f"{400 / S['competitive_tariff_lkr']:.0f}+",
             }
         return {
             f"be_{key}_lkr": f"{tariff:.1f}",
@@ -649,6 +708,77 @@ def narrative_values(R: Dict[str, Any]) -> Dict[str, str]:
         "dscr_best": f"{dbest['target']:.2f}" if dbest else "none",
         "dscr_best_eqnpv": _usd_m(dbest[OPTIMISATION_OBJECTIVE]) if dbest else "none",
     }
+    # The DSCR-target curve is not monotonic: below the equity lock-up threshold the
+    # waterfall traps every distribution for the whole tenor, so both equity measures
+    # step at the threshold (BW-10 domain lane R-1). The prose compares the band's
+    # ends, names the step, and states how little the optimum is worth.
+    cov = float(sweep[0]["lockup_threshold"] or 1.30)
+    below = [d for d in sweep if d["target_dscr"] < cov - 1e-9]
+    at_cov = min(sweep, key=lambda d: abs(d["target_dscr"] - cov))
+    below_cov = below[-1] if below else sweep[0]
+    dip = min(dcurve, key=lambda p: p["obj"])
+    cov_obj = min(dcurve, key=lambda p: abs(p["x"] - cov))["obj"]
+    multi = [p for p in gear if (p.get("sign_changes") or 0) > 1]
+    if multi:
+        pts = " and ".join(_pct(p["x"], 0) for p in multi)
+        times = max(int(p["sign_changes"]) for p in multi)
+        sign_sentence = (
+            f"Here the equity cash flows change sign {_times(times)} at {pts} "
+            "gearing, where the IRR need not be unique; in the other cases tested "
+            "they change sign at most once, and the IRR fails in other ways."
+        )
+    else:
+        sign_sentence = (
+            "Here the equity cash flows change sign at most once in every case "
+            "tested, so the multiple-root problem does not arise; the IRR fails in "
+            "other ways."
+        )
+    v.update(
+        {
+            "eq_npv_disc": _pct(inp["equity_npv_discount_rate"], 0),
+            "wacc_kd": (
+                _pct(inp["wacc_cost_of_debt"])
+                if inp["wacc_cost_of_debt"] is not None
+                else "an assumed"
+            ),
+            "wacc_gear": (
+                _pct(inp["wacc_target_gearing"], 0)
+                if inp["wacc_target_gearing"] is not None
+                else "an assumed"
+            ),
+            "comp_eq_dist": f"USD {(cc.get('equity_inflows_usd') or 0.0) / 1e3:,.0f}k",
+            "comp_cure": _usd_abs(cc.get("equity_sponsor_cure_usd") or 0.0),
+            "eq_sign_sentence": sign_sentence,
+            "dscr_cov": f"{cov:.2f}",
+            "dscr_lock_years": str(sweep[0]["locked_years"]),
+            "dscr_below": f"{below_cov['target_dscr']:.2f}",
+            "dscr_eq_below": _pct(below_cov["eqIRR"]),
+            "dscr_eqnpv_below": _usd_m(below_cov["eqNPV"]),
+            "dscr_eq_cov": _pct(at_cov["eqIRR"]),
+            "dscr_eqnpv_cov": _usd_m(at_cov["eqNPV"]),
+            "dscr_npv_span": _usd_abs(
+                max(p["obj"] for p in dcurve) - min(p["obj"] for p in dcurve)
+            ),
+            "dscr_dip": f"{dip['x']:.2f}",
+            "dscr_eqnpv_dip": _usd_m(dip["obj"]),
+            "dscr_best_margin": (
+                _usd_m(dbest[OPTIMISATION_OBJECTIVE] - cov_obj) if dbest else "none"
+            ),
+            "opt_eq_lo": (
+                _pct(gear[0]["eqIRR"])
+                if gear[0].get("eqIRR") is not None
+                else "undefined"
+            ),
+            "opt_eq_hi": (
+                _pct(gear[-1]["eqIRR"])
+                if gear[-1].get("eqIRR") is not None
+                else "undefined"
+            ),
+            "opt_cure_lo": _usd_abs(gear[0].get("cure", 0.0)),
+            "opt_cure_hi": _usd_abs(gear[-1].get("cure", 0.0)),
+            "opt_npv_gain": _usd_m(gear[-1]["obj"] - gear[0]["obj"]),
+        }
+    )
     v.update(be_values("dscr", be["dscr_tariff_lkr"]))
     v.update(be_values("irr", be["irr_tariff_lkr"]))
     return v
@@ -1200,10 +1330,11 @@ def make_charts(R: Dict[str, Any], charts: Path) -> None:
     ax.axvline(1.30, color=GREY, ls=":", lw=1.2)
     lo_y = min(pi2 + ei) - 1.0
     hi_y = max(pi2 + ei) + 3.0
+    i_cov = min(range(len(td)), key=lambda i: abs(td[i] - 1.30))
     ax.annotate(
         "Project IRR INVARIANT to the DSCR target",
-        xy=(1.30, pi2[3]),
-        xytext=(1.33, pi2[3] + 1.4),
+        xy=(1.30, pi2[i_cov]),
+        xytext=(1.33, pi2[i_cov] + 1.4),
         fontsize=7.5,
         color=NAVY,
         arrowprops=dict(arrowstyle="->", color=NAVY, lw=0.8),
@@ -1752,21 +1883,34 @@ def render_pdf(
 
     render_section("dscr")
     datatable(
-        ["Min-DSCR target", "Solved gearing", "Project IRR", "Equity IRR"],
+        [
+            "Min-DSCR target",
+            "Solved gearing",
+            "Project IRR",
+            "Equity IRR",
+            "Equity NPV",
+            "Locked-up years",
+        ],
         [
             [
                 f"{d['target_dscr']:.2f}x",
                 f"{d['gearing']*100:.0f}%",
                 pc(d["projIRR"]),
                 pc(d["eqIRR"]),
+                _usd_m(d["eqNPV"]),
+                str(d["locked_years"]),
             ]
             for d in D["sweep"]
         ],
-        [4.0 * cm, 4.0 * cm, 3.7 * cm, 3.8 * cm],
+        [2.6 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 2.9 * cm, 2.6 * cm],
     )
     FIG("07_dscr")
     CAP(
-        "Effect of the DSCR sizing target. Project IRR is flat (financing cannot change the asset return); equity IRR improves as the structure deleverages - the signature of negative carry - while equity NPV, the ranking measure, edges the other way."
+        "Effect of the DSCR sizing target. Project IRR is flat (financing cannot change the asset return). "
+        f"Equity IRR is higher at {V['dscr_hi']}x than at {V['dscr_lo']}x, but it is not monotonic: below the "
+        f"{V['dscr_cov']}x lock-up threshold every distribution is trapped until the debt is repaid, so both equity "
+        f"measures step at {V['dscr_cov']}x. The NPV-ranked optimum, {V['dscr_best']}x, is worth "
+        f"{V['dscr_best_margin']} over {V['dscr_cov']}x."
     )
 
     render_section("discussion")
@@ -1875,7 +2019,7 @@ def render_pdf(
         ),
         (
             "WACC",
-            "Weighted Average Cost of Capital - the blended required return used to discount the project.",
+            "Weighted Average Cost of Capital - the blended cost of debt and equity. In this report the scenario's CAPM block builds it for information only; cash flows are discounted at the declared discount rate (Section 6.2).",
         ),
         (
             "Negative carry",

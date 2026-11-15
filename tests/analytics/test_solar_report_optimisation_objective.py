@@ -72,7 +72,7 @@ def _opt(best: Dict[str, float] | None) -> Dict[str, Any]:
 def test_the_caption_states_the_npv_optimum_from_the_run() -> None:
     caption = _load_module()._optimisation_caption(_opt({"x": 0.5, "obj": -6.5e6}))
     assert "ranks on equity NPV, not equity IRR (#1456)" in caption
-    assert caption.endswith("Best feasible gearing 50%, equity NPV USD -6.50M.")
+    assert caption.endswith("Best feasible gearing 50%, equity NPV -USD 6.50M.")
 
 
 def test_the_caption_says_so_when_no_gearing_meets_the_covenant() -> None:
