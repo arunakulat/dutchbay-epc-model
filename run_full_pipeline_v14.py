@@ -682,8 +682,14 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
 def _run_epc_only_scenario(cfg: DictConfig, config: str) -> bool:
     """Run an EPC-only scenario through the construction-margin model (#1780).
 
+    The run follows the main path's rules (#1760): the emit switches are checked first, so
+    a bad one exits 1 as it does for any scenario; each emitter is listed under
+    ``result['emitters']`` with the reason it does not run; an earlier ``summary.json`` is
+    removed before anything is computed, so a failed run leaves none behind; and the
+    written summary carries a run manifest and lands in the resolved export directory.
+
     Args:
-        cfg: The Hydra config (``write_artifacts`` / ``export_dir`` are honoured).
+        cfg: The Hydra config.
         config: The scenario path.
 
     Returns:
@@ -692,6 +698,7 @@ def _run_epc_only_scenario(cfg: DictConfig, config: str) -> bool:
 
     Raises:
         SystemExit: Exit code 1 when the ``epc`` block does not compute.
+        ValueError: An emit switch is not true, false or null.
     """
     from finance.epc_margin import epc_only_result, is_epc_only_scenario
 
@@ -701,15 +708,55 @@ def _run_epc_only_scenario(cfg: DictConfig, config: str) -> bool:
         return False
     if not is_epc_only_scenario(raw):
         return False
+
+    write_artifacts = bool(cfg.get("write_artifacts", False))
+    emit_all = emit_all_requested(cfg)
+    plan = plan_emitters(cfg, {} if emit_all else None, write_artifacts=write_artifacts)
+    export_dir = resolve_output_dir(
+        cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT),
+        run_scoped=bool(cfg.get("run_scoped", False)),
+        run_id=cfg.get("run_id", None),
+    )
+    if write_artifacts:
+        stale = export_dir / "summary.json"
+        if stale.is_file():
+            stale.unlink()
+            logger.info("Removed the earlier run's summary.json from %s", export_dir)
+
     result = epc_only_result(raw, config)
+    result["run_manifest"] = build_run_manifest(
+        raw, validation_mode=str(cfg.get("validation_mode", "strict"))
+    ).as_dict()
+    if emit_all or any(d.run for d in plan.values()):
+        emitters: dict[str, dict[str, Any]] = {}
+        for flag, decision in plan.items():
+            keep = decision.status == STATUS_OFF or (
+                decision.source == "emit_all" and not write_artifacts
+            )
+            emitters[flag] = (
+                decision.as_dict()
+                if keep
+                else {
+                    "status": STATUS_NOT_RUN,
+                    "source": decision.source,
+                    "reason": EPC_ONLY_EMITTER_REASON,
+                }
+            )
+        result["emitters"] = emitters
     print(json.dumps(result, indent=2, sort_keys=True))
     if result["status"] != "success":
         raise SystemExit(1)
-    if bool(cfg.get("write_artifacts", False)):
-        export_dir = Path(str(cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT)))
+    if write_artifacts:
         _safe_mkdir(export_dir)
         _write_json(export_dir / "summary.json", result)
     return True
+
+
+#: Why no report or workbook emitter runs on an EPC-only scenario.
+EPC_ONLY_EMITTER_REASON = (
+    "an EPC-only scenario has no operating cashflow, which every report and workbook "
+    "emitter reads"
+)
 
 
 @hydra.main(

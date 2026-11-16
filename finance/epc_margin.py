@@ -97,6 +97,8 @@ def _resolve_total_cost(epc: Mapping[str, Any]) -> float:
                 f"epc.cost.{category}={value} must be non-negative finite."
             )
         total += value
+    if not math.isfinite(total):
+        raise ValueError("epc.cost categories sum to a total that is not finite.")
     if total <= 0:
         raise ValueError("epc.cost categories sum to a non-positive total.")
     return total
@@ -299,6 +301,14 @@ def epc_margin_failure(reason: str) -> Dict[str, Any]:
     return {"status": STATUS_FAILED, "reason": str(reason), "basis": _BASIS}
 
 
+#: Why ``annualized_irr`` can be null: when the receipts run ahead of the costs, the
+#: monthly flows have a positive NPV at every rate, so no rate sets it to zero.
+IRR_NOTE = (
+    "no IRR: the monthly net cashflow has no rate at which its NPV is zero, which happens "
+    "when receipts run ahead of costs; read the margin and peak working capital instead"
+)
+
+
 def epc_margin_result(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     """The pipeline's ``epc_margin`` entry for any scenario (#1780).
 
@@ -318,7 +328,14 @@ def epc_margin_result(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
     validate_epc_block(config, errors)
     if errors:
         raise ValueError("; ".join(errors))
-    return {"status": STATUS_RUN, "basis": _BASIS, **asdict(compute_epc_margin(config))}
+    entry: Dict[str, Any] = {
+        "status": STATUS_RUN,
+        "basis": _BASIS,
+        **asdict(compute_epc_margin(config)),
+    }
+    if entry["annualized_irr"] is None:
+        entry["irr_note"] = IRR_NOTE
+    return entry
 
 
 def epc_only_result(config: Mapping[str, Any], config_path: str) -> Dict[str, Any]:

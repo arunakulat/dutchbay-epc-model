@@ -249,3 +249,111 @@ def test_main_cli_exits_1_on_a_bad_epc_only_scenario(
     out = json.loads(capsys.readouterr().out)
     assert out["status"] == "error"
     assert "construction_months" in out["error"]
+
+
+# ── #1782 review follow-ups: the EPC-only route keeps #1760's run rules ─────────
+
+
+def _run_cli_with(config: Path, tmp_path: Path, **extra: Any) -> None:
+    cfg = {
+        "config": str(config),
+        "validation_mode": "strict",
+        "validation_modules": None,
+        "export_dir": str(tmp_path / "out"),
+        "write_artifacts": True,
+    }
+    cfg.update(extra)
+    rfp.cli.__wrapped__(OmegaConf.create(cfg))
+
+
+def test_epc_only_run_lists_every_emitter_as_not_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from analytics.emit_selection import EMIT_FLAGS
+
+    _run_cli_with(EPC_ONLY_SCENARIO, tmp_path)
+    out = json.loads(capsys.readouterr().out)
+    assert set(out["emitters"]) == set(EMIT_FLAGS)
+    for entry in out["emitters"].values():
+        assert entry["status"] == "not_run"
+        assert entry["reason"] == rfp.EPC_ONLY_EMITTER_REASON
+
+
+def test_epc_only_run_keeps_a_switch_turned_off_by_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run_cli_with(EPC_ONLY_SCENARIO, tmp_path, emit_grid_screen=False)
+    out = json.loads(capsys.readouterr().out)
+    assert out["emitters"]["emit_grid_screen"]["status"] == "off"
+
+
+def test_epc_only_run_with_emit_all_off_lists_no_emitters(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run_cli_with(EPC_ONLY_SCENARIO, tmp_path, emit_all=False)
+    out = json.loads(capsys.readouterr().out)
+    assert "emitters" not in out
+
+
+def test_epc_only_run_refuses_a_bad_switch(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="emit_all must be true, false or null"):
+        _run_cli_with(EPC_ONLY_SCENARIO, tmp_path, emit_all="banana")
+    assert not (tmp_path / "out" / "summary.json").exists()
+
+
+def test_epc_only_summary_carries_a_run_manifest(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run_cli_with(EPC_ONLY_SCENARIO, tmp_path)
+    out = json.loads(capsys.readouterr().out)
+    assert out["run_manifest"]["config_sha256"]
+    assert json.loads((tmp_path / "out" / "summary.json").read_text()) == out
+
+
+def test_epc_only_summary_follows_run_scoping(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run_cli_with(EPC_ONLY_SCENARIO, tmp_path, run_scoped=True, run_id="probe")
+    capsys.readouterr()
+    assert not (tmp_path / "out" / "summary.json").exists()
+    assert list((tmp_path / "out").rglob("summary.json"))
+
+
+def test_a_failed_epc_only_run_leaves_no_summary(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    (out_dir / "summary.json").write_text('{"from": "an earlier run"}')
+    path = tmp_path / "epc_only.yaml"
+    path.write_text(yaml.safe_dump({"epc": _block(construction_months=0)}))
+    with pytest.raises(SystemExit):
+        _run_cli_with(path, tmp_path)
+    capsys.readouterr()
+    assert not (out_dir / "summary.json").exists()
+
+
+def test_an_unreadable_file_falls_through_to_the_pipeline(tmp_path: Path) -> None:
+    from omegaconf import OmegaConf as OC
+
+    missing = tmp_path / "missing.yaml"
+    assert rfp._run_epc_only_scenario(OC.create({}), str(missing)) is False
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("epc: [unclosed\n")
+    assert rfp._run_epc_only_scenario(OC.create({}), str(bad)) is False
+
+
+def test_a_cost_total_that_is_not_finite_is_refused() -> None:
+    block = _block(cost={"a_usd": 1.7e308, "b_usd": 1.7e308})
+    with pytest.raises(ValueError, match="not finite"):
+        compute_epc_margin({"epc": block})
+
+
+def test_a_null_irr_carries_its_reason() -> None:
+    from finance.epc_margin import IRR_NOTE
+
+    raw = yaml.safe_load(EPC_ONLY_SCENARIO.read_text(encoding="utf-8"))
+    entry = epc_margin_result(raw)
+    assert entry is not None and entry["annualized_irr"] is None
+    assert entry["irr_note"] == IRR_NOTE
+    assert "irr_note" not in (epc_margin_result({"epc": _block()}) or {})
