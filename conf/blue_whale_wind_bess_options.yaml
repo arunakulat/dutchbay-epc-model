@@ -116,7 +116,10 @@ profile:
   power_loss_fractions: [0.02, 0.01]
 
 battery:
-  duration_h_for_tariff: 4.0      # PUCSL methodology s.5.1.1 / s.5.2.1: 4 h at nominal capacity
+  # PUCSL methodology s.5.1.1 / s.5.2.1: 4 h at nominal capacity. Recorded, not read: revenue is
+  # paid per delivered kWh, and an option that keeps the black-start reserve delivers under 4 h at
+  # its nameplate power (see the doc's "Tariff duration" note).
+  duration_h_for_tariff: 4.0
   usd_per_kwh: {low: 129.13, mode: 140.74, high: 202.51}   # conf/blue_whale_pv_bess_pricing.yaml bess
   om_usd_per_dc_kwh_year: 1.80    # input B20 (#1646 basis), LKR-denominated at the scenario FX
   dc_per_nominal: 1.1             # input B20 placeholder
@@ -128,7 +131,7 @@ battery:
 
 options:
   # power_mw / energy_mwh; operation: cycled (daily, 4 h, earns the peak rate) or held (kept for
-  # ramping and black start only, never cycled for revenue). ASSUMPTION: about 0.5 MW of
+  # black start only, never cycled for revenue). ASSUMPTION: about 0.5 MW of
   # grid-forming inverter is the floor for black-starting the turbine (auxiliaries and a soft,
   # voltage-ramped transformer energisation); no OEM figure is in the repository.
   - {name: held_0_5_0_5, power_mw: 0.5, energy_mwh: 0.5, operation: held}
