@@ -696,8 +696,11 @@ def cli(cfg: DictConfig) -> None:
                   modules to validate (default: None → all modules).
                 - export_dir: Artifact output directory
                   (default: '_out/run_full_pipeline_v14').
-                - write_artifacts: Write JSON/CSV files (default: false;
-                  the runtime reads bool(cfg.get("write_artifacts", False))).
+                - write_artifacts: Write JSON/CSV files. The committed
+                  conf sets it true, so a plain CLI run writes its figures and,
+                  under emit_all (on by default), the workbook and every
+                  applicable report. Only a config without the key falls back
+                  to false (bool(cfg.get("write_artifacts", False))).
                 - run_scoped: If true (#735 slice-2), group EVERY artifact of
                   this run — the JSON/CSV dump and the four optional
                   report/workbook emitters — under a per-run subdirectory of
@@ -1337,6 +1340,11 @@ def cli(cfg: DictConfig) -> None:
                     removed.append(stale)
             return removed
 
+        def _shown(stale: Path) -> str:
+            # Listed relative to the export directory, so the grid screen's two reports of
+            # the same name stay apart (#1760 assurance L-1 at 7c595118).
+            return stale.relative_to(export_dir_scoped).as_posix()
+
         owns_default_paths = (
             emit_all
             and write_artifacts
@@ -1356,7 +1364,9 @@ def cli(cfg: DictConfig) -> None:
             if not owns_default_paths and not configured_paths.get(flag):
                 for stale in _clear_default_outputs(flag):
                     logger.info(
-                        "%s: removed earlier output %s before running", flag, stale.name
+                        "%s: removed earlier output %s before running",
+                        flag,
+                        _shown(stale),
                     )
             if emit_plan[flag].source != "emit_all" or not isinstance(result, dict):
                 emit()
@@ -1565,15 +1575,15 @@ def cli(cfg: DictConfig) -> None:
                 # A cleared file that the emitter wrote again (a companion file beside a
                 # configured path, such as the capital-risk PNG) is this run's, not stale.
                 removed = [
-                    stale.name
+                    _shown(stale)
                     for stale in cleared_up_front.get(flag, [])
                     if not stale.exists()
                 ]
                 if failed:
                     removed += [
-                        stale.name
+                        _shown(stale)
                         for stale in _clear_default_outputs(flag)
-                        if stale.name not in removed
+                        if _shown(stale) not in removed
                     ]
                 if removed:
                     entry["removed_stale_outputs"] = removed

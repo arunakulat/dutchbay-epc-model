@@ -15,9 +15,10 @@
     reading an emitter's inputs, such as an interpolation that cannot resolve, is listed with
     its reason too.
   - `emit_all` writes files only in a run that writes its figures. With
-    `write_artifacts=false` (the committed conf sets it true) it switches no emitter on: each one not
-    switched on by name is listed as not run with that reason, and the run writes nothing
-    into the export directory, as before. A switch set by name still runs.
+    `write_artifacts=false` it switches no emitter on: each one not switched on by name is
+    listed as not run with that reason, and the run writes nothing into the export
+    directory, as before. A switch set by name still runs. The committed conf sets
+    `write_artifacts: true`, as on main, so this is not what a plain CLI run does (below).
   - The default export directory is shared between runs, so one rule decides what a run
     does with an emitter's earlier output at its default path. While `emit_all` is on and
     the run writes its figures, every default path is the run's own: all are cleared before
@@ -25,7 +26,7 @@
     when an emitter switched on by name fails and stops the run. An emitter that ends
     without writing its default path (not run, failed, switched off by name such as
     `emit_capital_risk_report=false` for a fast run, or writing to a configured path) names
-    the removed files under `removed_stale_outputs`; one that fails is cleared again of
+    the removed files, relative to the export directory, under `removed_stale_outputs`; one that fails is cleared again of
     anything it wrote before failing. Otherwise (`emit_all=false`, or no figures written),
     an emitter attempted at its default path clears its own earlier output first and
     nothing else is touched. A configured path is never touched; an earlier default-path
@@ -37,9 +38,10 @@
     `annual_rows.csv` before it plans or runs any emitter. An emitter switched on by `emit_all` that
     fails is recorded as `failed` with its error and logged; the run completes. An emitter
     switched on explicitly still stops the run when it fails.
-  - Runs that write their figures (`write_artifacts=true`, as the `feasibility_reproduce`
-    kits and the release run do) change. They now write the executive workbook, and they write the
-    capital-risk report for any scenario whose Monte Carlo parameters the engine can read.
+  - **Every plain CLI run changes.** The committed conf sets `write_artifacts: true`, as on
+    main, and the `feasibility_reproduce` kits and the release run use it, so a run with no
+    extra switches now writes the executive workbook, and it writes the capital-risk report
+    for any scenario whose Monte Carlo parameters the engine can read.
     The report runs its 2,000-trial Monte Carlo, which takes about 1 min 40 s on the lender
     case (the run took 2 s before). The export directory gains `executive_workbook.xlsx`,
     `capital_risk_report.html` and `npv_distribution_equity_npv.png`. `summary.json` gains

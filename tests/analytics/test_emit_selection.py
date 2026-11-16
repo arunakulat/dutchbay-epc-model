@@ -1022,3 +1022,27 @@ def test_cli_default_with_an_unresolvable_tech_comparison_writes_its_figures(
     assert "no_such_key" in entry["reason"]
     assert out["kpis"] == _STUB_RESULT["kpis"]
     assert (tmp_path / "run" / "summary.json").is_file()
+
+
+def test_removed_stale_outputs_are_listed_relative_to_the_export_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1760 assurance L-1 at 7c595118: the grid screen's two reports share a file name."""
+    from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
+
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    nested = run_dir / QSTS_SYNTHETIC_OUTPUT_CLASS
+    nested.mkdir(parents=True)
+    (run_dir / "grid_screening_report.html").write_text("earlier run", encoding="utf-8")
+    (nested / "grid_screening_report.html").write_text("earlier run", encoding="utf-8")
+    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True)
+    out = json.loads(capsys.readouterr().out)
+    entry = out["emitters"]["emit_grid_screen"]
+    assert entry["status"] == STATUS_NOT_RUN
+    assert entry["removed_stale_outputs"] == [
+        "grid_screening_report.html",
+        f"{QSTS_SYNTHETIC_OUTPUT_CLASS}/grid_screening_report.html",
+    ]
+    assert not (nested / "grid_screening_report.html").exists()
