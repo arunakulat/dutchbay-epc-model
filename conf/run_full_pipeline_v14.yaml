@@ -134,7 +134,9 @@ solar_technology: solar
 # with its reason under result['emitters']. The figures are written first; one
 # that emit_all turns on and that fails is listed as failed and the run
 # completes, while one switched on explicitly still stops the run when it
-# fails. The emitters' own lender guards are unchanged. emit_all=false
+# fails. The emitters' own lender guards are unchanged. emit_all writes files
+# only when write_artifacts is true: with write_artifacts=false it switches no
+# emitter on (each is listed as not run), as before. emit_all=false
 # with the switches left null runs no emitter, exactly as before #1756. See
 # analytics/emit_selection.py; tests/lint/test_emit_all_covers_every_emitter.py
 # ties this list to the CLI.

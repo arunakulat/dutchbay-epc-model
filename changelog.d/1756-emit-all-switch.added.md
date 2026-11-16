@@ -8,25 +8,48 @@
     `result['emitters']`, which every default run now carries. Monte Carlo parameters are
     read with the engine's own parser before the run, so a block the engine cannot read,
     including a non-numeric bound such as `low: null`, is listed with the parser's error.
-    A `tech_comparison.scenarios` value that is not a list (for example `5`) is listed the
-    same way, with its type, rather than stopping the run before the figures are written.
-  - The default export directory is shared between runs. While `emit_all` is on, an emitter
-    that is not run, fails, or is switched off explicitly (for example
-    `emit_capital_risk_report=false` for a fast run) has its earlier output at the default
-    path removed, so another run's report never sits beside this run's figures. The entry
-    under `emitters` names the removed files in `removed_stale_outputs`. An explicitly
-    configured path and `emit_all=false` leave files alone.
+    A malformed `tech_comparison` block is listed the same way, with its reason, rather than
+    stopping the run: a block that is not a mapping (a list, a number), a `scenarios` value
+    that is not a list, or an entry without a `label`, without a `config` or naming a file
+    that does not exist. The check applies the emitter's own rules. Any other error while
+    reading an emitter's inputs, such as an interpolation that cannot resolve, is listed with
+    its reason too. After the figures are written, a config value read only to decide which
+    earlier files to clear (an emitter's `path`, the capital-risk `npv_metric`) that cannot
+    be read is logged and its default used, so it never stops the run; an emitter that runs
+    reads the same key itself and fails as before.
+  - `emit_all` writes files only in a run that writes its figures. With
+    `write_artifacts=false` it switches no emitter on: each one not switched on by name is
+    listed as not run with that reason, and the run writes nothing into the export
+    directory, as before. A switch set by name still runs. The committed conf sets
+    `write_artifacts: true`, as on main, so this is not what a plain CLI run does (below).
+  - The default export directory is shared between runs, so one rule decides what a run
+    does with an emitter's earlier output at its default path. While `emit_all` is on and
+    the run writes its figures, every default path is the run's own: all are cleared before
+    any emitter runs, so an earlier run's report never sits beside this run's figures, even
+    when an emitter switched on by name fails and stops the run. An emitter that ends
+    without writing its default path (not run, failed, switched off by name such as
+    `emit_capital_risk_report=false` for a fast run, or writing to a configured path) names
+    the removed files, relative to the export directory, under `removed_stale_outputs`; one that fails is cleared again of
+    anything it wrote before failing. Otherwise (`emit_all=false`, or no figures written),
+    an emitter attempted at its default path clears its own earlier output first and
+    nothing else is touched. A configured path is never touched; an earlier default-path
+    file beside it is cleared like any other, and a companion file the emitter writes again
+    there (the capital-risk PNG) is not listed as removed. A
+    run that writes its figures removes an earlier `summary.json` first and writes its own
+    last, so a run that stops early leaves none.
   - The run writes `kpis.json`, `debt_result.json`, `equity_distribution.json` and
     `annual_rows.csv` before it plans or runs any emitter. An emitter switched on by `emit_all` that
     fails is recorded as `failed` with its error and logged; the run completes. An emitter
     switched on explicitly still stops the run when it fails.
-  - Default runs change. They now write the executive workbook, and they write the
-    capital-risk report for any scenario whose Monte Carlo parameters the engine can read.
+  - **Every plain CLI run changes.** The committed conf sets `write_artifacts: true`, as on
+    main, and the `feasibility_reproduce` kits and the release run use it, so a run with no
+    extra switches now writes the executive workbook, and it writes the capital-risk report
+    for any scenario whose Monte Carlo parameters the engine can read.
     The report runs its 2,000-trial Monte Carlo, which takes about 1 min 40 s on the lender
     case (the run took 2 s before). The export directory gains `executive_workbook.xlsx`,
     `capital_risk_report.html` and `npv_distribution_equity_npv.png`. `summary.json` gains
     `emitters`, `executive_workbook_path` and `capital_risk_report_path`.
-  - Other effects of the default: a default run's stdout grows from about 0.2 MB to about
+  - Other effects of the default: such a run's stdout grows from about 0.2 MB to about
     58 MB on the lender case, because the Monte Carlo writes a log line per trial. The
     `feasibility_reproduce` kits use the default command, so they now run the 2,000-trial
     Monte Carlo for each scenario that has readable parameters, and the

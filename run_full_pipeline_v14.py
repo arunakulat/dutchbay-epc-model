@@ -116,6 +116,7 @@ Version: 2.3.0 (Lender-Grade Pipeline + Equity Distribution + Wind→Finance Int
 from __future__ import annotations
 
 import csv
+import dataclasses
 import json
 import logging
 import os
@@ -702,8 +703,11 @@ def cli(cfg: DictConfig) -> None:
                   modules to validate (default: None → all modules).
                 - export_dir: Artifact output directory
                   (default: '_out/run_full_pipeline_v14').
-                - write_artifacts: Write JSON/CSV files (default: false;
-                  the runtime reads bool(cfg.get("write_artifacts", False))).
+                - write_artifacts: Write JSON/CSV files. The committed
+                  conf sets it true, so a plain CLI run writes its figures and,
+                  under emit_all (on by default), the workbook and every
+                  applicable report. Only a config without the key falls back
+                  to false (bool(cfg.get("write_artifacts", False))).
                 - run_scoped: If true (#735 slice-2), group EVERY artifact of
                   this run — the JSON/CSV dump and the four optional
                   report/workbook emitters — under a per-run subdirectory of
@@ -955,8 +959,14 @@ def cli(cfg: DictConfig) -> None:
     # switch behaves exactly as it did before #1756.
     # This early plan validates the switches before the finance run; under emit_all the plan
     # is made again against the effective scenario just before the emitters run.
+    # With write_artifacts=false, emit_all switches nothing on (#1760 assurance L-1): a run that
+    # writes no figures writes no report either, as on main; a switch set by name still runs.
     emit_all = emit_all_requested(cfg)
-    emit_plan = plan_emitters(cfg, {} if emit_all else None)
+    emit_plan = plan_emitters(
+        cfg,
+        {} if emit_all else None,
+        write_artifacts=bool(cfg.get("write_artifacts", False)),
+    )
     emit_executive_workbook = emit_plan["emit_executive_workbook"].run
     executive_workbook_path = cfg.get("executive_workbook_path", None)
 
@@ -1203,6 +1213,16 @@ def cli(cfg: DictConfig) -> None:
             # JSON/CSV block co-scopes with the four report emitters under the same directory.
             export_dir = export_dir_scoped
             _safe_mkdir(export_dir)
+            # #1760 assurance M-1: summary.json records this run's outcome and is written last,
+            # so one left by an earlier run is removed now. A run that stops before the end
+            # (an emitter switched on by name that fails) then leaves no summary that
+            # describes another run beside this run's figures.
+            stale_summary = export_dir / "summary.json"
+            if stale_summary.is_file():
+                stale_summary.unlink()
+                logger.info(
+                    "Removed the earlier run's summary.json from %s", export_dir
+                )
 
             if isinstance(result, dict):
                 if "kpis" in result:
@@ -1241,9 +1261,37 @@ def cli(cfg: DictConfig) -> None:
         # result['emitters'] whenever emit_all is on, which is the default; a run with
         # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
         if emit_all and isinstance(result, dict):
+            # The engine read this scenario file earlier in the run; if it cannot be read
+            # again, every emitter emit_all would switch on is listed as not run with the
+            # reason, and the run goes on (#1760 assurance M-2 audit at cf357629).
+            replan_error: str | None = None
+            try:
+                replan_scenario = dict(load_scenario_config(str(effective_config)))
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - listed with its reason, never silent
+                replan_scenario = {}
+                replan_error = (
+                    "the effective scenario cannot be read again to plan the emitters: "
+                    f"{type(exc).__name__}: {exc}"
+                )
             emit_plan = plan_emitters(
-                cfg, dict(load_scenario_config(str(effective_config)))
+                cfg, replan_scenario, write_artifacts=write_artifacts
             )
+            if replan_error is not None:
+                emit_plan = {
+                    flag: (
+                        dataclasses.replace(
+                            decision,
+                            run=False,
+                            status=STATUS_NOT_RUN,
+                            reason=replan_error,
+                        )
+                        if decision.source == "emit_all"
+                        else decision
+                    )
+                    for flag, decision in emit_plan.items()
+                }
             emit_executive_workbook = emit_plan["emit_executive_workbook"].run
             emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
             emit_interaction_grid = emit_plan["emit_interaction_grid"].run
@@ -1256,11 +1304,145 @@ def cli(cfg: DictConfig) -> None:
                         "emit_all: %s not run (%s)", decision.flag, decision.reason
                     )
 
+        # #1756 / #1760 (domain D-2, assurance M-1): which default-path files this run owns.
+        # The default export directory is shared between runs. One rule decides what a run
+        # does with an emitter's default-path outputs (the workbook, each report and its
+        # companion files under export_dir):
+        #
+        # * Under emit_all, when the run writes its figures, every default path is this run's.
+        #   All are cleared up front, before any emitter runs, so whatever is left there after
+        #   the run was written by this run, even if an emitter switched on by name then stops
+        #   it. Each emitter that ends without writing to its default path (not run, failed,
+        #   switched off by name, or writing to a configured path) lists what was cleared under
+        #   ``removed_stale_outputs``; one that failed is cleared again, of anything it wrote
+        #   before failing.
+        # * Otherwise (emit_all=false, or write_artifacts=false), an emitter that is attempted
+        #   at its default path clears its own default-path outputs first, so a failure cannot
+        #   leave an earlier run's file there; nothing else is touched.
+        # * A configured path is the caller's and is never cleared. A default-path file beside
+        #   it is cleared like any other (#1760 domain D-1 at 7c595118); if the emitter then
+        #   writes a companion file there (the capital-risk PNG), it is this run's and is not
+        #   listed as removed.
+        from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
+
+        unreadable: set[str] = set()
+
+        def _read_optional(block: Any, key: str, default: Any, where: str) -> Any:
+            # Every config read between the figures and summary.json that is not inside an
+            # emitter goes through here (#1760 assurance M-2 at cf357629). These reads only
+            # say which default-path files to keep or clear, so a value that cannot be read
+            # (a malformed block, or an interpolation such as ${oc.env:...} that does not
+            # resolve) falls back to the default and is logged; it never stops the run. An
+            # emitter that runs reads the same key itself, inside _run_emitter, and fails
+            # there as before (#1760 domain D-1 for malformed blocks).
+            if not isinstance(block, Mapping):
+                return default
+            try:
+                return block.get(key, default)
+            except Exception as exc:  # noqa: BLE001 - logged, never silent
+                unreadable.add(where)
+                logger.warning(
+                    "%s.%s cannot be read (%s: %s); using %r to decide which default"
+                    " outputs to clear",
+                    where,
+                    key,
+                    type(exc).__name__,
+                    exc,
+                    default,
+                )
+                return default
+
+        configured_paths: dict[str, Any] = {
+            "emit_executive_workbook": executive_workbook_path,
+            "emit_capital_risk_report": _read_optional(
+                capital_risk_report_cfg, "path", None, "capital_risk_report"
+            ),
+            "emit_interaction_grid": _read_optional(
+                interaction_grid_cfg, "path", None, "interaction_grid_report"
+            ),
+            "emit_tech_comparison": _read_optional(
+                tech_comparison_cfg, "path", None, "tech_comparison"
+            ),
+            "emit_grid_screen": _read_optional(
+                grid_screen_cfg, "path", None, "grid_screen_report"
+            ),
+        }
+        config_block_of = {
+            "emit_capital_risk_report": "capital_risk_report",
+            "emit_interaction_grid": "interaction_grid_report",
+            "emit_tech_comparison": "tech_comparison",
+            "emit_grid_screen": "grid_screen_report",
+        }
+        npv_metric = _read_optional(
+            capital_risk_report_cfg, "npv_metric", "equity_npv", "capital_risk_report"
+        )
+        default_outputs: dict[str, list[Path]] = {
+            "emit_executive_workbook": [export_dir_scoped / "executive_workbook.xlsx"],
+            "emit_capital_risk_report": [
+                export_dir_scoped / "capital_risk_report.html",
+                export_dir_scoped / "npv_distribution_{}.png".format(npv_metric),
+            ],
+            "emit_interaction_grid": [
+                export_dir_scoped / "interaction_grid_report.html"
+            ],
+            "emit_tech_comparison": [export_dir_scoped / "tech_comparison_report.html"],
+            "emit_grid_screen": [
+                export_dir_scoped / "grid_screening_report.html",
+                export_dir_scoped
+                / QSTS_SYNTHETIC_OUTPUT_CLASS
+                / "grid_screening_report.html",
+            ],
+        }
+
+        def _clear_default_outputs(flag: str) -> list[Path]:
+            configured = configured_paths.get(flag)
+            kept = Path(str(configured)).resolve() if configured else None
+            removed: list[Path] = []
+            for stale in default_outputs.get(flag, []):
+                # Only the configured file itself is the caller's (#1760 domain D-1 at
+                # 7c595118): a default-path file beside it is still cleared.
+                if kept is not None and stale.resolve() == kept:
+                    continue
+                if stale.is_file():
+                    stale.unlink()
+                    removed.append(stale)
+            return removed
+
+        def _shown(stale: Path) -> str:
+            # Listed relative to the export directory, so the grid screen's two reports of
+            # the same name stay apart (#1760 assurance L-1 at 7c595118).
+            return stale.relative_to(export_dir_scoped).as_posix()
+
+        owns_default_paths = (
+            emit_all
+            and write_artifacts
+            and isinstance(result, dict)
+            and isinstance(result.get("emitters"), dict)
+        )
+        cleared_up_front: dict[str, list[Path]] = {}
+        if owns_default_paths:
+            for flag in default_outputs:
+                cleared_up_front[flag] = _clear_default_outputs(flag)
+
         # #1756: an emitter switched on by emit_all (the default) that raises is recorded as
         # failed, with its error, under result['emitters'] and logged as an error; the run
         # carries on, and its figures are already written. An emitter switched on explicitly
         # still stops the run on failure (FRAMEWORK-02), as before #1756.
         def _run_emitter(flag: str, emit: Callable[[], None]) -> None:
+            # Outside emit_all's ownership, a default path is cleared only for an emitter that
+            # is attempted there: not when a path is configured, nor when the configured path
+            # could not be read (the emitter then fails reading it, as before #1756).
+            if (
+                not owns_default_paths
+                and not configured_paths.get(flag)
+                and config_block_of.get(flag) not in unreadable
+            ):
+                for stale in _clear_default_outputs(flag):
+                    logger.info(
+                        "%s: removed earlier output %s before running",
+                        flag,
+                        _shown(stale),
+                    )
             if emit_plan[flag].source != "emit_all" or not isinstance(result, dict):
                 emit()
                 return
@@ -1451,72 +1633,33 @@ def cli(cfg: DictConfig) -> None:
 
             _run_emitter("emit_grid_screen", _emit_grid_screen)
 
-        # #1756 (domain review F-2, D-1): the default export directory is shared between runs, so
-        # an emitter that emit_all lists as not run, that fails, or that is switched off
-        # explicitly while emit_all is on must not leave an earlier run's output at its default
-        # path beside this run's figures. Only default paths are cleared; an explicitly
-        # configured path is the caller's, and emit_all=false clears nothing.
-        if (
-            emit_all
-            and isinstance(result, dict)
-            and isinstance(result.get("emitters"), dict)
-        ):
-            from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
-
-            default_outputs: dict[str, list[Path]] = {
-                "emit_executive_workbook": (
-                    []
-                    if executive_workbook_path
-                    else [export_dir_scoped / "executive_workbook.xlsx"]
-                ),
-                "emit_capital_risk_report": (
-                    []
-                    if capital_risk_report_cfg.get("path", None)
-                    else [
-                        export_dir_scoped / "capital_risk_report.html",
-                        export_dir_scoped
-                        / "npv_distribution_{}.png".format(
-                            capital_risk_report_cfg.get("npv_metric", "equity_npv")
-                        ),
-                    ]
-                ),
-                "emit_interaction_grid": (
-                    []
-                    if interaction_grid_cfg.get("path", None)
-                    else [export_dir_scoped / "interaction_grid_report.html"]
-                ),
-                "emit_tech_comparison": (
-                    []
-                    if tech_comparison_cfg.get("path", None)
-                    else [export_dir_scoped / "tech_comparison_report.html"]
-                ),
-                "emit_grid_screen": (
-                    []
-                    if grid_screen_cfg.get("path", None)
-                    else [
-                        export_dir_scoped / "grid_screening_report.html",
-                        export_dir_scoped
-                        / QSTS_SYNTHETIC_OUTPUT_CLASS
-                        / "grid_screening_report.html",
-                    ]
-                ),
-            }
+        # #1756 / #1760: record, on each emitter that did not write to its default path, the
+        # earlier outputs this run cleared there (the rule above).
+        if owns_default_paths and isinstance(result, dict):
             for flag, entry in result["emitters"].items():
                 if not isinstance(entry, dict):
                     continue
                 source, status = entry.get("source"), entry.get("status")
-                # Not run or failed under emit_all, or switched off explicitly while emit_all is
-                # on (domain review D-1 at 43a58859): either way this run wrote nothing there.
+                failed = source == "emit_all" and status == STATUS_FAILED
                 if not (
                     (source == "emit_all" and status in (STATUS_NOT_RUN, STATUS_FAILED))
                     or (source == "explicit" and status == STATUS_OFF)
+                    or configured_paths.get(flag)
                 ):
                     continue
-                removed: list[str] = []
-                for stale in default_outputs.get(flag, []):
-                    if stale.is_file():
-                        stale.unlink()
-                        removed.append(stale.name)
+                # A cleared file that the emitter wrote again (a companion file beside a
+                # configured path, such as the capital-risk PNG) is this run's, not stale.
+                removed = [
+                    _shown(stale)
+                    for stale in cleared_up_front.get(flag, [])
+                    if not stale.exists()
+                ]
+                if failed:
+                    removed += [
+                        _shown(stale)
+                        for stale in _clear_default_outputs(flag)
+                        if _shown(stale) not in removed
+                    ]
                 if removed:
                     entry["removed_stale_outputs"] = removed
                     logger.info(
