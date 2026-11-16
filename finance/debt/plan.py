@@ -92,10 +92,16 @@ def plan_debt(
       canonical surface; see :func:`_build_dscr_periods`.
     - ``debt_service_total``, ``interest_total``, ``total_service``,
       ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution``,
-      ``balloon_interest``, ``balloon_interest_paid`` — PERIOD-indexed, positional, aligned 1:1 with
-      ``dscr_series``. ``debt_outstanding`` is each period's OPENING balance; after
-      maturity it is the balloon actually outstanding under its treatment, and
-      ``senior_fee_usd`` is charged on that balance (see
+      ``balloon_interest``, ``balloon_interest_paid``, ``senior_fee_deferred_usd`` —
+      PERIOD-indexed, positional, aligned 1:1 with ``dscr_series``.
+      ``debt_outstanding`` is each period's OPENING balance; after maturity it is the
+      balloon actually outstanding under its treatment. After maturity
+      ``senior_fee_usd`` is the fee PAID in cash on that balance: it equals the fee
+      charged except under ``cash_sweep`` when the period's cash cannot pay the fee due.
+      The unpaid part is deferred (#1539): ``senior_fee_deferred_usd`` is the balance
+      carried at the end of each balloon period (``None`` where the balloon path does
+      not govern), and ``senior_fee_deferred_residual`` the balance still deferred at
+      the horizon, before the equity waterfall settles what it can (see
       :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
       only; the balloon's post-maturity interest is ``balloon_interest`` (accrued)
       and ``balloon_interest_paid`` (settled in cash, capitalised interest first).
@@ -159,6 +165,8 @@ def plan_debt(
     balloon_residual = balloon_path["residual"]
     balloon_interest = balloon_path["interest"]
     balloon_interest_paid = balloon_path["interest_paid"]
+    senior_fee_deferred = balloon_path["senior_fee_deferred"]
+    senior_fee_deferred_residual = balloon_path["senior_fee_deferred_residual"]
 
     # After maturity the engine's own series still hold the STRUCTURAL balloon: the
     # layer amortises scheduled principal only, so it cannot see the sweep, bullet
@@ -381,4 +389,11 @@ def plan_debt(
         # sweep that capitalises. The levered tax pass deducts this series when
         # `tax.balloon_interest_tax_basis` is `paid`.
         "balloon_interest_paid": balloon_interest_paid,
+        # ── Deferred senior fee (#1539; additive, appended last) ────────────
+        # On a cash sweep, fee the period's cash could not pay is deferred and carried
+        # forward without interest, paid first from later cash; `senior_fee_usd` holds
+        # the fee actually paid. PERIOD-indexed carried balance (None where the balloon
+        # path does not govern), and any fee still unpaid at the horizon.
+        "senior_fee_deferred_usd": senior_fee_deferred,
+        "senior_fee_deferred_residual": senior_fee_deferred_residual,
     }

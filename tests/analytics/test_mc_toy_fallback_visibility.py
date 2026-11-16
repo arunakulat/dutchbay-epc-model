@@ -69,6 +69,11 @@ def test_allow_toy_fallback_defaults_true_and_is_surfaced() -> None:
     """Absent the flag the engine keeps the back-compatible fallback AND records the resolved
     value in metadata so a consumer can see which mode produced the result."""
     base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
+    # The lender case declares the fallback off (#962 item 1); drop the key to test the
+    # engine's own default.
+    base["monte_carlo"] = {
+        k: v for k, v in base["monte_carlo"].items() if k != "allow_toy_fallback"
+    }
     result = run_monte_carlo_analysis(base_config=base, n_trials=8, seed=42)
     assert result.metadata["allow_toy_fallback"] is True
     assert (

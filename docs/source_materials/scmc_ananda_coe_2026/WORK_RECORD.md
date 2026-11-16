@@ -1,6 +1,6 @@
 # SCMC / STEAM Hub work record
 
-Recorded 7 November 2026 for issue #1554. The evidence cutoff for the programme content is the
+Recorded 7 November 2026 for issue #1554, and updated 15 November 2026 for #1558. The evidence cutoff for the programme content is the
 5 August 2026 corrected pack, plus the 5 September 2026 cross-centre feedback.
 
 The commercial figures, individuals and source terms are deliberately left out. See
@@ -14,10 +14,14 @@ The commercial figures, individuals and source terms are deliberately left out. 
   `eb176793afa8820a22d95facf75216a8b4eaed4f6f767235fadda39f1efc7f10`). Do not cite it for a conclusion
   without checking v2.0, because v2.0 reverses some of its findings.
 - **Programme shape:** 360-minute Discovery, 90-hour Foundation, and 120 to 180-hour Advanced.
-- **Built in facilitator format:** Discovery only, as eight 45-minute modules.
-- **Not built:** the Foundation phase in the same detailed facilitator format. Its syllabus exists in
-  the pack. The agreed next step is to build it on the Mallorca CFGS production-workflow base, and
-  this has not been started.
+- **Built in facilitator format:** Discovery, as eight 45-minute modules, and, since 15 November 2026,
+  the Foundation phase (#1558). The Foundation handbook is draft v0.4 for pilot review. It is built on
+  the Mallorca CFGS production workflow and checked against v2.0, and it is held in the private
+  corpus (see [`README.md`](README.md)).
+- **Foundation handbook shape:** 60-minute sessions in 2-hour blocks. It covers the 24-hour common
+  core (F01-F24), all six 24-hour pathway tasters (the centre picks a contrasting pair per cohort), the
+  18-hour capstone (CP01-CP18) and an assessment pack. That is 186 run-sheet hours, and 90 for any one
+  learner. A build script checks the hours against the v2.0 syllabus.
 - **Funding result:** provisional. The v2.0 base case shows a small deficit, not a surplus.
 
 ## What v2.0 changed
@@ -48,6 +52,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 | 5 Aug 2026 | Design critique, reference audit and corrected release | v2.0, 90 pages, PDF/UA-1 |
 | 5 Sep 2026 | Ingested the COE building consultant's AV and ELV package and advised on the interface | Cross-centre feedback and paste-ready replies |
 | 5 Sep 2026 | Issued that feedback as a DBPL PDF. This exposed a renderer crash, since fixed in #1235 and recorded in #1553 | 6-page DBPL PDF |
+| 15 Nov 2026 | Foundation phase facilitator handbook, in the Discovery handbook's format, on the Mallorca workflow, checked against v2.0 (#1558). Reviewed by independent domain and assurance lanes; their blocking findings were fixed before it landed in the private corpus, and three wording points were carried forward | Draft v0.4 handbook, its build sources and a build log, 20 files held privately |
 
 ## Decisions that shape the work
 
@@ -69,15 +74,18 @@ The commercial figures, individuals and source terms are deliberately left out. 
 | Written TVEC mapping | COE | Approval gate before any qualification claim |
 | Eligible connectivity quote and measured traffic | COE | Needed to firm up the funding result |
 | Joint network drop-schedule walkthrough | COE and consultant | Settles the switch size |
-| Foundation phase build | Project owner to confirm | Do not start without confirmation |
+| Foundation handbook pilot | Centre lead | Treat the first cohort as a pilot and revise the handbook from its facilitator log |
+| Foundation award boundary and check-mark conversion | Centre lead | Proposed in the handbook's assessment pack; to be confirmed and published before enrolment. v2.0 sets neither |
+| Foundation handbook wording | Next revision | Three reviewer wording points were carried forward, not fixed, when it landed (#1558) |
 
 ## Sessions that contributed
 
 | Host | Session | Dates | Role |
 |---|---|---|---|
-| Claude Code | "STEAM Hub Foundation Program" (`local_e25a0508-e17a-443d-93e3-e50ce2db652b`) | 20 Jul–7 Nov 2026 | Primary. All work above except the 5 August review and v2.0 |
+| Claude Code | "STEAM Hub Foundation Program" (`local_e25a0508-e17a-443d-93e3-e50ce2db652b`) | 20 Jul–7 Nov 2026 | Primary. All work above except the 5 August review, v2.0 and the Foundation handbook |
 | Codex | `019fd034-e0ad-7f52-b6a5-00776faea626` | 5 Aug 2026 | Design critique, reference audit and v2.0 |
 | Codex | `019fc272-9ef3-7a91-841d-17910b5b9dd1` | 2 Aug 2026 | Opens with the same prompts as the primary session. No SCMC file writes detected |
+| Claude Code | Project thread "Build the SCMC facilitator handbook" | 15 Nov 2026 | The Foundation handbook (#1558): private build, then this entry |
 | Codex | Sessions rooted in the `Plant Green Force` folder | From 4 Nov 2026 | PGF work, not SCMC. Filed in the private corpus. See `../planet_green_force_2026/README.md` |
 
 **Search coverage.** Searched: Claude Code transcripts, Codex sessions and local Cowork session

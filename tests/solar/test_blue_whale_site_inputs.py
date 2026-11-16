@@ -334,9 +334,16 @@ def test_pricing_config_and_scenarios_carry_the_blend() -> None:
         assert techs["wind"]["capex_usd"] == round(
             per_kw * 1000.0 * techs["wind"]["capacity_mw"]
         )
-    for path in (HYBRID, SOLAR_BESS):
-        b = _yaml(path)["generation"]["technologies"]["bess_1"]
-        assert b["capex_usd"] == round(per_kwh * 1000.0 * b["energy_mwh"])
+    b = _yaml(HYBRID)["generation"]["technologies"]["bess_1"]
+    assert b["capex_usd"] == round(per_kwh * 1000.0 * b["energy_mwh"])
+    # #1578 L-11 (solar + BESS v0.10): the explicit augmentation replaces the reserve the
+    # all-in holds (the reserve before land and auxiliaries, grossed up by their share).
+    reserve = pricing["bess"]["augmentation_reserve_usd_per_kwh_base"] / (
+        1.0 - pricing["bess"]["land_and_auxiliaries_share_base"]
+    )
+    b = _yaml(SOLAR_BESS)["generation"]["technologies"]["bess_1"]
+    assert b["capex_usd"] == round((per_kwh - reserve) * 1000.0 * b["energy_mwh"])
+    assert b["revenue"]["augmentation_schedule"]
     for path in (WIND, HYBRID, SOLAR_BESS):
         scen = _yaml(path)
         techs = scen["generation"]["technologies"]

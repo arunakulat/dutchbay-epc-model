@@ -87,9 +87,10 @@ record under `DATA-01`.
    offers (2026-11-14: 0.1 MW / 0.4 MWh, the owner's floor, with 107 tables at 3.5 MW AC). A
    smaller battery, or none, would lose less, which runs against the owner's 2026-11-01
    direction to maximise the BESS; the minimum admissible battery (B18) is an owner decision.
-   The BESS price is a utility-scale per-kWh blend applied at 0.4 MWh (audit residual L-10), and
-   the base case has no capacity fade or augmentation (L-11). A supplier's price at this size
-   (input B19) and a fade and augmentation basis (B20) come before any reliance on the size.
+   The BESS price is a utility-scale per-kWh blend applied at 0.4 MWh (audit residual L-10). From
+   scenario v0.10 the battery fades at the OEM curve's rate and is augmented below 80% SoH at an
+   assumed price (L-11, below), and the size does not move. A supplier's price at this size
+   (input B19) comes before any reliance on the size.
 
 ## Wind yield and siting screen (v0.4, 2026-11-01)
 
@@ -399,7 +400,7 @@ Relayed on #1353 (comments 6554212671 and 6554297502):
 | BESS all-in, USD/kWh | 78.75 | 135.00 | 143.41 | Public NSO 250 variants (bid-implied, base, stress) in `scenarios/nso250_ltl_unit_*.yaml` |
 | Turbine | fixed | 1,300/kW | fixed | Placeholder B09, inside the public 977-1,420 USD/kW range of `docs/knowledge_base/01_wind_epc_costs_and_scaling.md` |
 
-This sizing used no private Envision BESS offer price and no internal turbine price, and the
+This sizing used no private BESS offer price from a generic battery supplier and no internal turbine price, and the
 turbine cost does not change which unit size is best. The internal turbine prices are in private
 developer packages. Since PR 6 (#1540) the capex config and its methods note cite one of those
 packages by its handling-note identifier; the owner confirmed on 2026-11-07 that this reference is
@@ -912,6 +913,40 @@ the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is 
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
 
+**FX stress and Monte Carlo reach the USD share (#1578 L-12).** The USD share's own FX path is set
+by the inputs above, so an override of `fx` (an FX drift stress, or a Monte Carlo drift draw) used
+to move the model curve but leave the USD opex on its own path. The
+Python override gateways (`evaluate_with_overrides`, `evaluate_scenario_from_dict` and
+`analytics.evaluate_scenario`, which the Monte Carlo and sensitivity tools use) now record the
+authored `fx` block. When an override names the drift (`fx.annual_depr`, its percent forms or an
+explicit curve), the stressed model curve replaces the USD share's own path, whatever the value: a
+drift stress of x runs the USD share at x, not at x on top of the 2.44%/yr PPP rate (the owner's
+ruling of 2026-11-15), and any drift override is a stress, even one equal to the authored drift
+(the owner's ruling of 2026-11-16). A 0%/yr override on the wind project, its model curve's own
+drift, therefore gives project IRR 12.76% and equity IRR 11.03%, with opex LKR 5,298M, the same as
+a near-zero drift of 1e-9/yr, so there is no jump at that boundary. The base case, with no
+override, does not move. A one-way tornado that sweeps the drift by a percentage of its authored
+value therefore runs two 0%/yr stresses on this project: both ends sit about 35 basis points above
+the base case (12.76% against 12.41%) and the bar is reported flat. An override of a drift key the
+FX curve does not read (`fx.annual_depr_pct` or `fx.depr_pct` beside the authored `fx.annual_depr`,
+or a parametric key beside an explicit curve) is refused, naming the key to use, because it would
+not move the curve the USD share is then put on. On the wind project a 3%/yr drift stress now gives project IRR 9.50% (9.60% before)
+and equity IRR 6.61% (6.74%), with life-of-project opex LKR 6,213M (6,013M); at 5.89%/yr, 6.35%
+(7.04%) and LKR 7,523M. A drift below 2.44% now lowers the USD opex (1%/yr: LKR 5,563M). A
+spot-only stress is unchanged, since the path already anchors on the spot. The solar + BESS
+project's USD share is 0%, so its stresses do not move. The web API's `/run-pipeline` overrides do
+not yet pass through this step, so an FX drift sent there still leaves the USD share on its own
+path (a follow-up on #1578).
+
+These are cost-side stresses. The tariff's escalable O&M index (`tariff.om_indexation`, described
+above) gives LKR/USD depreciation a 70% weight and derives it from the same 2.44%/yr, but no `fx`
+override reaches it, before or after this change: under a drift stress the index stays at its
+authored rate while the USD opex moves. So above 2.44%/yr the stressed IRRs are lower, and below
+it higher, than a stress that also moved the index would give. Whether a drift stress should also
+move the index is a separate owner decision. Because the base case runs the USD share at 2.44%/yr
+on a flat model curve, the neutral drift for that share is 2.44%/yr, not zero: any drift override
+below it lowers the USD opex, so a drift override of 0% or near it gives an IRR above the base case.
+
 **One construction period.** Both projects declare a 1-year construction period (input B30,
 `timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
 none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
@@ -1147,7 +1182,13 @@ of 0.1 MW is the owner's choice, not a regulatory or technical minimum: the froz
 set the 4 h duration but no minimum size for a "Power Plant with BESS" (input B18, reopened). A
 smaller battery would lose less: a reduced probe at 0.05 MW beats 0.1 MW by about USD 5k in the
 base case. A zero battery is outside the model (the dispatcher needs energy > 0) and outside that
-tariff category; extrapolated, it is the economic answer. The PV is also on its floor: in a
+tariff category; extrapolated, it is the economic answer. It is a real option, not only a model
+limit: without a battery the plant is PUCSL's ground-mounted solar category (s.1, LKR 18.00 +
+2.72/kWh), the rate this model already pays outside the priority window. PUCSL's own prosumer
+section (s.3.2 of the August 2026 decision) offers BESS-inclusive tariffs only above 250 kW,
+because the control centres cannot see small batteries and they cost more below that size. That
+does not bind a "Power Plant with BESS", but it is the regulator's own reference point for B18,
+2.5 times the committed 0.1 MW, and its own statement of the small-size premium in L-10. The PV is also on its floor: in a
 reduced probe below the grid (4 trials), 67 tables at 2.5 MW AC beat 107 tables at 3.5 MW AC by
 about USD 220k. This runs against the owner's 2026-11-01 direction to "Maximize BESS ... to gain
 the maximum benefit from the PUCSL evening tariff band", so the floor (B18) is an owner decision.
@@ -1243,11 +1284,10 @@ too.
   battery, it leaves the gap between battery sizes unchanged; if the per-kWh price falls with
   size, it narrows the gap to larger batteries. Neither shape is modelled; a supplier's price at
   this size is the first input to obtain (B19).
-- **L-11, fade and augmentation (#1578).** After the 15-year priority term the model keeps
-  cycling the battery with its round-trip loss, and the base case has no capacity fade or
-  augmentation (the price carries NSO 250's augmentation reserve). Modelling it needs the owner's
-  fade curve and augmentation cost or schedule (B19, B20). At 0.4 MWh the effect is small; the
-  20-year-term sensitivity above bounds the first part.
+- **L-11, fade and augmentation (#1578).** As committed in v0.9: after the 15-year priority term
+  the model keeps cycling the battery with its round-trip loss, and the base case has no
+  capacity fade or augmentation (the price carries NSO 250's augmentation reserve). Modelled from
+  v0.10: see "Battery fade and augmentation" below.
 - **L-6, PR 2's unit config.** `conf/blue_whale_solar_bess.yaml` keeps PR 2's illustrative
   5 MW / 30 MWh battery, DC/AC 1.2 and 0.96 inverter, which its tests and committed layout and
   hourly outputs use. They are now labelled as such; the sizing replaces each at every point, and
@@ -1292,6 +1332,108 @@ smaller, not because it earns more per dollar: the equity multiple turns negativ
 cures outweigh every distribution), the 20-year CFADS falls to about USD 0.3M, and the discount
 rate rises with the lower gearing.
 
+## Battery fade and augmentation (L-11, 2026-11-14)
+
+Work item: #1578 L-11 (the battery-size line, #1353 comment 6872251348). Owner, 2026-11-14,
+relayed by the coordinator: take the fade from the OEM's performance curve in the private corpus;
+augment "when capacity falls below 80%"; and for the augmentation cost, "use an assumption". KPIs
+applied under the owner's delegation of 2026-11-07.
+
+**Method** (`conf/blue_whale_solar_bess_project_sizing.yaml`, `battery_health`):
+
+- **Fade.** The battery loses 1.5533% of its nameplate energy a year, linearly: one rate derived
+  from the OEM's state-of-health curve (system SoH including auxiliary power, at the curve's
+  rated duty). The curve stays outside the repository; only the derived rate is committed, and
+  `tests/solar/test_battery_health.py` re-derives it when `DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE`
+  names the private file. The rate and the curve both first fall below 80% at the end of year 13.
+  The rate is applied in every operating year.
+- **Augmentation.** Before any operating year that would start below 80% SoH, cells are added to
+  restore the nameplate, and the battery fades again from there. In the base case that is once,
+  before year 14: 20.19% of the nameplate. The dispatcher runs the battery every year on its
+  faded energy, so its evening export, and the priority premium on it, fall with the cells and
+  recover after the event. The engine, which computes the ranked NPV, does not follow that
+  sawtooth: it carries the battery as one geometric fade matched to the 15-year sum of the
+  priority export, and the event moves its cash only. Its year-by-year revenue therefore departs
+  from the dispatcher's by up to 0.47% at the chosen floor and 6.69% at the largest battery among
+  the named points (186 tables, 5.0 MW), where its discounted revenue is about 0.2% above the
+  dispatcher's. The bias favours larger batteries, so the floor's lead is if anything understated
+  and the choice does not change (#1711 assurance N-2).
+- **Augmentation price (ASSUMPTION).** USD 103.55 per kWh added: the pricing config's BESS
+  equipment line (DC block, PCS and EMS landed, with duties and its EPC margin), paid as stated in
+  the event year, neither escalated nor reduced for falling cell prices (assumed to cancel). It
+  is conservative in scope, since an augmentation adds DC blocks only. The engine pays it out of
+  CFADS in that year (`bess_1.revenue.augmentation_schedule`) with no depreciation shield.
+- **The price reserve is removed.** The explicit events replace NSO 250's augmentation reserve
+  inside the BESS all-in price (USD 8.00/kWh before land and auxiliaries, 8.89 in the all-in), so
+  every BESS price, each trial's and each sensitivity's, is 8.89 lower: the mode is USD
+  131.85/kWh. The one-at-a-time prices and the break-even value below stay on the pricing
+  config's published basis, which includes the reserve.
+- **Uncertainty.** Each trial adds a residual fade, triangular 0 / 0 / 0.5%/yr (ASSUMPTION; was
+  0 / 0 / 2 under PR 3, when it stood for the fade the reserve did not cover). It stands for a
+  site hotter than the curve's basis and for calendar ageing the curve may not carry. This
+  battery cycles less than the curve's rated duty, which partly offsets them. Three
+  one-at-a-time cases move
+  the assumptions: fade 2.0%/yr, the augmentation at half price (USD 51.78/kWh) and at the all-in
+  less the reserve (USD 131.85/kWh).
+- **Trigger.** "Below 80%" is strict: a year that starts at exactly 0.80 SoH runs unaugmented,
+  and the event falls in the next year (`tests/solar/test_battery_health.py` pins the boundary).
+  The trigger takes no account of the priority term left: in the base case it buys cells before
+  year 14 of the 15-year premium. Asked whether to skip an event near the term's end (#1711
+  assurance N-5), the owner kept the year-14 augmentation (2026-11-15).
+- **Not modelled.** The RTE's decline with age (the curve shows it), the curve's duty scaled to
+  this battery's cycling, and O&M on the added cells.
+
+**Result** (seed 20261101, 256 trials, 514 points, 151,328 evaluations; the summary records the commit). Both
+readings still choose **107 tables (4.01464 MWp), 3.5 MW AC and 0.1 MW / 0.4 MWh**, the grid's
+floor on all three variables. P50 after-tax project NPV USD -4,440,814 (was -4,441,537), P90 -4,721,216
+(was -4,721,153): about the same, because removing the reserve from the price roughly offsets
+the fade and the augmentation, and the trials' residual fade now runs to 0.5%/yr, not 2%/yr.
+Unit pre-tax NPV P50 USD -328,819. Every comparison is still against a LARGER battery, and the
+floor beats each in 100% of the paired trials:
+
+| Battery (MW / MWh), 107 tables / 3.5 MW AC | P50 (USD) | P90 | Floor better by, paired P50 |
+|---|---|---|---|
+| **0.1 / 0.4, the floor** | **-4,440,814** | **-4,721,216** | |
+| 0.2 / 0.8 | -4,463,269 | -4,734,584 | 17,539 (was 17,737) |
+| 0.3 / 1.2 | -4,487,679 | -4,750,230 | 35,173 |
+| 0.5 / 2 | -4,535,255 | -4,796,480 | 70,934 |
+| 1.0 / 4 | -4,620,164 | -4,907,572 | 164,883 (was 167,892) |
+| 2.0 / 8 | -4,838,321 | -5,148,035 | 364,116 |
+
+Seventeen of the 18 one-at-a-time cases keep 0.1 MW, including the three new ones: fade
+2.0%/yr (the floor by USD 11,424 over 0.2 MW), the augmentation at half price (10,191) and at
+the all-in less the reserve (11,409). A 10% higher priority rate flattens the curve from 0.1
+to 0.4 MW to within USD 500 and picks 0.3 MW, by USD 418 over 0.1 MW (a near tie; under v0.9 it
+picked 0.5 MW by 636). The curtailment case and PUCSL's 0.90 RTE keep 0.1 MW. Break-even values
+(base case, so without the trials' residual fade; the choice itself is ranked on the paired P50)
+at which 0.2 MW overtakes 0.1 MW: BESS all-in USD 115.8/kWh on the published basis (106.9 after
+the reserve; was 118.9) and a priority rate of LKR 54.99/kWh (was 54.14). No BESS O&M rate from
+0 to USD 5/kWh-yr DC changes the choice. The value curve is shallow near the floor: in the
+base case, 0.1 to 1.0 MW costs USD 106,595 (about 2.4% of the project NPV), so the economics
+barely separate small batteries, and B18 and the owner's strategy (2026-11-01, "Maximize BESS")
+decide the size more than the NPV does.
+
+**KPIs** (scenario v0.10 against v0.9, base case, `run_v14_pipeline(strict)`):
+
+| Solar + BESS | v0.10 | Was (v0.9) |
+|---|---|---|
+| Project NPV (USD) | -4,479,214 | -4,477,787 |
+| Equity NPV (USD) | -4,557,964 | -4,557,056 |
+| Equity IRR / Project IRR | undefined / undefined | undefined / undefined |
+| Min DSCR | 0.8719 | 0.8717 |
+| LLCR / PLCR | 1.438 / 1.248 | 1.444 / 1.259 |
+| Equity multiple | -0.103 | -0.099 |
+| Total equity distributed (USD) | -470,024 | -450,616 |
+| Discount rate used | 11.79% | 11.79% |
+| Debt (USD, maximum) | 397,008 | 397,321 |
+| Debt-service shortfall years / sponsor cure (USD) | 9 / 770,192 | 9 / 757,557 |
+| BESS capex at 2026 prices (USD) | 52,740 | 56,296 |
+| Augmentation, year 14 (USD) | 8,364 | none |
+
+At 0.4 MWh the effect is small: the battery is 1% of the capex. Lower capex (the reserve removed)
+partly offsets the fade's lost premium and the year-14 event. Wind v0.6 and the hybrid do not
+move.
+
 ## Latest run (the battery floor, 2026-11-14)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on main's current
@@ -1300,7 +1442,7 @@ basis (the 2026 price dates included):
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
 | Wind project (v0.6) | 12.41% | 10.55% | 0.867 | 1,398,803 | -740,793 |
-| Solar + BESS project (v0.9, 0.1 MW / 0.4 MWh, 107 tables, 3.5 MW AC; the grid floor) | undefined | undefined | 0.872 | -4,477,787 | -4,557,056 |
+| Solar + BESS project (v0.10, 0.1 MW / 0.4 MWh, 107 tables, 3.5 MW AC; the grid floor; fade and augmentation, L-11) | undefined | undefined | 0.872 | -4,479,214 | -4,557,964 |
 | Hybrid (v0.11, superseded) | 10.61% | 8.20% | 0.868 | -205,833 | -3,036,703 |
 
 The wind and hybrid figures did not move in this change; they are restated because the section
