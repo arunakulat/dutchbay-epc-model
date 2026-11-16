@@ -108,6 +108,7 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
     "equipment_cost_parity": {
         **_ENVELOPE,
         "energy_summary": "docs/blue_whale/met_mast_transfer_summary.json",
+        "capex_config": "conf/blue_whale_capex_solar_resource.yaml",
         "operating_life_years": 20,
         "loss_retention_factors": [0.97, 0.98],
         "benchmark": {
@@ -135,7 +136,6 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
                 "quoted_amount_usd": 0.0,
             },
         ],
-        "private_anchors_env": "SITE_PRIVATE_ANCHORS_PATH",
     },
 }
 
@@ -277,8 +277,13 @@ def test_missing_envelope_key_fails(block: str) -> None:
         ),
         (
             "equipment_cost_parity",
-            lambda b: b.update({"private_anchors_env": "/private/anchors.yaml"}),
-            "equipment_cost_parity.private_anchors_env: must name an environment variable",
+            lambda b: b.update({"private_anchors": "/private/anchors.yaml"}),
+            "equipment_cost_parity.private_anchors: unknown key",
+        ),
+        (
+            "equipment_cost_parity",
+            lambda b: b.pop("capex_config"),
+            "equipment_cost_parity.capex_config: required key is missing",
         ),
         (
             "equipment_cost_parity",

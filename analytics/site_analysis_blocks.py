@@ -26,8 +26,8 @@ Every block shares one envelope:
 - ``method_config`` (optional): the analysis's method-parameter file;
 - ``notes`` (optional).
 
-Private anchors are never a value in a block. ``equipment_cost_parity.private_anchors_env``
-names the environment variable that supplies their path at run time.
+Private anchors are never a value in a block: an analysis that needs them takes their path
+at run time, outside the scenario.
 
 Each block holds what its analysis reads today. When an analysis is wired to its block, its
 item adds any further key here explicitly, so the keys stay strict.
@@ -66,7 +66,6 @@ COST_BUILDUP_ROUTES: Tuple[str, ...] = (
 )
 
 _CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
-_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 Check = Callable[[Any, str, List[str]], None]
@@ -121,14 +120,6 @@ def _currency(value: Any, path: str, errors: List[str]) -> None:
     if not (isinstance(value, str) and _CURRENCY_RE.match(value)):
         errors.append(
             f"{path}: must be a three-letter ISO currency code (got {value!r})"
-        )
-
-
-def _env_name(value: Any, path: str, errors: List[str]) -> None:
-    if not (isinstance(value, str) and _ENV_NAME_RE.match(value)):
-        errors.append(
-            f"{path}: must name an environment variable (A-Z, 0-9, _), not hold a "
-            f"path or a value (got {value!r})"
         )
 
 
@@ -457,7 +448,7 @@ _PACKAGE = _Mapping(
 _EQUIPMENT_COST_PARITY = _block(
     {
         "energy_summary": _req(_repo_file),
-        "capex_config": _opt(_repo_file),
+        "capex_config": _req(_repo_file),
         "operating_life_years": _req(_positive_int),
         "loss_retention_factors": _req(_list_of(_number(gt=0.0, le=1.0))),
         "benchmark": _req(
@@ -477,7 +468,6 @@ _EQUIPMENT_COST_PARITY = _block(
         ),
         "sensitivity_premium_pct": _req(_list_of(_number(gt=-100.0), unique=True)),
         "cost_buildup_packages": _req(_list_of(_PACKAGE)),
-        "private_anchors_env": _opt(_env_name),
     },
     _unique_package_ids,
 )
