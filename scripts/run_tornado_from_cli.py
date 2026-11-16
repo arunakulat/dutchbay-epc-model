@@ -352,15 +352,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to v14 scenario config YAML/JSON (e.g. scenarios/dutchbay_lendercase_2025Q4.yaml)",
+        help="Path to v14 scenario config YAML/JSON (e.g. scenarios/example.yaml)",
     )
     parser.add_argument(
         "--parameters",
         required=False,
         default=None,
         help=(
-            "Path to sensitivity parameters YAML "
-            "(e.g. scenarios/sensitivity_parameters_examples.yaml). "
+            "Path to a sensitivity parameters YAML that maps each driver to its "
+            "range. "
             "Required UNLESS --preset is given (a preset supplies its own drivers)."
         ),
     )
