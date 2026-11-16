@@ -1300,6 +1300,35 @@
     {% else %}
     <p class="muted">No structured manifest was emitted for this run.</p>
     {% endif %}
+    {# Yield reconciliation (#1768): what the AEP <-> capacity-factor check compared.
+       Render-when-present: a report built without a run result omits it. #}
+    {% if ctx.yield_reconciliation %}
+    {% set yr = ctx.yield_reconciliation %}
+    <h3>Yield reconciliation</h3>
+    <p>
+      Status: <strong>{{ yr.status | replace("_", " ") }}</strong>.
+      {% if yr.gate_applied %}The load-time gate ran on this scenario and passed.{% else %}The load-time gate did not run on this configuration (an inline configuration).{% endif %}
+      {% if yr.tolerance_pct is not none %}Tolerance {{ "%.2f" | format(yr.tolerance_pct) }}%{% if yr.tolerance_overridden %} (audited override of the default){% endif %}.{% endif %}
+      {% if yr.reason %}{{ yr.reason }}.{% endif %}
+    </p>
+    {% if yr.rows %}
+    <table>
+      <thead><tr><th>Check</th><th>Reference</th><th class="num">Reference (GWh)</th><th class="num">Compared (GWh)</th><th class="num">Deviation</th><th>Within tolerance</th></tr></thead>
+      <tbody>
+        {% for row in yr.rows %}
+        <tr>
+          <td>{{ row.check }}</td>
+          <td>{{ row.source }}</td>
+          <td class="num">{% if row.reference_gwh is not none %}{{ "%.2f" | format(row.reference_gwh) }}{% else %}&mdash;{% endif %}</td>
+          <td class="num">{% if row.compared_gwh is not none %}{{ "%.2f" | format(row.compared_gwh) }}{% else %}&mdash;{% endif %}</td>
+          <td class="num">{% if row.deviation_pct is not none %}{{ "%+.2f" | format(row.deviation_pct) }}%{% else %}&mdash;{% endif %}</td>
+          <td>{{ "yes" if row.within_tolerance else "no" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endif %}
     <h3>Methodology</h3>
     <p class="disclaimer">
       Figures are produced by the DutchBay v14 project-finance engine: an
