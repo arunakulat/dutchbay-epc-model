@@ -221,7 +221,8 @@ def emit_capital_risk_report_from_pipeline(
     )
     # #1760: every capital-risk report carries the F-5 non-reliance notice on its cover, the same
     # text as the executive workbook's first sheet (owner ruling 2026-11-16 07:19Z; domain review
-    # F-3). A default CLI run writes this report and the release asset ships it.
+    # F-3). A run that writes its figures writes this report by default, and the release asset
+    # ships it.
     context = context.model_copy(update={"f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT})
     html = render_report_html(context)
 
