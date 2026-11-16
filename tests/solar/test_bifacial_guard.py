@@ -124,7 +124,8 @@ def test_error_carries_actionable_detail() -> None:
         assert_monofacial_financed_cf(_export(bifacial=True), None)
     except BifacialInFinancedChainError as exc:
         assert exc.key == "bifacial"
-        assert "generate_solar_assessment_report" in str(exc)
+        assert "SOLAR-9" in str(exc)
+        assert "generate_solar_assessment_report" not in str(exc)
     else:  # pragma: no cover
         pytest.fail("expected BifacialInFinancedChainError")
 
