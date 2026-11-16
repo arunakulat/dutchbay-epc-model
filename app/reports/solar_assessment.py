@@ -558,7 +558,10 @@ def _nasa_power_annual_ghi(lat: float, lon: float) -> float:
         "parameters=ALLSKY_SFC_SW_DWN&community=RE"
         f"&latitude={lat:.2f}&longitude={lon:.2f}&format=JSON"
     )
-    with urllib.request.urlopen(url, timeout=20) as response:
+    # The URL is a fixed https literal; only the two coordinates, formatted as numbers, vary.
+    with urllib.request.urlopen(  # nosec B310 - fixed https NASA POWER literal
+        url, timeout=20
+    ) as response:
         data = json.load(response)
     return float(data["properties"]["parameter"]["ALLSKY_SFC_SW_DWN"]["ANN"]) * 365.0
 
