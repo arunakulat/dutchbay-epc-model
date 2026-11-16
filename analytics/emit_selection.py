@@ -5,8 +5,9 @@ turns them all on at once. The rules:
 
 - A switch set explicitly (``true`` or ``false``) wins over ``emit_all``. So
   ``emit_all=true emit_grid_screen=false`` runs everything except grid screening.
-- A switch left unset (``null``) follows ``emit_all``, which defaults to ``false``. With
-  ``emit_all`` off, nothing changes from the behaviour before this module.
+- A switch left unset (``null``) follows ``emit_all``, which is on by default (owner ruling,
+  2026-11-16: the analyses run for every scenario unless switched off). ``emit_all=false``
+  with every switch unset runs no emitter, as before this module.
 - Under ``emit_all``, an emitter whose inputs the run does not have is not run, and the plan
   records why: no ``monte_carlo.parameters`` to sample, no ``interaction_grid`` block, no
   ``tech_comparison.scenarios`` list, or no grid block with ``study_enabled: true``. An emitter
@@ -79,9 +80,14 @@ def _switch(cfg: Any, key: str) -> Optional[bool]:
     raise ValueError(f"{key} must be true, false or null; got {value!r}")
 
 
+#: ``emit_all`` when the run config leaves it unset. On, by the owner's ruling of 2026-11-16.
+EMIT_ALL_DEFAULT = True
+
+
 def emit_all_requested(cfg: Any) -> bool:
-    """Return the ``emit_all`` switch (``False`` when unset)."""
-    return bool(_switch(cfg, "emit_all"))
+    """Return the ``emit_all`` switch (:data:`EMIT_ALL_DEFAULT` when unset)."""
+    value = _switch(cfg, "emit_all")
+    return EMIT_ALL_DEFAULT if value is None else value
 
 
 def _needs_monte_carlo_parameters(

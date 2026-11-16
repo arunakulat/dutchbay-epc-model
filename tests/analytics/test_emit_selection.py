@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 
 import run_full_pipeline_v14 as rfp
 from analytics.emit_selection import (
+    EMIT_ALL_DEFAULT,
     EMIT_FLAGS,
     STATUS_NOT_RUN,
     STATUS_OFF,
@@ -36,15 +37,32 @@ def _runs(plan: Dict[str, Any]) -> Dict[str, bool]:
     return {flag: decision.run for flag, decision in plan.items()}
 
 
-def test_default_runs_nothing_and_needs_no_scenario() -> None:
-    plan = plan_emitters(OmegaConf.create({}))
+def test_emit_all_is_on_by_default() -> None:
+    """Owner ruling 2026-11-16: the analyses run for every scenario unless switched off."""
+    assert EMIT_ALL_DEFAULT is True
+    plan = plan_emitters(OmegaConf.create({}), {})
+    assert list(plan) == list(EMIT_FLAGS)
+    assert {d.source for d in plan.values()} == {"emit_all"}
+    assert plan["emit_executive_workbook"].run
+    # Every emitter that does not run says why.
+    for decision in plan.values():
+        assert decision.run or (decision.status == STATUS_NOT_RUN and decision.reason)
+
+
+def test_unset_emit_all_needs_the_scenario() -> None:
+    with pytest.raises(ValueError, match="effective scenario"):
+        plan_emitters(OmegaConf.create({}))
+
+
+def test_emit_all_off_runs_nothing_and_needs_no_scenario() -> None:
+    plan = plan_emitters(OmegaConf.create({"emit_all": False}))
     assert list(plan) == list(EMIT_FLAGS)
     assert not any(_runs(plan).values())
     assert {d.status for d in plan.values()} == {STATUS_OFF}
 
 
 def test_single_switch_behaves_as_before() -> None:
-    plan = plan_emitters({"emit_grid_screen": True})
+    plan = plan_emitters({"emit_all": False, "emit_grid_screen": True})
     assert _runs(plan) == {flag: flag == "emit_grid_screen" for flag in EMIT_FLAGS}
     assert plan["emit_grid_screen"].source == "explicit"
 
@@ -175,12 +193,25 @@ def _run_cli(tmp_path: Path, scenario: Dict[str, Any], **overrides: Any) -> None
     rfp.cli.__wrapped__(OmegaConf.create(base))
 
 
-def test_cli_default_runs_no_emitter_and_records_no_plan(
+def test_cli_default_runs_what_applies_and_records_the_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With emit_all unset, the run behaves as emit_all=true (owner ruling 2026-11-16)."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(tmp_path, {"scenario_name": "t", "grid": {"study_enabled": True}})
+    out = json.loads(capsys.readouterr().out)
+    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
+    assert out["emitters"]["emit_capital_risk_report"]["status"] == STATUS_NOT_RUN
+    assert out["kpis"] == _STUB_RESULT["kpis"]
+
+
+def test_cli_emit_all_off_runs_no_emitter_and_records_no_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls)
-    _run_cli(tmp_path, {"scenario_name": "t", **_ALL_INPUTS_SCENARIO})
+    _run_cli(tmp_path, {"scenario_name": "t", **_ALL_INPUTS_SCENARIO}, emit_all=False)
     out = json.loads(capsys.readouterr().out)
     assert calls == []
     assert "emitters" not in out

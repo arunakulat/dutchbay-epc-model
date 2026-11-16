@@ -84,6 +84,12 @@ REFINANCE_KEYS = frozenset({"refinance"})
 # the default `paid` basis.
 BALLOON_INTEREST_KEYS = frozenset({"balloon_interest", "balloon_interest_paid"})
 
+# #1539 appends the senior fee a cash sweep could not pay, carried forward, and any of
+# it still unpaid at the horizon.
+SENIOR_FEE_DEFERRAL_KEYS = frozenset(
+    {"senior_fee_deferred_usd", "senior_fee_deferred_residual"}
+)
+
 # Every key ``plan_debt`` published BEFORE the taxonomy was added, captured from
 # the pre-change engine across all evaluable scenarios (the set is identical for
 # each). This is the additive-only guard: the sweep asserts that the published
@@ -193,7 +199,13 @@ def test_scenario_sweep_is_additive_and_taxonomy_is_consistent(scenario: Path) -
     # 1. Nothing removed or renamed; exactly the three taxonomy keys added.
     missing = PRE_EXISTING_KEYS - published
     assert not missing, f"plan_debt dropped pre-existing keys: {sorted(missing)}"
-    additive = TAXONOMY_KEYS | UNIFICATION_KEYS | REFINANCE_KEYS | BALLOON_INTEREST_KEYS
+    additive = (
+        TAXONOMY_KEYS
+        | UNIFICATION_KEYS
+        | REFINANCE_KEYS
+        | BALLOON_INTEREST_KEYS
+        | SENIOR_FEE_DEFERRAL_KEYS
+    )
     assert published - PRE_EXISTING_KEYS == set(additive), (
         "plan_debt published unexpected keys: "
         f"{sorted(published - PRE_EXISTING_KEYS - additive)}"
@@ -406,13 +418,14 @@ def test_published_key_order_places_the_taxonomy_last() -> None:
 
     F-2/F-3 appended ``dscr_periods`` AFTER the F-6 taxonomy, #1396 appended
     ``refinance`` after that, #1503 appended ``balloon_interest`` and #1505
-    ``balloon_interest_paid`` last, so the tail is seven keys in dolphin order. The pin is extended rather than relaxed: the exact
+    ``balloon_interest_paid``, and #1539 the two deferred-fee keys last, so the tail is
+    nine keys in dolphin order. The pin is extended rather than relaxed: the exact
     list is still asserted, in order, and everything before it is still exactly the
     pre-existing surface.
     """
     _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
     published = list(debt_result)
-    assert published[-7:] == [
+    assert published[-9:] == [
         "construction_periods",
         "bridge_debt_period",
         "first_operating_period",
@@ -420,9 +433,11 @@ def test_published_key_order_places_the_taxonomy_last() -> None:
         "refinance",
         "balloon_interest",
         "balloon_interest_paid",
+        "senior_fee_deferred_usd",
+        "senior_fee_deferred_residual",
     ]
     # Everything before the additive tail is exactly the pre-existing surface, in order.
-    assert set(published[:-7]) == PRE_EXISTING_KEYS
+    assert set(published[:-9]) == PRE_EXISTING_KEYS
 
 
 def test_first_mapped_period_zero_is_reported_as_zero() -> None:

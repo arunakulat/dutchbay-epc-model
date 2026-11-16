@@ -757,15 +757,15 @@ def cli(cfg: DictConfig) -> None:
                   (default: 'P50' — the producer is deterministic P50 today).
                 - solar_technology: generation.technologies key the solar
                   export targets (default: 'solar').
-            Optional field (#1756 — one switch for all emitters; OFF by default):
-                - emit_all: If true, every emit_* switch below that is left null
-                  turns on. An explicit switch wins. An emitter whose inputs the
+            Optional field (#1756 — one switch for all emitters; ON by default,
+            owner ruling 2026-11-16; set emit_all=false to run none of them):
+                - emit_all: If true (the default, also when unset), every emit_*
+                  switch below that is left null turns on. An explicit switch wins. An emitter whose inputs the
                   run lacks is not run and is listed with its reason under
                   result['emitters']; one that applies and fails stops the run.
                   See analytics.emit_selection.
-            Optional fields (#656 slice 3 — Executive Workbook emission; OFF
-            by default — leaving emit_executive_workbook false preserves
-            behaviour and keeps committed-scenario output byte-identical):
+            Optional fields (#656 slice 3 — Executive Workbook emission; follows
+            emit_all, so ON by default since #1756; KPIs are byte-identical either way):
                 - emit_executive_workbook: If true, write a single-scenario
                   lender Executive Workbook (.xlsx) after a successful run via
                   analytics.executive_workbook.emit_executive_workbook_from_pipeline.
@@ -774,20 +774,20 @@ def cli(cfg: DictConfig) -> None:
                   frozen wind OR solar export carries a long_term_trend block
                   (#656 wind / #727 solar GHI; ONE sheet, wind-first on a hybrid).
                   No live ERA5/pvlib is run (the finance CLI stays cdsapi-/pvlib-
-                  free). Default false.
+                  free). Default null (follows emit_all).
                 - executive_workbook_path: Target .xlsx path. Default
                   '<export_dir>/executive_workbook.xlsx'. On emission the written
                   path is echoed back under result['executive_workbook_path'].
-            Optional fields (#779 — capital-risk Monte-Carlo report emission; OFF
-            by default — leaving emit_capital_risk_report false preserves behaviour
-            and keeps committed-scenario output byte-identical):
+            Optional fields (#779 — capital-risk Monte-Carlo report emission; follows
+            emit_all, so ON by default since #1756 for a scenario with
+            monte_carlo.parameters; KPIs are byte-identical either way):
                 - emit_capital_risk_report: If true, after a successful run run the
                   CANONICAL MC (analytics.mc.engine — LHS + Iman-Conover, with
                   monte_carlo.allow_toy_fallback forced false so a failed trial
                   raises rather than fabricating a toy metric) over a bounded trial
                   count and render a lender HTML report carrying the capital-risk
                   section, via app.reports.capital_risk_emit. Heavy (each trial is a
-                  full evaluation), so batch-path only. Default false.
+                  full evaluation), so batch-path only. Default null (follows emit_all).
                 - capital_risk_report.n_trials: Bounded MC trial count for the
                   report tail (NOT the scenario's monte_carlo.n_scenarios). Default
                   2000 (app.reports.capital_risk_emit.DEFAULT_CAPITAL_RISK_N_TRIALS).
@@ -802,8 +802,8 @@ def cli(cfg: DictConfig) -> None:
                   '<export_dir>/capital_risk_report.html'. On emission the written
                   path is echoed back under result['capital_risk_report_path'].
             Optional fields (#739 slice-2 — two-factor interaction-grid report
-            emission; OFF by default — leaving emit_interaction_grid false
-            preserves behaviour and keeps committed-scenario output byte-identical):
+            emission; follows emit_all, so ON by default since #1756 for a scenario
+            with an interaction_grid block; KPIs are byte-identical either way):
                 - emit_interaction_grid: If true, after a successful run build the
                   two-factor sensitivity interaction grid (N×M full-pipeline
                   evaluations — heavy, batch-path only, never the synchronous HTTP
@@ -812,14 +812,14 @@ def cli(cfg: DictConfig) -> None:
                   app.reports.interaction_grid_emit. The two drivers and the metric
                   are config-required (the scenario's 'interaction_grid' block); no
                   default pair is imposed, and a missing/malformed block fails loud.
-                  Default false.
+                  Default null (follows emit_all).
                 - interaction_grid_report.path: Target .html path. Default
                   '<export_dir>/interaction_grid_report.html'. On emission the written
                   path is echoed back under result['interaction_grid_report_path'].
 
             Optional fields (#745 slice-1 — cross-technology headline-KPI comparison
-            report emission; OFF by default — leaving emit_tech_comparison false
-            preserves behaviour and keeps committed-scenario output byte-identical):
+            report emission; follows emit_all, so ON by default since #1756 when
+            tech_comparison.scenarios is listed; KPIs are byte-identical either way):
                 - emit_tech_comparison: If true, after a successful run render a lender
                   HTML report carrying a side-by-side headline-KPI comparison of the
                   compared configs, via app.reports.tech_comparison_emit. Each compared
@@ -829,7 +829,7 @@ def cli(cfg: DictConfig) -> None:
                   HTTP report route; the #645 latency ledger). The compared scenarios are
                   config-required (tech_comparison.scenarios); no default pair is imposed,
                   and an absent/empty/malformed list or a missing scenario path fails loud.
-                  Default false.
+                  Default null (follows emit_all).
                 - tech_comparison.scenarios: A non-empty list of {label, config} entries
                   naming the configs to compare (config-required; this slice compares the
                   wind lender case + the hybrid case that exist — solar-only and
@@ -838,9 +838,9 @@ def cli(cfg: DictConfig) -> None:
                   '<export_dir>/tech_comparison_report.html'. On emission the written path
                   is echoed back under result['tech_comparison_report_path'].
 
-            Optional fields (#884 D8 — advisory GRID-SCREENING report emission; OFF by
-            default — leaving emit_grid_screen false preserves behaviour and keeps
-            committed-scenario output BYTE-IDENTICAL; the grid study is advisory
+            Optional fields (#884 D8 — advisory GRID-SCREENING report emission; follows
+            emit_all, so ON by default since #1756 for a scenario whose grid block has
+            study_enabled: true; KPIs are BYTE-IDENTICAL either way; the grid study is advisory
             (bankable=false) and NEVER feeds finance, so no committed KPI moves):
                 - emit_grid_screen: If true, after a successful run compose the in-house
                   design-stage grid screens (SCR@POC / GFL-vs-GFM, reactive/PQ-box Mvar
@@ -853,7 +853,7 @@ def cli(cfg: DictConfig) -> None:
                   synchronous HTTP report route (the #645 latency ledger); a missing [grid]
                   engine degrades that screen to an honest 'not run' state (CASPER), it does
                   not crash. Every grid surface carries the un-suppressible SCREENING-not-
-                  bankable + EMT-gap caveat + dependency/verification provenance. Default false.
+                  bankable + EMT-gap caveat + dependency/verification provenance. Default null (follows emit_all).
                 - grid_screen_report.path: Target .html path. Default
                   '<export_dir>/grid_screening_report.html'. On emission the written path is
                   echoed back under result['grid_screening_report_path'].
@@ -935,19 +935,20 @@ def cli(cfg: DictConfig) -> None:
 
     # ------------------------------------------------------------------
     # #656 (slice 3): optional single-scenario Executive Workbook emission
-    # (OFF by default). When true, after a successful finance run this CLI
+    # (follows emit_all, #1756). When on, after a successful finance run this CLI
     # writes a lender-facing .xlsx via
     # analytics.executive_workbook.emit_executive_workbook_from_pipeline —
     # the genuine live caller of build_executive_workbook. The five finance
     # sheets are assembled from the pipeline result; the optional
     # "ResourceTrend" sheet is added only when a supplied frozen wind export
     # carries a long_term_trend block. Emission derives no financial value and
-    # never mutates KPIs, so committed-scenario runs (which leave this off) stay
-    # byte-identical.
+    # never mutates KPIs, so the KPIs and the JSON/CSV dump are byte-identical
+    # with it on or off.
     # ------------------------------------------------------------------
     # #1756: every emit_* switch is read through analytics.emit_selection, which adds
     # emit_all (one switch for all emitters). An explicit switch wins over emit_all; an unset
-    # one follows it. With emit_all off (the default) each switch behaves exactly as before.
+    # one follows it. emit_all is on by default (owner ruling 2026-11-16); with it off each
+    # switch behaves exactly as it did before #1756.
     # This early plan validates the switches before the finance run; under emit_all the plan
     # is made again against the effective scenario just before the emitters run.
     emit_all = emit_all_requested(cfg)
@@ -956,19 +957,19 @@ def cli(cfg: DictConfig) -> None:
     executive_workbook_path = cfg.get("executive_workbook_path", None)
 
     # ------------------------------------------------------------------
-    # #779: optional capital-risk (Monte-Carlo) report emission (OFF by default).
+    # #779: optional capital-risk (Monte-Carlo) report emission (follows emit_all, #1756).
     # When true, after a successful finance run this CLI runs the CANONICAL MC
     # (analytics.mc.engine, allow_toy_fallback forced false — no fabricated
     # trials) over a BOUNDED trial count and renders a lender HTML report that
     # carries the capital-risk section, via app.reports.capital_risk_emit. It is
     # heavy (each trial is a full v14 evaluation), so it belongs in this batch
     # path, never the synchronous HTTP report route. Emission derives no committed
-    # KPI, so leaving this off keeps committed scenarios byte-identical.
+    # KPI, so the KPIs are byte-identical with it on or off.
     # ------------------------------------------------------------------
     emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
     capital_risk_report_cfg = cfg.get("capital_risk_report", None) or {}
 
-    # #739 slice-2: optional two-factor interaction-grid report emission. OFF by default; the
+    # #739 slice-2: optional two-factor interaction-grid report emission (follows emit_all); the
     # drivers/metric are config-required (interaction_grid block), no default pair is imposed.
     emit_interaction_grid = emit_plan["emit_interaction_grid"].run
     interaction_grid_cfg = cfg.get("interaction_grid_report", None) or {}
@@ -980,18 +981,18 @@ def cli(cfg: DictConfig) -> None:
     # the original scenario path flows straight through, byte-identical.
     resource_overrides = cfg.get("resource_overrides", None)
 
-    # #745 slice-1: optional cross-technology headline-KPI comparison report emission. OFF by
-    # default; the compared scenarios are config-required (tech_comparison.scenarios list of
+    # #745 slice-1: optional cross-technology headline-KPI comparison report emission (follows
+    # emit_all); the compared scenarios are config-required (tech_comparison.scenarios list of
     # {label, config} entries), no default scenario pair is imposed. Each compared config is run
     # through the CANONICAL pipeline (strict), so every column reconciles to that config's own
     # committed headline KPIs (the lender-integrity basis, per #745).
     emit_tech_comparison = emit_plan["emit_tech_comparison"].run
     tech_comparison_cfg = cfg.get("tech_comparison", None) or {}
 
-    # #884 D8: optional advisory grid-screening report emission. OFF by default; the study is
-    # advisory (bankable=false) and NEVER feeds finance, so leaving this off keeps committed
-    # scenarios byte-identical. Requires the scenario's grid block with study_enabled: true
-    # (the emitter fails loud otherwise — the caller opted in). The heavy screens are on this
+    # #884 D8: optional advisory grid-screening report emission (follows emit_all); the study is
+    # advisory (bankable=false) and NEVER feeds finance, so the KPIs are byte-identical with it
+    # on or off. Requires the scenario's grid block with study_enabled: true (under emit_all a
+    # scenario without it is listed as not run; switched on explicitly, it fails loud). The heavy screens are on this
     # batch path only; a missing [grid] engine degrades gracefully (CASPER).
     emit_grid_screen = emit_plan["emit_grid_screen"].run
     grid_screen_cfg = cfg.get("grid_screen_report", None) or {}
@@ -1191,7 +1192,8 @@ def cli(cfg: DictConfig) -> None:
         # #1756: under emit_all, decide which emitters apply to this run from the effective
         # scenario. One whose inputs are absent is recorded as not run with its reason; one that
         # applies runs and, if it fails, stops the run. The plan is recorded under
-        # result['emitters'] only when emit_all is on, so other runs stay byte-identical.
+        # result['emitters'] whenever emit_all is on, which is the default; a run with
+        # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
         if emit_all and isinstance(result, dict):
             emit_plan = plan_emitters(
                 cfg, dict(load_scenario_config(str(effective_config)))
