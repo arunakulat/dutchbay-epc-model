@@ -128,7 +128,10 @@ EVIDENCE_REQUEST_REGISTER: Mapping[str, EvidenceRequest] = {
     "EV-REQ-01": EvidenceRequest(
         request_id="EV-REQ-01",
         title="Met-Mast Anemometer Calibration & Geometry",
-        description="ISO 17025 calibration certificates for DutchBay met mast 617725 sensors.",
+        description=(
+            "ISO 17025 calibration certificates for the site met mast's sensors "
+            "(the mast named in the scenario's measurement evidence)."
+        ),
         required_verification="Slope/offset verification within 12 months of campaign start.",
         strand=EnergyYieldStrand.STRAND_1_MEASUREMENT_SITE_IDENTITY,
     ),

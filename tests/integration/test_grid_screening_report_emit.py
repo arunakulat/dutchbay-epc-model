@@ -82,6 +82,9 @@ def _run_cli(overrides: Dict[str, Any]) -> None:
         "validation_modules": None,
         "export_dir": overrides.pop("export_dir", "_out/test"),
         "write_artifacts": False,
+        # emit_all is on by default (#1756); this harness tests one switch at a time, and
+        # tests/analytics/test_emit_selection.py covers the default.
+        "emit_all": False,
         "wind_assessment_json": None,
         "wind_auto_orchestrate": False,
         "adapter_mode": "fill_if_absent",
