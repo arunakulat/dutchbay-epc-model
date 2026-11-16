@@ -23,6 +23,7 @@ from typing import Any, Dict
 
 import pytest
 
+from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from app.reports import capital_risk_emit
 from app.reports.capital_risk_emit import (
@@ -89,6 +90,11 @@ def test_emit_renders_capital_risk_section_through_real_mc(tmp_path) -> None:
     # The NPV chart is embedded as a self-contained data URI — no absolute server path leaks.
     assert 'src="data:image/png;base64,' in html
     assert str(tmp_path) not in html
+    # #1760 (domain review F-3): every capital-risk report carries the F-5 non-reliance notice
+    # on its cover, once, ahead of the Important Notice, in the workbook's exact words.
+    assert html.count(EXECUTIVE_WORKBOOK_F5_CAVEAT) == 1
+    assert html.index(EXECUTIVE_WORKBOOK_F5_CAVEAT) < html.index("Important Notice")
+    assert '<p class="f5-notice"><strong>F-5 non-reliance notice:</strong>' in html
 
 
 def test_scenario_without_mc_parameters_fails_loud(monkeypatch, tmp_path) -> None:
