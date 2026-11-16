@@ -11,14 +11,20 @@ price. It is the "put it together" layer over the existing BESS pieces, adding f
    and FX layers are what the buyer actually pays.
 2. **Capacity-charge effective-cost curve**, the method capacity-charge battery tenders use:
    ``effective LKR/kWh = annual capacity charge / degradation-adjusted annual discharge``,
-   over life (rising as energy degrades while the flat charge stays constant). The method
+   over life. The capacity revenue here is derated by the same state-of-health curve as the
+   discharge (:mod:`finance.bess_revenue`), so the curve this module returns is flat; a
+   tender that pays an undiminished charge would see it rise as energy degrades. The method
    **EXCLUDES the charging cost**; that omission is disclosed in the result, not hidden.
 3. **The separate charging-cost lever** the method omits:
    ``energy_to_charge_mwh x charging_tariff_lkr_per_kwh x 1/RTE`` (the round-trip loss makes
    the charge-side energy larger than the discharge-side). Required for a full P&L.
 4. **A standalone BESS cashflow -> IRR / NPV / LCOS**: ``landed capex`` at t0, then per year
    ``capacity revenue - opex - charging cost - warranty draws - augmentation capex``, plus a
-   read-only LCOS view. IRR/NPV come from :mod:`finance.irr` (R7 single source of truth); the
+   read-only LCOS view. The yearly LKR flows are translated to USD on the scenario's own
+   operating FX curve (with the construction offset the scenario's cashflow uses), and the
+   IRR and NPV are reported in USD at the scenario's project rate, the currency and rate of
+   the scenario's own KPIs. The basis is nominal, pre-tax and unlevered, and the result says
+   so. The LKR series and its IRR are kept for reference. IRR/NPV come from :mod:`finance.irr` (R7 single source of truth); the
    LCOS reuses :func:`finance.bess_lcos.compute_lcos`. Nothing is re-implemented.
 
 RECONCILIATION (extends, does not duplicate)
@@ -472,7 +478,6 @@ class ChargingCostSpec:
 
     charging_tariff_lkr_per_kwh: float
     round_trip_efficiency: float
-    cycles_per_year: float
 
 
 def resolve_charging_cost_spec(config: Mapping[str, Any]) -> Optional[ChargingCostSpec]:
@@ -480,9 +485,10 @@ def resolve_charging_cost_spec(config: Mapping[str, Any]) -> Optional[ChargingCo
 
     Reads ``bess_economics.charging``: ``tariff_lkr_per_kwh`` (REQUIRED when the block is
     present — the price of charge energy), ``round_trip_efficiency`` (optional, default 0.85 —
-    NREL ATB 2024, matching :mod:`finance.bess_revenue`), and ``cycles_per_year`` (optional;
-    absent, it is the block's required ``discharge_cycles_per_year``, so the two cannot
-    disagree silently). Absent block => ``None`` => no charging cost.
+    NREL ATB 2024, matching :mod:`finance.bess_revenue`). The charge-side energy is the
+    discharge energy over RTE, and the discharge energy uses the block's required
+    ``discharge_cycles_per_year``; there is no separate charging-cycles input, so the two
+    cannot disagree (#1776 domain D-2). Absent block => ``None`` => no charging cost.
     """
     charging = _nested_get(config, _ECONOMICS_BLOCK, "charging")
     if not isinstance(charging, Mapping):
@@ -501,19 +507,9 @@ def resolve_charging_cost_spec(config: Mapping[str, Any]) -> Optional[ChargingCo
         raise ValueError(
             f"{blk}.round_trip_efficiency must be > 0 (charge energy = discharge / RTE)."
         )
-    if charging.get("cycles_per_year") is None:
-        cycles_per_year = _required_cycles_per_year(config)
-    else:
-        cycles_per_year = _as_float(charging.get("cycles_per_year")) or 0.0
-        if cycles_per_year <= 0.0:
-            raise ValueError(
-                f"{blk}.cycles_per_year={charging.get('cycles_per_year')!r} must be a "
-                "positive number of cycles per year."
-            )
     return ChargingCostSpec(
         charging_tariff_lkr_per_kwh=tariff,
         round_trip_efficiency=rte,
-        cycles_per_year=cycles_per_year,
     )
 
 
@@ -545,10 +541,13 @@ class BessProjectEconomics:
     """The assembled standalone-BESS project economics (opt-in, off the committed path).
 
     ``cashflow_lkr`` is ``[-landed_capex_lkr, cf_1, cf_2, ...]`` — capex at t0, then per-year
-    ``capacity revenue - opex - charging cost - warranty draw - augmentation capex``. IRR is
-    the periodic project IRR of that series; NPV is its present value at ``discount_rate``.
-    ``lcos`` is the read-only LCOS view (USD/MWh) for the BESS. All monetary figures are LKR
-    except the LCOS (USD/MWh, per its own contract) and the landed capex (both).
+    ``capacity revenue - opex - charging cost - warranty draw - augmentation capex``.
+    ``cashflow_usd`` is the same series in USD: the landed capex in USD at t0, then each
+    year's LKR flow divided by that operating year's rate on ``fx_lkr_per_usd`` (the
+    scenario's FX curve with its construction offset). ``irr_usd`` and ``npv_usd`` are on
+    that USD series at ``discount_rate`` (the scenario's project rate, a USD rate);
+    ``irr_lkr`` is the LKR series' IRR, for reference. ``currency_basis`` states the basis
+    (nominal, pre-tax, unlevered). ``lcos`` is the read-only LCOS view (USD/MWh).
     """
 
     technology: str
@@ -556,12 +555,16 @@ class BessProjectEconomics:
     discount_rate: float
     horizon_years: int
     cashflow_lkr: Tuple[float, ...]
+    cashflow_usd: Tuple[float, ...]
+    fx_lkr_per_usd: Tuple[float, ...]
     revenue_lkr: Tuple[float, ...]
     opex_lkr: Tuple[float, ...]
     charging_cost_lkr: Tuple[float, ...]
     augmentation_capex_lkr: Tuple[float, ...]
-    irr: Optional[float]
-    npv_lkr: float
+    irr_usd: Optional[float]
+    npv_usd: float
+    irr_lkr: Optional[float]
+    currency_basis: str
     effective_cost_curve: Optional[List[Dict[str, Any]]]
     lcos: Optional[LcosResult]
     charging_modelled: bool
@@ -575,12 +578,16 @@ class BessProjectEconomics:
             "discount_rate": self.discount_rate,
             "horizon_years": self.horizon_years,
             "cashflow_lkr": list(self.cashflow_lkr),
+            "cashflow_usd": list(self.cashflow_usd),
+            "fx_lkr_per_usd": list(self.fx_lkr_per_usd),
             "revenue_lkr": list(self.revenue_lkr),
             "opex_lkr": list(self.opex_lkr),
             "charging_cost_lkr": list(self.charging_cost_lkr),
             "augmentation_capex_lkr": list(self.augmentation_capex_lkr),
-            "irr": self.irr,
-            "npv_lkr": self.npv_lkr,
+            "irr_usd": self.irr_usd,
+            "npv_usd": self.npv_usd,
+            "irr_lkr": self.irr_lkr,
+            "currency_basis": self.currency_basis,
             "effective_cost_curve": self.effective_cost_curve,
             "lcos": self.lcos.as_dict() if self.lcos is not None else None,
             "charging_modelled": self.charging_modelled,
@@ -600,8 +607,9 @@ def compute_bess_project_economics(
         t0:  -landed_capex_lkr                        (from the CIF/duty/FX ingest)
         t>0:  capacity_revenue - opex - charging_cost - warranty_draw - augmentation_capex
 
-    then computes the periodic project IRR (:func:`finance.irr.irr`) and NPV
-    (:func:`finance.irr.npv` at ``discount_rate``) of that series, and attaches the
+    translates it to USD on the operating FX curve (construction offset applied), computes the
+    USD IRR (:func:`finance.irr.irr`) and the USD NPV (:func:`finance.irr.npv` at
+    ``discount_rate``, a USD rate) and the LKR IRR for reference, and attaches the
     capacity-charge effective-cost curve and the read-only LCOS (:func:`finance.bess_lcos.compute_lcos`).
 
     Opex, the warranty draw schedule, and the charging tariff are all opt-in
@@ -611,16 +619,17 @@ def compute_bess_project_economics(
 
     Args:
         config: The scenario config (must carry an enabled ``bess_economics`` block).
-        discount_rate: The rate to discount the NPV at (decimal, e.g. 0.10). The caller
-            resolves it (the project's WACC/hurdle for a standalone BESS).
+        discount_rate: The USD rate to discount the USD cash flow at (decimal, e.g. 0.10).
+            The pipeline passes the scenario's project discount rate.
         project_years: The number of operating years to model.
 
     Returns:
         One :class:`BessProjectEconomics` per capacity-charge BESS, or ``None``.
 
     Raises:
-        ValueError: A required ``bess_economics`` input is missing/invalid, or the FX/rate
-            arguments are non-finite.
+        ValueError: A required ``bess_economics`` input is missing/invalid, the FX/rate
+            arguments are non-finite, or the scenario declares more than one
+            capacity-charge battery.
     """
     if not bess_economics_requested(config):
         return None
@@ -632,14 +641,29 @@ def compute_bess_project_economics(
         raise ValueError(f"project_years={project_years!r} must be a positive integer.")
 
     specs = resolve_bess_specs(config)
-    if not specs or not any(spec.get("model") == "capacity_charge" for spec in specs):
+    capacity_specs = [s for s in specs or [] if s.get("model") == "capacity_charge"]
+    if not capacity_specs:
         return None
+    if len(capacity_specs) > 1:
+        # #1776 domain D-3: the block holds one capex, one opex and one charging spec, so
+        # it describes ONE battery project. Two would each be charged the whole capex.
+        raise ValueError(_MULTIPLE_BATTERIES_MESSAGE.format(n=len(capacity_specs)))
 
     # Year-0 FX spot from the project's own FX routine — no hardcoded rate. A standalone BESS
     # economics run must therefore declare an fx block (CESSPIT), exactly like the cashflow.
     fx_curve = _fx_curve(dict(config), project_years)
     fx0 = float(fx_curve[0])
     landed = resolve_landed_capex(config, fx_rate_lkr_per_usd=fx0)
+    # The operating-year rates, offset by the construction periods exactly as the
+    # scenario's own cashflow does (finance.cashflow_v14), so a year's LKR flow and its
+    # augmentation capex convert at the same rate the scenario uses for that year.
+    from .debt_v14 import _resolve_construction_periods
+
+    fx_operating = _fx_curve(
+        dict(config),
+        project_years,
+        period_offset=_resolve_construction_periods(config),
+    )
 
     charging = resolve_charging_cost_spec(config)
     discharge_cycles = _required_cycles_per_year(config)
@@ -664,7 +688,7 @@ def compute_bess_project_economics(
     lcos_by_tech = {s.technology: s for s in lcos_specs}
 
     out: List[BessProjectEconomics] = []
-    for spec in specs:
+    for spec in capacity_specs:
         if spec.get("model") != "capacity_charge":
             continue
         name = str(spec["technology"])
@@ -691,6 +715,8 @@ def compute_bess_project_economics(
         charging_series: List[float] = []
         aug_series: List[float] = []
         cashflow = [-landed.landed_capex_lkr]
+        cashflow_usd = [-landed.landed_capex_usd]
+        fx_series: List[float] = []
         for t in range(horizon):
             revenue = bess_revenue_lkr_for_year([spec], t)
             opex = opex_lkr_per_year * (1.0 + opex_escalation) ** t
@@ -701,18 +727,22 @@ def compute_bess_project_economics(
                 cycles_per_year=discharge_cycles,
             )
             charge_cost = charging_cost_lkr_for_year(charging, discharge_mwh)
-            # Augmentation capex converted at the year's FX rate (reuse the shared routine).
-            fx_year = float(fx_curve[t]) if t < len(fx_curve) else fx0
+            # Augmentation capex converted at the year's operating FX rate (shared routine).
+            fx_year = float(fx_operating[min(t, len(fx_operating) - 1)])
             aug = bess_augmentation_capex_lkr_for_year([spec], t, fx_year)
             warranty = warranty_draws.get(t + 1, 0.0)
             revenue_series.append(revenue)
             opex_series.append(opex)
             charging_series.append(charge_cost)
             aug_series.append(aug)
-            cashflow.append(revenue - opex - charge_cost - aug - warranty)
+            flow_lkr = revenue - opex - charge_cost - aug - warranty
+            cashflow.append(flow_lkr)
+            cashflow_usd.append(flow_lkr / fx_year)
+            fx_series.append(fx_year)
 
-        project_irr = irr(cashflow)
-        project_npv = npv(discount_rate, cashflow)
+        irr_usd = irr(cashflow_usd)
+        npv_usd = npv(discount_rate, cashflow_usd)
+        irr_lkr = irr(cashflow)
         lcos_res: Optional[LcosResult] = None
         if name in lcos_by_tech:
             lcos_res = compute_lcos(
@@ -738,12 +768,16 @@ def compute_bess_project_economics(
                 discount_rate=float(discount_rate),
                 horizon_years=horizon,
                 cashflow_lkr=tuple(cashflow),
+                cashflow_usd=tuple(cashflow_usd),
+                fx_lkr_per_usd=tuple(fx_series),
                 revenue_lkr=tuple(revenue_series),
                 opex_lkr=tuple(opex_series),
                 charging_cost_lkr=tuple(charging_series),
                 augmentation_capex_lkr=tuple(aug_series),
-                irr=project_irr,
-                npv_lkr=project_npv,
+                irr_usd=irr_usd,
+                npv_usd=npv_usd,
+                irr_lkr=irr_lkr,
+                currency_basis=CURRENCY_BASIS,
                 effective_cost_curve=effective_cost,
                 lcos=lcos_res,
                 charging_modelled=charging is not None,
@@ -816,9 +850,22 @@ _CAPEX_KEYS: Tuple[str, ...] = (
 _CHARGING_KEYS: Tuple[str, ...] = (
     "tariff_lkr_per_kwh",
     "round_trip_efficiency",
-    "cycles_per_year",
 )
 _WARRANTY_EVENT_KEYS: Tuple[str, ...] = ("year", "lkr")
+
+#: The basis every reported IRR and NPV is on (#1776 domain D-1).
+CURRENCY_BASIS = (
+    "USD, nominal, pre-tax, unlevered: each operating year's LKR flow translated at the "
+    "scenario's operating FX curve (construction offset applied) and discounted at the "
+    "scenario's project rate; capex at year 0, operations from year 1; irr_lkr is the "
+    "LKR series' IRR, for reference only"
+)
+
+_MULTIPLE_BATTERIES_MESSAGE = (
+    "bess_economics describes one battery project (one capex, opex and charging spec), but "
+    "generation.technologies declares {n} capacity-charge batteries; model one battery per "
+    "scenario"
+)
 
 
 def _check_keys(
@@ -910,6 +957,16 @@ def validate_bess_economics_block(config: Mapping[str, Any], errors: List[str]) 
     )
     _check_number(block, "opex_lkr_per_year", path, errors)
     _check_number(block, "opex_escalation_pct", path, errors, upper=100.0)
+    if enabled:
+        try:
+            specs = resolve_bess_specs(config) or []
+        except (ValueError, TypeError, KeyError):
+            specs = []  # a malformed technology block is reported by its own check
+        n_capacity = sum(1 for s in specs if s.get("model") == "capacity_charge")
+        if n_capacity > 1:
+            errors.append(
+                f"{path}: " + _MULTIPLE_BATTERIES_MESSAGE.format(n=n_capacity)
+            )
 
     charging = block.get("charging")
     if charging is not None:
@@ -932,7 +989,6 @@ def validate_bess_economics_block(config: Mapping[str, Any], errors: List[str]) 
                 positive=True,
                 upper=1.0,
             )
-            _check_number(charging, "cycles_per_year", hpath, errors, positive=True)
 
     schedule = block.get("warranty_schedule")
     if schedule is not None:
@@ -1032,6 +1088,7 @@ def bess_economics_result(
     return {
         "status": STATUS_RUN,
         "basis": basis,
+        "currency_basis": CURRENCY_BASIS,
         "discount_rate": float(discount_rate),
         "project_years": int(project_years),
         "projects": [project.as_dict() for project in projects],
@@ -1039,6 +1096,7 @@ def bess_economics_result(
 
 
 __all__ = [
+    "CURRENCY_BASIS",
     "LandedCapex",
     "ChargingCostSpec",
     "BessProjectEconomics",
