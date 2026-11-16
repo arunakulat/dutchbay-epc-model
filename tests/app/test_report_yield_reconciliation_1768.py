@@ -68,6 +68,9 @@ def test_report_restates_the_record() -> None:
 
     html = render_report_html(ctx)
     assert "Yield reconciliation" in html
+    # The status is a real <strong> element, never its escaped markup shown as text.
+    assert "Status: <strong>reconciled</strong>." in html
+    assert "&lt;strong&gt;" not in html
     assert (
         "The fail-loud reconciliation gate ran on this configuration and passed. "
         "Tolerance 2.00%." in html
@@ -112,6 +115,20 @@ def test_report_shows_not_applicable_with_its_reason() -> None:
     assert "did not run on this configuration" in html
     assert "reported here rather than refused." in html
     assert record["reason"] in html
+    assert "Status: <strong>not applicable</strong>." in html
+
+
+def test_report_escapes_the_record_text() -> None:
+    record = _record(351.0)
+    record["reason"] = "<script>x</script>"
+    ctx = build_report_context(
+        _case(),
+        generated_at=GENERATED_AT,
+        run_result={"yield_reconciliation": record},
+    )
+    html = render_report_html(ctx)
+    assert "<script>x</script>" not in html
+    assert "&lt;script&gt;x&lt;/script&gt;." in html
 
 
 def test_report_shows_the_p90_row(tmp_path: Path) -> None:

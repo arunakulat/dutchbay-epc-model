@@ -1307,7 +1307,9 @@
     <h3>Yield reconciliation</h3>
     {# One sentence per fact, joined with explicit spaces so block-tag trimming cannot run
        them together. #}
-    {% set yr_parts = ["Status: <strong>" ~ (yr.status | replace("_", " ") | e) ~ "</strong>."] %}
+    {# yr_parts holds plain text only; autoescape escapes it on output. The status markup
+       sits in the template itself so it is never escaped as text. #}
+    {% set yr_parts = [] %}
     {% if yr.gate_applied %}
     {% set _ = yr_parts.append("The fail-loud reconciliation gate ran on this configuration and passed.") %}
     {% else %}
@@ -1317,9 +1319,9 @@
     {% set _ = yr_parts.append("Tolerance " ~ ("%.2f" | format(yr.tolerance_pct)) ~ "%" ~ (" (audited override of the default)" if yr.tolerance_overridden else "") ~ ".") %}
     {% endif %}
     {% if yr.reason %}
-    {% set _ = yr_parts.append((yr.reason | e) ~ ".") %}
+    {% set _ = yr_parts.append(yr.reason ~ ".") %}
     {% endif %}
-    <p>{{ yr_parts | join(" ") | safe }}</p>
+    <p>Status: <strong>{{ yr.status | replace("_", " ") }}</strong>. {{ yr_parts | join(" ") }}</p>
     {% if yr.rows %}
     <table>
       <thead><tr><th>Check</th><th>Reference</th><th class="num">Reference (GWh)</th><th class="num">Compared (GWh)</th><th class="num">Deviation</th><th>Within tolerance</th></tr></thead>
