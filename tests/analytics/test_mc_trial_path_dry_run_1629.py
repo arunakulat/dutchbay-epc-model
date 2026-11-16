@@ -215,7 +215,8 @@ def test_a_config_whose_base_does_not_resolve_is_left_to_the_trials() -> None:
 def test_census_the_dry_run_refuses_no_committed_scenario() -> None:
     """Census: the dry run refuses no committed Monte Carlo scenario, now that the 5
     US-cent variant declares its reconciliation. Mapping-form ``monte_carlo.parameters``
-    blocks are refused by the existing schema check, as on main, and are out of scope."""
+    blocks are refused by the existing schema check, as on main, and are out of scope.
+    """
     checked = 0
     refused = []
     for path in sorted(_SCENARIOS.rglob("*.yaml")):
