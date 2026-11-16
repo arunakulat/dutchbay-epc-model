@@ -10,7 +10,12 @@ from finance.debt.constants import (
     _BRIDGE_DEFAULT_TREATMENT,
     _BRIDGE_VALID_TREATMENTS,
 )
-from finance.debt.helpers import _as_float, _rate_decimal, _section_case_insensitive
+from finance.debt.helpers import (
+    _as_float,
+    _rate_decimal,
+    _required_number,
+    _section_case_insensitive,
+)
 from finance.debt.placeholders import _warn_placeholder_once
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
@@ -27,6 +32,22 @@ logger = logging.getLogger("finance.debt_v14")
 _warned_decorative_tranches = False
 
 
+def _financing_key_prefix(params: Mapping[str, Any]) -> str:
+    """The YAML path prefix of the section :func:`_extract_financing_terms` reads.
+
+    Used to name a missing key in a refusal. Follows the extractor's precedence:
+    ``Financing_Terms.``, then ``financing.``, then ``debt.``, else ``""`` for a key at
+    the mapping's top level.
+    """
+    if _section_case_insensitive(params, "Financing_Terms"):
+        return "Financing_Terms."
+    if _section_case_insensitive(params, "financing"):
+        return "financing."
+    if _section_case_insensitive(params, "debt") is not None:
+        return "debt."
+    return ""
+
+
 def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
     """Return canonical financing terms from v14 or simple test schemas."""
     financing_terms = _section_case_insensitive(params, "Financing_Terms")
@@ -34,11 +55,13 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         adapted = dict(financing_terms)
         periods = _resolve_construction_periods(params)
         if adapted.get("debt_ratio") is None:
+            debt_pct_key = "debt_pct"
             debt_pct = adapted.get("debt_pct")
             if debt_pct is None:
+                debt_pct_key = "leverage_pct"
                 debt_pct = adapted.get("leverage_pct")
             if debt_pct is not None:
-                ratio = _as_float(debt_pct, 0.70)
+                ratio = _required_number(debt_pct, f"Financing_Terms.{debt_pct_key}")
                 adapted["debt_ratio"] = ratio / 100.0 if ratio > 1.0 else ratio
         if adapted.get("construction_periods") is None:
             # The resolved count, so this mapping can never publish a count the engine
@@ -125,9 +148,17 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
             debt_ratio = debt_cfg.get("debt_ratio_pct")
         if debt_ratio is None:
             debt_ratio = debt_cfg.get("leverage_pct")
-        debt_ratio_value = _as_float(debt_ratio, 0.70)
-        if debt_ratio_value > 1.0:
-            debt_ratio_value /= 100.0
+        # An absent gearing passes through as None: the debt layer refuses it where it
+        # is used (#1429), while callers that read only the rates (the FX hedge's CIP
+        # forwards) still can. A present value must be a number.
+        debt_ratio_value: Optional[float] = None
+        if debt_ratio is not None:
+            debt_ratio_value = _required_number(
+                debt_ratio,
+                "debt.debt_ratio (or debt.debt_ratio_pct / debt.leverage_pct)",
+            )
+            if debt_ratio_value > 1.0:
+                debt_ratio_value /= 100.0
 
         tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years", 15))
         rate_value = debt_cfg.get(
@@ -182,7 +213,12 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 _as_float(debt_cfg.get("interest_only_years"), 0)
             ),
             "amortization_style": debt_cfg.get("amortization_style", "annuity"),
-            "target_dscr": _as_float(debt_cfg.get("target_dscr"), 1.30),
+            # None when absent; the debt layer refuses it there (#1429).
+            "target_dscr": (
+                None
+                if debt_cfg.get("target_dscr") is None
+                else _required_number(debt_cfg.get("target_dscr"), "debt.target_dscr")
+            ),
             "mix": debt_cfg.get("mix", {"usd_commercial_min": 1.0}),
             "rates": debt_cfg.get("rates", {"usd_nominal": usd_rate}),
         }

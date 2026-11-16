@@ -13,12 +13,13 @@ from finance.debt.constants import (
     _AMORT_VALID_STYLES,
 )
 from finance.debt.construction import calculate_construction_drawdowns, calculate_idc
-from finance.debt.helpers import _as_float, _npv
+from finance.debt.helpers import _as_float, _npv, _required_number
 from finance.debt.placeholders import _allow_toy_capex_fallback
 from finance.debt.schedules import _annuity_schedule, _sculpted_schedule, _solve_mix
 from finance.debt.terms import (
     _build_cfads_timeline,
     _extract_financing_terms,
+    _financing_key_prefix,
     _resolve_construction_periods,
     placeholder_construction_schedule,
     placeholder_debt_drawdown_pct,
@@ -52,7 +53,8 @@ def apply_debt_layer(
     drawdown_pct = p.get("debt_drawdown_pct")
     if drawdown_pct is None:
         drawdown_pct = placeholder_debt_drawdown_pct(construction_periods)
-    debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
+    prefix = _financing_key_prefix(params)
+    debt_ratio = _required_number(p.get("debt_ratio"), f"{prefix}debt_ratio")
     tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
     amort_raw = p.get("amortization_style", _AMORT_DEFAULT_STYLE)
@@ -76,7 +78,7 @@ def apply_debt_layer(
             "/".join(_AMORT_SCULPTED_STYLES),
         )
         amortization = _AMORT_DEFAULT_STYLE
-    target_dscr = _as_float(p.get("target_dscr"), 1.30)
+    target_dscr = _required_number(p.get("target_dscr"), f"{prefix}target_dscr")
 
     # Annual credit-support fees (#737): DFI partial-credit-guarantee fee + PRI premium,
     # each an annual rate on the OUTSTANDING senior debt (ADB PCG convention). Config

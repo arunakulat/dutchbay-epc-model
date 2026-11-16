@@ -423,6 +423,10 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
     # --- 6. DSCR investigation (sculpted sizing) ---
     sculpt = make(comp)
     sculpt["Financing_Terms"]["debt_sizing"] = "dual_dscr"
+    # Dual-DSCR sizing reads the flat P99 downside factor, which has no code default
+    # since #1429. The base case declares none (it does not size by DSCR), so state the
+    # value the engine used to fill in, unchanged.
+    sculpt["Financing_Terms"].setdefault("dscr_p99_downside_factor", 0.80)
     sp = _OUT_PATH / "solar_scenario_dscr_sculpt.yaml"
     yaml.safe_dump(sculpt, open(sp, "w"), sort_keys=False)
     dscr_sweep = []
