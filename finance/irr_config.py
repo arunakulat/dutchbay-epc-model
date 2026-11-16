@@ -24,8 +24,8 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     Parameters
     ----------
     config_path:
-        Path to YAML config file.
-        Default: "scenarios/dutchbay_master_config_v14.yaml"
+        Path to YAML config file. Required: there is no default scenario (#1759),
+        and ``None`` raises ``ValueError``.
 
     Returns
     -------
@@ -39,11 +39,13 @@ def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
 
     Examples
     --------
-    >>> config = load_config()  # Uses default path
-    >>> config = load_config("scenarios/custom_scenario.yaml")  # Custom path
+    >>> config = load_config("scenarios/custom_scenario.yaml")
     """
     if config_path is None:
-        config_path = "scenarios/dutchbay_master_config_v14.yaml"
+        # #1759: no site default. The caller names the scenario or master config.
+        raise ValueError(
+            "load_config needs a config_path; there is no default scenario"
+        )
 
     path = Path(config_path)
     if not path.exists():
@@ -79,7 +81,7 @@ def get_irr_bounds(
     --------
     Pattern 1 (Explicit Config - Recommended):
     >>> from finance.irr_config import load_config, get_irr_bounds
-    >>> config = load_config()  # Load once at app start
+    >>> config = load_config("scenarios/custom_scenario.yaml")  # Load once at app start
     >>> lower, upper = get_irr_bounds(config)
     >>> print(f"Project IRR bounds: [{lower}, {upper}]")
     Project IRR bounds: [-0.7, 0.35]
@@ -140,7 +142,7 @@ def get_xirr_bounds(
     --------
     Pattern 1 (Explicit Config):
     >>> from finance.irr_config import load_config, get_xirr_bounds
-    >>> config = load_config()
+    >>> config = load_config("scenarios/custom_scenario.yaml")
     >>> lower, upper = get_xirr_bounds(config)
     >>> print(f"XIRR bounds: [{lower}, {upper}]")
     XIRR bounds: [-0.7, 0.25]

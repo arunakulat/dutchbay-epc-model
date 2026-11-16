@@ -3,6 +3,7 @@
 - **Work item:** [#1677](https://github.com/arunakulat/dutchbay-epc-model/issues/1677)
 - **Source:** Owner's private review brief of 2026-11-14 (owner-authorized non-confidential benchmark calculations and unpriced buildup structure)
 - **Code & Config:** [`analytics/wind/blue_whale_equipment_parity.py`](../../analytics/wind/blue_whale_equipment_parity.py), [`conf/blue_whale_equipment_parity.yaml`](../../conf/blue_whale_equipment_parity.yaml), [`scripts/run_blue_whale_equipment_parity_v14.py`](../../scripts/run_blue_whale_equipment_parity_v14.py)
+- **Update 2026-11-16 (#1755):** the arithmetic now lives in the site-neutral [`analytics/wind/equipment_parity.py`](../../analytics/wind/equipment_parity.py), run for any scenario that declares an `equipment_cost_parity` block by [`scripts/run_equipment_parity_v14.py`](../../scripts/run_equipment_parity_v14.py) (method inputs in [`conf/equipment_parity.yaml`](../../conf/equipment_parity.yaml)). The single-site module and script above still work and print the same output.
 - **Status:** Conditional benchmark and unpriced buildup guard only. **No scenario CAPEX is revised.**
 
 ## 1. Key Findings & Methodology Correction (Appendix E)

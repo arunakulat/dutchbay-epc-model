@@ -78,7 +78,11 @@ def main() -> None:
     capacity_mw = 150.0
     capacity_factor = 0.40
     degradation = 0.006
-    resource_file = "inputs/mannar_synthetic.srw"
+    # #1775: the resource file is the caller's choice; no site default.
+    if len(sys.argv) < 2:
+        print("usage: python scripts/validate_pysam_offline.py <resource.srw>")
+        sys.exit(2)
+    resource_file = sys.argv[1]
 
     # Check resource file exists
     if not Path(resource_file).exists():
