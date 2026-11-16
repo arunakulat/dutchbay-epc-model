@@ -420,14 +420,13 @@ Financing_Terms:
   downside_aep_source: p90
   # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
   # maturity. balloon_treatment governs how the equity waterfall resolves it
-  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
-  # the prudent-lender default: post-maturity CFADS is trapped to retire any
-  # balloon before any equity distribution. NB: with bind_downside (D4.6) the
-  # smaller P90-bound debt now FULLY AMORTISES over the tenor — balloon_pct is 0%
-  # (it was ~40-57% with the unconstrained P50 gearing, breaching
-  # constraints.max_balloon_pct 10%; the P90 sizing resolved it). cash_sweep is
-  # retained for robustness, but no balloon remains in the base case.
-  balloon_treatment: cash_sweep
+  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). NB: with
+  # bind_downside (D4.6) the smaller P90-bound debt FULLY AMORTISES over the tenor,
+  # so balloon_pct is 0% and no balloon remains in the base case. This case shares
+  # the lender case's debt stack, so it follows the lender case to refinance
+  # (#1493, owner ruling 2026-11-14, after #1396). With no balloon the treatment
+  # does not change any figure; it applies only if a sensitivity leaves one.
+  balloon_treatment: refinance
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
@@ -489,7 +488,12 @@ constraints:
   warn_balloon_pct: 0.05
   refinancing:
     enabled: true
-    max_refinance_pct: 0.1
+    # The lender case's assumed terms (#1396), carried over with the refinance
+    # treatment (#1493). An ASSUMPTION, no term-sheet basis. max_refinance_pct is
+    # NOT ENFORCED: no engine code reads this key yet.
+    max_refinance_pct: 0.5
+    # REQUIRED when balloon_treatment is refinance (#1396). Assumed terms, no
+    # term-sheet basis: premium over the average debt rate (decimal) and tenor.
     refinance_rate_premium: 0.02
     refinance_tenor_years: 3
     requires_documentation: true

@@ -103,11 +103,14 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # equity NPV -6167136.817522649, min DSCR 0.868213653807526. (A first v0.9 at the 0.5 MW
 # floor, never on main: project NPV -4518152.075386281, equity NPV -4628674.688512776, min
 # DSCR 0.8702721240311019.)
+# Re-pinned for v0.10 (#1578 L-11: the battery's fade and its year-14 augmentation, with the
+# price's augmentation reserve removed; the size is unchanged). Before (v0.9): project NPV
+# -4477786.514808497, equity NPV -4557056.390826946, min DSCR 0.8716987467623586.
 SOLAR_BESS_PINS = {
-    "project_npv": -4477786.514808497,
-    "equity_npv": -4557056.390826946,
+    "project_npv": -4479213.671770833,
+    "equity_npv": -4557963.632064052,
     "equity_irr": None,
-    "min_dscr": 0.8716987467623586,
+    "min_dscr": 0.8719255106683012,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -587,6 +590,7 @@ def _context() -> sz.Context:
             _project_cfg()["plant"]["bess_dc_per_nominal"],
             150000.0,
         ),
+        battery_health=sz.BatteryHealth.from_mapping(_project_cfg()["battery_health"]),
     )
 
 
@@ -776,6 +780,88 @@ def test_battery_sensitivities_and_break_even_are_counted_and_responsive(
     assert edge["bess_power_mw"] == {"minimum": chosen == 0.5, "maximum": chosen == 2.0}
 
 
+def test_break_even_bracket_straddles_the_crossing_on_an_independent_path(
+    site: Dict[str, Any],
+) -> None:
+    """#1691 assurance N-1: the bisection's final bracket must straddle the sign change.
+
+    The search's own ``gap_at_low``/``gap_at_high`` are the endpoint gaps, so they cannot
+    show a wrong bracket. The check re-prices the battery at the two bracket ends through
+    the one-at-a-time cases (a separate code path) and recomputes the gap from their
+    battery profiles. Two PV sizes make the chosen battery's own value the best of its PVs;
+    a third battery outside reading A must stay out of the committed reading's gap.
+    """
+    cfg = _project_cfg()
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [107, 120],
+        "pv_ac_mw": [3.5],
+        "bess_power_mw": [0.5, 1.0, 1.5, 2.0],
+    }
+    cfg["readings"] = {
+        **cfg["readings"],
+        # 3.5 MW AC + 2.0 MW > 5.0 MW: 2.0 MW is outside reading A, inside reading B.
+        "A": {**cfg["readings"]["A"], "max_pv_ac_plus_bess_mw": 5.0},
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    cfg["curtailment_scenario"] = {**cfg["curtailment_scenario"], "enabled": False}
+    spec = {"input": "bess_usd_per_kwh", "low": 40.0, "high": 202.51, "tolerance": 4.0}
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [],
+        "break_even": [spec],
+    }
+    run = _run(cfg, site, evaluate_with_overrides)
+    committed = run.recommendation["committed_reading"]
+    assert committed == "A"
+    outside_a = [
+        p for p in run.points if p["bess_power_mw"] == 2.0 and p["metrics"] is not None
+    ]
+    assert outside_a and not any(p["eligible_by_reading"]["A"] for p in outside_a)
+    assert any(p["eligible_by_reading"]["B"] for p in outside_a)
+    (found,) = run.curtailment["break_even"]
+    chosen = found["chosen_bess_power_mw"]
+    lo, hi = found["bracket"]
+    assert hi - lo <= spec["tolerance"] and lo <= found["value"] <= hi
+
+    cfg["sensitivities"] = {
+        **cfg["sensitivities"],
+        "one_at_a_time": [
+            {"name": "at_low", "bess_usd_per_kwh": lo},
+            {"name": "at_high", "bess_usd_per_kwh": hi},
+            {"name": "search_low", "bess_usd_per_kwh": spec["low"]},
+            {"name": "search_high", "bess_usd_per_kwh": spec["high"]},
+        ],
+        "break_even": [],
+    }
+    check = _run(cfg, site, evaluate_with_overrides)
+    cases = check.curtailment["one_at_a_time"]["cases"]
+
+    def gap_and_other(case: str) -> tuple[float, Dict[str, Any]]:
+        rows = cases[case]["battery_profile"][committed]
+        assert 2.0 not in {r["size"]["bess_power_mw"] for r in rows}
+        own = next(r for r in rows if r["size"]["bess_power_mw"] == chosen)
+        other = max(
+            (r for r in rows if r["size"]["bess_power_mw"] != chosen),
+            key=lambda r: r["project_npv"],
+        )
+        return other["project_npv"] - own["project_npv"], other["size"]
+
+    # The search's endpoint gaps, recomputed under reading A only: a battery outside
+    # the committed reading must not enter the gap.
+    for case, key in (("search_low", "gap_at_low"), ("search_high", "gap_at_high")):
+        assert gap_and_other(case)[0] == pytest.approx(found[key], rel=1e-12, abs=1e-6)
+    g_lo, other_lo = gap_and_other("at_low")
+    g_hi, other_hi = gap_and_other("at_high")
+    # Opposite signs: the crossing lies inside the reported bracket.
+    assert (g_lo > 0.0) != (g_hi > 0.0)
+    assert (g_lo > 0.0) == (found["gap_at_low"] > 0.0)
+    # The battery that takes over is the best other battery on the side where it wins.
+    assert found["other_battery_takes_over_at"] == (
+        other_lo if g_lo > 0.0 else other_hi
+    )
+
+
 # ---------------------------------------------------------------------------
 # The committed run and the scenarios it writes
 # ---------------------------------------------------------------------------
@@ -794,7 +880,7 @@ def test_committed_summary_is_truthful_and_matches_the_config() -> None:
     # Each point: the trials and the base case, then the RTE case, the curtailment case and
     # the one-at-a-time cases (sensitivity_cases_per_point); then the break-even searches.
     oat = len(cfg["sensitivities"]["one_at_a_time"])
-    assert spec["sensitivity_cases_per_point"] == 2 + oat == 17
+    assert spec["sensitivity_cases_per_point"] == 2 + oat == 20
     assert (
         spec["effective_evaluations"]
         == pts * (n + 1)
@@ -1010,11 +1096,20 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
         assert r["posttax_cfads_lkr"] == pytest.approx(
             r["pretax_cfads_lkr"] - r["tax_lkr"], abs=1e-6
         )
+        # #1578 L-11 (v0.10): and after the battery's augmentation in its year.
         assert r["cfads_usd"] == pytest.approx(
-            (r["posttax_cfads_lkr"] - r["risk_haircut_amount_lkr"]) / r["fx_rate"],
+            (
+                r["posttax_cfads_lkr"]
+                - r["risk_haircut_amount_lkr"]
+                - r["bess_augmentation_capex_lkr"]
+            )
+            / r["fx_rate"],
             rel=1e-12,
         )
-    # At v0.9's grid-floor size the project never has a taxable profit, so its after-tax
+    assert [i + 1 for i, r in enumerate(rows) if r["bess_augmentation_capex_lkr"]] == [
+        14
+    ]
+    # At the grid-floor size (v0.9, v0.10) the project never has a taxable profit, so its after-tax
     # objective equals the pre-tax one (#1691: disclosed in STATUS). Under v0.8 tax was paid.
     assert sum(r["tax_lkr"] for r in rows) == 0.0
     # Responsiveness at a held discount rate, where tax bites (a 30 LKR/kWh generation tariff):
@@ -1075,12 +1170,97 @@ def test_solar_bess_scenario_carries_the_committed_base_case() -> None:
         eng["bess_mdsc_fade_pct_annual"], abs=5e-7
     )
     assert b["revenue"]["tariff_lkr_per_kwh"] == pytest.approx(50.10 - 20.72)
+    # #1578 L-11: the scenario's augmentation is the point's base case, and each event
+    # restores the engine's own SoH that year, so it moves the cash only.
+    health = point["base"]["battery_health"]
+    events = b["revenue"]["augmentation_schedule"]
+    by_year = health["augmentation_capex_usd_by_year"]
+    assert [e["year"] for e in events] == [int(y) for y in by_year] == [14]
+    for e in events:
+        assert e["capex_usd"] == pytest.approx(by_year[str(e["year"])], abs=0.005)
+        assert e["restore_to_soh"] == pytest.approx(
+            (1.0 - eng["bess_mdsc_fade_pct_annual"]) ** (e["year"] - 1), abs=5e-7
+        )
+    assert health["reserve_removed_usd_per_kwh"] == pytest.approx(8.00 / 0.90)
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(eng["tariff_lkr_per_kwh"])
     assert scen["capex"]["usd_total"] == pytest.approx(
         solar["capex_usd"] + b["capex_usd"] + 2.0e6
     )
     for path in (SOLAR_BESS, WIND, HYBRID):
         assert "contiguous" in path.read_text(), path.name
+
+
+def test_live_floor_point_reproduces_the_pins_through_the_l11_wiring(
+    site: Dict[str, Any],
+) -> None:
+    """#1578 L-11, live: the committed floor point's base case, evaluated now (#1711 N-1).
+
+    The other L-11 tests call the pieces directly or read the committed summary, which is
+    static. This one runs the sizing path for one trial at the floor (107 tables, 3.5 MW AC,
+    0.1 MW / 0.4 MWh) and checks what reaches the engine against oracles that do not come from
+    the sizing code:
+
+    * the base case's project NPV equals ``SOLAR_BESS_PINS`` (the committed scenario through
+      the engine, no override) to a few dollars (the scenario rounds its inputs);
+    * the BESS capex is 400 kWh at the pricing config's all-in mode less its augmentation
+      reserve grossed up by land and auxiliaries (8.00 / 0.90);
+    * the engine's schedule is one event before year 14, which would start at ``1 - 13 f``
+      (``f`` the config's fade), adding ``13 f`` of the nameplate at the config's
+      augmentation price per kWh (closed form);
+    * the one trial, whose residual fade is positive, moves the event earlier than the base.
+    """
+    seen: list[Dict[str, Any]] = []
+
+    def capturing(**kw: Any) -> Any:
+        seen.append(kw["overrides"])
+        return evaluate_with_overrides(**kw)
+
+    cfg = _quiet(_project_cfg())
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [107],
+        "pv_ac_mw": [3.5],
+        "bess_power_mw": [0.1],
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    cfg["curtailment_scenario"] = {**cfg["curtailment_scenario"], "enabled": False}
+    run = _run(cfg, site, capturing)
+    # One point x (base + 1 trial) + its RTE-sensitivity case.
+    assert run.effective_evaluations == len(seen) == 3 <= _hard_cap()
+
+    project = _project_cfg()
+    health = project["battery_health"]
+    bess_price = _yaml(PRICING_CONF)["bess"]
+    reserve = bess_price["augmentation_reserve_usd_per_kwh_base"] / (
+        1.0 - bess_price["land_and_auxiliaries_share_base"]
+    )
+    kwh = 0.4 * 1000.0
+    added = 13.0 * health["fade_pct_per_year"] / 100.0
+    expected_event = added * kwh * health["augmentation_usd_per_kwh"]
+    # Year 13 starts at or above the trigger, year 14 below it.
+    assert added - 1.0 / 13.0 * added <= 1.0 - health["augment_below_soh"] < added
+
+    point = run.points[0]
+    base = point["base"]
+    assert base["project_npv"] == pytest.approx(SOLAR_BESS_PINS["project_npv"], abs=5.0)
+    assert base["min_dscr"] == pytest.approx(SOLAR_BESS_PINS["min_dscr"], abs=1e-5)
+
+    schedule_key = "generation.technologies.bess_1.revenue.augmentation_schedule"
+    capex_key = "generation.technologies.bess_1.capex_usd"
+    # The base case is the point's first evaluation (row 0 of the trials).
+    base_overrides = seen[0]
+    assert base_overrides[capex_key] == pytest.approx(
+        kwh * (bess_price["all_in_usd_per_kwh"]["mode"] - reserve), abs=0.01
+    )
+    base_events = base_overrides[schedule_key]
+    assert [e["year"] for e in base_events] == [14]
+    assert base_events[0]["capex_usd"] == pytest.approx(expected_event, abs=0.01)
+
+    trial_overrides = [o for o in seen if o[schedule_key] != base_events]
+    assert len(trial_overrides) == 1
+    trial_events = trial_overrides[0][schedule_key]
+    assert trial_events and trial_events[0]["year"] < 14
+    assert trial_events[0]["capex_usd"] > 0.0
 
 
 def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> list:
