@@ -1,0 +1,46 @@
+# Equipment-cost parity: method configuration (#1755).
+#
+# Read by scripts/run_equipment_parity_v14.py (Hydra; one JSON object on stdout, CLI-01,
+# CLI-03) through analytics.wind.equipment_parity. Every site input (site, energy summary,
+# capex file, benchmark project, sensitivity premiums and the cost-buildup packages) comes
+# from the scenario's `equipment_cost_parity` block (analytics/site_analysis_blocks.py,
+# #1754). A scenario without that block reports "not applicable". Only method inputs live
+# here.
+#
+# Usage:
+#   .venv/bin/python scripts/run_equipment_parity_v14.py scenario=scenarios/<file>.yaml
+
+schema_version: equipment_parity_method_v1
+
+# Required on the command line: the scenario whose block is evaluated.
+scenario: null
+
+method:
+  hours_per_year: 8760
+  # Table 2, Ashuri et al. (2016), p. 60: 5 MW, 10 MW, 20 MW offshore reference scaling
+  # counterexample showing that $/MWh does not necessarily fall with turbine rating.
+  reference_scaling_counterexample:
+    - rating_mw: 5
+      modelled_tcc_usd_2010_basis: 6072300
+      modelled_annual_mwh: 28397
+    - rating_mw: 10
+      modelled_tcc_usd_2010_basis: 15489000
+      modelled_annual_mwh: 56273
+    - rating_mw: 20
+      modelled_tcc_usd_2010_basis: 45618000
+      modelled_annual_mwh: 122806
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
