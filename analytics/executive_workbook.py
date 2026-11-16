@@ -12,9 +12,10 @@ from analytics.reproducible_workbook import normalize_xlsx_reproducible
 PathLike = Union[str, Path]
 
 # Non-reliance notice written on the workbook's first sheet (owner ruling,
-# 2026-11-16 07:19Z, #1760). The workbook is produced on every default run once
-# the emitters follow emit_all, so it carries the same F-5 bar the HTML report and
-# the screening helpers carry. The wording is pinned by a test.
+# 2026-11-16 07:19Z, #1760). Once the emitters follow emit_all, every run that
+# writes its figures produces the workbook by default, so it carries the same F-5
+# bar the HTML report and the screening helpers carry. The wording is pinned by a
+# test.
 EXECUTIVE_WORKBOOK_F5_CAVEAT = (
     "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs for "
     "screening and discussion only. They support no covenant, lender or IC "

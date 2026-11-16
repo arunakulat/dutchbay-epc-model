@@ -21,6 +21,7 @@ def _engine_config(section: str | None, values: dict[str, Any]) -> dict[str, Any
     draw = [1.0 / n] * n if n >= 1 else []
     debt_terms: dict[str, Any] = {
         "debt_ratio": 0.0,
+        "target_dscr": 1.30,  # no code default since #1429
         "tenor_years": 1,
         "construction_schedule": sched,
         "debt_drawdown_pct": draw,
@@ -105,5 +106,13 @@ def test_present_empty_debt_masks_conflicting_top_level_periods(
         "construction_periods": 9,
     }
 
+    assert _resolve_construction_periods(config) == 2
+    # An empty debt mapping declares no gearing, which the engine now refuses (#1429).
+    with pytest.raises(
+        ValueError, match=r"debt\.debt_ratio .*no code default \(#1429\)"
+    ):
+        apply_debt_layer(config, annual_rows=[])
+    # With the required terms declared, the count is still the default of two.
+    config[debt_key] = {"debt_ratio": 0.0, "target_dscr": 1.30}
     assert _resolve_construction_periods(config) == 2
     assert apply_debt_layer(config, annual_rows=[])["construction_periods"] == 2
