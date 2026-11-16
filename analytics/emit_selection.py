@@ -261,7 +261,17 @@ def plan_emitters(
             raise ValueError(
                 "emit_all needs the effective scenario to decide which emitters apply"
             )
-        reason = APPLICABILITY[flag](scenario, cfg)
+        # Any error from an applicability check is listed with its reason, not raised: the
+        # plan is read before the finance run, and a default run must still write its figures
+        # (owner ruling 2026-11-16 07:15Z). An OmegaConf interpolation that cannot resolve, for
+        # example, raises on first read (#1760 domain D-2 at 7c595118).
+        try:
+            reason = APPLICABILITY[flag](scenario, cfg)
+        except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+            reason = (
+                f"the run config's inputs for {flag} cannot be read: "
+                f"{type(exc).__name__}: {exc}"
+            )
         plan[flag] = EmitterDecision(
             flag=flag,
             run=reason is None,

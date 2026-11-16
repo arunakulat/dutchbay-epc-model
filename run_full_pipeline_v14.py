@@ -1283,9 +1283,10 @@ def cli(cfg: DictConfig) -> None:
         # * Otherwise (emit_all=false, or write_artifacts=false), an emitter that is attempted
         #   at its default path clears its own default-path outputs first, so a failure cannot
         #   leave an earlier run's file there; nothing else is touched.
-        # * A configured path is the caller's and is never cleared, nor is any default-path
-        #   file in the configured path's own directory, where an emitter writes its companion
-        #   files (the capital-risk PNG).
+        # * A configured path is the caller's and is never cleared. A default-path file beside
+        #   it is cleared like any other (#1760 domain D-1 at 7c595118); if the emitter then
+        #   writes a companion file there (the capital-risk PNG), it is this run's and is not
+        #   listed as removed.
         from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
 
         def _configured(block: Any) -> Any:
@@ -1322,16 +1323,18 @@ def cli(cfg: DictConfig) -> None:
             ],
         }
 
-        def _clear_default_outputs(flag: str) -> list[str]:
+        def _clear_default_outputs(flag: str) -> list[Path]:
             configured = configured_paths.get(flag)
-            kept_dir = Path(str(configured)).resolve().parent if configured else None
-            removed: list[str] = []
+            kept = Path(str(configured)).resolve() if configured else None
+            removed: list[Path] = []
             for stale in default_outputs.get(flag, []):
-                if kept_dir is not None and stale.resolve().parent == kept_dir:
+                # Only the configured file itself is the caller's (#1760 domain D-1 at
+                # 7c595118): a default-path file beside it is still cleared.
+                if kept is not None and stale.resolve() == kept:
                     continue
                 if stale.is_file():
                     stale.unlink()
-                    removed.append(stale.name)
+                    removed.append(stale)
             return removed
 
         owns_default_paths = (
@@ -1340,7 +1343,7 @@ def cli(cfg: DictConfig) -> None:
             and isinstance(result, dict)
             and isinstance(result.get("emitters"), dict)
         )
-        cleared_up_front: dict[str, list[str]] = {}
+        cleared_up_front: dict[str, list[Path]] = {}
         if owns_default_paths:
             for flag in default_outputs:
                 cleared_up_front[flag] = _clear_default_outputs(flag)
@@ -1351,9 +1354,9 @@ def cli(cfg: DictConfig) -> None:
         # still stops the run on failure (FRAMEWORK-02), as before #1756.
         def _run_emitter(flag: str, emit: Callable[[], None]) -> None:
             if not owns_default_paths and not configured_paths.get(flag):
-                for name in _clear_default_outputs(flag):
+                for stale in _clear_default_outputs(flag):
                     logger.info(
-                        "%s: removed earlier output %s before running", flag, name
+                        "%s: removed earlier output %s before running", flag, stale.name
                     )
             if emit_plan[flag].source != "emit_all" or not isinstance(result, dict):
                 emit()
@@ -1559,12 +1562,18 @@ def cli(cfg: DictConfig) -> None:
                     or configured_paths.get(flag)
                 ):
                     continue
-                removed = list(cleared_up_front.get(flag, []))
+                # A cleared file that the emitter wrote again (a companion file beside a
+                # configured path, such as the capital-risk PNG) is this run's, not stale.
+                removed = [
+                    stale.name
+                    for stale in cleared_up_front.get(flag, [])
+                    if not stale.exists()
+                ]
                 if failed:
                     removed += [
-                        name
-                        for name in _clear_default_outputs(flag)
-                        if name not in removed
+                        stale.name
+                        for stale in _clear_default_outputs(flag)
+                        if stale.name not in removed
                     ]
                 if removed:
                     entry["removed_stale_outputs"] = removed

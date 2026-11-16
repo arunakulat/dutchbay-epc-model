@@ -11,9 +11,11 @@
     A malformed `tech_comparison` block is listed the same way, with its reason, rather than
     stopping the run: a block that is not a mapping (a list, a number), a `scenarios` value
     that is not a list, or an entry without a `label`, without a `config` or naming a file
-    that does not exist. The check applies the emitter's own rules.
+    that does not exist. The check applies the emitter's own rules. Any other error while
+    reading an emitter's inputs, such as an interpolation that cannot resolve, is listed with
+    its reason too.
   - `emit_all` writes files only in a run that writes its figures. With
-    `write_artifacts=false` (the CLI's default) it switches no emitter on: each one not
+    `write_artifacts=false` (the committed conf sets it true) it switches no emitter on: each one not
     switched on by name is listed as not run with that reason, and the run writes nothing
     into the export directory, as before. A switch set by name still runs.
   - The default export directory is shared between runs, so one rule decides what a run
@@ -26,8 +28,9 @@
     the removed files under `removed_stale_outputs`; one that fails is cleared again of
     anything it wrote before failing. Otherwise (`emit_all=false`, or no figures written),
     an emitter attempted at its default path clears its own earlier output first and
-    nothing else is touched. A configured path is never touched, nor is a default-path file
-    in the configured path's own directory (where the capital-risk PNG is written). A
+    nothing else is touched. A configured path is never touched; an earlier default-path
+    file beside it is cleared like any other, and a companion file the emitter writes again
+    there (the capital-risk PNG) is not listed as removed. A
     run that writes its figures removes an earlier `summary.json` first and writes its own
     last, so a run that stops early leaves none.
   - The run writes `kpis.json`, `debt_result.json`, `equity_distribution.json` and

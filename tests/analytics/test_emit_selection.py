@@ -705,24 +705,99 @@ def test_cli_default_clears_the_default_path_when_a_path_is_configured(
     assert summary["emitters"]["emit_capital_risk_report"] == entry
 
 
-def test_cli_default_keeps_files_beside_a_configured_path(
+def test_cli_default_clears_default_files_beside_a_configured_path_when_not_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A configured path in the run's own directory: its companion PNG there is kept."""
+    """#1760 domain D-1 at 7c595118: a configured path in the run's own directory.
+
+    Only the configured file is the caller's. An earlier run's default report and PNG beside
+    it are cleared and listed when the emitter does not run.
+    """
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls)
     run_dir = tmp_path / "run"
     _plant_stale_capital_risk(run_dir)
+    configured = run_dir / "custom_cr.html"
+    configured.write_text("the caller's", encoding="utf-8")
     _run_cli(
         tmp_path,
         {"scenario_name": "t"},
         write_artifacts=True,
-        capital_risk_report={"path": str(run_dir / "my_report.html")},
+        capital_risk_report={"path": str(configured)},
     )
     out = json.loads(capsys.readouterr().out)
     for name in _STALE_CAPITAL_RISK:
-        assert (run_dir / name).read_text(encoding="utf-8") == "earlier run", name
-    assert "removed_stale_outputs" not in out["emitters"]["emit_capital_risk_report"]
+        assert not (run_dir / name).exists(), name
+    assert configured.read_text(encoding="utf-8") == "the caller's"
+    entry = out["emitters"]["emit_capital_risk_report"]
+    assert entry["status"] == STATUS_NOT_RUN
+    assert entry["removed_stale_outputs"] == list(_STALE_CAPITAL_RISK)
+
+
+def test_cli_default_keeps_the_companion_file_a_configured_emitter_writes_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The emitter runs to a configured path in the run's directory and writes its PNG there,
+    at the default PNG path. The earlier default report is cleared and listed; the PNG this
+    run wrote is kept and is not listed as removed."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+
+    def write_report(result: Any, *args: Any, **kwargs: Any) -> Path:
+        calls.append("emit_capital_risk_report")
+        out = Path(str(args[-1] if args else kwargs.get("output_html_path")))
+        out.write_text("this run", encoding="utf-8")
+        (out.parent / "npv_distribution_equity_npv.png").write_text(
+            "this run", encoding="utf-8"
+        )
+        return out
+
+    import app.reports.capital_risk_emit as cr
+
+    monkeypatch.setattr(cr, "emit_capital_risk_report_from_pipeline", write_report)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    configured = run_dir / "custom_cr.html"
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t", "monte_carlo": {"parameters": [{"name": "x"}]}},
+        write_artifacts=True,
+        capital_risk_report={"path": str(configured)},
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert "emit_capital_risk_report" in calls
+    assert configured.read_text(encoding="utf-8") == "this run"
+    assert not (run_dir / "capital_risk_report.html").exists()
+    png = run_dir / "npv_distribution_equity_npv.png"
+    assert png.read_text(encoding="utf-8") == "this run"
+    entry = out["emitters"]["emit_capital_risk_report"]
+    assert entry["status"] == STATUS_RUN
+    assert entry["removed_stale_outputs"] == ["capital_risk_report.html"]
+
+
+def test_cli_default_clears_the_default_workbook_beside_a_configured_workbook(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1760 domain D-1 at 7c595118: a workbook configured at <export>/custom_wb.xlsx."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "executive_workbook.xlsx").write_text("earlier run", encoding="utf-8")
+    configured = run_dir / "custom_wb.xlsx"
+    configured.write_text("the caller's", encoding="utf-8")
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        write_artifacts=True,
+        executive_workbook_path=str(configured),
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert "emit_executive_workbook" in calls
+    assert not (run_dir / "executive_workbook.xlsx").exists()
+    assert configured.read_text(encoding="utf-8") == "the caller's"
+    entry = out["emitters"]["emit_executive_workbook"]
+    assert entry["removed_stale_outputs"] == ["executive_workbook.xlsx"]
 
 
 def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_switched_off(
@@ -890,3 +965,60 @@ def test_cli_without_write_artifacts_still_runs_a_switch_set_by_name(
     out = json.loads(capsys.readouterr().out)
     assert calls == ["emit_executive_workbook"]
     assert out["emitters"]["emit_executive_workbook"]["status"] == STATUS_RUN
+
+
+# --------------------------------------------------------------------------------------------
+# #1760 domain D-2 at 7c595118: an applicability check that raises is listed, not raised.
+# --------------------------------------------------------------------------------------------
+
+
+def test_plan_lists_an_unresolvable_interpolation_with_its_reason() -> None:
+    cfg = OmegaConf.create({"tech_comparison": {"scenarios": "${no_such_key}"}})
+    plan = plan_emitters(cfg, {"scenario_name": "t"})
+    decision = plan["emit_tech_comparison"]
+    assert decision.run is False
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.source == "emit_all"
+    assert decision.reason is not None
+    assert decision.reason.startswith(
+        "the run config's inputs for emit_tech_comparison cannot be read: "
+    )
+    assert "no_such_key" in decision.reason
+    assert plan["emit_executive_workbook"].run is True
+
+
+def test_plan_lists_any_applicability_error_with_its_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import analytics.emit_selection as es
+
+    def boom(scenario: Mapping[str, Any], cfg: Any) -> None:
+        raise KeyError("missing input")
+
+    monkeypatch.setitem(es.APPLICABILITY, "emit_interaction_grid", boom)
+    decision = plan_emitters({}, {"scenario_name": "t"})["emit_interaction_grid"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason == (
+        "the run config's inputs for emit_interaction_grid cannot be read: "
+        "KeyError: 'missing input'"
+    )
+
+
+def test_cli_default_with_an_unresolvable_tech_comparison_writes_its_figures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """On 7c595118 the early plan raised and the run exited before its figures."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        tech_comparison={"scenarios": "${no_such_key}"},
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert "emit_tech_comparison" not in calls
+    entry = out["emitters"]["emit_tech_comparison"]
+    assert entry["status"] == STATUS_NOT_RUN
+    assert "no_such_key" in entry["reason"]
+    assert out["kpis"] == _STUB_RESULT["kpis"]
+    assert (tmp_path / "run" / "summary.json").is_file()
