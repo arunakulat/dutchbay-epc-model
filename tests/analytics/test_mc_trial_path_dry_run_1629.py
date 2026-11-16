@@ -68,7 +68,8 @@ def test_five_us_cent_sweep_is_refused_before_sampling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """On main every trial refused the sampled total and the run stopped at trial 0; now
-    the engine refuses the committed sweep before any trial runs, and says how to fix it."""
+    the engine refuses the committed sweep before any trial runs, and says how to fix it.
+    """
     cfg = _load(_FIVE_US_CENT)
     assert cfg["capex"]["derive_from_breakdown"] is True
     assert "reconcile_breakdown" not in _capex_param(cfg)
@@ -211,7 +212,8 @@ def test_a_config_whose_base_does_not_resolve_is_left_to_the_trials() -> None:
 def test_census_the_dry_run_refuses_only_the_five_us_cent_variant() -> None:
     """Census: the dry run refuses no committed Monte Carlo scenario except the 5 US-cent
     variant, whose trials all failed on main. Mapping-form ``monte_carlo.parameters``
-    blocks are refused by the existing schema check, as on main, and are out of scope."""
+    blocks are refused by the existing schema check, as on main, and are out of scope.
+    """
     checked = 0
     refused = []
     for path in sorted(_SCENARIOS.rglob("*.yaml")):
