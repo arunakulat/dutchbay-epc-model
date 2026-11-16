@@ -399,9 +399,14 @@ def test_tariff_guards_refuse_each_bad_value(
     [
         ("bess", "power_mw"),
         ("bess", "energy_mwh"),
+        ("bess", "round_trip_efficiency"),
+        ("bess", "charge_efficiency"),
         ("bess", "min_soc_fraction"),
+        ("bess", "max_soc_fraction"),
         ("dispatch", "export_limit_mw"),
         ("dispatch", "cyclic_soc_tolerance_mwh"),
+        ("tariff", "priority_lkr_per_kwh"),
+        ("tariff", "other_lkr_per_kwh"),
         ("tariff", "wind_lkr_per_kwh"),
     ],
 )
