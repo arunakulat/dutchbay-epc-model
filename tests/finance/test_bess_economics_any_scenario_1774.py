@@ -120,11 +120,66 @@ def test_declared_cycles_drive_the_discharge_basis() -> None:
         assert curve[0]["discharge_mwh"] == pytest.approx(40.0 * cycles)
 
 
-def test_charging_cycles_default_to_the_declared_discharge_cycles() -> None:
-    cfg = _capacity_cfg(_block(charging={"tariff_lkr_per_kwh": 20.0}))
-    spec = resolve_charging_cost_spec(cfg)
-    assert spec is not None
-    assert spec.cycles_per_year == 300.0
+def test_a_separate_charging_cycles_input_is_refused() -> None:
+    """#1776 domain D-2: charging energy follows the discharge cycles; no second input."""
+    errors = _errors(
+        _capacity_cfg(
+            _block(charging={"tariff_lkr_per_kwh": 20.0, "cycles_per_year": 365.0})
+        )
+    )
+    assert any("charging.cycles_per_year: unknown key" in e for e in errors)
+
+
+def test_declared_cycles_drive_the_charging_cost() -> None:
+    """#1776 domain D-5: the economics' charging cost scales with the declared cycles."""
+    costs = []
+    for cycles in (250.0, 365.0):
+        cfg = _capacity_cfg(
+            _block(
+                discharge_cycles_per_year=cycles,
+                charging={"tariff_lkr_per_kwh": 10.0, "round_trip_efficiency": 0.8},
+            )
+        )
+        projects = compute_bess_project_economics(
+            cfg, discount_rate=0.10, project_years=3
+        )
+        assert projects is not None
+        costs.append(projects[0].charging_cost_lkr[0])
+    # year 1 at full health: 40 MWh x cycles / 0.8 x 1000 kWh/MWh x 10 LKR/kWh
+    assert costs[0] == pytest.approx(40.0 * 250.0 / 0.8 * 1000.0 * 10.0)
+    assert costs[1] == pytest.approx(40.0 * 365.0 / 0.8 * 1000.0 * 10.0)
+
+
+def _two_battery_cfg() -> Dict[str, Any]:
+    cfg = _capacity_cfg(_block())
+    techs = cfg["generation"]["technologies"]
+    techs["store_b"] = copy.deepcopy(techs["store"])
+    return cfg
+
+
+def test_more_than_one_capacity_charge_battery_is_refused() -> None:
+    """#1776 domain D-3: one block is one battery project; two would double the capex."""
+    errors = _errors(_two_battery_cfg())
+    assert any("declares 2 capacity-charge batteries" in e for e in errors)
+    with pytest.raises(ValueError, match="2 capacity-charge batteries"):
+        compute_bess_project_economics(
+            _two_battery_cfg(), discount_rate=0.10, project_years=3
+        )
+
+
+def test_flows_translate_at_the_operating_fx_curve_with_its_offset() -> None:
+    """#1776 domain D-1/D-4: USD on the scenario's operating FX curve, offset as the cashflow."""
+    cfg = _capacity_cfg(_block())
+    cfg["fx"] = {"start_lkr_per_usd": 300.0, "annual_depr_pct": 5.0}
+    cfg["timeline"] = {"construction_years": 1}
+    project = compute_bess_project_economics(cfg, discount_rate=0.10, project_years=3)[
+        0
+    ]
+    assert project.fx_lkr_per_usd[0] == pytest.approx(300.0 * 1.05)
+    assert project.cashflow_usd[0] == pytest.approx(-5_000_000.0)
+    for t, rate in enumerate(project.fx_lkr_per_usd, start=1):
+        assert project.cashflow_usd[t] == pytest.approx(project.cashflow_lkr[t] / rate)
+    assert project.npv_usd == pytest.approx(npf.npv(0.10, project.cashflow_usd))
 
 
 #: sha256 of the lower-cased word tokens (and adjacent token pairs) the module must not
@@ -345,7 +400,11 @@ def test_pipeline_runs_the_analysis_for_a_scenario_that_opts_in(tmp_path: Path) 
     project = entry["projects"][0]
     cashflow = project["cashflow_lkr"]
     # Independent oracle: numpy-financial's IRR on the emitted cashflow.
-    assert project["irr"] == pytest.approx(npf.irr(cashflow), rel=1e-9)
+    assert project["irr_lkr"] == pytest.approx(npf.irr(cashflow), rel=1e-9)
+    usd = project["cashflow_usd"]
+    assert project["irr_usd"] == pytest.approx(npf.irr(usd), rel=1e-9)
+    assert project["npv_usd"] == pytest.approx(npf.npv(entry["discount_rate"], usd))
+    assert entry["currency_basis"].startswith("USD, nominal, pre-tax, unlevered")
 
     # KPI-neutral: the scenario's own figures do not move.
     for key in ("kpis", "annual_rows", "debt_result", "equity_distribution"):

@@ -366,7 +366,6 @@ def test_charging_cost_hand_checked_with_rte_inflation() -> None:
     spec = ChargingCostSpec(
         charging_tariff_lkr_per_kwh=20.0,
         round_trip_efficiency=0.80,
-        cycles_per_year=400,
     )
     assert charging_cost_lkr_for_year(spec, 16_000.0) == pytest.approx(400_000_000.0)
 
@@ -382,13 +381,12 @@ def test_resolve_charging_none_without_block() -> None:
 
 
 def test_resolve_charging_reads_block() -> None:
-    """The charging block resolves tariff / RTE / cycles."""
+    """The charging block resolves tariff and RTE (no separate charging-cycles input)."""
     cfg = _capacity_cfg(
         economics_overrides={
             "charging": {
                 "tariff_lkr_per_kwh": 25.0,
                 "round_trip_efficiency": 0.9,
-                "cycles_per_year": 350.0,
             }
         }
     )
@@ -396,7 +394,6 @@ def test_resolve_charging_reads_block() -> None:
     assert spec is not None
     assert spec.charging_tariff_lkr_per_kwh == 25.0
     assert spec.round_trip_efficiency == 0.9
-    assert spec.cycles_per_year == 350.0
 
 
 def test_resolve_charging_requires_tariff() -> None:
@@ -426,7 +423,9 @@ def test_economics_irr_npv_hand_checked_no_opex_no_charging() -> None:
 
     landed capex = 5,000,000 USD x 300 = 1,500,000,000 LKR at t0.
     revenue = 240,000,000 LKR/yr, flat, 15 years, no fade, no opex, no charging.
-    IRR and NPV must equal the independent numpy_financial / finance.irr computation.
+    At a flat 300 LKR/USD the USD series is -5,000,000 then 800,000 a year. The USD IRR
+    and NPV (the reported basis) and the LKR IRR must equal the independent
+    numpy_financial / finance.irr computation.
     """
     cfg = _capacity_cfg()
     results = compute_bess_project_economics(cfg, discount_rate=0.10, project_years=15)
@@ -438,8 +437,12 @@ def test_economics_irr_npv_hand_checked_no_opex_no_charging() -> None:
 
     expected_cf = [-1_500_000_000.0] + [240_000_000.0] * 15
     assert list(res.cashflow_lkr) == pytest.approx(expected_cf)
-    assert res.irr == pytest.approx(float(npf.irr(expected_cf)))
-    assert res.npv_lkr == pytest.approx(npv(0.10, expected_cf))
+    expected_usd = [-5_000_000.0] + [800_000.0] * 15
+    assert list(res.cashflow_usd) == pytest.approx(expected_usd)
+    assert res.irr_usd == pytest.approx(float(npf.irr(expected_usd)))
+    assert res.npv_usd == pytest.approx(npv(0.10, expected_usd))
+    assert res.irr_lkr == pytest.approx(float(npf.irr(expected_cf)))
+    assert "USD, nominal, pre-tax, unlevered" in res.currency_basis
     # No opex / no charging => those legs are zero and disclosed.
     assert all(v == 0.0 for v in res.opex_lkr)
     assert all(v == 0.0 for v in res.charging_cost_lkr)
@@ -466,9 +469,9 @@ def test_economics_charging_lever_lowers_cashflow_and_irr() -> None:
     assert charged.charging_cost_lkr[0] == pytest.approx(expected_charge)
     assert charged.charging_modelled is True
     assert charged.cashflow_lkr[1] < base.cashflow_lkr[1]
-    assert charged.npv_lkr < base.npv_lkr
-    assert base.irr is not None and charged.irr is not None
-    assert charged.irr < base.irr
+    assert charged.npv_usd < base.npv_usd
+    assert base.irr_usd is not None and charged.irr_usd is not None
+    assert charged.irr_usd < base.irr_usd
 
 
 def test_economics_opex_reduces_cashflow() -> None:
