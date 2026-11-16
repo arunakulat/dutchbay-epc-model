@@ -409,8 +409,8 @@ def test_cli_default_records_a_failed_emitter_and_completes(
     ("failing", "expected_calls"),
     [
         ("emit_grid_screen", ["emit_executive_workbook", "emit_grid_screen"]),
-        # The workbook is the one emitter every default run reaches (assurance
-        # F-2, M20): switched on explicitly, its failure still stops the run.
+        # The workbook is the one emitter every default run that writes files reaches
+        # (assurance F-2, M20): switched on explicitly, its failure still stops the run.
         ("emit_executive_workbook", ["emit_executive_workbook"]),
     ],
 )
