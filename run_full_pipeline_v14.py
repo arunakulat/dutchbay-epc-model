@@ -134,6 +134,7 @@ from omegaconf import DictConfig, OmegaConf
 from analytics.emit_selection import (
     STATUS_FAILED,
     STATUS_NOT_RUN,
+    STATUS_OFF,
     emit_all_requested,
     plan_emitters,
     plan_report,
@@ -1444,10 +1445,11 @@ def cli(cfg: DictConfig) -> None:
 
             _run_emitter("emit_grid_screen", _emit_grid_screen)
 
-        # #1756 (domain review F-2): the default export directory is shared between runs, so an
-        # emitter that emit_all lists as not run, or that fails, must not leave an earlier run's
-        # output at its default path beside this run's figures. Only default paths are cleared;
-        # an explicitly configured path is the caller's, and emit_all=false clears nothing.
+        # #1756 (domain review F-2, D-1): the default export directory is shared between runs, so
+        # an emitter that emit_all lists as not run, that fails, or that is switched off
+        # explicitly while emit_all is on must not leave an earlier run's output at its default
+        # path beside this run's figures. Only default paths are cleared; an explicitly
+        # configured path is the caller's, and emit_all=false clears nothing.
         if (
             emit_all
             and isinstance(result, dict)
@@ -1494,9 +1496,15 @@ def cli(cfg: DictConfig) -> None:
                 ),
             }
             for flag, entry in result["emitters"].items():
-                if not isinstance(entry, dict) or entry.get("source") != "emit_all":
+                if not isinstance(entry, dict):
                     continue
-                if entry.get("status") not in (STATUS_NOT_RUN, STATUS_FAILED):
+                source, status = entry.get("source"), entry.get("status")
+                # Not run or failed under emit_all, or switched off explicitly while emit_all is
+                # on (domain review D-1 at 43a58859): either way this run wrote nothing there.
+                if not (
+                    (source == "emit_all" and status in (STATUS_NOT_RUN, STATUS_FAILED))
+                    or (source == "explicit" and status == STATUS_OFF)
+                ):
                     continue
                 removed: list[str] = []
                 for stale in default_outputs.get(flag, []):

@@ -499,7 +499,6 @@ def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_that_fails(
     "overrides",
     [
         {"emit_all": False},
-        {"emit_capital_risk_report": False},
         {"capital_risk_report": {"path": "elsewhere/capital_risk_report.html"}},
     ],
 )
@@ -509,7 +508,7 @@ def test_cli_keeps_outputs_it_does_not_own(
     capsys: pytest.CaptureFixture[str],
     overrides: Dict[str, Any],
 ) -> None:
-    """Only emit_all's own default paths are cleared: an explicit switch or path is the caller's."""
+    """emit_all=false clears nothing, and an explicitly configured path is the caller's."""
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls)
     run_dir = tmp_path / "run"
@@ -518,3 +517,29 @@ def test_cli_keeps_outputs_it_does_not_own(
     capsys.readouterr()
     for name in _STALE_CAPITAL_RISK:
         assert (run_dir / name).read_text(encoding="utf-8") == "earlier run", name
+
+
+def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_switched_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Domain review D-1: emit_all on with emit_capital_risk_report=false (the fast run)."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t", "monte_carlo": {"parameters": [{"name": "x"}]}},
+        write_artifacts=True,
+        emit_capital_risk_report=False,
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert "emit_capital_risk_report" not in calls
+    for name in _STALE_CAPITAL_RISK:
+        assert not (run_dir / name).exists(), name
+    entry = out["emitters"]["emit_capital_risk_report"]
+    assert entry["status"] == "off"
+    assert entry["source"] == "explicit"
+    assert entry["removed_stale_outputs"] == list(_STALE_CAPITAL_RISK)
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["emitters"]["emit_capital_risk_report"] == entry
