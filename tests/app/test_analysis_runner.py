@@ -132,8 +132,15 @@ def test_default_analysis_mc_runs_engine_and_wraps_envelope(
         lambda s, m: steps.append((s, m)),
     )
 
-    # The engine is driven with the ASSESSED scenario and the requested knobs.
-    assert captured["base_config"] is assessed
+    # The engine is driven with the ASSESSED scenario and the requested knobs, with the
+    # fixed-debt stress turned off for web jobs (#962, owner decision 2026-11-15).
+    assert captured["base_config"] == {
+        "monte_carlo": {
+            "parameters": [{"name": "capex.usd_total"}],
+            "fixed_debt_stress": False,
+        }
+    }
+    assert "fixed_debt_stress" not in assessed["monte_carlo"]  # caller's dict unchanged
     assert captured["n_trials"] == 500 and captured["seed"] == 7
     # The result is a typed, discriminated envelope carrying the engine dict verbatim.
     assert out["analysis_type"] == "mc"
@@ -680,3 +687,43 @@ def test_default_analysis_morris_fails_loud_on_too_few_drivers(
             {"monte_carlo": {"parameters": [{"name": "capex.usd_total"}]}},
             lambda _step, _message: None,
         )
+
+
+# --------------------------------------------------------------------------- #
+# #962 (owner decision 2026-11-15): web jobs never run the fixed-debt stress.
+# --------------------------------------------------------------------------- #
+def test_default_analysis_mc_turns_the_lender_fixed_debt_stress_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pathlib import Path
+
+    import yaml
+
+    lender = yaml.safe_load(
+        (
+            Path(__file__).resolve().parents[2]
+            / "scenarios"
+            / "dutchbay_lendercase_2025Q4.yaml"
+        ).read_text(encoding="utf-8")
+    )
+    assert lender["monte_carlo"]["fixed_debt_stress"] is True  # lender runs keep it
+    captured: Dict[str, Any] = {}
+
+    class _FakeMC:
+        def model_dump(self) -> Dict[str, Any]:
+            return {"summary": {}, "metadata": {}}
+
+    def _spy(*, base_config: Any, **_kw: Any) -> _FakeMC:
+        captured["base_config"] = base_config
+        return _FakeMC()
+
+    monkeypatch.setattr(ar, "run_monte_carlo_analysis", _spy)
+    default_analysis(_request(n_trials=500, seed=1), lender, lambda _s, _m: None)
+
+    sent = captured["base_config"]
+    assert sent["monte_carlo"]["fixed_debt_stress"] is False
+    assert lender["monte_carlo"]["fixed_debt_stress"] is True
+    rest = {k: v for k, v in sent["monte_carlo"].items() if k != "fixed_debt_stress"}
+    assert rest == {
+        k: v for k, v in lender["monte_carlo"].items() if k != "fixed_debt_stress"
+    }

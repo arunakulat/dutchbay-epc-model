@@ -577,7 +577,8 @@ def battery_pretax(
     Revenue in a contract year is delivered x peak rate - charged x wind tariff, each with its
     escalable part indexed at ``index_rate`` from the tariff base year; after the contract the
     delivered energy earns the wind tariff. No tax, debt or CFADS haircut.
-        ``capex_price_factor`` is the engine's own price-year escalation of the capex
+
+    ``capex_price_factor`` is the engine's own price-year escalation of the capex
     (``capex.price_basis``), so the battery is priced at the same draw as in the engine.
     """
     capex = energy_mwh * 1000.0 * usd_per_kwh * capex_price_factor
@@ -622,12 +623,59 @@ def down_ramp_firming(rated_mw: float, ramp_mw_per_min: float) -> Dict[str, floa
     }
 
 
+def _all_in_factor(
+    supplier: Mapping[str, Any], all_in_usd_per_kwh_mode: float
+) -> float:
+    """All-in / CIF: the repository's all-in mode over the offer per usable kWh.
+
+    The offer per usable kWh is the offer per DC kWh over the published (rounded) usable
+    fraction (owner decision, 2026-11-15).
+    """
+    usable = float(supplier["usable_per_dc"])
+    return all_in_usd_per_kwh_mode / (float(supplier["offer_usd_per_dc_kwh"]) / usable)
+
+
+def bottom_up_price(
+    supplier: Mapping[str, Any],
+    *,
+    power_mw: float,
+    energy_mwh: float,
+    all_in_usd_per_kwh_mode: float,
+) -> Dict[str, float]:
+    """Price a battery bottom-up from the supplier's lines; CIF and all-in (USD).
+
+    The skid is taken pro rata by power, the EMS once per site, and the DC energy for
+    ``energy_mwh`` usable at the offer's DC rate, plus the installation and transport share.
+    All-in uses the same factor as :func:`firming_unit_prices`. The flat per-kWh mode prices a
+    battery as a slice of a 4-hour product, so it understates the power-related and per-site
+    cost of a short-duration unit; this is the comparison.
+
+    Raises:
+        ValueError: If the power or the energy is not positive.
+    """
+    if power_mw <= 0.0 or energy_mwh <= 0.0:
+        raise ValueError("bottom-up power and energy must be positive")
+    usable = float(supplier["usable_per_dc"])
+    soft = 1.0 + float(supplier["install_transport_share"])
+    cif = (
+        float(supplier["ac_skid_usd"]) * power_mw / float(supplier["ac_skid_mw"])
+        + float(supplier["ems_usd"])
+        + energy_mwh / usable * 1000.0 * float(supplier["dc_block_usd_per_dc_kwh"])
+    ) * soft
+    all_in = cif * _all_in_factor(supplier, all_in_usd_per_kwh_mode)
+    return {
+        "cif_usd": cif,
+        "all_in_usd": all_in,
+        "all_in_usd_per_kwh": all_in / (energy_mwh * 1000.0),
+    }
+
+
 def firming_unit_prices(
     supplier: Mapping[str, Any],
     *,
     power_mw: float,
     energy_mwh: float,
-    all_in_usd_per_contracted_kwh: float,
+    all_in_usd_per_kwh_mode: float,
 ) -> Dict[str, Dict[str, float]]:
     """Price a held firming unit two ways from a supplier offer; CIF, all-in and O&M (USD).
 
@@ -635,7 +683,7 @@ def firming_unit_prices(
     DC energy for ``energy_mwh`` usable at the offer's DC rate times a power-cell premium ``k``,
     plus the installation and transport share. ``smallest_block``: the supplier's smallest
     block with one skid at the flat offer rate per DC kWh. All-in = CIF x
-    ``all_in_usd_per_contracted_kwh`` / the offer's CIF per usable kWh, which is the offer per DC
+    ``all_in_usd_per_kwh_mode`` / the offer's CIF per usable kWh, which is the offer per DC
     kWh over the published (rounded) usable fraction. O&M = a generic service share of CIF a
     year (an assumption, not from the offer).
 
@@ -647,10 +695,7 @@ def firming_unit_prices(
         raise ValueError("firming power must be in (0, one skid] and energy positive")
     usable = float(supplier["usable_per_dc"])
     soft = 1.0 + float(supplier["install_transport_share"])
-    # The offer per usable kWh, from the published (rounded) usable fraction.
-    factor = all_in_usd_per_contracted_kwh / (
-        float(supplier["offer_usd_per_dc_kwh"]) / usable
-    )
+    factor = _all_in_factor(supplier, all_in_usd_per_kwh_mode)
     service = float(supplier["service_share_of_cif_per_year"])
     dc_kwh = energy_mwh / usable * 1000.0
     out: Dict[str, Dict[str, float]] = {}
@@ -685,6 +730,7 @@ __all__ = [
     "REVENUE_BASES",
     "battery_pretax",
     "bess_component",
+    "bottom_up_price",
     "calibrate_cp",
     "derive_rates",
     "dispatch",

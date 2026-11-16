@@ -591,6 +591,13 @@ monte_carlo:
   # Lender runs never substitute toy KPIs for a failed trial (#962 item 1, owner ruling
   # 2026-11-15): a trial whose full v14 evaluation raises stops the run instead.
   allow_toy_fallback: false
+  # Lender runs also test each trial's CFADS against the debt service committed at
+  # financial close (#962 item 4, owner ruling 2026-11-15), rather than only against
+  # debt re-sized for that trial. Internal model metadata only, under
+  # metadata.fixed_debt_stress, on an unfolded per-period basis that is not the covenant
+  # basis; the F-5 HOLD still applies. Web-app Monte Carlo jobs turn it off (owner
+  # decision 2026-11-15; app/jobs/analysis_runner.py).
+  fixed_debt_stress: true
 
   # Wind resource uncertainty (dominant risk driver)
   weibull_uncertainty_pct: 10.0  # ±10% on A and k
@@ -669,6 +676,7 @@ monte_carlo:
   var_confidence: 0.95
   cvar_confidence: 0.95
   percentiles: [10, 25, 50, 75, 90]
+  # Outranked by constraints.min_dscr_covenant (1.30x), which the fixed-debt stress uses.
   min_dscr_covenant: 1.2
   min_llcr_covenant: 1.25
   output_path: "outputs/mc_aep_dutchbay_100k.parquet"

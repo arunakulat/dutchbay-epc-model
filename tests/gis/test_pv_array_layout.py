@@ -463,22 +463,25 @@ def test_site_fit_config_is_strict(cfg: Dict[str, Any]) -> None:
 
 
 def test_the_layout_library_carries_no_site_wording() -> None:
-    """The GeoJSON note comes from the caller, not the library (#1531 assurance A-5)."""
+    """The GeoJSON note comes from the caller, not the library (#1531 assurance A-5).
+
+    The docstrings are covered too (#1590 assurance A-4); the wider site-wording check of
+    the solar + BESS modules is in ``tests/solar/test_solar_bess_site_neutral_1578.py``.
+    """
     import ast
     import inspect
 
     import analytics.gis.pv_array_layout as layout_mod
 
     tree = ast.parse(Path(layout_mod.__file__).read_text())
-    module_doc = ast.get_docstring(tree, clean=False)
     texts = [
         node.value
         for node in ast.walk(tree)
-        if isinstance(node, ast.Constant)
-        and isinstance(node.value, str)
-        and node.value != module_doc
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
     ]
-    assert not [t for t in texts if "blue whale" in t.lower()]
+    assert not [
+        t for t in texts if "blue whale" in t.lower() or "blue_whale" in t.lower()
+    ]
     params = inspect.signature(layout_mod.layout_feature_collection).parameters
     assert params["note"].kind is inspect.Parameter.KEYWORD_ONLY
     assert params["note"].default is inspect.Parameter.empty
