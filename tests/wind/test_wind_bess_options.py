@@ -439,7 +439,7 @@ def test_down_ramp_firming_is_the_ramp_triangle() -> None:
 def test_firming_unit_prices_follow_the_hand_build_up() -> None:
     supplier = _cfg()["down_ramp"]["supplier"]
     prices = wbo.firming_unit_prices(
-        supplier, power_mw=9.5, energy_mwh=0.8, all_in_usd_per_contracted_kwh=140.0
+        supplier, power_mw=9.5, energy_mwh=0.8, all_in_usd_per_kwh_mode=140.0
     )
     dc_kwh = 0.8 / supplier["usable_per_dc"] * 1000
     cif = (
@@ -457,9 +457,37 @@ def test_firming_unit_prices_follow_the_hand_build_up() -> None:
     assert supplier["usable_per_dc"] == 0.91
     assert block["cif_usd"] == pytest.approx(20_000 * supplier["offer_usd_per_dc_kwh"])
     assert block["energy_mwh"] == pytest.approx(18.2)
+    assert block["om_usd_per_year"] == pytest.approx(block["cif_usd"] * 0.02)
     with pytest.raises(ValueError, match="one skid"):
         wbo.firming_unit_prices(
-            supplier, power_mw=12.0, energy_mwh=0.8, all_in_usd_per_contracted_kwh=140.0
+            supplier, power_mw=12.0, energy_mwh=0.8, all_in_usd_per_kwh_mode=140.0
+        )
+
+
+def test_bottom_up_price_follows_the_hand_build_up() -> None:
+    supplier = _cfg()["down_ramp"]["supplier"]
+    out = wbo.bottom_up_price(
+        supplier, power_mw=0.5, energy_mwh=0.5, all_in_usd_per_kwh_mode=140.0
+    )
+    # Skid pro rata by power, the EMS once per site, the DC energy at the offer's DC rate.
+    cif = (
+        supplier["ac_skid_usd"] * 0.5 / supplier["ac_skid_mw"]
+        + supplier["ems_usd"]
+        + 0.5 / supplier["usable_per_dc"] * 1000 * supplier["dc_block_usd_per_dc_kwh"]
+    ) * (1 + supplier["install_transport_share"])
+    assert out["cif_usd"] == pytest.approx(cif)
+    assert out["all_in_usd"] == pytest.approx(cif * 140.0 / (90.0009 / 0.91))
+    assert out["all_in_usd_per_kwh"] == pytest.approx(out["all_in_usd"] / 500.0)
+    # A short unit carries the per-site and power cost, so it costs more per kWh than the
+    # flat mode; a long one less.
+    assert out["all_in_usd_per_kwh"] > 140.0
+    long = wbo.bottom_up_price(
+        supplier, power_mw=10.0, energy_mwh=40.0, all_in_usd_per_kwh_mode=140.0
+    )
+    assert long["all_in_usd_per_kwh"] < 140.0
+    with pytest.raises(ValueError, match="positive"):
+        wbo.bottom_up_price(
+            supplier, power_mw=0.0, energy_mwh=0.5, all_in_usd_per_kwh_mode=140.0
         )
 
 
@@ -619,6 +647,17 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
             bases["whole_wind_peak_rate"]["delta_project_npv_vs_wind_only"]
             > bases["stacked"]["delta_project_npv_vs_wind_only"]
         )
+    # The CLI prices the battery's own pre-tax capex at the engine's price-year factor.
+    from finance.capex_price_basis import capex_escalation_factor
+
+    basis = capex_escalation_factor(_scenario())
+    assert basis is not None and float(basis["factor"]) != 1.0
+    mode = cfg["battery"]["usd_per_kwh"]["mode"]
+    for name, opt in out["options"].items():
+        capex = opt["readings"]["B"]["battery_pretax_base_basis"]["capex_usd_at_draw"]
+        assert capex == pytest.approx(
+            opt["energy_mwh"] * 1000.0 * mode * float(basis["factor"]), rel=1e-12
+        ), name
     firming = out["down_ramp_illustrative"]["firming_unit_base_basis"]
     for unit in firming.values():
         assert unit["kpis"]["delta_project_npv_vs_wind_only"] < 0
@@ -715,6 +754,7 @@ def _option_scenario(
     row: Dict[str, Any],
     reading: Dict[str, Any],
     overrides: Optional[Dict[str, Any]] = None,
+    usd_per_kwh: Optional[float] = None,
 ) -> Dict[str, Any]:
     """The wind scenario with one summary option, built from its reported energies."""
     cfg = _cfg()
@@ -725,7 +765,7 @@ def _option_scenario(
         power_mw=row["power_mw"],
         energy_mwh=row["energy_mwh"],
         operation=row["operation"],
-        usd_per_kwh=bcfg["usd_per_kwh"]["mode"],
+        usd_per_kwh=bcfg["usd_per_kwh"]["mode"] if usd_per_kwh is None else usd_per_kwh,
         om_usd_per_dc_kwh_year=bcfg["om_usd_per_dc_kwh_year"],
         dc_per_nominal=bcfg["dc_per_nominal"],
         round_trip_efficiency=bcfg["round_trip_efficiency"],
@@ -762,3 +802,140 @@ def test_cli_refuses_a_scenario_the_engine_would_escalate_automatically() -> Non
     scenario.setdefault("finance", {})["capex_usd"] = scenario["capex"]["usd_total"]
     with pytest.raises(ValueError, match="automatically"):
         cli._kpis(scenario)
+
+
+def test_committed_capex_and_service_figures_recompute_from_the_config() -> None:
+    from finance.capex_price_basis import capex_escalation_factor
+
+    summary = json.loads(SUMMARY.read_text())
+    cfg = _cfg()
+    mode = cfg["battery"]["usd_per_kwh"]["mode"]
+    basis = capex_escalation_factor(_scenario())
+    factor = 1.0 if basis is None else float(basis["factor"])
+    assert factor != 1.0  # the scenario declares a price basis, so the pin bites
+    for row in summary["options"].values():
+        for rr in row["readings"].values():
+            assert rr["battery_pretax_base_basis"][
+                "capex_usd_at_draw"
+            ] == pytest.approx(row["energy_mwh"] * 1000.0 * mode * factor, rel=1e-12)
+    supplier = cfg["down_ramp"]["supplier"]
+    service = supplier["service_share_of_cif_per_year"]
+    firming = summary["down_ramp_illustrative"]["firming_unit_base_basis"]
+    for unit in firming.values():
+        assert unit["om_usd_per_year"] == pytest.approx(
+            unit["cif_usd"] * service, rel=1e-12
+        )
+    block = firming["smallest_block"]
+    assert block["cif_usd"] == pytest.approx(
+        supplier["smallest_block_dc_mwh"] * 1000.0 * supplier["offer_usd_per_dc_kwh"]
+    )
+    assert block["all_in_usd"] == pytest.approx(
+        block["cif_usd"] * mode / (supplier["offer_usd_per_dc_kwh"] / 0.91), rel=1e-12
+    )
+
+
+def test_committed_bottom_up_rows_recompute_through_the_engine() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    cfg = _cfg()
+    supplier = cfg["down_ramp"]["supplier"]
+    mode = cfg["battery"]["usd_per_kwh"]["mode"]
+    wind_only = summary["wind_only"]["project_npv"]
+    for row in summary["options"].values():
+        expected = wbo.bottom_up_price(
+            supplier,
+            power_mw=row["power_mw"],
+            energy_mwh=row["energy_mwh"],
+            all_in_usd_per_kwh_mode=mode,
+        )
+        for key, value in expected.items():
+            assert row["bottom_up_price"][key] == pytest.approx(value, rel=1e-12)
+    held = summary["options"]["held_0_5_0_5"]
+    rr = held["readings"]["B"]
+    delta = (
+        _engine_project_value(
+            _option_scenario(
+                held, rr, usd_per_kwh=held["bottom_up_price"]["all_in_usd_per_kwh"]
+            )
+        )
+        - wind_only
+    )
+    committed = rr["bottom_up_price_base_basis"]["delta_project_npv_vs_wind_only"]
+    assert delta == pytest.approx(committed, rel=1e-9)
+
+    # What the doc says about the bottom-up price (reading B): the held 0.5 / 0.5 unit stays
+    # the cheapest option, no option beats wind-only, and only held 1 / 1 and cycled 1 / 4
+    # swap places against the flat price.
+    def ranked(key: str) -> List[str]:
+        def value(name: str) -> float:
+            readings = summary["options"][name]["readings"]["B"]
+            if key == "flat":
+                return float(
+                    readings["bases"]["whole_wind_peak_rate"][
+                        "delta_project_npv_vs_wind_only"
+                    ]
+                )
+            return float(
+                readings["bottom_up_price_base_basis"]["delta_project_npv_vs_wind_only"]
+            )
+
+        return sorted(summary["options"], key=value, reverse=True)
+
+    flat, bottom_up = ranked("flat"), ranked("bottom_up")
+    assert flat[0] == bottom_up[0] == "held_0_5_0_5"
+    assert summary["recommended_option_reading_A"] == "held_0_5_0_5"
+    for row in summary["options"].values():
+        assert (
+            row["readings"]["B"]["bottom_up_price_base_basis"][
+                "delta_project_npv_vs_wind_only"
+            ]
+            < 0.0
+        )
+    swapped = [a for a, b in zip(flat, bottom_up, strict=True) if a != b]
+    assert sorted(swapped) == ["cycled_1_4", "held_1_1"]
+    assert flat.index("held_1_1") < flat.index("cycled_1_4")
+    assert bottom_up.index("cycled_1_4") < bottom_up.index("held_1_1")
+
+
+def test_cli_refuses_to_write_a_summary_from_an_overridden_config() -> None:
+    cli = _cli()
+    raw = copy.deepcopy(_cfg())
+    raw["output"]["summary_json"] = "somewhere.json"
+    cli._refuse_overrides(raw)  # only output.* differs: accepted
+    raw["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
+    with pytest.raises(ValueError, match="committed config"):
+        cli._refuse_overrides(raw)
+
+
+def test_cli_main_refuses_an_overridden_config_before_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The entry point itself, not only the helper, must refuse an overridden config.
+
+    ``run`` is replaced by a recorder, so the test fails if ``main`` stops calling
+    ``_refuse_overrides`` before it runs and writes the summary.
+    """
+    from omegaconf import OmegaConf
+
+    cli = _cli()
+    calls: List[Any] = []
+
+    def fake_run(cfg: Any) -> Dict[str, Any]:
+        calls.append(cfg)
+        return {"ran": True}
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    target = tmp_path / "summary.json"
+
+    clean = copy.deepcopy(_cfg())
+    clean["output"]["summary_json"] = str(target)
+    cli.main(OmegaConf.create(clean))  # only output.* differs: runs and writes
+    assert len(calls) == 1
+    assert json.loads(target.read_text()) == {"ran": True}
+
+    target.unlink()
+    overridden = copy.deepcopy(clean)
+    overridden["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
+    with pytest.raises(ValueError, match="committed config"):
+        cli.main(OmegaConf.create(overridden))
+    assert len(calls) == 1  # refused before ``run``
+    assert not target.exists()

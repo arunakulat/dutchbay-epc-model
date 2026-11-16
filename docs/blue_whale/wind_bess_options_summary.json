@@ -1,5 +1,5 @@
 {
- "config_sha256": "b60c9e087728d14a36e38e755f45b4bc584c72928ccea7183a626d7b497c5883",
+ "config_sha256": "e8538a8dcc8c0974a5f21ddc89aea1ddc6c28ce6105eb3b3b90332b4aa645482",
  "down_ramp_illustrative": {
   "0.0": {
    "energy_mwh": 0.07520833333333334,
@@ -231,6 +231,11 @@
  },
  "options": {
   "cycled_0_5_2": {
+   "bottom_up_price": {
+    "all_in_usd": 323856.1897652096,
+    "all_in_usd_per_kwh": 161.92809488260482,
+    "cif_usd": 227583.15582657797
+   },
    "capex_usd_at_mode": 281480.0,
    "energy_mwh": 2.0,
    "fits_reading_A_turbine_plus_battery_le_limit": true,
@@ -277,6 +282,10 @@
       "year1_net_usd": 36937.88405809877
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -162167.5684549266,
+      "equity_irr": 0.10243119271694545
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 72.01177463796404,
      "break_even_usd_per_kwh_base_basis": 78.48135272979735,
      "charged_mwh_per_year": 639.6760471037954,
@@ -333,6 +342,10 @@
       "year1_net_usd": 36937.88405809877
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -162167.5684549266,
+      "equity_irr": 0.10243119271694545
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 72.01177463796404,
      "break_even_usd_per_kwh_base_basis": 78.48135272979735,
      "charged_mwh_per_year": 639.6760471037954,
@@ -352,6 +365,11 @@
    }
   },
   "cycled_10_40": {
+   "bottom_up_price": {
+    "all_in_usd": 5284595.724294353,
+    "all_in_usd_per_kwh": 132.11489310735882,
+    "cif_usd": 3713638.98610206
+   },
    "capex_usd_at_mode": 5629600.0,
    "energy_mwh": 40.0,
    "fits_reading_A_turbine_plus_battery_le_limit": false,
@@ -398,6 +416,10 @@
       "year1_net_usd": 316304.0817877146
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -3929374.7117115655,
+      "equity_irr": 0.05800895235850345
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 115.68268928262924,
      "break_even_usd_per_kwh_base_basis": 30.279320106506347,
      "charged_mwh_per_year": 6248.840492710441,
@@ -454,6 +476,10 @@
       "year1_net_usd": 837843.0777153631
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -1637380.7176990313,
+      "equity_irr": 0.08061148758555103
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 67.80138489670225,
      "break_even_usd_per_kwh_base_basis": 89.53623485565187,
      "charged_mwh_per_year": 14318.433596450277,
@@ -473,6 +499,11 @@
    }
   },
   "cycled_1_4": {
+   "bottom_up_price": {
+    "all_in_usd": 584947.7442141118,
+    "all_in_usd_per_kwh": 146.23693605352796,
+    "cif_usd": 411059.7784726559
+   },
    "capex_usd_at_mode": 562960.0,
    "energy_mwh": 4.0,
    "fits_reading_A_turbine_plus_battery_le_limit": false,
@@ -519,6 +550,10 @@
       "year1_net_usd": 84774.19032944749
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -220773.96462791413,
+      "equity_irr": 0.1012181288786056
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 67.58331291675569,
      "break_even_usd_per_kwh_base_basis": 91.00106395721436,
      "charged_mwh_per_year": 1447.9803079004653,
@@ -575,6 +610,10 @@
       "year1_net_usd": 86894.17455162277
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -206666.20300355274,
+      "equity_irr": 0.10135672762059467
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 66.76654332213933,
      "break_even_usd_per_kwh_base_basis": 93.43481647491456,
      "charged_mwh_per_year": 1480.7884868063534,
@@ -594,6 +633,11 @@
    }
   },
   "cycled_2_5_10": {
+   "bottom_up_price": {
+    "all_in_usd": 1368222.4075608186,
+    "all_in_usd_per_kwh": 136.82224075608187,
+    "cif_usd": 961489.6464108899
+   },
    "capex_usd_at_mode": 1407400.0,
    "energy_mwh": 10.0,
    "fits_reading_A_turbine_plus_battery_le_limit": false,
@@ -640,6 +684,10 @@
       "year1_net_usd": 183567.28278136437
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -576739.7208524073,
+      "equity_irr": 0.09520046775602986
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 72.42291034327613,
      "break_even_usd_per_kwh_base_basis": 77.97018840789795,
      "charged_mwh_per_year": 3179.5979809488695,
@@ -696,6 +744,10 @@
       "year1_net_usd": 230606.70936765723
      },
      "black_start_reserve_mwh": 0.5,
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -365701.4754220706,
+      "equity_irr": 0.09800737607535925
+     },
      "break_even_peak_rate_lkr_per_kwh_base_basis": 64.65634680059222,
      "break_even_usd_per_kwh_base_basis": 98.91266696929932,
      "charged_mwh_per_year": 3907.5646832152665,
@@ -715,6 +767,11 @@
    }
   },
   "held_0_5_0_5": {
+   "bottom_up_price": {
+    "all_in_usd": 141147.23433009067,
+    "all_in_usd_per_kwh": 282.29446866018134,
+    "cif_usd": 99188.26331009448
+   },
    "capex_usd_at_mode": 70370.0,
    "energy_mwh": 0.5,
    "fits_reading_A_turbine_plus_battery_le_limit": true,
@@ -759,6 +816,10 @@
       "irr": null,
       "npv_usd": -86465.15503415704,
       "year1_net_usd": -1091.4750000000001
+     },
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -146696.2061219702,
+      "equity_irr": 0.10300596515989136
      },
      "break_even_usd_per_kwh_base_basis": null,
      "charged_mwh_per_year": 0.0,
@@ -810,6 +871,10 @@
       "npv_usd": -86465.15503415704,
       "year1_net_usd": -1091.4750000000001
      },
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -146696.2061219702,
+      "equity_irr": 0.10300596515989136
+     },
      "break_even_usd_per_kwh_base_basis": null,
      "charged_mwh_per_year": 0.0,
      "delivered_min_year_mwh": 0.0,
@@ -824,6 +889,11 @@
    }
   },
   "held_1_1": {
+   "bottom_up_price": {
+    "all_in_usd": 219529.83334387396,
+    "all_in_usd_per_kwh": 219.52983334387397,
+    "cif_usd": 154269.993439689
+   },
    "capex_usd_at_mode": 140740.0,
    "energy_mwh": 1.0,
    "fits_reading_A_turbine_plus_battery_le_limit": false,
@@ -868,6 +938,10 @@
       "irr": null,
       "npv_usd": -172930.31006831408,
       "year1_net_usd": -2182.9500000000003
+     },
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -233159.65218722052,
+      "equity_irr": 0.10161642063718435
      },
      "break_even_usd_per_kwh_base_basis": null,
      "charged_mwh_per_year": 0.0,
@@ -918,6 +992,10 @@
       "irr": null,
       "npv_usd": -172930.31006831408,
       "year1_net_usd": -2182.9500000000003
+     },
+     "bottom_up_price_base_basis": {
+      "delta_project_npv_vs_wind_only": -233159.65218722052,
+      "equity_irr": 0.10161642063718435
      },
      "break_even_usd_per_kwh_base_basis": null,
      "charged_mwh_per_year": 0.0,
