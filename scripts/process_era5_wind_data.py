@@ -1,14 +1,15 @@
 """
 ERA5 wind data processing for a wind farm's turbine positions.
 ==============================================================
-Extracts wind speed data from an ERA5 NetCDF and extrapolates it to the 150 m hub height
-at each counted turbine position of a layout file.
+Extracts wind speed data from an ERA5 NetCDF and extrapolates it to the hub height at each
+counted turbine position of a layout file.
 
 The layout comes from configuration, never from this script (#1775): a YAML file holding a
 ``layout.turbines`` list, at its top level or under one top-level block, each entry with
 ``id``, ``lat_deg``, ``lon_deg`` and an optional ``role``. Only ``role: counted`` entries (or
 entries without a role) are processed; an ``external_waker`` stands in the flow but belongs
-to another project, so it is listed and skipped. DutchBay's layout is
+to another project, so it is listed and skipped. The hub height comes from the same block's
+``turbine.hub_height_m`` and is required: no hub height is assumed. DutchBay's layout is
 ``conf/dutchbay_wake_14_turbines.yaml``.
 
 Usage::
@@ -34,8 +35,6 @@ import yaml
 #: The role of a turbine whose energy belongs to the layout's own project.
 COUNTED_ROLE = "counted"
 
-HUB_HEIGHT = 150  # meters
-
 
 @dataclass
 class WindStats:
@@ -44,14 +43,15 @@ class WindStats:
     turbine_id: str
     latitude: float
     longitude: float
-    mean_ws_150m: float
-    std_ws_150m: float
-    min_ws_150m: float
-    max_ws_150m: float
+    hub_height_m: float
+    mean_ws_hub: float
+    std_ws_hub: float
+    min_ws_hub: float
+    max_ws_hub: float
     mean_alpha: float
-    p50_ws_150m: float
-    p75_ws_150m: float
-    p90_ws_150m: float
+    p50_ws_hub: float
+    p75_ws_hub: float
+    p90_ws_hub: float
     hours_data: int
 
 
@@ -111,7 +111,12 @@ def extrapolate_to_hub_height(
 
 
 def process_turbine_location(
-    ds: xr.Dataset, time_dim: str, turbine_id: str, lat: float, lon: float
+    ds: xr.Dataset,
+    time_dim: str,
+    turbine_id: str,
+    lat: float,
+    lon: float,
+    hub_height_m: float,
 ) -> Tuple[pd.DataFrame, WindStats]:
     """Process wind data for a single turbine location."""
     print(f"Processing {turbine_id} at ({lat:.6f}, {lon:.6f})")
@@ -151,8 +156,8 @@ def process_turbine_location(
     ws100 = calculate_wind_speed(u100, v100)
     ws10 = calculate_wind_speed(u10, v10)
 
-    # Extrapolate to 150m hub height
-    ws150, alpha = extrapolate_to_hub_height(ws10, ws100, 10, 100, HUB_HEIGHT)
+    # Extrapolate to the layout's hub height
+    ws_hub, alpha = extrapolate_to_hub_height(ws10, ws100, 10, 100, hub_height_m)
 
     # Create dataframe
     df = pd.DataFrame(
@@ -163,7 +168,7 @@ def process_turbine_location(
             "longitude": lon,
             "ws_10m": ws10,
             "ws_100m": ws100,
-            "ws_150m": ws150,
+            "ws_hub": ws_hub,
             "wind_shear_alpha": alpha,
             "u_100m": u100,
             "v_100m": v100,
@@ -175,21 +180,65 @@ def process_turbine_location(
         turbine_id=turbine_id,
         latitude=lat,
         longitude=lon,
-        mean_ws_150m=float(np.mean(ws150)),
-        std_ws_150m=float(np.std(ws150)),
-        min_ws_150m=float(np.min(ws150)),
-        max_ws_150m=float(np.max(ws150)),
+        hub_height_m=float(hub_height_m),
+        mean_ws_hub=float(np.mean(ws_hub)),
+        std_ws_hub=float(np.std(ws_hub)),
+        min_ws_hub=float(np.min(ws_hub)),
+        max_ws_hub=float(np.max(ws_hub)),
         mean_alpha=float(np.mean(alpha)),
-        p50_ws_150m=float(np.percentile(ws150, 50)),
-        p75_ws_150m=float(np.percentile(ws150, 75)),
-        p90_ws_150m=float(np.percentile(ws150, 90)),
-        hours_data=len(ws150),
+        p50_ws_hub=float(np.percentile(ws_hub, 50)),
+        p75_ws_hub=float(np.percentile(ws_hub, 75)),
+        p90_ws_hub=float(np.percentile(ws_hub, 90)),
+        hours_data=len(ws_hub),
     )
 
-    print(f"  ✓ Mean wind speed at 150m: {stats.mean_ws_150m:.2f} m/s")
+    print(f"  ✓ Mean wind speed at {hub_height_m:g} m: {stats.mean_ws_hub:.2f} m/s")
     print(f"  ✓ Mean wind shear alpha: {stats.mean_alpha:.3f}")
 
     return df, stats
+
+
+def _layout_holder(layout_file: str) -> Mapping[str, Any]:
+    """The one mapping in ``layout_file`` that holds ``layout`` (top level or one block)."""
+    doc = yaml.safe_load(Path(layout_file).read_text(encoding="utf-8"))
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"{layout_file}: must hold a mapping")
+    holders: List[Mapping[str, Any]] = []
+    if isinstance(doc.get("layout"), Mapping):
+        holders.append(doc)
+    holders += [
+        v
+        for v in doc.values()
+        if isinstance(v, Mapping) and isinstance(v.get("layout"), Mapping)
+    ]
+    if len(holders) != 1:
+        raise ValueError(
+            f"{layout_file}: expected exactly one layout.turbines list, "
+            f"found {len(holders)}"
+        )
+    return holders[0]
+
+
+def load_hub_height(layout_file: str) -> float:
+    """Read the hub height (m) from ``turbine.hub_height_m`` beside the layout.
+
+    Args:
+        layout_file: The layout YAML (see :func:`load_turbine_layout`).
+
+    Returns:
+        The hub height in metres.
+
+    Raises:
+        ValueError: The layout's block declares no positive ``turbine.hub_height_m``.
+    """
+    turbine = _layout_holder(layout_file).get("turbine")
+    raw = turbine.get("hub_height_m") if isinstance(turbine, Mapping) else None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)) or raw <= 0:
+        raise ValueError(
+            f"{layout_file}: turbine.hub_height_m must be a positive number beside the "
+            f"layout (got {raw!r}); no hub height is assumed"
+        )
+    return float(raw)
 
 
 def load_turbine_layout(
@@ -209,23 +258,7 @@ def load_turbine_layout(
         ValueError: The file holds no single ``layout.turbines`` list, an entry is malformed,
             an id repeats, a role is unknown, or no turbine is counted.
     """
-    doc = yaml.safe_load(Path(layout_file).read_text(encoding="utf-8"))
-    if not isinstance(doc, Mapping):
-        raise ValueError(f"{layout_file}: must hold a mapping")
-    holders: List[Mapping[str, Any]] = []
-    if isinstance(doc.get("layout"), Mapping):
-        holders.append(doc)
-    holders += [
-        v
-        for v in doc.values()
-        if isinstance(v, Mapping) and isinstance(v.get("layout"), Mapping)
-    ]
-    if len(holders) != 1:
-        raise ValueError(
-            f"{layout_file}: expected exactly one layout.turbines list, "
-            f"found {len(holders)}"
-        )
-    turbines = holders[0]["layout"].get("turbines")
+    turbines = _layout_holder(layout_file)["layout"].get("turbines")
     if not isinstance(turbines, list) or not turbines:
         raise ValueError(f"{layout_file}: layout.turbines must be a non-empty list")
     counted: Dict[str, Tuple[float, float]] = {}
@@ -259,6 +292,7 @@ def main(
     print("=" * 70)
 
     turbine_locations, skipped = load_turbine_layout(layout_file)
+    hub_height_m = load_hub_height(layout_file)
     output_dir = Path(output_dir_name)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -281,7 +315,9 @@ def main(
     all_stats = []
 
     for turbine_id, (lat, lon) in turbine_locations.items():
-        df, stats = process_turbine_location(ds, time_dim, turbine_id, lat, lon)
+        df, stats = process_turbine_location(
+            ds, time_dim, turbine_id, lat, lon, hub_height_m
+        )
         all_data.append(df)
         all_stats.append(stats)
 
@@ -294,36 +330,37 @@ def main(
     df_combined["hour"] = pd.to_datetime(df_combined["timestamp"]).dt.hour
 
     # Save hourly data
-    hourly_file = output_dir / "wind_150m_hourly.csv"
+    hourly_file = output_dir / "wind_hub_hourly.csv"
     df_combined.to_csv(hourly_file, index=False)
     print(f"\n✓ Saved hourly data: {hourly_file}")
     print(f"  Records: {len(df_combined):,}")
 
     # Save summary statistics
     stats_df = pd.DataFrame([vars(s) for s in all_stats])
-    stats_file = output_dir / "wind_150m_summary.csv"
+    stats_file = output_dir / "wind_hub_summary.csv"
     stats_df.to_csv(stats_file, index=False)
     print(f"\n✓ Saved summary statistics: {stats_file}")
 
     # Calculate monthly averages per turbine
     monthly = (
-        df_combined.groupby(["turbine_id", "month"])["ws_150m"].mean().reset_index()
+        df_combined.groupby(["turbine_id", "month"])["ws_hub"].mean().reset_index()
     )
-    monthly_file = output_dir / "wind_150m_monthly.csv"
+    monthly_file = output_dir / "wind_hub_monthly.csv"
     monthly.to_csv(monthly_file, index=False)
     print(f"✓ Saved monthly averages: {monthly_file}")
 
     # Calculate site-wide average
-    site_avg = df_combined.groupby("timestamp")["ws_150m"].mean()
+    site_avg = df_combined.groupby("timestamp")["ws_hub"].mean()
     site_stats = {
         "layout_file": layout_file,
         "turbines_counted": len(turbine_locations),
         "turbines_skipped": skipped,
-        "mean_ws_150m": float(site_avg.mean()),
-        "std_ws_150m": float(site_avg.std()),
-        "p50_ws_150m": float(site_avg.quantile(0.50)),
-        "p75_ws_150m": float(site_avg.quantile(0.75)),
-        "p90_ws_150m": float(site_avg.quantile(0.90)),
+        "hub_height_m": hub_height_m,
+        "mean_ws_hub": float(site_avg.mean()),
+        "std_ws_hub": float(site_avg.std()),
+        "p50_ws_hub": float(site_avg.quantile(0.50)),
+        "p75_ws_hub": float(site_avg.quantile(0.75)),
+        "p90_ws_hub": float(site_avg.quantile(0.90)),
         "hours_of_data": len(site_avg),
         "years_of_data": len(site_avg) / 8760,
     }
@@ -335,17 +372,17 @@ def main(
 
     # Print summary
     print("\n" + "=" * 70)
-    print("SUMMARY - Wind Speed at 150m Hub Height")
+    print(f"SUMMARY - Wind Speed at {hub_height_m:g} m Hub Height")
     print("=" * 70)
     print(
         f"Data period: {site_stats['years_of_data']:.1f} years ({site_stats['hours_of_data']:,} hours)"
     )
     print(
-        f"Site Average: {site_stats['mean_ws_150m']:.2f} ± {site_stats['std_ws_150m']:.2f} m/s"
+        f"Site Average: {site_stats['mean_ws_hub']:.2f} ± {site_stats['std_ws_hub']:.2f} m/s"
     )
-    print(f"P50 (Median): {site_stats['p50_ws_150m']:.2f} m/s")
-    print(f"P75: {site_stats['p75_ws_150m']:.2f} m/s")
-    print(f"P90: {site_stats['p90_ws_150m']:.2f} m/s")
+    print(f"P50 (Median): {site_stats['p50_ws_hub']:.2f} m/s")
+    print(f"P75: {site_stats['p75_ws_hub']:.2f} m/s")
+    print(f"P90: {site_stats['p90_ws_hub']:.2f} m/s")
     print("=" * 70)
     print(f"\nAll output files saved to: {output_dir.absolute()}")
 
