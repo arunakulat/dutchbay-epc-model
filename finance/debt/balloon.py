@@ -136,8 +136,14 @@ def _balloon_resolution_path(
     - ``outstanding[p]``: the balloon's OPENING balance in period ``p``, or ``None``
       for every period this path does not govern (before maturity, or when the
       treatment produces no stream). Plan_debt overlays it on ``debt_outstanding``.
-    - ``senior_fee[p]``: ``senior_fee_rate`` x ``outstanding[p]``, or ``None`` where
-      ``outstanding[p]`` is ``None``. Plan_debt overlays it on ``senior_fee_usd``.
+    - ``senior_fee[p]``: the senior credit-support fee PAID in cash in period ``p``, or
+      ``None`` where ``outstanding[p]`` is ``None``. Plan_debt overlays it on
+      ``senior_fee_usd``. It equals ``senior_fee_rate`` x ``outstanding[p]`` except under
+      ``cash_sweep`` when the period's cash cannot pay the fee due (see below).
+    - ``senior_fee_deferred[p]``: fee charged but not yet paid, carried forward at the
+      end of period ``p`` (#1539); ``None`` where ``outstanding[p]`` is ``None``. Only
+      ``cash_sweep`` defers a fee; every other treatment carries 0.0.
+    - ``senior_fee_deferred_residual``: fee still deferred at the end of the timeline.
     - ``residual``: the balloon still outstanding at the end of the timeline,
       including any interest the cash could not pay (0.0 when fully resolved).
 
@@ -150,7 +156,16 @@ def _balloon_resolution_path(
     - ``cash_sweep`` (default): each period's post-fee cash pays the interest, then
       principal, until the balloon clears. Interest the cash cannot pay is added to
       the balance (capitalised): the sweep never asks equity for more cash than
-      the period generates, and an unpaid balance shows as ``residual``.
+      the period generates, and an unpaid balance shows as ``residual``. The fee due
+      (this period's fee on the opening balance plus any fee deferred earlier) is paid
+      first, up to the period's cash; whatever the cash cannot pay is deferred and
+      carried forward as the first claim on later cash (owner ruling on #1539,
+      2026-11-15). ASSUMPTION: the deferred fee bears no interest; the ruling does not
+      say, and the owner may change it. Before #1539 the full fee was charged even when
+      it exceeded the period's cash. The cash here is the sizing-basis ``cfads_ext``,
+      which can be lower than the cash the equity waterfall holds, so the waterfall
+      also settles the deferred balance from its own cash ahead of any distribution
+      (``finance.equity_distribution_v14_hydra``).
     - ``bullet``: the balloon and one period's interest are repaid in the maturity
       period, which may exceed the period's cash (a sponsor cash call).
     - ``refinance``: a level annuity over ``refi_tenor_years`` at ``avg_rate`` plus
@@ -164,16 +179,19 @@ def _balloon_resolution_path(
     interest_paid = [0.0] * n
     outstanding: List[Optional[float]] = [None] * n
     senior_fee: List[Optional[float]] = [None] * n
+    senior_fee_deferred: List[Optional[float]] = [None] * n
     fee_rate = float(senior_fee_rate)
 
-    def _path(residual: float) -> Dict[str, Any]:
+    def _path(residual: float, fee_deferred_residual: float = 0.0) -> Dict[str, Any]:
         return {
             "resolution": resolution,
             "interest": interest,
             "interest_paid": interest_paid,
             "outstanding": outstanding,
             "senior_fee": senior_fee,
+            "senior_fee_deferred": senior_fee_deferred,
             "residual": residual,
+            "senior_fee_deferred_residual": fee_deferred_residual,
         }
 
     if balloon <= _BALLOON_TOL or treatment in ("legacy_ignore", "amortize"):
@@ -188,10 +206,17 @@ def _balloon_resolution_path(
         return _path(0.0)
 
     def _carry(
-        p: int, opening: float, accrued: float, paid: float, interest_settled: float
+        p: int,
+        opening: float,
+        accrued: float,
+        paid: float,
+        interest_settled: float,
+        fee_paid: Optional[float] = None,
+        fee_deferred: float = 0.0,
     ) -> None:
         outstanding[p] = opening
-        senior_fee[p] = fee_rate * opening
+        senior_fee[p] = fee_rate * opening if fee_paid is None else fee_paid
+        senior_fee_deferred[p] = fee_deferred
         interest[p] = accrued
         interest_paid[p] = interest_settled
         resolution[p] = paid
@@ -244,21 +269,36 @@ def _balloon_resolution_path(
     # Interest accrued in earlier periods that the cash could not pay. It sits in
     # `remaining` (capitalised) and is the first claim on a later payment.
     capitalised_interest = 0.0
+    # Senior fee charged but not yet paid (#1539). It is senior to the sweep: the fee
+    # due is paid before any cash reaches the balloon. It carries no interest (an
+    # ASSUMPTION; see the docstring).
+    deferred_fee = 0.0
     for p in range(maturity, n):
         available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
-        fee = fee_rate * remaining
+        fee_due = fee_rate * remaining + deferred_fee
+        fee_paid = min(fee_due, max(0.0, available))
+        deferred_fee = fee_due - fee_paid
         accrued = remaining * rate
         due = remaining + accrued
-        pay = min(max(0.0, available - fee), due)
+        pay = min(max(0.0, available - fee_paid), due)
         interest_due = capitalised_interest + accrued
         interest_settled = min(pay, interest_due)
-        _carry(p, remaining, accrued, pay, interest_settled)
+        _carry(
+            p,
+            remaining,
+            accrued,
+            pay,
+            interest_settled,
+            fee_paid=fee_paid,
+            fee_deferred=deferred_fee,
+        )
         capitalised_interest = interest_due - interest_settled
         remaining = due - pay
         if remaining <= _BALLOON_TOL:
+            # Clearing needs cash beyond the fee due, so no fee is left deferred here.
             _cleared_from(p + 1)
-            return _path(0.0)
-    return _path(remaining)
+            return _path(0.0, deferred_fee)
+    return _path(remaining, deferred_fee)
 
 
 def _balloon_resolution_stream(

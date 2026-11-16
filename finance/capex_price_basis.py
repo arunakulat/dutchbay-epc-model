@@ -28,12 +28,22 @@ The block is resolved once, on the configuration the pipeline evaluates, and is 
 replaced by ``capex.price_basis_applied``, which records the stated amount, the factor and
 the years, so that a configuration that passes through the pipeline twice is not
 escalated twice. A scenario without the block is returned unchanged.
+
+The engine also reads capex amounts stated under other keys, some of them in place of
+``capex.usd_total`` (``finance.capex_usd``, a ``capex.breakdown`` with
+``derive_from_breakdown``, a tax base such as ``tax.depreciable_capex_lkr``). Before
+#1591 D-1/A-1 those amounts bypassed the price date silently. By the owner's ruling of
+2026-11-14 the factor now applies to every such amount automatically, and the change is
+disclosed: each key and its stated amount is listed under
+``capex.price_basis_applied.automatically_escalated``, and a warning is logged.
 """
 
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Mapping
+import logging
+import math
+from typing import Any, Dict, List, Mapping, MutableMapping, Tuple
 
 from finance.debt_v14 import (
     _resolve_construction_periods,
@@ -41,9 +51,34 @@ from finance.debt_v14 import (
     placeholder_construction_schedule,
 )
 
+logger = logging.getLogger(__name__)
+
 PRICE_BASIS_KEY = "price_basis"
 APPLIED_KEY = "price_basis_applied"
+AUTO_KEY = "automatically_escalated"
 _ALLOWED_KEYS = frozenset({"price_year", "escalation_pct", "source"})
+
+# Capex amounts the engine reads besides capex.usd_total (#1591 D-1/A-1): the debt and
+# NPV capex resolvers (finance/debt/capex.py, analytics/core/metrics.py), the EPC helper
+# alias and the tax-base ladder (finance/cashflow_v14.py). Matched case-insensitively,
+# as those readers match them. Per-kW figures and percentages are not amounts.
+_SECTION_AMOUNT_KEYS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    (
+        "capex",
+        (
+            "usd_total",
+            "epc_usd",
+            "capex_total_usd",
+            "total_capex_usd",
+            "total_capex",
+            "lkr_total",
+        ),
+    ),
+    ("finance", ("capex_total_usd", "capex_usd")),
+    ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
+    ("tax", ("depreciable_capex_lkr", "dep_base_lkr")),
+)
+_TOP_LEVEL_AMOUNT_KEYS = ("capex_usd_total", "capex_total_usd", "total_capex_usd")
 
 
 def _whole_year(value: Any, where: str) -> int:
@@ -156,41 +191,184 @@ def capex_escalation_factor(config: Mapping[str, Any]) -> Dict[str, Any] | None:
     }
 
 
+def _amount(value: Any) -> float | None:
+    """Return ``value`` as a finite number when the capex readers would use it."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        try:
+            number = float(value)
+        except ValueError:
+            return None
+    else:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _escalate_in(
+    block: MutableMapping[str, Any],
+    keys: Tuple[str, ...],
+    prefix: str,
+    factor: float,
+    found: Dict[str, float],
+    skip: str | None = None,
+) -> None:
+    """Escalate each amount in ``block`` whose key matches ``keys`` (any case)."""
+    for name in list(block):
+        if not isinstance(name, str) or name == skip or name.lower() not in keys:
+            continue
+        stated = _amount(block[name])
+        if stated is not None:
+            found[f"{prefix}{name}"] = stated
+            block[name] = stated * factor
+
+
+def _escalate_breakdown(
+    block: MutableMapping[str, Any], prefix: str, factor: float, found: Dict[str, float]
+) -> None:
+    """Escalate the numeric ``capex.breakdown`` line items, which the readers sum."""
+    for name in list(block):
+        if not isinstance(name, str) or name.lower() != "breakdown":
+            continue
+        items = block[name]
+        if not isinstance(items, Mapping):
+            continue
+        items = dict(items)
+        for item, value in items.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                found[f"{prefix}{name}.{item}"] = float(value)
+                items[item] = float(value) * factor
+        block[name] = items
+
+
+def _escalate_other_amounts(out: Dict[str, Any], factor: float) -> Dict[str, float]:
+    """Escalate every capex amount except ``capex.usd_total``; return what moved.
+
+    ``out`` is modified in place: each section that is touched is replaced by a copy,
+    so the caller's configuration is never changed.
+    """
+    found: Dict[str, float] = {}
+    for section, keys in _SECTION_AMOUNT_KEYS:
+        for name in list(out):
+            if not isinstance(name, str) or name.lower() != section:
+                continue
+            if not isinstance(out[name], Mapping):
+                continue
+            block = copy.deepcopy(dict(out[name]))
+            out[name] = block
+            if section == "capex":
+                _escalate_breakdown(block, f"{name}.", factor, found)
+            # The canonical capex.usd_total is the stated amount, escalated by the
+            # caller; any other spelling of it is read like it and escalated here.
+            skip = "usd_total" if name == "capex" else None
+            _escalate_in(block, keys, f"{name}.", factor, found, skip)
+    _escalate_in(out, _TOP_LEVEL_AMOUNT_KEYS, "", factor, found)
+    return found
+
+
 def apply_capex_price_basis(config: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return a copy of ``config`` with ``capex.usd_total`` escalated to the draws.
+    """Return a copy of ``config`` with its capex amounts escalated to the draws.
 
     A configuration without ``capex.price_basis`` is returned as a plain copy with no
     key changed. With the block, ``capex.usd_total`` (the amount at the price year) is
     multiplied by :func:`capex_escalation_factor`, and the block is replaced by
     ``capex.price_basis_applied``.
 
+    Every other capex amount the engine reads (see ``_SECTION_AMOUNT_KEYS``, the
+    numeric ``capex.breakdown`` line items and the top-level aliases) is multiplied by
+    the same factor automatically (#1591 D-1/A-1). Those keys and their stated amounts
+    are recorded under ``capex.price_basis_applied.automatically_escalated`` and a
+    warning is logged, so the automatic step is never silent. Without such keys the
+    result is byte-identical to the usd_total-only escalation.
+
     Raises:
-        ValueError: As :func:`capex_escalation_factor`, or if the block is declared
-            without ``capex.usd_total`` (the one capex key it escalates).
+        ValueError: As :func:`capex_escalation_factor`; if ``capex.usd_total`` is
+            declared but is not a number; or if the block finds no capex amount at
+            all to escalate.
     """
     resolved = capex_escalation_factor(config)
     out = dict(config)
     if resolved is None:
         return out
-    capex = copy.deepcopy(dict(config["capex"]))
-    stated = capex.get("usd_total")
-    if isinstance(stated, bool) or not isinstance(stated, (int, float)):
+    factor = resolved["factor"]
+    stated_raw = config["capex"].get("usd_total")
+    if stated_raw is not None and (
+        isinstance(stated_raw, bool) or not isinstance(stated_raw, (int, float))
+    ):
         raise ValueError(
             "capex.price_basis escalates capex.usd_total, which must be a number; "
-            f"got {stated!r}"
+            f"got {stated_raw!r}"
         )
+    auto = _escalate_other_amounts(out, factor)
+    if stated_raw is None and not auto:
+        raise ValueError(
+            "capex.price_basis found no capex amount to escalate: state "
+            "capex.usd_total at the price year"
+        )
+    capex = out["capex"]
     block = capex.pop(PRICE_BASIS_KEY)
-    capex["usd_total"] = float(stated) * resolved["factor"]
-    capex[APPLIED_KEY] = {
-        **dict(block),
-        "usd_total_at_price_year": float(stated),
-        "factor": resolved["factor"],
-        "close_year": resolved["close_year"],
-        "cod_year": resolved["cod_year"],
-        "construction_periods": resolved["construction_periods"],
-    }
-    out["capex"] = capex
+    applied: Dict[str, Any] = dict(block)
+    if stated_raw is not None:
+        capex["usd_total"] = float(stated_raw) * factor
+        applied["usd_total_at_price_year"] = float(stated_raw)
+    applied.update(
+        {
+            "factor": factor,
+            "close_year": resolved["close_year"],
+            "cod_year": resolved["cod_year"],
+            "construction_periods": resolved["construction_periods"],
+        }
+    )
+    if auto:
+        applied[AUTO_KEY] = auto
+        logger.warning(
+            "%s",
+            automatic_escalation_message(resolved["price_year"], factor, sorted(auto)),
+        )
+    capex[APPLIED_KEY] = applied
     return out
 
 
-__all__ = ["apply_capex_price_basis", "capex_escalation_factor"]
+def automatic_escalation_message(
+    price_year: int, factor: float, keys: List[str]
+) -> str:
+    """The disclosure for capex amounts escalated automatically (#1591 D-1/A-1)."""
+    return (
+        f"capex.price_basis: the price-year factor {factor:.6f} (from {price_year}) was "
+        f"applied AUTOMATICALLY to {', '.join(keys)}, which the engine reads as capex "
+        "amounts beside capex.usd_total. Each is taken as stated at the price year; "
+        "the stated amounts are kept in capex.price_basis_applied."
+        f"{AUTO_KEY}."
+    )
+
+
+def automatic_escalation(config: Mapping[str, Any]) -> Dict[str, Any] | None:
+    """Return the automatic-escalation disclosure of a resolved config, or ``None``.
+
+    For the pipeline result: present only when :func:`apply_capex_price_basis`
+    escalated a capex amount other than ``capex.usd_total``.
+    """
+    capex = config.get("capex")
+    applied = capex.get(APPLIED_KEY) if isinstance(capex, Mapping) else None
+    if not isinstance(applied, Mapping) or not applied.get(AUTO_KEY):
+        return None
+    auto = dict(applied[AUTO_KEY])
+    price_year = int(applied["price_year"])
+    factor = float(applied["factor"])
+    return {
+        "automatically_applied": True,
+        "factor": factor,
+        "price_year": price_year,
+        "keys_at_price_year": auto,
+        "warning": automatic_escalation_message(price_year, factor, sorted(auto)),
+    }
+
+
+__all__ = [
+    "apply_capex_price_basis",
+    "automatic_escalation",
+    "automatic_escalation_message",
+    "capex_escalation_factor",
+]

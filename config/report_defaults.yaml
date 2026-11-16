@@ -116,6 +116,8 @@ risk_register:
 #   - BESS dispatch  -> finance/bess_lcos.py "LIMITATIONS (stated for lender DD, DOC-03)"
 #   - Tax shield / 100% sweep / equity-balancing -> analytics/three_statement.py "Documented limitations"
 #   - Construction draw/phasing placeholders -> finance/debt_v14.py A1/#91 placeholder WARNs (#683)
+#   - Reserve accounts / distribution lock-up -> finance/equity_distribution_v14_hydra.py
+#     (`reserve_required` is the DSRA; `covenant_locked` is the one lock-up test) (#1400)
 model_limitations:
   - topic: "BESS dispatch"
     detail: >
@@ -158,3 +160,13 @@ model_limitations:
       coastal yield. The committed P50/P90 and every AEP-driven KPI are therefore
       PRE-MEASUREMENT / indicative until an on-site campaign is commissioned and wired through
       MCP, at which point the AEP re-freeze is a governed, KPI-moving change.
+  - topic: "Major-maintenance reserve and distribution lock-up"
+    detail: >
+      The model has no separately modelled major-maintenance reserve: the only reserve
+      account it builds is the debt service reserve, so no major-maintenance spend is
+      pre-funded from operating cash. The distribution lock-up is a single test, each
+      period's DSCR against one threshold (the scenario's lock-up covenant). There is no
+      forward-looking (projected) DSCR test and no multi-tier structure, such as a cash
+      sweep tier or a separate default tier. Whether a transaction requires either, and in
+      what form, depends on its term sheet and maintenance agreement, and none has been
+      received (#1400). Nothing in this report covers either mechanism.
