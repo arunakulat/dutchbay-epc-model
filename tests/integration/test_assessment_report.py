@@ -86,6 +86,79 @@ def test_the_monte_carlo_ran_without_the_toy_engine(results: Dict[str, Any]) -> 
     assert results["mc"]["n"] == 20 and results["mc"]["failed"] == 0
 
 
+def test_the_report_passes_the_lender_guard_to_the_monte_carlo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1785 assurance F5: pin the flag the report hands the engine, not only the count."""
+    import analytics.mc.engine as engine
+
+    seen: Dict[str, Any] = {}
+
+    def fake(*, base_config: Dict[str, Any], n_trials: int, seed: int) -> Any:
+        seen.update(base_config=base_config, n_trials=n_trials, seed=seed)
+        raise RuntimeError("stop after capture")
+
+    monkeypatch.setattr(engine, "run_monte_carlo_analysis", fake)
+    cfg = sa.load_scenario(str(SOLAR))
+    cfg["monte_carlo"]["allow_toy_fallback"] = True
+    with pytest.raises(RuntimeError, match="stop after capture"):
+        sa._monte_carlo(cfg, 7)
+    assert seen["base_config"]["monte_carlo"]["allow_toy_fallback"] is False
+    assert seen["n_trials"] == 7
+
+
+def test_breakeven_brackets_and_labels_follow_the_scenario(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1785 assurance F1 and F5: the search bracket scales with the scenario's tariff, and
+    the IRR target is labelled as the base case's rate with its figure."""
+    import analytics.core.parameter_solvers as solvers
+
+    calls: list[Dict[str, Any]] = []
+
+    class _Result:
+        status = "converged"
+        breakeven_value = 1.0
+        bracket = None
+
+    def fake(path: str, *, metric: str, target_value: float, bounds: Any) -> Any:
+        calls.append({"metric": metric, "target": target_value, "bounds": bounds})
+        return _Result()
+
+    monkeypatch.setattr(solvers, "solve_tariff_breakeven", fake)
+    cfg = sa.load_scenario(str(SOLAR))
+    cfg["tariff"]["lkr_per_kwh"] = 37.0
+    out = sa._breakevens(str(SOLAR), cfg, {"discount_rate_used": 0.1114})
+    lo, hi = sa.BREAKEVEN_BRACKETS[0]
+    assert {c["bounds"] for c in calls} == {(37.0 * lo, 37.0 * hi)}
+    assert (
+        out["project_irr"]["label"] == "Project IRR = base-case discount rate (11.14%)"
+    )
+    assert out["project_irr"]["target"] == 0.1114
+
+
+def test_the_gearing_constraint_is_the_scenario_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#1785 assurance F5: a fixture with a target other than 1.30x, so a fixed constraint
+    cannot pass."""
+    import analytics.optimization_v14 as optimisation
+
+    seen: Dict[str, Any] = {}
+
+    def fake(path: str, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        raise RuntimeError("stop after capture")
+
+    monkeypatch.setattr(optimisation, "optimize_parameter", fake)
+    cfg = sa.load_scenario(str(SOLAR))
+    cfg["Financing_Terms"]["target_dscr"] = 1.45
+    with pytest.raises(RuntimeError, match="stop after capture"):
+        sa._gearing(str(SOLAR), cfg)
+    assert seen["constraint_min"] == 1.45
+    assert seen["constraint_key"] == "min_dscr_period"
+
+
 def test_project_irr_does_not_move_with_the_dscr_target(
     results: Dict[str, Any],
 ) -> None:
@@ -93,11 +166,61 @@ def test_project_irr_does_not_move_with_the_dscr_target(
     assert len(irrs) == 1
 
 
+def test_a_dscr_sized_scenario_reports_no_gearing_optimum(
+    results: Dict[str, Any],
+) -> None:
+    """#1785 domain D-1. The committed scenario sizes its debt to its DSCR target
+    (``debt_sizing: dual_dscr``), so the debt-ratio ceiling never binds: every point raises
+    the same debt. The report must record that debt and name no "best" gearing."""
+    raw = yaml.safe_load(SOLAR.read_text(encoding="utf-8"))
+    assert raw["Financing_Terms"]["debt_sizing"] == "dual_dscr"
+    opt = results["optimization"]
+    realised = {round(p["realised"], 6) for p in opt["curve"]}
+    assert len(realised) == 1
+    assert realised.pop() < min(p["x"] for p in opt["curve"])
+    assert opt["cap_binds"] is False and opt["best"] is None
+    caption = sa.optimisation_caption(opt)
+    assert "Best feasible" not in caption and "does not bind" in caption
+
+
+def test_a_ratio_sized_scenario_reports_the_debt_its_best_ceiling_raises(
+    tmp_path: Path,
+) -> None:
+    """The same scenario sized by its debt ratio: the ceiling binds, and the best point's
+    debt raised is one the sweep reached."""
+    raw: Dict[str, Any] = yaml.safe_load(_single_tech_copy(tmp_path).read_text())
+    raw["Financing_Terms"].pop("debt_sizing")
+    path = tmp_path / "ratio_sized.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    opt = sa._gearing(str(path), sa.load_scenario(str(path)))
+    assert opt["cap_binds"] is True
+    assert len({round(p["realised"], 6) for p in opt["curve"]}) > 1
+    if opt["best"] is not None:
+        point = next(p for p in opt["curve"] if p["x"] == opt["best"]["x"])
+        assert point["feasible"] and point["realised"] == opt["best"]["realised"]
+
+
+def test_the_dscr_target_section_flags_a_target_below_the_lockup_covenant(
+    results: Dict[str, Any],
+) -> None:
+    """#1785 domain D-3: the committed scenario's best target lands on the sweep floor,
+    below its lock-up covenant, and the report says so."""
+    dscr = results["dscr"]
+    assert dscr["lockup_covenant"] is not None
+    caption = sa.dscr_target_caption(dscr)
+    best = dscr["best"]["target"]
+    if best < dscr["lockup_covenant"]:
+        assert "lock-up covenant" in caption
+    if best == sa.DSCR_TARGETS[0]:
+        assert "edge of the" in caption
+
+
 def test_a_per_technology_scenario_lists_the_sensitivity_and_still_reports(
     tmp_path: Path,
 ) -> None:
     R = sa.run_assessment(SOLAR, trials=5, work_dir=tmp_path)
     assert [n["analysis"] for n in R["not_run"]] == ["One-way sensitivity"]
+    assert sa.SENSITIVITY_PER_TECHNOLOGY_ISSUE in R["not_run"][0]["reason"]
     assert "reconcile" in R["not_run"][0]["reason"]
     assert R["base"]["min_dscr"] is not None
 

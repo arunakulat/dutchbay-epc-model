@@ -275,7 +275,18 @@ def _breakevens(
     hurdle = _number(base.get("discount_rate_used"))
     targets = [("project_npv", 0.0, "Project NPV = 0")]
     if hurdle is not None:
-        targets.insert(0, ("project_irr", hurdle, "Project IRR = discount rate"))
+        # The engine re-derives the project discount rate at each tariff, so the IRR target is
+        # the base case's rate held fixed, and the label says so with the figure. The point
+        # where project IRR equals the rate in force at that tariff is the NPV = 0 breakeven
+        # (#1785 assurance F1).
+        targets.insert(
+            0,
+            (
+                "project_irr",
+                hurdle,
+                f"Project IRR = base-case discount rate ({hurdle:.2%})",
+            ),
+        )
     out: Dict[str, Any] = {}
     for metric, target, label in targets:
         result = None
@@ -337,31 +348,63 @@ def _monte_carlo(cfg: Mapping[str, Any], trials: int) -> Dict[str, Any]:
     return summary
 
 
-def _sensitivity(scenario_path: str) -> List[Dict[str, Any]]:
+#: The open issue for the one-way sensitivity on a scenario with per-technology generation.
+SENSITIVITY_PER_TECHNOLOGY_ISSUE = "#1787"
+
+
+def _sensitivity(scenario_path: str, cfg: Mapping[str, Any]) -> List[Dict[str, Any]]:
     from analytics.core.sensitivity_runner import run_sensitivity_analysis
 
-    suite = run_sensitivity_analysis(scenario_path, metric="project_irr")
+    try:
+        suite = run_sensitivity_analysis(scenario_path, metric="project_irr")
+    except Exception as exc:
+        generation = cfg.get("generation")
+        if isinstance(generation, Mapping) and generation.get("technologies"):
+            raise RuntimeError(
+                f"{type(exc).__name__}: {exc} The runner shocks project.capacity_factor, "
+                "which a per-technology generation block refuses to reconcile; tracked in "
+                f"{SENSITIVITY_PER_TECHNOLOGY_ISSUE}."
+            ) from exc
+        raise
     rows: List[Dict[str, Any]] = []
     for tr in suite.tornado_results:
         shock = tr.shock_results[0]
         low, high = _number(shock.low_case), _number(shock.high_case)
+        # An undefined IRR is undefined, never zero (#1474): the impact is undefined too.
+        impact = abs(high - low) if low is not None and high is not None else None
         rows.append(
             {
                 "param": tr.label or shock.label or shock.variable_name or "driver",
                 "base": _number(tr.base_metric),
                 "low": low,
                 "high": high,
-                "impact": abs((high or 0.0) - (low or 0.0)),
+                "impact": impact,
             }
         )
-    rows.sort(key=lambda d: -d["impact"])
+    rows.sort(key=lambda d: (d["impact"] is None, -(d["impact"] or 0.0)))
     return rows
 
 
+#: Two debt-ratio ceilings whose debt raised differs by less than this share of capex raise
+#: the same debt: the ceiling does not bind between them.
+CEILING_BIND_TOLERANCE = 1e-4
+
+
 def _gearing(scenario_path: str, cfg: Mapping[str, Any]) -> Dict[str, Any]:
+    """Sweep the scenario's debt-ratio ceiling and record the debt each point actually raises.
+
+    ``Financing_Terms.debt_ratio`` is a ceiling. A scenario that sizes its debt to a DSCR
+    target (``debt_sizing: dual_dscr``) may never reach it, so each point also records the
+    realised gearing (``max_debt_usd`` over capex). When the ceiling binds at no point, every
+    point raises the same debt and no gearing optimum is reported (#1785 domain D-1): the
+    report must not name a gearing the sweep did not reach.
+    """
     from analytics.optimization_v14 import optimize_parameter
 
     covenant = scenario_covenant(cfg)
+    capex = scenario_capex(cfg)
+    terms = cfg.get("Financing_Terms")
+    sizing = terms.get("debt_sizing") if isinstance(terms, Mapping) else None
     # Constrain on the per-period sculpt floor (min_dscr_period), not the fold-corrected
     # headline min_dscr, which an interest-only lead-in can push below the target even when
     # the sculpt holds it in every operating period (#790).
@@ -384,20 +427,30 @@ def _gearing(scenario_path: str, cfg: Mapping[str, Any]) -> Dict[str, Any]:
         curve.append(
             {
                 "x": float(p.value),
+                "realised": (_number(k.get("max_debt_usd")) or 0.0) / capex,
                 "obj": float(p.objective),
                 "feasible": bool(p.feasible),
                 "eqIRR": k["equity_irr"],
                 "cure": float(k["equity_sponsor_cure_usd"] or 0.0),
             }
         )
-    best = (
-        {"x": float(opt.best.value), "obj": float(opt.best.objective)}
-        if opt.best
-        else None
+    realised = [p["realised"] for p in curve]
+    cap_binds = bool(realised) and (
+        max(realised) - min(realised) > CEILING_BIND_TOLERANCE
     )
+    best = None
+    if opt.best is not None and cap_binds:
+        point = next(p for p in curve if p["x"] == float(opt.best.value))
+        best = {
+            "x": point["x"],
+            "realised": point["realised"],
+            "obj": float(opt.best.objective),
+        }
     return {
         "objective_key": OPTIMISATION_OBJECTIVE,
         "covenant": covenant,
+        "debt_sizing": str(sizing) if sizing is not None else None,
+        "cap_binds": cap_binds,
         "curve": curve,
         "best": best,
     }
@@ -425,6 +478,7 @@ def _dscr_targets(cfg: Mapping[str, Any], work_dir: Path) -> Dict[str, Any]:
                 "eqIRR": k["equity_irr"],
                 "eqNPV": k["equity_npv"],
                 "locked_years": int(k["equity_covenant_locked_years"] or 0),
+                "lockup": _number(k.get("lockup_threshold")),
             }
         )
     path = work_dir / "dscr_sculpt_scenario.yaml"
@@ -443,7 +497,13 @@ def _dscr_targets(cfg: Mapping[str, Any], work_dir: Path) -> Dict[str, Any]:
         if opt.best
         else None
     )
-    return {"sweep": sweep, "objective_key": OPTIMISATION_OBJECTIVE, "best": best}
+    lockups = [d["lockup"] for d in sweep if d["lockup"] is not None]
+    return {
+        "sweep": sweep,
+        "objective_key": OPTIMISATION_OBJECTIVE,
+        "best": best,
+        "lockup_covenant": lockups[0] if lockups else None,
+    }
 
 
 def run_assessment(
@@ -483,7 +543,7 @@ def run_assessment(
         )
     step("capex_sweep", "Capex sweep", lambda: _capex_sweep(cfg))
     step("mc", "Monte Carlo", lambda: _monte_carlo(cfg, trials))
-    step("sensitivity", "One-way sensitivity", lambda: _sensitivity(path))
+    step("sensitivity", "One-way sensitivity", lambda: _sensitivity(path, cfg))
     step("optimization", "Gearing optimisation", lambda: _gearing(path, cfg))
     step("dscr", "DSCR sizing-target sweep", lambda: _dscr_targets(cfg, work_dir))
     return R
@@ -677,7 +737,14 @@ def make_charts(R: Mapping[str, Any], charts: Path) -> Dict[str, Path]:
             color=_AMBER,
         )
         if disc is not None:
-            ax.axhline(disc * 100, color=_RED, ls=":", lw=1.2)
+            ax.axhline(
+                disc * 100,
+                color=_RED,
+                ls=":",
+                lw=1.2,
+                label=f"Base-case discount rate ({disc:.2%})",
+            )
+            ax.legend(loc="upper left", fontsize=7, frameon=False)
         for be in (R.get("breakeven") or {}).values():
             if be.get("tariff_lkr") is not None:
                 ax.axvline(be["tariff_lkr"], color=_GREY, ls="--", lw=1)
@@ -694,12 +761,23 @@ def make_charts(R: Mapping[str, Any], charts: Path) -> Dict[str, Path]:
         for q in ("p10", "p50", "p90"):
             ax.axvline(mc["proj_irr"][q] * 100, color=_NAVY, ls="--", lw=1.2)
         if disc is not None:
-            ax.axvline(disc * 100, color=_RED, ls=":", lw=1.4)
+            ax.axvline(
+                disc * 100,
+                color=_RED,
+                ls=":",
+                lw=1.4,
+                label=f"Base-case discount rate ({disc:.2%})",
+            )
+            ax.legend(loc="upper right", fontsize=7, frameon=False)
         ax.set_xlabel("Project IRR (%)")
         ax.set_ylabel("Trials")
         save(fig, "mc", "03_mc_irr")
 
-    sens = [d for d in R.get("sensitivity") or [] if d["impact"] > 0]
+    sens = [
+        d
+        for d in R.get("sensitivity") or []
+        if d["impact"] is not None and d["impact"] > 0
+    ]
     if sens:
         fig, ax = plt.subplots(figsize=(7, 3.2))
         y = np.arange(len(sens))
@@ -743,7 +821,7 @@ def make_charts(R: Mapping[str, Any], charts: Path) -> Dict[str, Path]:
                 lw=2,
                 zorder=6,
             )
-        ax.set_xlabel("Gearing (debt ratio, %)")
+        ax.set_xlabel("Debt-ratio ceiling (%)")
         ax.set_ylabel("Equity NPV (USD M)")
         save(fig, "optimization", "05_gearing")
 
@@ -822,21 +900,58 @@ def fmt_num(x: Any, dp: int = 2) -> str:
 
 
 def optimisation_caption(opt: Mapping[str, Any]) -> str:
-    """The gearing finding, stated from the run (#1456: ranked on equity NPV)."""
+    """The gearing finding, stated from the run (#1456: ranked on equity NPV).
+
+    It names only a gearing the sweep reached. When the debt-ratio ceiling binds at no point
+    (a scenario sized to its DSCR target), it says so and reports the debt actually raised.
+    """
     curve = opt.get("curve") or []
     lo = min((p["x"] for p in curve), default=float("nan"))
     hi = max((p["x"] for p in curve), default=float("nan"))
     text = (
-        f"Equity NPV against gearing under the scenario's {fmt_x(opt.get('covenant'))} "
-        "minimum per-period DSCR; the optimiser ranks on equity NPV, not equity IRR (#1456). "
+        f"Equity NPV against the debt-ratio ceiling under the scenario's "
+        f"{fmt_x(opt.get('covenant'))} minimum per-period DSCR; the optimiser ranks on equity "
+        "NPV, not equity IRR (#1456). "
     )
+    if curve and opt.get("cap_binds") is False:
+        sizing = opt.get("debt_sizing")
+        sized = f"sizes its debt by {sizing}" if sizing else "sizes its debt"
+        return text + (
+            f"The scenario {sized} to its {fmt_x(opt.get('covenant'))} DSCR target, so the "
+            f"ceiling does not bind: every ceiling from {lo:.0%} to {hi:.0%} raises the same "
+            f"debt, {curve[0]['realised']:.1%} of capex, with equity NPV "
+            f"{fmt_usd_m(curve[0]['obj'])}. No gearing optimum is reported."
+        )
     best = opt.get("best")
     if best is None:
-        return text + f"No gearing from {lo:.0%} to {hi:.0%} meets the covenant."
-    return (
-        text
-        + f"Best feasible gearing {best['x']:.0%}, equity NPV {fmt_usd_m(best['obj'])}."
+        return text + f"No ceiling from {lo:.0%} to {hi:.0%} meets the covenant."
+    return text + (
+        f"Best feasible ceiling {best['x']:.0%}, which raises debt of "
+        f"{best['realised']:.1%} of capex, equity NPV {fmt_usd_m(best['obj'])}."
     )
+
+
+def dscr_target_caption(dscr: Mapping[str, Any]) -> str:
+    """The DSCR sizing-target finding, flagged when it sits at the sweep's edge or below the
+    scenario's lock-up covenant (#1785 domain D-3)."""
+    best = dscr.get("best")
+    if not best:
+        return "No DSCR target in the sweep gives a defined equity NPV optimum."
+    target = float(best["target"])
+    text = f"Best target on equity NPV: {target:.2f}x ({fmt_usd_m(best['obj'])})."
+    edges = (DSCR_TARGETS[0], DSCR_TARGETS[-1])
+    if any(math.isclose(target, e) for e in edges):
+        text += (
+            f" It sits at the edge of the {DSCR_TARGETS[0]:.2f}x-{DSCR_TARGETS[-1]:.2f}x "
+            "sweep, so the sweep does not bracket an optimum."
+        )
+    lockup = _number(dscr.get("lockup_covenant"))
+    if lockup is not None and target < lockup:
+        text += (
+            f" It is below the scenario's {lockup:.2f}x lock-up covenant, so distributions "
+            "lock up in the years shown; the target is not a recommended sizing."
+        )
+    return text
 
 
 # ── the DBPL document ──────────────────────────────────────────────────────────
@@ -985,6 +1100,12 @@ def as_dbpl_document(
             )
             for b in be.values()
         ]
+        if "project_irr" in be:
+            notes.append(
+                "The engine re-derives the project discount rate at each tariff. The IRR "
+                "breakeven holds the base case's rate fixed; the tariff at which project IRR "
+                "equals the rate in force at that tariff is the NPV = 0 breakeven."
+            )
         sections.append(
             {
                 "heading": "Tariff sweep and breakevens",
@@ -1097,7 +1218,11 @@ def as_dbpl_document(
                             d["param"],
                             fmt_pct(d["low"]),
                             fmt_pct(d["high"]),
-                            f"{d['impact'] * 100:.2f}",
+                            (
+                                UNDEFINED
+                                if d["impact"] is None
+                                else f"{d['impact'] * 100:.2f}"
+                            ),
                         ]
                         for d in R["sensitivity"]
                     ],
@@ -1117,7 +1242,8 @@ def as_dbpl_document(
                 "exhibit": exhibit,
                 "table": _table(
                     [
-                        "Gearing",
+                        "Debt-ratio ceiling",
+                        "Debt raised (% of capex)",
                         "Equity NPV",
                         "Equity IRR",
                         "Sponsor cures",
@@ -1126,6 +1252,7 @@ def as_dbpl_document(
                     [
                         [
                             f"{p['x']:.0%}",
+                            f"{p['realised']:.1%}",
                             fmt_usd_m(p["obj"]),
                             fmt_pct(p["eqIRR"]),
                             fmt_usd_m(p["cure"]),
@@ -1133,22 +1260,17 @@ def as_dbpl_document(
                         ]
                         for p in opt["curve"]
                     ],
-                    numeric_indices=[0, 1, 2, 3],
+                    numeric_indices=[0, 1, 2, 3, 4],
                     caption="Gearing sweep",
                 ),
             }
         )
     dscr = R.get("dscr")
     if dscr:
-        best = dscr.get("best")
         sections.append(
             {
                 "heading": "DSCR sizing target",
-                "intro": (
-                    f"Best target on equity NPV: {best['target']:.2f}x ({fmt_usd_m(best['obj'])})."
-                    if best
-                    else "No DSCR target in the sweep gives a defined equity NPV optimum."
-                ),
+                "intro": dscr_target_caption(dscr),
                 "exhibit": _exhibit(
                     figures,
                     "dscr",

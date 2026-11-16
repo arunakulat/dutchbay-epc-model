@@ -8,3 +8,10 @@
   the country outline, place labels and the illustrative bifacial uplift are removed. An
   analysis or map that cannot run is listed in the report with its reason. No engine,
   scenario or KPI figure moves.
+- The report's gearing sweep records the debt each debt-ratio ceiling actually raises. When a
+  scenario sizes its debt to a DSCR target and the ceiling never binds, the report says so and
+  names no gearing optimum. A best DSCR sizing target at the edge of the sweep, or below the
+  scenario's lock-up covenant, is flagged. The IRR breakeven is labelled as the base case's
+  discount rate with its figure, because the engine re-derives the rate at each tariff. An
+  undefined sensitivity swing prints as undefined, not zero. The one-way sensitivity on a
+  scenario with per-technology generation is listed as not run and cites #1787.
