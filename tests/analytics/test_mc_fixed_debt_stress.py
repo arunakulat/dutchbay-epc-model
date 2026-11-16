@@ -48,8 +48,9 @@ def test_fixed_debt_min_dscr_helper_no_operating_periods() -> None:
 
 def _cfg(fixed_debt: bool):
     cfg = copy.deepcopy(yaml.safe_load(_SCENARIO.read_text()))
+    # The lender case turns the stress on (#962 item 4); "off" is set explicitly here.
+    cfg["monte_carlo"]["fixed_debt_stress"] = fixed_debt
     if fixed_debt:
-        cfg["monte_carlo"]["fixed_debt_stress"] = True
         cfg["monte_carlo"]["allow_toy_fallback"] = False
     return cfg
 
