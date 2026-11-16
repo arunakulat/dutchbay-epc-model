@@ -304,26 +304,57 @@ def test_cli_default_records_a_failed_emitter_and_completes(
     assert summary["emitters"]["emit_executive_workbook"]["status"] == STATUS_FAILED
 
 
+@pytest.mark.parametrize(
+    ("failing", "expected_calls"),
+    [
+        ("emit_grid_screen", ["emit_executive_workbook", "emit_grid_screen"]),
+        # The workbook is the one emitter every default run reaches (assurance
+        # F-2, M20): switched on explicitly, its failure still stops the run.
+        ("emit_executive_workbook", ["emit_executive_workbook"]),
+    ],
+)
 def test_cli_explicit_emitter_failure_stops_the_run_after_the_figures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failing: str,
+    expected_calls: List[str],
 ) -> None:
     """An emitter switched on explicitly still stops the run; the figures are already on disk."""
     calls: List[str] = []
-    _install_recording_emitters(monkeypatch, calls, fail="emit_grid_screen")
+    _install_recording_emitters(monkeypatch, calls, fail=failing)
     with pytest.raises(SystemExit) as excinfo:
         _run_cli(
             tmp_path,
             {"scenario_name": "t", "grid": {"study_enabled": True}},
             emit_all=True,
-            emit_grid_screen=True,
             write_artifacts=True,
+            **{failing: True},
         )
     assert excinfo.value.code == 1
-    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
-    assert "emit_grid_screen failed" in capsys.readouterr().out
+    assert calls == expected_calls
+    assert f"{failing} failed" in capsys.readouterr().out
     run_dir = tmp_path / "run"
     assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
     assert not (run_dir / "summary.json").exists()
+
+
+@pytest.mark.parametrize(
+    "monte_carlo",
+    [{"n_trials": 100}, {"parameters": []}, {"parameters": None}, {}],
+)
+def test_monte_carlo_block_without_parameters_is_not_run(monte_carlo: Any) -> None:
+    """A monte_carlo block alone is not an input (assurance F-2, M05).
+
+    A committed scenario carries a monte_carlo block with no parameters, so the
+    check reads ``parameters``, not the block's presence.
+    """
+    plan = plan_emitters({"emit_all": True}, {"monte_carlo": monte_carlo})
+    decision = plan["emit_capital_risk_report"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason == (
+        "the scenario declares no monte_carlo.parameters to sample"
+    )
 
 
 @pytest.mark.parametrize(

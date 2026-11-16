@@ -18,6 +18,14 @@
     case (the run took 2 s before). The export directory gains `executive_workbook.xlsx`,
     `capital_risk_report.html` and `npv_distribution_equity_npv.png`. `summary.json` gains
     `emitters`, `executive_workbook_path` and `capital_risk_report_path`.
+  - Other effects of the default: a default run's stdout grows from about 0.2 MB to about
+    58 MB on the lender case, because the Monte Carlo writes a log line per trial. The
+    `feasibility_reproduce` kits use the default command, so they now run the 2,000-trial
+    Monte Carlo for each scenario that has readable parameters, and the
+    `run_all_NOV26.sh` workbook and capital-risk step repeats what the default already
+    wrote. The release asset gains the three files above.
+  - The executive workbook carries the F-5 non-reliance notice on its first sheet
+    ("Summary"), one blank row below the KPI table (owner ruling, 2026-11-16 07:19Z).
   - KPIs, `debt_result`, the equity distribution and `annual_rows.csv` are byte-identical
     with `emit_all` on and off.
   - The emitters' lender guards are unchanged.
