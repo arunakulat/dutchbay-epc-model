@@ -437,7 +437,7 @@ class TestF5NonRelianceNotice:
             "be used for covenant purposes."
         )
 
-    def test_first_sheet_carries_the_notice_below_the_kpi_table(
+    def test_first_sheet_opens_with_the_notice_above_the_kpi_table(
         self, tmp_path, pipeline_result
     ) -> None:
         out = emit_executive_workbook_from_pipeline(
@@ -446,24 +446,30 @@ class TestF5NonRelianceNotice:
         wb = openpyxl.load_workbook(out)
         first = wb.worksheets[0]
         assert first.title == "Summary"
+        # Row 1 is the notice, row 2 is blank, and the KPI table starts at row 3
+        # (domain review L-1 at 43a58859: visible on opening).
+        assert first["A1"].value == EXECUTIVE_WORKBOOK_F5_CAVEAT
+        assert [c.value for c in first[2]] == [None] * len(first[2])
+        assert [c.value for c in first[3]][:2] == ["Metric", "Value"]
         column_a = [row[0].value for row in first.iter_rows()]
-        # The notice is the last row, one blank row below the table, so the KPI
-        # table itself (header in row 1) is unchanged.
-        assert column_a[-1] == EXECUTIVE_WORKBOOK_F5_CAVEAT
-        assert column_a[-2] is None
         assert column_a.count(EXECUTIVE_WORKBOOK_F5_CAVEAT) == 1
-        assert first.cell(row=1, column=1).value == "Metric"
+        # The table itself is the Summary frame, unchanged.
+        summary = frames_from_pipeline_result(pipeline_result)["summary"]
+        table = pd.read_excel(out, sheet_name="Summary", header=2)
+        pd.testing.assert_frame_equal(
+            table.reset_index(drop=True),
+            summary.reset_index(drop=True),
+            check_dtype=False,
+        )
         # No other sheet carries it: one notice, on the first sheet.
         for ws in wb.worksheets[1:]:
             values = {c.value for row in ws.iter_rows() for c in row}
             assert EXECUTIVE_WORKBOOK_F5_CAVEAT not in values, ws.title
 
-    def test_short_summary_is_padded_before_the_notice(self, tmp_path) -> None:
+    def test_short_summary_still_carries_the_notice_first(self, tmp_path) -> None:
         out = emit_executive_workbook_from_pipeline({}, tmp_path / "wb.xlsx")
         first = openpyxl.load_workbook(out).worksheets[0]
-        assert first.cell(row=first.max_row, column=1).value == (
-            EXECUTIVE_WORKBOOK_F5_CAVEAT
-        )
+        assert first["A1"].value == EXECUTIVE_WORKBOOK_F5_CAVEAT
         assert first.max_row >= 5
 
 

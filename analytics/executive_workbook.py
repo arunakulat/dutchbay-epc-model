@@ -22,6 +22,9 @@ EXECUTIVE_WORKBOOK_F5_CAVEAT = (
     "for covenant purposes."
 )
 
+# Zero-based row at which the Summary KPI table starts: row 1 holds the notice, row 2 is blank.
+_SUMMARY_TABLE_START_ROW = 2
+
 __all__ = [
     "EXECUTIVE_WORKBOOK_F5_CAVEAT",
     "build_executive_workbook",
@@ -58,8 +61,8 @@ def build_executive_workbook(
       (long-term wind-resource & trend commentary; IEC-61400-15 / MEASNET basis --
       see ``wind_resource.long_term_trend``).
     - Writes the F-5 non-reliance notice (``EXECUTIVE_WORKBOOK_F5_CAVEAT``) in
-      column A of the "Summary" sheet, the first sheet, one blank row below the
-      KPI table.
+      cell A1 of the "Summary" sheet, the first sheet; the KPI table follows
+      from row 3, below one blank row.
     - Returns the resolved Path to the created workbook.
 
     Inputs
@@ -96,8 +99,13 @@ def build_executive_workbook(
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        # Core sheets
-        _to_excel(summary_df, writer, "Summary")
+        # Core sheets. "Summary" is the first sheet: its row 1 carries the F-5 non-reliance
+        # notice (owner ruling 2026-11-16 07:19Z, #1760), so the KPI table starts at row 3,
+        # below one blank row, and is otherwise unchanged.
+        summary_df.to_excel(
+            writer, sheet_name="Summary", index=False, startrow=_SUMMARY_TABLE_START_ROW
+        )
+        writer.sheets["Summary"]["A1"] = EXECUTIVE_WORKBOOK_F5_CAVEAT
         _to_excel(cashflow_df, writer, "Cashflow")
         _to_excel(debt_df, writer, "DebtService")
         _to_excel(ratios_df, writer, "Ratios")
@@ -109,21 +117,16 @@ def build_executive_workbook(
         if resource_trend_df is not None:
             _to_excel(resource_trend_df, writer, "ResourceTrend")
 
-        # Ensure the Summary sheet has at least 3 rows:
+        # Ensure the Summary table has at least 3 rows below the notice:
         #   - header row
         #   - at least a couple of metric rows
         summary_ws = writer.sheets.get("Summary")
-        if summary_ws is not None and summary_ws.max_row < 3:
+        min_rows = _SUMMARY_TABLE_START_ROW + 3
+        if summary_ws is not None and summary_ws.max_row < min_rows:
             # Append lightweight metadata rows until we hit the minimum.
             # Content is intentionally minimal; tests only care about row count.
-            while summary_ws.max_row < 3:
+            while summary_ws.max_row < min_rows:
                 summary_ws.append([""])
-
-        # F-5 non-reliance notice on the first sheet (owner ruling 07:19Z,
-        # 2026-11-16, #1760): one blank row, then the notice in column A.
-        first_ws = writer.book.worksheets[0]
-        first_ws.append([])
-        first_ws.append([EXECUTIVE_WORKBOOK_F5_CAVEAT])
 
     # Freeze the volatile document timestamps openpyxl bakes into the archive so
     # two builds of the same data are raw-ZIP-byte identical (#886): the byte

@@ -10,17 +10,17 @@ turns them all on at once. The rules:
   with every switch unset runs no emitter, as before this module.
 - Under ``emit_all``, an emitter whose inputs the run does not have is not run, and the plan
   records why: no ``monte_carlo.parameters`` the Monte Carlo engine can read, no
-  ``interaction_grid`` block, no ``tech_comparison.scenarios`` list, or no grid block with
-  ``study_enabled: true``.
+  ``interaction_grid`` block, no ``tech_comparison.scenarios`` list (or a value that is not a
+  list), or no grid block with ``study_enabled: true``.
 - The CLI writes the run's figures before any emitter runs. An emitter that ran under
   ``emit_all`` and raised is recorded as ``failed`` with its error under
   ``result['emitters']`` and logged as an error; the run still completes.
 - An emitter switched on explicitly is always attempted, and its failure stops the run
   (``FRAMEWORK-02``), as it did before this module.
 
-The Monte Carlo parameters are read with the engine's own parser. The other applicability
-checks look only for the presence of an emitter's inputs; a declared but malformed block is
-the emitter's to refuse. The lender guards in
+The Monte Carlo parameters are read with the engine's own parser, and
+``tech_comparison.scenarios`` must be a list. The other applicability checks look only for the
+presence of an emitter's inputs; a declared but malformed block is the emitter's to refuse. The lender guards in
 the emitters themselves (the capital-risk report's trial floor and forced fail-loud Monte Carlo)
 are untouched.
 
@@ -30,6 +30,7 @@ and the conf declares, so a new emitter cannot be left out of ``emit_all``.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
@@ -132,9 +133,19 @@ def _needs_tech_comparison_scenarios(
 ) -> Optional[str]:
     block = _get(cfg, "tech_comparison")
     entries = block.get("scenarios", None) if hasattr(block, "get") else None
-    if entries is not None and not isinstance(entries, (str, bytes)) and len(entries):
-        return None
-    return "the run config lists no tech_comparison.scenarios"
+    if entries is None:
+        return "the run config lists no tech_comparison.scenarios"
+    # A malformed value (``5``, a string, a mapping) is listed with its reason rather than
+    # raising here: this check also runs before the finance run, and a default run must still
+    # write its figures (owner ruling 2026-11-16 07:15Z).
+    if isinstance(entries, (str, bytes)) or not isinstance(entries, Sequence):
+        return (
+            "tech_comparison.scenarios must be a list of {label, config} entries; "
+            f"got {type(entries).__name__}"
+        )
+    if not len(entries):
+        return "the run config lists no tech_comparison.scenarios"
+    return None
 
 
 def _needs_enabled_grid_study(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
