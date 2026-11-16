@@ -12,9 +12,10 @@ issuecomment-6901889800, and issuecomment-6893178345 N-4):
 * the code fallback ``DEFAULT_ENGINE_PATH_STATUS`` is pinned;
 * the calibrated drift driver is held by one real trial, not a constructor flag.
 
-A drift that starts late replaces the USD path from its first drifted year only, and
-the earlier years keep the own path (owner ruling, 2026-11-16 14:28Z). That split is
-pinned in ``test_fx_drift_late_start_1578.py``; the late-drift test below holds it too.
+A drift that starts late replaces the USD path from its first drifted year only, the
+earlier years keep the own path, and the drift carries on from the own path's level
+(owner rulings, 2026-11-16 14:28Z and 14:47Z). That rule is pinned in
+``test_fx_drift_late_start_1578.py``; the late-drift test below holds it too.
 """
 
 from __future__ import annotations
@@ -89,8 +90,9 @@ def test_drift_only_in_later_years_replaces_the_path_there() -> None:
     first = 11  # the first operating year whose curve departs from the flat base
     assert curve[first] != curve[0]
     assert path[:first] == own[:first]  # the years before it keep the own path
-    for i in range(first, years):
-        assert path[i] == curve[i], i
+    for i in range(first, years):  # carried on from the own level (2026-11-16 14:47Z)
+        want = own[first - 1] * curve[i] / curve[first - 1]
+        assert path[i] == pytest.approx(want, rel=1e-12), i
         assert path[i] != own[i], i
 
 

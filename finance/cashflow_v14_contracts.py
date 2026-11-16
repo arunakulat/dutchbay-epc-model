@@ -100,9 +100,11 @@ class CashflowParams:
       shape (each curve relative to its own financial-close spot) differs from the
       reference's, the stressed model curve replaces the own path from the first
       operating year whose shape differs, so an FX drift stress or a Monte Carlo drift
-      draw runs the USD share at the drawn rate; the years before it keep the own path
-      (owner ruling, 2026-11-16 14:28Z). A spot-only or curve-neutral change keeps the
-      own path.
+      draw runs the USD share at the drawn rate; the years before it keep the own path,
+      and from that year the stressed curve's year-on-year moves carry on from the
+      level the own path had reached, with no step onto the model curve (owner rulings,
+      2026-11-16 14:28Z and 14:47Z). A spot-only or curve-neutral change keeps the own
+      path.
     - opex_usd_fx_drift_override: bool (default False). Set with the reference when the
       override explicitly named an FX drift key, even with the authored value. A drift
       that departs from the reference in a later year replaces the own path from that

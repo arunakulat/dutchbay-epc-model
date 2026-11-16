@@ -1,10 +1,13 @@
 """A drift that starts late replaces the USD opex path from its first drifted year (#1578 L-12).
 
-Owner ruling, 2026-11-16 14:28Z ("Replace from first drifted year"): when an FX drift
-override departs from the authored curve only in a later year, the stressed model curve
-replaces the USD opex share's own FX path from that first drifted year onward, and the
-years before it keep the own path. Before this change the whole path was replaced, so a
-drift that started in year 11 also moved years 1 to 10 onto the model curve.
+Owner rulings, 2026-11-16: when an FX drift override departs from the authored curve
+only in a later year, the drift replaces the USD opex share's own FX path from that
+first drifted year onward, and the years before it keep the own path (14:28Z, "Replace
+from first drifted year"). From that year the stressed curve's year-on-year moves carry
+on from the level the own path had reached, so the path does not step onto the model
+curve (14:47Z, "Carry on from own level"). Before this change the whole path was
+replaced, so a drift that started in year 11 also moved years 1 to 10 onto the model
+curve.
 
 The first drifted year is the first operating year whose model curve, relative to its
 own spot, departs from the authored curve relative to its spot. The rulings already in
@@ -85,6 +88,17 @@ def _late(
     return [authored] * first + [rate] * (HORIZON - first)
 
 
+def _assert_carried(
+    path: List[float], own: List[float], curve: List[float], first: int
+) -> None:
+    """The own path before ``first``; from it, the curve's moves on the own level."""
+    assert first >= 1
+    assert path[:first] == own[:first]
+    level, anchor = own[first - 1], curve[first - 1]
+    for i in range(first, len(path)):
+        assert path[i] == pytest.approx(level * curve[i] / anchor, rel=1e-12), i
+
+
 def _first_departure(curve: List[float], base: List[float]) -> Optional[int]:
     """The first index where two curves on the same spot differ, independently derived."""
     for i, (c, b) in enumerate(zip(curve, base, strict=True)):
@@ -106,9 +120,29 @@ def test_named_late_drift_replaces_the_path_from_its_first_drifted_year(
     assert _split(out)[USD_FX_DRIFT_OVERRIDE] is True
     curve, path = _paths(out)
     assert _first_departure(curve, curve0) == first
-    assert path[:first] == own[:first]
-    assert path[first:] == curve[first:]
+    _assert_carried(path, own, curve, first)
     assert all(p != o for p, o in zip(path[first:], own[first:], strict=True))
+    # Closed form: the 2.44%/yr own path (relative PPP, 1.05 / 1.025) through the
+    # construction year and the undrifted years, then 5%/yr on from that level.
+    spot = float(base["fx"]["start_lkr_per_usd"])
+    ppp = 1.05 / 1.025
+    for i in range(first, len(path)):
+        want = spot * ppp**first * 1.05 ** (i - first + 1)
+        assert path[i] == pytest.approx(want, rel=1e-12), i
+
+
+@pytest.mark.parametrize("first", [1, 10])
+def test_no_step_at_the_first_drifted_year(first: int) -> None:
+    """14:47Z: the path moves into its first drifted year by the drift alone."""
+    base = _cfg()
+    _, own = _paths(base)
+    curve, path = _paths(_with_fx(base, annual_depr=_late(base, first, 0.05)))
+    assert path[first - 1] == own[first - 1]
+    assert path[first] / path[first - 1] == pytest.approx(1.05, rel=1e-12)
+    assert curve[first] / curve[first - 1] == pytest.approx(1.05, rel=1e-12)
+    # Not onto the model curve: the flat curve sits below the own path's level there.
+    assert path[first] != pytest.approx(curve[first], rel=1e-6)
+    assert path[first] > curve[first]
 
 
 @pytest.mark.parametrize("first", [5, 11])
@@ -120,8 +154,7 @@ def test_shape_comparison_late_drift_replaces_from_the_same_year(first: int) -> 
     assert USD_FX_DRIFT_OVERRIDE not in _split(out)
     curve, path = _paths(out)
     assert _first_departure(curve, curve0) == first
-    assert path[:first] == own[:first]
-    assert path[first:] == curve[first:]
+    _assert_carried(path, own, curve, first)
 
 
 def test_late_drift_below_the_base_curve_splits_the_same_way() -> None:
@@ -129,8 +162,7 @@ def test_late_drift_below_the_base_curve_splits_the_same_way() -> None:
     base = _cfg()
     _, own = _paths(base)
     curve, path = _paths(_with_fx(base, annual_depr=_late(base, 8, -0.02)))
-    assert path[:8] == own[:8]
-    assert path[8:] == curve[8:]
+    _assert_carried(path, own, curve, 8)
 
 
 def test_late_drift_on_a_non_flat_authored_curve_departs_where_the_rate_changes() -> (
@@ -145,8 +177,7 @@ def test_late_drift_on_a_non_flat_authored_curve_departs_where_the_rate_changes(
     )
     assert _first_departure(curve, curve0) == 6
     assert curve[:6] == pytest.approx(curve0[:6], rel=1e-12)
-    assert path[:6] == own[:6]
-    assert path[6:] == curve[6:]
+    _assert_carried(path, own, curve, 6)
 
 
 def test_spot_with_a_late_drift_keeps_the_own_path_on_the_new_spot_until_it_drifts() -> (
@@ -162,7 +193,8 @@ def test_spot_with_a_late_drift_keeps_the_own_path_on_the_new_spot_until_it_drif
     curve, path = _paths(out)
     for i in range(7):
         assert path[i] == pytest.approx(own[i] * 1.1, rel=1e-12), i
-    assert path[7:] == curve[7:]
+    for i in range(7, len(path)):
+        assert path[i] == pytest.approx(path[6] * curve[i] / curve[6], rel=1e-12), i
 
 
 def test_explicit_curve_moved_from_a_later_year_replaces_from_there() -> None:
@@ -174,8 +206,7 @@ def test_explicit_curve_moved_from_a_later_year_replaces_from_there() -> None:
     moved = list(base["fx"]["curve"])
     moved[9:] = [v * 1.2 for v in moved[9:]]
     curve, path = _paths(_with_fx(base, curve=moved))
-    assert path[:9] == own[:9]
-    assert path[9:] == curve[9:]
+    _assert_carried(path, own, curve, 9)
 
 
 # ------------------------------------------------- the earlier rulings, as controls
@@ -253,8 +284,7 @@ def test_gateway_late_curve_moves_only_the_drifted_years() -> None:
     curve0, own = _paths(base)
     curve, path = _paths(_with_fx(base, curve=late))
     assert curve[:first] == curve0[:first]
-    assert path[:first] == own[:first]
-    assert path[first:] == curve[first:]
+    _assert_carried(path, own, curve, first)
     unstressed = evaluate_with_overrides(WIND, {})
     stressed = evaluate_with_overrides(WIND, {"fx.curve": late})
     assert stressed["project_irr"] < unstressed["project_irr"]

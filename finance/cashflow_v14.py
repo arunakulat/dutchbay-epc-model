@@ -286,7 +286,8 @@ def _prepare_cashflow_context(
             # shape equal, and the own path (already anchored on the merged spot) is
             # kept. A drift that departs from the authored curve only in a later year
             # replaces the own path from that first drifted year onward; the years
-            # before it keep the own path (owner ruling, 2026-11-16 14:28Z). An
+            # before it keep the own path (owner ruling, 2026-11-16 14:28Z), and the
+            # drift carries on from the level the own path had reached (14:47Z). An
             # override that named a drift key is a stress whatever its value (owner
             # ruling, 2026-11-16): when its curve never departs from the authored one
             # (the authored drift itself), the model curve replaces the whole path, so
@@ -336,9 +337,19 @@ def _prepare_cashflow_context(
                         for i, r in enumerate(ref_curve[:years])
                     )
                     replace_from = first_drifted if curve_moved else None
-                if replace_from is not None:
+                if replace_from == 0:
+                    usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
+                elif replace_from is not None:
+                    # From the first drifted year the stressed curve's year-on-year
+                    # moves carry on from the level the own path had reached, so the
+                    # path does not step onto the model curve there (owner ruling,
+                    # 2026-11-16 14:47Z). From year 1 both start at the
+                    # financial-close spot, so the branch above is the same rule.
+                    level = usd_path[replace_from - 1]
+                    anchor = float(fx_curve_resolved[replace_from - 1])
                     usd_path = usd_path[:replace_from] + [
-                        float(fx_curve_resolved[i]) for i in range(replace_from, years)
+                        level * float(fx_curve_resolved[i]) / anchor
+                        for i in range(replace_from, years)
                     ]
             params_dict["opex_usd_fx_path"] = usd_path
 

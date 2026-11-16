@@ -312,8 +312,8 @@ class OpexCurrencySplit:
             stress or a Monte Carlo draw) changed ``fx``: when the model curve's shape
             changed, the engine translates the USD share on the stressed model curve
             in place of its own path, from the first operating year whose shape
-            differs (:func:`with_usd_opex_fx_reference`). ``None`` for an authored
-            scenario.
+            differs, carrying on from the own path's level there
+            (:func:`with_usd_opex_fx_reference`). ``None`` for an authored scenario.
         usd_fx_drift_override: ``True`` when the override explicitly set an FX drift
             key (see :data:`FX_DRIFT_KEYS`), even to the authored value: the engine
             then translates the USD share on the model curve even when its shape is
@@ -757,7 +757,11 @@ def with_usd_opex_fx_reference(
     2026-11-15), and an override at the model curve's own drift does not jump back to
     the own path. A drift that departs from the authored curve only in a later year
     replaces the own path from that first drifted year onward, and the years before it
-    keep the own path (owner ruling, 2026-11-16 14:28Z). When ``fx`` changed without a
+    keep the own path (owner ruling, 2026-11-16 14:28Z). From that year the stressed
+    curve's year-on-year moves carry on from the level the own path had reached, so the
+    path does not step onto the model curve (owner ruling, 2026-11-16 14:47Z). A drift
+    from year 1 starts at the financial-close spot, where both paths begin, so it runs
+    on the model curve itself. When ``fx`` changed without a
     drift key (a spot or curve-neutral override), only the reference is recorded: the
     engine compares the two curves' shapes, each relative to its own spot, and keeps the
     own path while they match.
