@@ -913,6 +913,40 @@ the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is 
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
 
+**FX stress and Monte Carlo reach the USD share (#1578 L-12).** The USD share's own FX path is set
+by the inputs above, so an override of `fx` (an FX drift stress, or a Monte Carlo drift draw) used
+to move the model curve but leave the USD opex on its own path. The
+Python override gateways (`evaluate_with_overrides`, `evaluate_scenario_from_dict` and
+`analytics.evaluate_scenario`, which the Monte Carlo and sensitivity tools use) now record the
+authored `fx` block. When an override names the drift (`fx.annual_depr`, its percent forms or an
+explicit curve), the stressed model curve replaces the USD share's own path, whatever the value: a
+drift stress of x runs the USD share at x, not at x on top of the 2.44%/yr PPP rate (the owner's
+ruling of 2026-11-15), and any drift override is a stress, even one equal to the authored drift
+(the owner's ruling of 2026-11-16). A 0%/yr override on the wind project, its model curve's own
+drift, therefore gives project IRR 12.76% and equity IRR 11.03%, with opex LKR 5,298M, the same as
+a near-zero drift of 1e-9/yr, so there is no jump at that boundary. The base case, with no
+override, does not move. A one-way tornado that sweeps the drift by a percentage of its authored
+value therefore runs two 0%/yr stresses on this project: both ends sit about 35 basis points above
+the base case (12.76% against 12.41%) and the bar is reported flat. An override of a drift key the
+FX curve does not read (`fx.annual_depr_pct` or `fx.depr_pct` beside the authored `fx.annual_depr`,
+or a parametric key beside an explicit curve) is refused, naming the key to use, because it would
+not move the curve the USD share is then put on. On the wind project a 3%/yr drift stress now gives project IRR 9.50% (9.60% before)
+and equity IRR 6.61% (6.74%), with life-of-project opex LKR 6,213M (6,013M); at 5.89%/yr, 6.35%
+(7.04%) and LKR 7,523M. A drift below 2.44% now lowers the USD opex (1%/yr: LKR 5,563M). A
+spot-only stress is unchanged, since the path already anchors on the spot. The solar + BESS
+project's USD share is 0%, so its stresses do not move. The web API's `/run-pipeline` overrides do
+not yet pass through this step, so an FX drift sent there still leaves the USD share on its own
+path (a follow-up on #1578).
+
+These are cost-side stresses. The tariff's escalable O&M index (`tariff.om_indexation`, described
+above) gives LKR/USD depreciation a 70% weight and derives it from the same 2.44%/yr, but no `fx`
+override reaches it, before or after this change: under a drift stress the index stays at its
+authored rate while the USD opex moves. So above 2.44%/yr the stressed IRRs are lower, and below
+it higher, than a stress that also moved the index would give. Whether a drift stress should also
+move the index is a separate owner decision. Because the base case runs the USD share at 2.44%/yr
+on a flat model curve, the neutral drift for that share is 2.44%/yr, not zero: any drift override
+below it lowers the USD opex, so a drift override of 0% or near it gives an IRR above the base case.
+
 **One construction period.** Both projects declare a 1-year construction period (input B30,
 `timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
 none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
