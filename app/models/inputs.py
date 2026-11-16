@@ -18,23 +18,45 @@ the asynchronous live-ERA5 path (roadmap Sprint 2) when AEP must be recomputed.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional, get_args
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from analytics.scenario_loader import load_scenario_config
 
 ScenarioVariant = Literal["lendercase", "basecase", "equitycase"]
 
-#: Friendly variant name → committed base scenario file (single source).
-_VARIANT_SCENARIOS: Dict[ScenarioVariant, str] = {
-    "lendercase": "scenarios/dutchbay_lendercase_2025Q4.yaml",
-    "basecase": "scenarios/dutchbay_basecase_2025Q4.yaml",
-    "equitycase": "scenarios/dutchbay_equitycase_2025Q4.yaml",
-}
-
 #: Repo root, resolved relative to this file (app/models/inputs.py → parents[2]).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: Which committed scenario each variant loads is project data, not code (#1759). It is
+#: read from this repository-relative file.
+BASE_SCENARIOS_CONFIG = Path("conf") / "web_base_scenarios.yaml"
+
+
+def variant_scenario_paths(repo_root: Optional[Path] = None) -> Dict[str, str]:
+    """Return the variant → repository-relative base scenario map from the conf file.
+
+    Raises:
+        FileNotFoundError: the conf file is missing.
+        ValueError: the file has no ``variants`` mapping, or does not name a scenario for
+            every :data:`ScenarioVariant`.
+    """
+    root = repo_root if repo_root is not None else _REPO_ROOT
+    path = root / BASE_SCENARIOS_CONFIG
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    variants = loaded.get("variants") if isinstance(loaded, dict) else None
+    if not isinstance(variants, dict):
+        raise ValueError(f"{path} must declare a 'variants' mapping")
+    expected = set(get_args(ScenarioVariant))
+    missing = sorted(expected - set(variants))
+    if missing:
+        raise ValueError(f"{path} names no base scenario for: {', '.join(missing)}")
+    for name in expected:
+        if not isinstance(variants[name], str) or not variants[name]:
+            raise ValueError(f"{path}: variants.{name} must be a scenario path")
+    return {str(k): str(v) for k, v in variants.items() if k in expected}
 
 
 def _deep_merge(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
@@ -146,7 +168,7 @@ class WindFarmInputs(BaseModel):
     def base_scenario_path(self, repo_root: Optional[Path] = None) -> Path:
         """Resolve the committed base scenario file for this variant."""
         root = repo_root if repo_root is not None else _REPO_ROOT
-        return root / _VARIANT_SCENARIOS[self.scenario_variant]
+        return root / variant_scenario_paths(root)[self.scenario_variant]
 
     def to_scenario_config(self, repo_root: Optional[Path] = None) -> Dict[str, Any]:
         """Load the base variant and merge the form fields → full scenario dict.
