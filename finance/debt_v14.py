@@ -39,6 +39,7 @@ from finance.debt.constants import (  # noqa: F401
     BRIDGE_TREATMENT_CONSTRUCTION_CAPITALIZED,
     BRIDGE_TREATMENT_EQUITY_CFADS_MATCH,
     BRIDGE_TREATMENT_HISTORICAL_FOLD,
+    DSRA_TARGET_BASIS,
     REFINANCE_TERMS_BASIS,
 )
 from finance.debt.construction import (  # noqa: F401
