@@ -15,6 +15,7 @@ import run_full_pipeline_v14 as rfp
 from analytics.emit_selection import (
     EMIT_ALL_DEFAULT,
     EMIT_FLAGS,
+    STATUS_FAILED,
     STATUS_NOT_RUN,
     STATUS_OFF,
     STATUS_RUN,
@@ -276,9 +277,37 @@ def test_cli_explicit_false_wins_under_emit_all(
     }
 
 
-def test_cli_emit_all_stops_when_an_applicable_emitter_fails(
+def test_cli_default_records_a_failed_emitter_and_completes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """Under emit_all, a failing emitter is listed as failed; the figures are still written."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls, fail="emit_executive_workbook")
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t", "grid": {"study_enabled": True}},
+        write_artifacts=True,
+    )
+    out = json.loads(capsys.readouterr().out)
+    # The failure does not stop the emitters after it.
+    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
+    failed = out["emitters"]["emit_executive_workbook"]
+    assert failed == {
+        "status": STATUS_FAILED,
+        "source": "emit_all",
+        "reason": "RuntimeError: emit_executive_workbook failed",
+    }
+    assert out["emitters"]["emit_grid_screen"]["status"] == STATUS_RUN
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["emitters"]["emit_executive_workbook"]["status"] == STATUS_FAILED
+
+
+def test_cli_explicit_emitter_failure_stops_the_run_after_the_figures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An emitter switched on explicitly still stops the run; the figures are already on disk."""
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls, fail="emit_grid_screen")
     with pytest.raises(SystemExit) as excinfo:
@@ -286,7 +315,36 @@ def test_cli_emit_all_stops_when_an_applicable_emitter_fails(
             tmp_path,
             {"scenario_name": "t", "grid": {"study_enabled": True}},
             emit_all=True,
+            emit_grid_screen=True,
+            write_artifacts=True,
         )
     assert excinfo.value.code == 1
     assert calls == ["emit_executive_workbook", "emit_grid_screen"]
     assert "emit_grid_screen failed" in capsys.readouterr().out
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    assert not (run_dir / "summary.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("parameters", "fragment"),
+    [
+        ({"capacity_factor_std": 0.05}, "must be a LIST"),
+        ([{"low": 0.1, "high": 0.2}], "must be a mapping with a 'name' key"),
+        ([{"name": "x", "low": 0.3, "high": 0.2}], "well-ordered"),
+    ],
+)
+def test_unreadable_monte_carlo_parameters_are_listed_not_run(
+    parameters: Any, fragment: str
+) -> None:
+    """The engine's own parser reads the parameters before the run (FRAMEWORK-02)."""
+    plan = plan_emitters(
+        {"emit_all": True}, {"monte_carlo": {"parameters": parameters}}
+    )
+    decision = plan["emit_capital_risk_report"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason is not None
+    assert decision.reason.startswith(
+        "the Monte Carlo engine cannot read monte_carlo.parameters: "
+    )
+    assert fragment in decision.reason
