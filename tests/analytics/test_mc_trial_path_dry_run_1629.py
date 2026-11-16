@@ -7,9 +7,8 @@ A sweep those checks refuse is refused up front, with the parameter and bound na
 instead of failing trial by trial. A ``capex.usd_total`` sweep on a scenario that derives
 CAPEX from its breakdown can opt in to ``reconcile_breakdown: pro_rata``, which scales
 every breakdown line with the sampled total so the trial path's cross-check holds. The
-committed 5 US-cent variant does not declare it here (that scenario change is its own
-R3 pull request), so its sweep is refused before sampling. The reconciliation tests opt
-in on a copy. Offline: committed scenarios only. No figure is asserted.
+committed 5 US-cent variant declares it on its CAPEX sweep (#1762). Offline: committed
+scenarios only. No figure is asserted.
 """
 
 from __future__ import annotations
@@ -64,14 +63,19 @@ def _reconciled() -> Dict[str, Any]:
 # ── #1762: the 5 US-cent variant ────────────────────────────────────────────────
 
 
-def test_five_us_cent_sweep_is_refused_before_sampling(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """On main every trial refused the sampled total and the run stopped at trial 0; now
-    the engine refuses the committed sweep before any trial runs, and says how to fix it."""
+def test_five_us_cent_capex_sweep_declares_the_breakdown_reconciliation() -> None:
     cfg = _load(_FIVE_US_CENT)
     assert cfg["capex"]["derive_from_breakdown"] is True
-    assert "reconcile_breakdown" not in _capex_param(cfg)
+    assert _capex_param(cfg)["reconcile_breakdown"] == "pro_rata"
+
+
+def test_without_the_reconciliation_the_sweep_is_refused_before_sampling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control: without the declaration the engine refuses the sweep before any
+    trial runs, and says how to fix it."""
+    cfg = _load(_FIVE_US_CENT)
+    del _capex_param(cfg)["reconcile_breakdown"]
 
     def _no_trial(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("a trial ran before the refusal")
@@ -208,9 +212,9 @@ def test_a_config_whose_base_does_not_resolve_is_left_to_the_trials() -> None:
     assert result.metadata["toy_fallback_count"] == 2
 
 
-def test_census_the_dry_run_refuses_only_the_five_us_cent_variant() -> None:
-    """Census: the dry run refuses no committed Monte Carlo scenario except the 5 US-cent
-    variant, whose trials all failed on main. Mapping-form ``monte_carlo.parameters``
+def test_census_the_dry_run_refuses_no_committed_scenario() -> None:
+    """Census: the dry run refuses no committed Monte Carlo scenario, now that the 5
+    US-cent variant declares its reconciliation. Mapping-form ``monte_carlo.parameters``
     blocks are refused by the existing schema check, as on main, and are out of scope."""
     checked = 0
     refused = []
@@ -229,4 +233,4 @@ def test_census_the_dry_run_refuses_only_the_five_us_cent_variant() -> None:
             refused.append(path.name)
         checked += 1
     assert checked >= 17
-    assert refused == [_FIVE_US_CENT.name]
+    assert refused == []
