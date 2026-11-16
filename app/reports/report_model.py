@@ -2128,7 +2128,7 @@ def _build_multi_tech(
 def _normalize_report_wind_rose(rose: Dict[str, Any]) -> Dict[str, Any]:
     """Guarantee ``sector_label`` + ``prevailing_sector_deg`` on a canonical rose block (#851).
 
-    The canonical :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` emits both keys
+    The canonical :func:`wind_resource.aep_summary._resolve_wind_rose` emits both keys
     on the ``direction_deg`` path (via :func:`~analytics.wind.wind_rose.build_wind_rose`) but
     NEITHER on the pre-binned ``sector_deg`` + ``frequency`` path. Rather than fork a divergent
     resolver, the report reuses the canonical block and back-fills those two display fields
@@ -2159,7 +2159,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     """Resolve the optional ``resource.wind_rose`` display block for the report layer (#851).
 
     Reuses the CANONICAL resolver
-    :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` (the exact block the #742
+    :func:`wind_resource.aep_summary._resolve_wind_rose` (the exact block the #742
     AEP-summary provenance carries — no divergent copy) and normalises the two display fields
     the pre-binned path omits (:func:`_normalize_report_wind_rose`). Returns ``None`` when no
     rose is declared. Display / provenance only — applies NO AEP correction. Propagates the
@@ -2167,7 +2167,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     (:func:`_build_wind_chapter`) catches it so a bad config degrades the report gracefully
     rather than crashing it.
     """
-    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+    from wind_resource.aep_summary import _resolve_wind_rose
 
     rose = _resolve_wind_rose(resource)
     if rose is None:

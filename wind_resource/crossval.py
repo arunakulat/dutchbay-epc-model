@@ -77,7 +77,7 @@ def _implied_aep(scenario: Mapping[str, Any], fit: WeibullFit) -> Dict[str, Any]
     :func:`wind_resource.arco_assessment._implied_aep`; the analytic engine import is local
     to keep this module import-light.
     """
-    from analytics.wind.aep_summary_builder import build_aep_summary_from_config
+    from wind_resource.aep_summary import build_aep_summary_from_config
 
     probe = copy.deepcopy(dict(scenario))
     probe["wind_resource"] = dict(probe.get("wind_resource", {}))
