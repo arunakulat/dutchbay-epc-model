@@ -109,7 +109,8 @@
 </head>
 <body>
 
-  {# 1. Cover #}
+  {# 1. Cover. The F-5 non-reliance notice (#1760) is render-when-present, so a report
+     without it is byte-identical. #}
   <section class="page cover">
     <h1>{{ ctx.meta.title }}</h1>
     <div class="subtitle">{{ ctx.meta.subtitle }}</div>
@@ -124,6 +125,9 @@
       Report version: {{ ctx.meta.version }}
     </div>
     <div class="confidential">{{ ctx.meta.confidentiality }}</div>
+    {% if ctx.f5_notice %}
+    <p class="f5-notice"><strong>F-5 non-reliance notice:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
   </section>
 
   {# 2. Important notice #}
@@ -139,7 +143,7 @@
         Render-when-present; whitespace-trimmed so a healthy report is byte-identical. -#}
     {%- if ctx.fx_fallback_note %}
     <p class="fx-warning"><strong>FX fallback notice:</strong> {{ ctx.fx_fallback_note }}</p>
-    {%- endif %}
+    {% endif %}
   </section>
 
   {# 3. Executive summary #}

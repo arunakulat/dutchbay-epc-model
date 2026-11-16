@@ -447,3 +447,27 @@ def test_fx_warning_omitted_when_fx_integration_succeeded() -> None:
     ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=ok)
     assert ctx.fx_warning is None
     assert "FX assumption notice" not in render_report_html(ctx)
+
+
+def test_f5_notice_is_absent_unless_the_caller_sets_it() -> None:
+    """#1760: the cover notice is render-when-present, so other reports are byte-identical."""
+    html = render_report_html(_context())
+    assert "f5-notice" not in html
+    assert "F-5 non-reliance notice" not in html
+
+
+def test_f5_notice_renders_on_the_cover_when_set() -> None:
+    notice = "HOLD (F-5, #1110, v15.6.1): test notice."
+    html = render_report_html(_context().model_copy(update={"f5_notice": notice}))
+    assert html.count(notice) == 1
+    # On the cover, ahead of the Important Notice section.
+    assert html.index(notice) < html.index("Important Notice")
+    without = render_report_html(_context())
+    # Only the notice line is added.
+    assert (
+        html.replace(
+            f'\n    <p class="f5-notice"><strong>F-5 non-reliance notice:</strong> {notice}</p>',
+            "",
+        )
+        == without
+    )

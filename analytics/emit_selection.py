@@ -105,13 +105,19 @@ def _needs_monte_carlo_parameters(
     # the engine would refuse is listed with the engine's reason instead of failing the run
     # after the figures (FRAMEWORK-02 pre-flight). Imported here to keep the engine off the
     # CLI's import path when no Monte Carlo is planned.
-    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+    from analytics.mc.engine import MonteCarloEngine
 
+    # Any parser error is listed, not only MonteCarloConfigError: a non-numeric bound such as
+    # ``low: null`` reaches ``float(...)`` and raises TypeError or ValueError, and a default run
+    # must still complete (owner ruling 2026-11-16 07:15Z).
     try:
         names, _, kinds, _, _ = MonteCarloEngine._extract_param_definitions(scenario)
         MonteCarloEngine._refuse_native_capex_conflicts(scenario, names, kinds)
-    except MonteCarloConfigError as exc:
-        return f"the Monte Carlo engine cannot read monte_carlo.parameters: {exc}"
+    except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+        return (
+            "the Monte Carlo engine cannot read monte_carlo.parameters: "
+            f"{type(exc).__name__}: {exc}"
+        )
     return None
 
 

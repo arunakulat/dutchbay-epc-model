@@ -379,3 +379,142 @@ def test_unreadable_monte_carlo_parameters_are_listed_not_run(
         "the Monte Carlo engine cannot read monte_carlo.parameters: "
     )
     assert fragment in decision.reason
+
+
+@pytest.mark.parametrize(
+    ("parameters", "error"),
+    [
+        ([{"name": "x", "low": None, "high": 0.2}], "TypeError"),
+        ([{"name": "x", "low": "abc", "high": 0.2}], "ValueError"),
+        ([{"name": "x", "low": 0.1, "high": [0.2]}], "TypeError"),
+        (5, "TypeError"),
+        ("x_std", "MonteCarloConfigError"),
+    ],
+)
+def test_any_unreadable_monte_carlo_parameters_are_listed_not_run(
+    parameters: Any, error: str
+) -> None:
+    """Domain review F-1: whatever the parser raises is listed, never raised."""
+    plan = plan_emitters(
+        {"emit_all": True}, {"monte_carlo": {"parameters": parameters}}
+    )
+    decision = plan["emit_capital_risk_report"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason is not None
+    assert decision.reason.startswith(
+        f"the Monte Carlo engine cannot read monte_carlo.parameters: {error}: "
+    )
+
+
+def test_cli_default_with_a_null_monte_carlo_bound_writes_figures_and_completes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Domain review F-1 probe P1, end to end through the CLI (owner ruling 07:15Z)."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path,
+        {
+            "scenario_name": "t",
+            "monte_carlo": {"parameters": [{"name": "x", "low": None, "high": 0.2}]},
+        },
+        write_artifacts=True,
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert calls == ["emit_executive_workbook"]
+    assert out["emitters"]["emit_capital_risk_report"]["status"] == STATUS_NOT_RUN
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    assert (run_dir / "summary.json").exists()
+
+
+def test_cli_writes_the_figures_before_the_emitter_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Whatever the plan does, the figures are already on disk (owner ruling 07:15Z)."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    real_plan = rfp.plan_emitters
+
+    def plan_that_fails_on_the_scenario(cfg: Any, scenario: Any = None) -> Any:
+        if scenario:
+            raise RuntimeError("planning failed")
+        return real_plan(cfg, scenario)
+
+    monkeypatch.setattr(rfp, "plan_emitters", plan_that_fails_on_the_scenario)
+    with pytest.raises(SystemExit):
+        _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True)
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    assert calls == []
+
+
+_STALE_CAPITAL_RISK = ("capital_risk_report.html", "npv_distribution_equity_npv.png")
+
+
+def _plant_stale_capital_risk(run_dir: Path) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    for name in _STALE_CAPITAL_RISK:
+        (run_dir / name).write_text("earlier run", encoding="utf-8")
+
+
+def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_not_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Domain review F-2: a shared export dir must not keep another run's report."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    (run_dir / "unrelated.txt").write_text("kept", encoding="utf-8")
+    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True)
+    out = json.loads(capsys.readouterr().out)
+    for name in _STALE_CAPITAL_RISK:
+        assert not (run_dir / name).exists(), name
+    assert (run_dir / "unrelated.txt").exists()
+    entry = out["emitters"]["emit_capital_risk_report"]
+    assert entry["status"] == STATUS_NOT_RUN
+    assert entry["removed_stale_outputs"] == list(_STALE_CAPITAL_RISK)
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["emitters"]["emit_capital_risk_report"] == entry
+
+
+def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_that_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls, fail="emit_executive_workbook")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "executive_workbook.xlsx").write_text("earlier run", encoding="utf-8")
+    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True)
+    out = json.loads(capsys.readouterr().out)
+    assert not (run_dir / "executive_workbook.xlsx").exists()
+    entry = out["emitters"]["emit_executive_workbook"]
+    assert entry["status"] == STATUS_FAILED
+    assert entry["removed_stale_outputs"] == ["executive_workbook.xlsx"]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"emit_all": False},
+        {"emit_capital_risk_report": False},
+        {"capital_risk_report": {"path": "elsewhere/capital_risk_report.html"}},
+    ],
+)
+def test_cli_keeps_outputs_it_does_not_own(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    overrides: Dict[str, Any],
+) -> None:
+    """Only emit_all's own default paths are cleared: an explicit switch or path is the caller's."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True, **overrides)
+    capsys.readouterr()
+    for name in _STALE_CAPITAL_RISK:
+        assert (run_dir / name).read_text(encoding="utf-8") == "earlier run", name

@@ -763,8 +763,10 @@ def cli(cfg: DictConfig) -> None:
                 - emit_all: If true (the default, also when unset), every emit_*
                   switch below that is left null turns on. An explicit switch wins. An emitter whose inputs the
                   run lacks is not run and is listed with its reason under
-                  result['emitters']; one that applies and fails stops the run.
-                  See analytics.emit_selection.
+                  result['emitters']. The figures are written first; an emitter
+                  that emit_all turns on and that fails is listed as failed and the
+                  run completes, while one switched on explicitly still stops the
+                  run when it fails. See analytics.emit_selection.
             Optional fields (#656 slice 3 — Executive Workbook emission; follows
             emit_all, so ON by default since #1756; KPIs are byte-identical either way):
                 - emit_executive_workbook: If true, write a single-scenario
@@ -1190,29 +1192,9 @@ def cli(cfg: DictConfig) -> None:
             run_id=cfg.get("run_id", None),
         )
 
-        # #1756: under emit_all, decide which emitters apply to this run from the effective
-        # scenario. One whose inputs are absent is recorded as not run with its reason; one that
-        # applies runs and, if it fails, is recorded as failed (below). The plan is recorded under
-        # result['emitters'] whenever emit_all is on, which is the default; a run with
-        # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
-        if emit_all and isinstance(result, dict):
-            emit_plan = plan_emitters(
-                cfg, dict(load_scenario_config(str(effective_config)))
-            )
-            emit_executive_workbook = emit_plan["emit_executive_workbook"].run
-            emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
-            emit_interaction_grid = emit_plan["emit_interaction_grid"].run
-            emit_tech_comparison = emit_plan["emit_tech_comparison"].run
-            emit_grid_screen = emit_plan["emit_grid_screen"].run
-            result["emitters"] = plan_report(emit_plan)
-            for decision in emit_plan.values():
-                if decision.status == STATUS_NOT_RUN:
-                    logger.info(
-                        "emit_all: %s not run (%s)", decision.flag, decision.reason
-                    )
-
-        # #1756: the figures are written BEFORE any emitter runs, so an analysis that fails can
-        # never remove them. summary.json, which records the emitters' outcome, is written after.
+        # #1756: the figures are written BEFORE the emitter plan and before any emitter runs, so
+        # nothing an analysis does (planning included) can stop them being written (owner ruling
+        # 2026-11-16 07:15Z). summary.json, which records the emitters' outcome, is written after.
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns
             # the configured root unchanged, so committed runs write to the same paths
@@ -1250,6 +1232,27 @@ def cli(cfg: DictConfig) -> None:
                     )
                     logger.info(
                         "Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv"
+                    )
+
+        # #1756: under emit_all, decide which emitters apply to this run from the effective
+        # scenario. One whose inputs are absent is recorded as not run with its reason; one that
+        # applies runs and, if it fails, is recorded as failed (below). The plan is recorded under
+        # result['emitters'] whenever emit_all is on, which is the default; a run with
+        # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
+        if emit_all and isinstance(result, dict):
+            emit_plan = plan_emitters(
+                cfg, dict(load_scenario_config(str(effective_config)))
+            )
+            emit_executive_workbook = emit_plan["emit_executive_workbook"].run
+            emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
+            emit_interaction_grid = emit_plan["emit_interaction_grid"].run
+            emit_tech_comparison = emit_plan["emit_tech_comparison"].run
+            emit_grid_screen = emit_plan["emit_grid_screen"].run
+            result["emitters"] = plan_report(emit_plan)
+            for decision in emit_plan.values():
+                if decision.status == STATUS_NOT_RUN:
+                    logger.info(
+                        "emit_all: %s not run (%s)", decision.flag, decision.reason
                     )
 
         # #1756: an emitter switched on by emit_all (the default) that raises is recorded as
@@ -1446,6 +1449,74 @@ def cli(cfg: DictConfig) -> None:
                 logger.info("Wrote grid-screening report to %s", gs_written)
 
             _run_emitter("emit_grid_screen", _emit_grid_screen)
+
+        # #1756 (domain review F-2): the default export directory is shared between runs, so an
+        # emitter that emit_all lists as not run, or that fails, must not leave an earlier run's
+        # output at its default path beside this run's figures. Only default paths are cleared;
+        # an explicitly configured path is the caller's, and emit_all=false clears nothing.
+        if (
+            emit_all
+            and isinstance(result, dict)
+            and isinstance(result.get("emitters"), dict)
+        ):
+            from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
+
+            default_outputs: dict[str, list[Path]] = {
+                "emit_executive_workbook": (
+                    []
+                    if executive_workbook_path
+                    else [export_dir_scoped / "executive_workbook.xlsx"]
+                ),
+                "emit_capital_risk_report": (
+                    []
+                    if capital_risk_report_cfg.get("path", None)
+                    else [
+                        export_dir_scoped / "capital_risk_report.html",
+                        export_dir_scoped
+                        / "npv_distribution_{}.png".format(
+                            capital_risk_report_cfg.get("npv_metric", "equity_npv")
+                        ),
+                    ]
+                ),
+                "emit_interaction_grid": (
+                    []
+                    if interaction_grid_cfg.get("path", None)
+                    else [export_dir_scoped / "interaction_grid_report.html"]
+                ),
+                "emit_tech_comparison": (
+                    []
+                    if tech_comparison_cfg.get("path", None)
+                    else [export_dir_scoped / "tech_comparison_report.html"]
+                ),
+                "emit_grid_screen": (
+                    []
+                    if grid_screen_cfg.get("path", None)
+                    else [
+                        export_dir_scoped / "grid_screening_report.html",
+                        export_dir_scoped
+                        / QSTS_SYNTHETIC_OUTPUT_CLASS
+                        / "grid_screening_report.html",
+                    ]
+                ),
+            }
+            for flag, entry in result["emitters"].items():
+                if not isinstance(entry, dict) or entry.get("source") != "emit_all":
+                    continue
+                if entry.get("status") not in (STATUS_NOT_RUN, STATUS_FAILED):
+                    continue
+                removed: list[str] = []
+                for stale in default_outputs.get(flag, []):
+                    if stale.is_file():
+                        stale.unlink()
+                        removed.append(stale.name)
+                if removed:
+                    entry["removed_stale_outputs"] = removed
+                    logger.info(
+                        "emit_all: %s %s; removed earlier output %s",
+                        flag,
+                        entry.get("status"),
+                        ", ".join(removed),
+                    )
 
         if write_artifacts:
             _write_json(export_dir_scoped / "summary.json", result)

@@ -131,8 +131,10 @@ solar_technology: solar
 # except grid screening. Under emit_all, an emitter whose inputs this run lacks
 # (for example no monte_carlo.parameters, no interaction_grid block, no
 # tech_comparison.scenarios, no enabled grid study) is not run and is listed
-# with its reason under result['emitters']; one that has its inputs and fails
-# stops the run. The emitters' own lender guards are unchanged. emit_all=false
+# with its reason under result['emitters']. The figures are written first; one
+# that emit_all turns on and that fails is listed as failed and the run
+# completes, while one switched on explicitly still stops the run when it
+# fails. The emitters' own lender guards are unchanged. emit_all=false
 # with the switches left null runs no emitter, exactly as before #1756. See
 # analytics/emit_selection.py; tests/lint/test_emit_all_covers_every_emitter.py
 # ties this list to the CLI.
