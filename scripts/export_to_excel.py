@@ -402,9 +402,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage: python export_to_excel.py <config_yaml> <output_xlsx>")
         print("\nExample:")
-        print(
-            "  python export_to_excel.py scenarios/dutchbay_lendercase_2025Q4.yaml out/analysis.xlsx"
-        )
+        print("  python export_to_excel.py scenarios/example.yaml out/analysis.xlsx")
         sys.exit(1)
 
     config_path = sys.argv[1]

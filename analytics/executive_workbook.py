@@ -11,7 +11,23 @@ from analytics.reproducible_workbook import normalize_xlsx_reproducible
 
 PathLike = Union[str, Path]
 
+# Non-reliance notice written on the workbook's first sheet (owner ruling,
+# 2026-11-16 07:19Z, #1760). Once the emitters follow emit_all, every run that
+# writes its figures produces the workbook by default, so it carries the same F-5
+# bar the HTML report and the screening helpers carry. The wording is pinned by a
+# test.
+EXECUTIVE_WORKBOOK_F5_CAVEAT = (
+    "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs for "
+    "screening and discussion only. They support no covenant, lender or IC "
+    "representation, and no quarterly CFADS or intra-year DSCR figure may be used "
+    "for covenant purposes."
+)
+
+# Zero-based row at which the Summary KPI table starts: row 1 holds the notice, row 2 is blank.
+_SUMMARY_TABLE_START_ROW = 2
+
 __all__ = [
+    "EXECUTIVE_WORKBOOK_F5_CAVEAT",
     "build_executive_workbook",
     "frames_from_pipeline_result",
     "serialize_resource_trend",
@@ -45,6 +61,9 @@ def build_executive_workbook(
     - Optionally creates "ResourceTrend" when ``resource_trend_df`` is supplied
       (long-term wind-resource & trend commentary; IEC-61400-15 / MEASNET basis --
       see ``wind_resource.long_term_trend``).
+    - Writes the F-5 non-reliance notice (``EXECUTIVE_WORKBOOK_F5_CAVEAT``) in
+      cell A1 of the "Summary" sheet, the first sheet; the KPI table follows
+      from row 3, below one blank row.
     - Returns the resolved Path to the created workbook.
 
     Inputs
@@ -81,8 +100,13 @@ def build_executive_workbook(
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
-        # Core sheets
-        _to_excel(summary_df, writer, "Summary")
+        # Core sheets. "Summary" is the first sheet: its row 1 carries the F-5 non-reliance
+        # notice (owner ruling 2026-11-16 07:19Z, #1760), so the KPI table starts at row 3,
+        # below one blank row, and is otherwise unchanged.
+        summary_df.to_excel(
+            writer, sheet_name="Summary", index=False, startrow=_SUMMARY_TABLE_START_ROW
+        )
+        writer.sheets["Summary"]["A1"] = EXECUTIVE_WORKBOOK_F5_CAVEAT
         _to_excel(cashflow_df, writer, "Cashflow")
         _to_excel(debt_df, writer, "DebtService")
         _to_excel(ratios_df, writer, "Ratios")
@@ -94,14 +118,15 @@ def build_executive_workbook(
         if resource_trend_df is not None:
             _to_excel(resource_trend_df, writer, "ResourceTrend")
 
-        # Ensure the Summary sheet has at least 3 rows:
+        # Ensure the Summary table has at least 3 rows below the notice:
         #   - header row
         #   - at least a couple of metric rows
         summary_ws = writer.sheets.get("Summary")
-        if summary_ws is not None and summary_ws.max_row < 3:
+        min_rows = _SUMMARY_TABLE_START_ROW + 3
+        if summary_ws is not None and summary_ws.max_row < min_rows:
             # Append lightweight metadata rows until we hit the minimum.
             # Content is intentionally minimal; tests only care about row count.
-            while summary_ws.max_row < 3:
+            while summary_ws.max_row < min_rows:
                 summary_ws.append([""])
 
     # Freeze the volatile document timestamps openpyxl bakes into the archive so

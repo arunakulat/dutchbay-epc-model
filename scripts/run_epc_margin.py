@@ -34,7 +34,7 @@ from finance.epc_margin import compute_epc_margin  # noqa: E402
 
 def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="EPC construction-margin model (e.g. the Kolonnawa BESS EPC)."
+        description="EPC construction-margin model for a scenario's epc block."
     )
     parser.add_argument(
         "--config",

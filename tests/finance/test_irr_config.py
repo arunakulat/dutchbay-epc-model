@@ -46,14 +46,10 @@ def test_load_config_explicit_path_returns_dict() -> None:
     assert "irr_validation" in config
 
 
-def test_load_config_default_path_resolves_from_cwd(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``load_config(None)`` resolves the default master-config path from cwd."""
-    monkeypatch.chdir(REPO_ROOT)
-    config = load_config()  # default: scenarios/dutchbay_master_config_v14.yaml
-    assert isinstance(config, dict)
-    assert "irr_validation" in config
+def test_load_config_without_a_path_is_refused() -> None:
+    """``load_config(None)`` has no default scenario to fall back on (#1759)."""
+    with pytest.raises(ValueError, match="config_path"):
+        load_config()
 
 
 def test_load_config_missing_file_raises_filenotfound() -> None:
@@ -65,13 +61,13 @@ def test_load_config_missing_file_raises_filenotfound() -> None:
     assert "does_not_exist_xyz.yaml" in msg
 
 
-def test_load_config_default_missing_when_cwd_wrong(
+def test_load_config_relative_path_missing_when_cwd_wrong(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """From a directory without the scenarios/ tree, the default path is missing."""
+    """A relative path resolves from cwd; outside the repository it is missing."""
     monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError):
-        load_config()
+        load_config("scenarios/does_not_exist_xyz.yaml")
 
 
 # ---------------------------------------------------------------------------

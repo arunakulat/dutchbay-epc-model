@@ -148,3 +148,65 @@ def render_wind_rose_polar_data_uri(
         except Exception:
             pass
         return None
+
+
+def render_turbine_wake_roses_png(
+    turbines: Sequence[Mapping[str, Any]],
+    sector_deg: Sequence[float],
+    out_path: str,
+    *,
+    title: str = "",
+    dpi: int = 130,
+) -> str:
+    """Draw one waked-energy rose per turbine in a grid and write it as a PNG.
+
+    Args:
+        turbines: Rows with ``id``, ``live_wake_loss_pct``, ``sector_wake_loss_pct`` and
+            ``waked_energy_rose`` (the re-baseline runner's ``per_turbine_sensitivity``).
+        sector_deg: North-centred sector bearings aligned to each row's lists.
+        out_path: Where the PNG goes.
+        title: A caption printed under the grid, such as the sensitivity label.
+        dpi: Raster resolution.
+
+    Returns:
+        ``out_path``.
+    """
+    import math
+
+    import matplotlib
+
+    matplotlib.use("Agg", force=False)
+    import matplotlib.pyplot as plt
+
+    n = len(turbines)
+    cols = min(5, n) or 1
+    rows = math.ceil(n / cols)
+    width = 2.0 * math.pi / len(sector_deg)
+    theta = [math.radians(d) for d in sector_deg]
+    fig = plt.figure(figsize=(3.0 * cols, 3.1 * rows + 0.8))
+    for i, t in enumerate(turbines):
+        ax = fig.add_subplot(rows, cols, i + 1, projection="polar")
+        ax.set_theta_zero_location("N")  # type: ignore[attr-defined]
+        ax.set_theta_direction(-1)  # type: ignore[attr-defined]
+        loss = [float(v) for v in t["sector_wake_loss_pct"]]
+        colours = plt.get_cmap("YlOrRd")([min(v, 60.0) / 60.0 for v in loss])
+        ax.bar(
+            theta,
+            [float(v) for v in t["waked_energy_rose"]],
+            width=width,
+            color=colours,
+            edgecolor="#555555",
+            linewidth=0.4,
+        )
+        ax.set_yticklabels([])
+        ax.tick_params(labelsize=6)
+        note = "" if t.get("counted", True) else " (not counted)"
+        ax.set_title(
+            f"{t['id']}{note}: {float(t['live_wake_loss_pct']):.1f}%", fontsize=8, pad=8
+        )
+    if title:
+        fig.text(0.5, 0.005, title, ha="center", va="bottom", fontsize=6, wrap=True)
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.savefig(out_path, dpi=dpi)
+    plt.close(fig)
+    return out_path

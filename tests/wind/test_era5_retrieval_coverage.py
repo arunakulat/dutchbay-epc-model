@@ -362,23 +362,19 @@ def test_main_prints_run_result_for_env_config(
     assert out == {"project": "Env Site", "ok": True}
 
 
-def test_main_uses_default_config_path_when_env_unset(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+def test_main_refuses_to_run_without_a_config_when_env_unset(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With no env var, ``main`` falls back to the Kalpitiya default path (line 378-379)."""
-    captured_path: Dict[str, str] = {}
+    """With no env var, ``main`` stops: there is no default site config (#1759)."""
+    calls: Dict[str, int] = {"run": 0}
 
-    monkeypatch.setattr(
-        ERA5RequestConfig,
-        "from_yaml",
-        classmethod(
-            lambda _cls, path: captured_path.setdefault("path", path) and None or _cfg()
-        ),
-    )
-    monkeypatch.setattr(era5_retrieval, "run", lambda c: {"ok": True})
+    def _fake_run(_c: Any) -> Dict[str, bool]:
+        calls["run"] += 1
+        return {"ok": True}
+
+    monkeypatch.setattr(era5_retrieval, "run", _fake_run)
     monkeypatch.delenv("ERA5_REQUEST_CONFIG", raising=False)
 
-    main()
-
-    assert captured_path["path"] == ("wind_resource/config/era5_request_kalpitiya.yaml")
-    assert json.loads(capsys.readouterr().out) == {"ok": True}
+    with pytest.raises(SystemExit, match="ERA5_REQUEST_CONFIG"):
+        main()
+    assert calls["run"] == 0

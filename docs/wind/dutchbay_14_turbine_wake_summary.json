@@ -7,7 +7,7 @@
   "layout": [
     {
       "id": "T1",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 856.23,
       "y_m": 2643.46
     },
@@ -19,84 +19,632 @@
     },
     {
       "id": "T3",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 436.52,
       "y_m": 1575.75
     },
     {
       "id": "T4",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 210.91,
       "y_m": 959.06
     },
     {
       "id": "T5",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -195.05,
       "y_m": 529.39
     },
     {
       "id": "T6",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 491.62,
       "y_m": 593.98
     },
     {
       "id": "T7",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -377.05,
       "y_m": 104.91
     },
     {
       "id": "T8",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 582.18,
       "y_m": 152.03
     },
     {
       "id": "T9",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -465.19,
       "y_m": -348.53
     },
     {
       "id": "T10",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 346.64,
       "y_m": -420.53
     },
     {
       "id": "T11",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -83.79,
       "y_m": -597.49
     },
     {
       "id": "T12",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -612.72,
       "y_m": -1140.63
     },
     {
       "id": "T13",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -697.89,
       "y_m": -1628.36
     },
     {
       "id": "T14",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -311.3,
       "y_m": -2124.06
     },
     {
       "id": "T15",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -817.77,
       "y_m": -2361.4
     }
   ],
   "method": "frozen_wake_15_pct x (live PyWake loss over the 14 DutchBay turbines with T2 standing and waking / live loss over all 15), real layout",
+  "per_turbine_sensitivity": {
+    "basis_wake_loss_pct": 7.32,
+    "label": "Resource sensitivity, not the lender basis. Live PyWake wake loss for each turbine on the real layout, with T2 standing and waking. The lender basis is wake_loss_14_pct. The live model's farm loss over the counted turbines is far above the frozen value it scales, and that gap is open in #1589, so the live figures are shown beside a share scaled to the lender basis: each turbine's live loss times wake_loss_14_pct over the live farm loss, which keeps the farm total on the basis.",
+    "live_farm_wake_loss_pct": 19.44,
+    "scale_to_basis": 0.376634,
+    "sector_deg": [
+      0.0,
+      30.0,
+      60.0,
+      90.0,
+      120.0,
+      150.0,
+      180.0,
+      210.0,
+      240.0,
+      270.0,
+      300.0,
+      330.0
+    ],
+    "turbines": [
+      {
+        "counted": true,
+        "id": "T1",
+        "live_wake_loss_pct": 12.9,
+        "role": "counted",
+        "scaled_to_basis_pct": 4.86,
+        "sector_wake_loss_pct": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          21.55,
+          47.45,
+          0.03,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0355,
+          0.0355,
+          0.0355,
+          0.0473,
+          0.071,
+          0.1065,
+          0.13,
+          0.1244,
+          0.1893,
+          0.1065,
+          0.071,
+          0.0473
+        ]
+      },
+      {
+        "counted": false,
+        "id": "T2",
+        "live_wake_loss_pct": 17.89,
+        "role": "external_waker",
+        "scaled_to_basis_pct": null,
+        "sector_wake_loss_pct": [
+          9.02,
+          34.38,
+          0.03,
+          0.0,
+          0.0,
+          0.0,
+          32.18,
+          57.55,
+          0.22,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0343,
+          0.0247,
+          0.0377,
+          0.0502,
+          0.0753,
+          0.113,
+          0.1192,
+          0.1066,
+          0.2004,
+          0.113,
+          0.0753,
+          0.0502
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T3",
+        "live_wake_loss_pct": 19.92,
+        "role": "counted",
+        "scaled_to_basis_pct": 7.5,
+        "sector_wake_loss_pct": [
+          10.72,
+          49.03,
+          0.22,
+          0.0,
+          0.0,
+          0.4,
+          46.32,
+          54.96,
+          0.06,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0345,
+          0.0197,
+          0.0385,
+          0.0515,
+          0.0772,
+          0.1154,
+          0.0968,
+          0.116,
+          0.2059,
+          0.1159,
+          0.0772,
+          0.0515
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T4",
+        "live_wake_loss_pct": 28.43,
+        "role": "counted",
+        "scaled_to_basis_pct": 10.71,
+        "sector_wake_loss_pct": [
+          9.92,
+          38.02,
+          0.01,
+          0.0,
+          13.63,
+          67.89,
+          26.66,
+          60.61,
+          20.95,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0389,
+          0.0268,
+          0.0432,
+          0.0576,
+          0.0746,
+          0.0416,
+          0.1479,
+          0.1135,
+          0.1822,
+          0.1296,
+          0.0864,
+          0.0576
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T5",
+        "live_wake_loss_pct": 25.41,
+        "role": "counted",
+        "scaled_to_basis_pct": 9.57,
+        "sector_wake_loss_pct": [
+          0.02,
+          47.37,
+          23.41,
+          35.44,
+          26.39,
+          19.36,
+          41.56,
+          59.21,
+          0.72,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0415,
+          0.0218,
+          0.0318,
+          0.0357,
+          0.061,
+          0.1003,
+          0.1131,
+          0.1128,
+          0.2195,
+          0.1244,
+          0.0829,
+          0.0553
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T6",
+        "live_wake_loss_pct": 31.31,
+        "role": "counted",
+        "scaled_to_basis_pct": 11.79,
+        "sector_wake_loss_pct": [
+          37.93,
+          1.05,
+          0.0,
+          0.0,
+          0.01,
+          23.5,
+          60.99,
+          36.88,
+          32.21,
+          34.81,
+          13.7,
+          51.5
+        ],
+        "waked_energy_rose": [
+          0.0279,
+          0.0446,
+          0.045,
+          0.06,
+          0.09,
+          0.1033,
+          0.082,
+          0.1895,
+          0.1628,
+          0.0881,
+          0.0777,
+          0.0291
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T7",
+        "live_wake_loss_pct": 21.86,
+        "role": "counted",
+        "scaled_to_basis_pct": 8.23,
+        "sector_wake_loss_pct": [
+          12.07,
+          70.06,
+          23.21,
+          22.94,
+          23.89,
+          30.04,
+          56.1,
+          25.67,
+          0.01,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0348,
+          0.0119,
+          0.0304,
+          0.0407,
+          0.0602,
+          0.0831,
+          0.0811,
+          0.1961,
+          0.2111,
+          0.1187,
+          0.0792,
+          0.0528
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T8",
+        "live_wake_loss_pct": 25.51,
+        "role": "counted",
+        "scaled_to_basis_pct": 9.61,
+        "sector_wake_loss_pct": [
+          58.34,
+          0.26,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          6.69,
+          63.08,
+          25.43,
+          23.93,
+          26.34,
+          40.89
+        ],
+        "waked_energy_rose": [
+          0.0173,
+          0.0414,
+          0.0415,
+          0.0554,
+          0.083,
+          0.1246,
+          0.1808,
+          0.1022,
+          0.1651,
+          0.0948,
+          0.0612,
+          0.0327
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T9",
+        "live_wake_loss_pct": 16.45,
+        "role": "counted",
+        "scaled_to_basis_pct": 6.19,
+        "sector_wake_loss_pct": [
+          43.68,
+          50.88,
+          24.87,
+          29.28,
+          58.46,
+          8.08,
+          36.28,
+          9.4,
+          0.0,
+          0.0,
+          0.0,
+          0.14
+        ],
+        "waked_energy_rose": [
+          0.0208,
+          0.0182,
+          0.0278,
+          0.0349,
+          0.0308,
+          0.1021,
+          0.1101,
+          0.2236,
+          0.1974,
+          0.111,
+          0.074,
+          0.0493
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T10",
+        "live_wake_loss_pct": 24.2,
+        "role": "counted",
+        "scaled_to_basis_pct": 9.11,
+        "sector_wake_loss_pct": [
+          45.43,
+          38.73,
+          0.06,
+          0.0,
+          0.0,
+          0.0,
+          0.41,
+          23.1,
+          62.81,
+          42.63,
+          25.75,
+          20.91
+        ],
+        "waked_energy_rose": [
+          0.0223,
+          0.025,
+          0.0408,
+          0.0544,
+          0.0816,
+          0.1224,
+          0.1896,
+          0.2092,
+          0.0809,
+          0.0702,
+          0.0606,
+          0.043
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T11",
+        "live_wake_loss_pct": 22.05,
+        "role": "counted",
+        "scaled_to_basis_pct": 8.31,
+        "sector_wake_loss_pct": [
+          34.77,
+          35.9,
+          54.81,
+          15.54,
+          0.0,
+          0.0,
+          10.26,
+          40.08,
+          15.89,
+          1.62,
+          56.78,
+          36.42
+        ],
+        "waked_energy_rose": [
+          0.0259,
+          0.0254,
+          0.0179,
+          0.0447,
+          0.0794,
+          0.119,
+          0.1662,
+          0.1585,
+          0.178,
+          0.1171,
+          0.0343,
+          0.0336
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T12",
+        "live_wake_loss_pct": 16.03,
+        "role": "counted",
+        "scaled_to_basis_pct": 6.04,
+        "sector_wake_loss_pct": [
+          27.5,
+          46.69,
+          29.97,
+          0.0,
+          0.0,
+          12.82,
+          52.75,
+          19.42,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.0267,
+          0.0196,
+          0.0258,
+          0.0491,
+          0.0737,
+          0.0963,
+          0.0812,
+          0.1979,
+          0.1964,
+          0.1105,
+          0.0737,
+          0.0491
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T13",
+        "live_wake_loss_pct": 12.36,
+        "role": "counted",
+        "scaled_to_basis_pct": 4.65,
+        "sector_wake_loss_pct": [
+          46.93,
+          56.75,
+          2.13,
+          0.0,
+          6.75,
+          35.92,
+          26.41,
+          7.36,
+          0.0,
+          0.0,
+          0.0,
+          0.11
+        ],
+        "waked_energy_rose": [
+          0.0187,
+          0.0153,
+          0.0345,
+          0.0471,
+          0.0658,
+          0.0678,
+          0.1212,
+          0.2179,
+          0.1882,
+          0.1059,
+          0.0706,
+          0.047
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T14",
+        "live_wake_loss_pct": 12.04,
+        "role": "counted",
+        "scaled_to_basis_pct": 4.53,
+        "sector_wake_loss_pct": [
+          42.07,
+          15.2,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.27,
+          43.9,
+          6.06,
+          6.75,
+          48.31
+        ],
+        "waked_energy_rose": [
+          0.0204,
+          0.0298,
+          0.0352,
+          0.0469,
+          0.0703,
+          0.1055,
+          0.1641,
+          0.2338,
+          0.1052,
+          0.0991,
+          0.0656,
+          0.0242
+        ]
+      },
+      {
+        "counted": true,
+        "id": "T15",
+        "live_wake_loss_pct": 3.64,
+        "role": "counted",
+        "scaled_to_basis_pct": 1.37,
+        "sector_wake_loss_pct": [
+          34.58,
+          31.12,
+          43.9,
+          6.06,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "waked_energy_rose": [
+          0.021,
+          0.0221,
+          0.018,
+          0.0402,
+          0.0642,
+          0.0963,
+          0.1498,
+          0.214,
+          0.1712,
+          0.0963,
+          0.0642,
+          0.0428
+        ]
+      }
+    ],
+    "work_item": "#1589"
+  },
   "real_layout": {
     "all_15": {
       "aep_gross_gwh": 575.7950188924701,
@@ -151,7 +699,7 @@
     "ratio_t2_removed": 0.9495145991455103,
     "ratio_t2_waking": 0.9948216955956343
   },
-  "t2_proxy_note": "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy for the Blue Whale machine, whose curves are confidential and not read.",
+  "t2_proxy_note": "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy for the other project's machine there, whose curves are confidential and not read.",
   "wake_loss_14_pct": 7.32,
   "work_item": "#1577"
 }
