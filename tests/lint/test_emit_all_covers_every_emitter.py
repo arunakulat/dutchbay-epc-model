@@ -35,7 +35,8 @@ def test_conf_declares_exactly_the_planned_switches() -> None:
     conf = OmegaConf.load(CONF)
     declared = {str(k) for k in conf if str(k).startswith("emit_")}
     assert declared == set(EMIT_FLAGS) | {"emit_all"}
-    assert conf.emit_all is False
+    # On by default: owner ruling 2026-11-16.
+    assert conf.emit_all is True
     for flag in EMIT_FLAGS:
         assert conf.get(flag) is None, f"{flag} must default to null (follow emit_all)"
 

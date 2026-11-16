@@ -124,18 +124,20 @@ solar_export_scenario: P50
 solar_technology: solar
 
 # ---------------------------------------------------------------------------
-# #1756: one switch for all emitters (OFF by default).
+# #1756: one switch for all emitters (ON by default: owner ruling 2026-11-16,
+# the analyses run for every scenario unless switched off).
 # emit_all: true turns on every emit_* switch below that is left null. A switch
 # set explicitly wins, so `emit_all=true emit_grid_screen=false` runs everything
 # except grid screening. Under emit_all, an emitter whose inputs this run lacks
 # (for example no monte_carlo.parameters, no interaction_grid block, no
 # tech_comparison.scenarios, no enabled grid study) is not run and is listed
 # with its reason under result['emitters']; one that has its inputs and fails
-# stops the run. The emitters' own lender guards are unchanged. A null switch
-# with emit_all off is off, exactly as before. See analytics/emit_selection.py;
-# tests/lint/test_emit_all_covers_every_emitter.py ties this list to the CLI.
+# stops the run. The emitters' own lender guards are unchanged. emit_all=false
+# with the switches left null runs no emitter, exactly as before #1756. See
+# analytics/emit_selection.py; tests/lint/test_emit_all_covers_every_emitter.py
+# ties this list to the CLI.
 # ---------------------------------------------------------------------------
-emit_all: false
+emit_all: true
 
 # Switches with no section of their own below (null = follow emit_all).
 emit_interaction_grid: null
@@ -143,15 +145,16 @@ emit_tech_comparison: null
 emit_grid_screen: null
 
 # ---------------------------------------------------------------------------
-# #656 (slice 3): single-scenario Executive Workbook emission (OFF by default).
+# #656 (slice 3): single-scenario Executive Workbook emission (follows emit_all,
+# so ON by default since #1756).
 # When true, after a successful finance run this CLI writes a lender-facing
 # .xlsx via analytics.executive_workbook.emit_executive_workbook_from_pipeline
 # (the genuine live caller of build_executive_workbook). The five finance
 # sheets are assembled from the pipeline result; the optional "ResourceTrend"
 # sheet is added only when a supplied frozen wind export carries a
 # long_term_trend block. No live ERA5 is run (the finance CLI stays cdsapi-free).
-# Emission derives no financial value, so leaving this off keeps committed
-# scenarios byte-identical.
+# Emission derives no financial value: the KPIs and the JSON/CSV dump are
+# byte-identical with it on or off.
 # ---------------------------------------------------------------------------
 
 # If true, write the single-scenario Executive Workbook after the finance run.
@@ -164,15 +167,17 @@ emit_executive_workbook: null
 executive_workbook_path: null
 
 # ---------------------------------------------------------------------------
-# #779: capital-risk (Monte-Carlo) report emission (OFF by default).
+# #779: capital-risk (Monte-Carlo) report emission (follows emit_all, so ON by
+# default since #1756 for any scenario with monte_carlo.parameters).
 # When true, after a successful finance run this CLI runs the CANONICAL MC
 # (analytics.mc.engine — LHS + Iman-Conover, with monte_carlo.allow_toy_fallback
 # forced false so a failed trial raises rather than fabricating a toy metric)
 # over a BOUNDED trial count and renders a lender HTML report carrying the
 # capital-risk section, via app.reports.capital_risk_emit. It is heavy (each
 # trial is a full v14 evaluation), so it lives in this batch path only — never
-# the synchronous HTTP report route. Emission derives no committed KPI, so
-# leaving this off keeps committed scenarios byte-identical.
+# the synchronous HTTP report route. Emission derives no committed KPI: the
+# KPIs and the JSON/CSV dump are byte-identical with it on or off. Set
+# emit_capital_risk_report=false for a fast run.
 # ---------------------------------------------------------------------------
 
 # If true, render the capital-risk lender report after the finance run.
