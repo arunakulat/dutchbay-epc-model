@@ -184,6 +184,7 @@ def test_a_bound_that_fails_alone_is_named() -> None:
     """A sweep refused at one bound only is still refused: the trials near it fail."""
     cfg = _load(_FIVE_US_CENT)
     param = _capex_param(cfg)
+    param.pop("reconcile_breakdown", None)  # independent of the scenario's declaration
     base_total = float(cfg["capex"]["usd_total"])
     param["low"], param["high"] = base_total, base_total * 1.5
     cfg["monte_carlo"]["parameters"] = [param]
