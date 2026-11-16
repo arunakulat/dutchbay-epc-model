@@ -204,15 +204,29 @@ APPLICABILITY: Dict[str, Callable[[Mapping[str, Any], Any], Optional[str]]] = {
 }
 
 
+WRITE_ARTIFACTS_OFF_REASON = (
+    "write_artifacts is false, so emit_all writes no files; switch an emitter on by name"
+    " to write it"
+)
+
+
 def plan_emitters(
-    cfg: Any, scenario: Optional[Mapping[str, Any]] = None
+    cfg: Any,
+    scenario: Optional[Mapping[str, Any]] = None,
+    *,
+    write_artifacts: bool = True,
 ) -> Dict[str, EmitterDecision]:
     """Decide which emitters run.
 
     Args:
         cfg: The run config (``DictConfig`` or mapping).
-        scenario: The effective scenario mapping. Required when ``emit_all`` is on and any
-            switch is unset, because applicability is read from it; ignored otherwise.
+        scenario: The effective scenario mapping. Required when ``emit_all`` is on, any
+            switch is unset and ``write_artifacts`` is true, because applicability is read
+            from it; ignored otherwise.
+        write_artifacts: Whether the run writes files (#1760 assurance L-1). When false,
+            ``emit_all`` switches nothing on: every unset switch is listed as not run with
+            :data:`WRITE_ARTIFACTS_OFF_REASON`, so a run that writes no figures writes no
+            report either. A switch set by name still runs, as before #1756.
 
     Returns:
         One :class:`EmitterDecision` per entry in :data:`EMIT_FLAGS`, in that order.
@@ -232,6 +246,15 @@ def plan_emitters(
         if not emit_all:
             plan[flag] = EmitterDecision(
                 flag=flag, run=False, status=STATUS_OFF, source="default"
+            )
+            continue
+        if not write_artifacts:
+            plan[flag] = EmitterDecision(
+                flag=flag,
+                run=False,
+                status=STATUS_NOT_RUN,
+                source="emit_all",
+                reason=WRITE_ARTIFACTS_OFF_REASON,
             )
             continue
         if scenario is None:

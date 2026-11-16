@@ -19,6 +19,7 @@ from analytics.emit_selection import (
     STATUS_NOT_RUN,
     STATUS_OFF,
     STATUS_RUN,
+    WRITE_ARTIFACTS_OFF_REASON,
     plan_emitters,
     plan_report,
 )
@@ -67,6 +68,18 @@ def test_emit_all_off_runs_nothing_and_needs_no_scenario() -> None:
     assert list(plan) == list(EMIT_FLAGS)
     assert not any(_runs(plan).values())
     assert {d.status for d in plan.values()} == {STATUS_OFF}
+
+
+def test_write_artifacts_false_switches_nothing_on_under_emit_all() -> None:
+    """#1760 assurance L-1: a run that writes no files writes no report under emit_all."""
+    cfg = OmegaConf.create({"emit_executive_workbook": True})
+    plan = plan_emitters(cfg, None, write_artifacts=False)
+    assert _runs(plan) == {
+        flag: flag == "emit_executive_workbook" for flag in EMIT_FLAGS
+    }
+    for flag in EMIT_FLAGS[1:]:
+        assert plan[flag].status == STATUS_NOT_RUN
+        assert plan[flag].reason == WRITE_ARTIFACTS_OFF_REASON
 
 
 def test_single_switch_behaves_as_before() -> None:
@@ -264,6 +277,8 @@ def _install_recording_emitters(
 
 
 def _run_cli(tmp_path: Path, scenario: Dict[str, Any], **overrides: Any) -> None:
+    """Run the CLI with stubs. It writes files unless ``write_artifacts=False`` is passed,
+    because under emit_all a run that writes no files runs no emitter (#1760 L-1)."""
     path = tmp_path / "scenario.yaml"
     path.write_text(yaml.safe_dump(scenario), encoding="utf-8")
     base: Dict[str, Any] = {
@@ -271,7 +286,7 @@ def _run_cli(tmp_path: Path, scenario: Dict[str, Any], **overrides: Any) -> None
         "validation_mode": "off",
         "validation_modules": None,
         "export_dir": str(tmp_path / "run"),
-        "write_artifacts": False,
+        "write_artifacts": True,
         "wind_assessment_json": None,
         "wind_auto_orchestrate": False,
         "solar_assessment_json": None,
@@ -569,10 +584,12 @@ def test_cli_writes_the_figures_before_the_emitter_plan(
     _install_recording_emitters(monkeypatch, calls)
     real_plan = rfp.plan_emitters
 
-    def plan_that_fails_on_the_scenario(cfg: Any, scenario: Any = None) -> Any:
+    def plan_that_fails_on_the_scenario(
+        cfg: Any, scenario: Any = None, **kwargs: Any
+    ) -> Any:
         if scenario:
             raise RuntimeError("planning failed")
-        return real_plan(cfg, scenario)
+        return real_plan(cfg, scenario, **kwargs)
 
     monkeypatch.setattr(rfp, "plan_emitters", plan_that_fails_on_the_scenario)
     with pytest.raises(SystemExit):
@@ -631,7 +648,7 @@ def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_that_fails(
 def test_cli_emit_all_off_keeps_every_earlier_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """emit_all=false clears nothing."""
+    """emit_all=false clears no output of an emitter it does not attempt."""
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls)
     run_dir = tmp_path / "run"
@@ -732,3 +749,144 @@ def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_switched_off
     assert entry["removed_stale_outputs"] == list(_STALE_CAPITAL_RISK)
     summary = json.loads((run_dir / "summary.json").read_text())
     assert summary["emitters"]["emit_capital_risk_report"] == entry
+
+
+# --------------------------------------------------------------------------------------------
+# #1760 assurance M-1 and L-1: one rule for which default-path files a run owns.
+# --------------------------------------------------------------------------------------------
+
+
+def _plant(run_dir: Path, *names: str) -> None:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (run_dir / name).write_text("earlier run", encoding="utf-8")
+
+
+def test_cli_by_name_failure_under_emit_all_leaves_no_earlier_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M-1: an emitter switched on by name that fails stops the run (exit 1), and nothing an
+    earlier run wrote is left beside this run's figures: not summary.json, not the failed
+    emitter's report, not a not-run emitter's report, and not the report of an emitter that
+    would have run after the failure."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls, fail="emit_capital_risk_report")
+    run_dir = tmp_path / "run"
+    _plant(
+        run_dir,
+        "summary.json",
+        *_STALE_CAPITAL_RISK,
+        "tech_comparison_report.html",
+        "grid_screening_report.html",
+        "unrelated.txt",
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        _run_cli(
+            tmp_path,
+            {
+                "scenario_name": "t",
+                "monte_carlo": {"parameters": [{"name": "x"}]},
+                "grid": {"study_enabled": True},
+            },
+            emit_capital_risk_report=True,
+        )
+    capsys.readouterr()
+    assert excinfo.value.code == 1
+    assert calls == ["emit_executive_workbook", "emit_capital_risk_report"]
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    for name in (
+        "summary.json",
+        *_STALE_CAPITAL_RISK,
+        "tech_comparison_report.html",
+        "grid_screening_report.html",
+    ):
+        assert not (run_dir / name).exists(), name
+    assert (run_dir / "unrelated.txt").exists()
+
+
+def test_cli_by_name_failure_with_emit_all_off_clears_only_its_own_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """M-1 with emit_all=false: the attempted emitter clears its own default outputs first,
+    summary.json is removed when the figures are written, and nothing else is touched.
+    """
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls, fail="emit_capital_risk_report")
+    run_dir = tmp_path / "run"
+    _plant(run_dir, "summary.json", *_STALE_CAPITAL_RISK, "tech_comparison_report.html")
+    with pytest.raises(SystemExit):
+        _run_cli(
+            tmp_path,
+            {"scenario_name": "t"},
+            emit_all=False,
+            emit_capital_risk_report=True,
+        )
+    capsys.readouterr()
+    assert calls == ["emit_capital_risk_report"]
+    for name in ("summary.json", *_STALE_CAPITAL_RISK):
+        assert not (run_dir / name).exists(), name
+    assert (run_dir / "tech_comparison_report.html").read_text(
+        encoding="utf-8"
+    ) == "earlier run"
+
+
+def test_cli_default_clears_what_a_failed_emitter_wrote_before_failing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+
+    def half_written_workbook(result: Any, out: Path, **kwargs: Any) -> Path:
+        Path(out).write_text("half written", encoding="utf-8")
+        raise RuntimeError("workbook failed")
+
+    monkeypatch.setattr(
+        rfp, "emit_executive_workbook_from_pipeline", half_written_workbook
+    )
+    _run_cli(tmp_path, {"scenario_name": "t"})
+    out = json.loads(capsys.readouterr().out)
+    assert not (tmp_path / "run" / "executive_workbook.xlsx").exists()
+    entry = out["emitters"]["emit_executive_workbook"]
+    assert entry["status"] == STATUS_FAILED
+    assert entry["removed_stale_outputs"] == ["executive_workbook.xlsx"]
+
+
+def test_cli_default_without_write_artifacts_writes_no_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """L-1: with write_artifacts=false a default run writes nothing into export_dir, as on
+    main, and lists every emitter as not run with the reason."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant(run_dir, *_STALE_CAPITAL_RISK)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t", "grid": {"study_enabled": True}},
+        write_artifacts=False,
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert calls == []
+    assert {entry["status"] for entry in out["emitters"].values()} == {STATUS_NOT_RUN}
+    assert {entry["reason"] for entry in out["emitters"].values()} == {
+        WRITE_ARTIFACTS_OFF_REASON
+    }
+    assert sorted(path.name for path in run_dir.iterdir()) == sorted(
+        _STALE_CAPITAL_RISK
+    )
+
+
+def test_cli_without_write_artifacts_still_runs_a_switch_set_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        write_artifacts=False,
+        emit_executive_workbook=True,
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert calls == ["emit_executive_workbook"]
+    assert out["emitters"]["emit_executive_workbook"]["status"] == STATUS_RUN
