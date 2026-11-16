@@ -1,0 +1,1370 @@
+{
+  "base": "c283565abd8c7a989daac4c7cfd70c7fb7c18d4d",
+  "files": [
+    {
+      "path": "analytics/__init__.py",
+      "git_blob": "1ff9099cc23be717102d0a1ebffa6db9c22fdf3e",
+      "sha256": "f8c70c522e75a3f0f2b410bec73988a1c1c2d993f8bddf640e85ed6e399152eb",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/aep_provenance.py",
+      "git_blob": "da1dfff83b9aa7fca644cac99ffbce377420a63e",
+      "sha256": "ecd83ad49cd76e3720cb6f2866c7a4bbdeb04c5bed3cb39c5db8b1c91c00296d",
+      "numeric_literals": 2,
+      "numeric_tokens": 2
+    },
+    {
+      "path": "analytics/aep_reconciliation.py",
+      "git_blob": "a56637b5319953fb6bc87788ce2c407bc3f0ac0d",
+      "sha256": "ad7d2eb065ffcd1378247d56123e6c28ebaf4bbfe42de9a2e3a59e58d5be9861",
+      "numeric_literals": 13,
+      "numeric_tokens": 13
+    },
+    {
+      "path": "analytics/capital_risk_layer_v14.py",
+      "git_blob": "1665b945617bed12d8bbe0556fed3325b392ee88",
+      "sha256": "466ca7add5a57daeeb20d12d9cdb0ef1f4b82136466fb3980eebec0e3e3c9cfb",
+      "numeric_literals": 33,
+      "numeric_tokens": 33
+    },
+    {
+      "path": "analytics/capital_structure_optimizer_v14.py",
+      "git_blob": "81c9bdd6e5b9585b54af17dd3b875954b134150a",
+      "sha256": "fe31dd0ca391156eb89e84f84cf7ca63cdaf4f4f1a5de6f985716e86b5cfbccf",
+      "numeric_literals": 25,
+      "numeric_tokens": 25
+    },
+    {
+      "path": "analytics/casper/__init__.py",
+      "git_blob": "26ecc76f77d3221b14344a91267d57fb3e66c7b1",
+      "sha256": "00232217e1a49f71deb4f0cbf2c380948c2183f1ce48d01aa8b1394238c186ea",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/casper/casper_payload.py",
+      "git_blob": "cd55afb8ba6bd204baf60910e657e2d986aecb24",
+      "sha256": "4bc36ffb3bd32ba95285c457c4d3b4592991a84d67dc896fba65e88935db0389",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/casper/casper_v14.py",
+      "git_blob": "1fb87c8abc65739ae7baae09b8d9615d9d8fa12d",
+      "sha256": "190729251c4d7ee8f165dcf5627a8006161b1fe1dd2822bd8e166c318b88aca9",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/cli/__init__.py",
+      "git_blob": "929a8d3028d3b11fe828271e53b088501367761a",
+      "sha256": "d51b5eefb3feda634dc5db4519cacb98b2c70e8e25f50bfcb77bccfa6c0d8fd8",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/cli/cli_capital_structure_optimize_hydra.py",
+      "git_blob": "8464a35613a6a1bcb4b440e5fd10beaa73b6555b",
+      "sha256": "bbc05f4447299ca1308ad66e3dc3a472965da8d05d38746e4f6d5c74fa5a9276",
+      "numeric_literals": 10,
+      "numeric_tokens": 10
+    },
+    {
+      "path": "analytics/cli/cli_monte_carlo_hydra.py",
+      "git_blob": "ae01377f9275a21f3ae015ee53122b4a09c5413d",
+      "sha256": "bb700bd495057fc810c2757d619fe65c3372313766afff153aec8a94ce024434",
+      "numeric_literals": 15,
+      "numeric_tokens": 15
+    },
+    {
+      "path": "analytics/cli/cli_sensitivity.py",
+      "git_blob": "480c4ffc2bfaee905fef0e939fb2b682d6fe233c",
+      "sha256": "bda6542d49c91cfe0671b71227635c377a97cdcf6c84afd9d3ea31b8a0c6680b",
+      "numeric_literals": 3,
+      "numeric_tokens": 3
+    },
+    {
+      "path": "analytics/cli/cli_sensitivity_hydra.py",
+      "git_blob": "6de57f27e7e7eef88b9c455ddfbfb1db9f8245e4",
+      "sha256": "efc626822287f755fb70465cd8b714c629bdaefbc9424be96d24bf4952c70b2c",
+      "numeric_literals": 7,
+      "numeric_tokens": 7
+    },
+    {
+      "path": "analytics/conditions_precedent.py",
+      "git_blob": "75ae02f6fc66bccd1aa73d6083ee08562ff4cfa3",
+      "sha256": "76883cfe30ad5ab61e6d95e9a1ee387ccade963dc371227f8cb2eb31618f0032",
+      "numeric_literals": 10,
+      "numeric_tokens": 10
+    },
+    {
+      "path": "analytics/config_schema.py",
+      "git_blob": "b0a61cd98a5ae43111c722a9e01748e91868470d",
+      "sha256": "77fa2b64e071cb3651cc2a2fbfd0d3452f5996b62901776e72231af355ddc06b",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/contracts/__init__.py",
+      "git_blob": "76ef38fe3f5983c08f285e4a0e02e9cc948c80e5",
+      "sha256": "c20f4ba69046feb257e54680e6d0f8745eaf403438f99294f652edac7ae14520",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/contracts_v14.py",
+      "git_blob": "0c6fb61c3f37f8eafa33079f02eee5696ac8f94a",
+      "sha256": "49e8cc03cd88f6455f54c2f12cdebe3180c4beeac2f13dc79ccc4991a6f68d57",
+      "numeric_literals": 231,
+      "numeric_tokens": 231
+    },
+    {
+      "path": "analytics/core/__init__.py",
+      "git_blob": "18ccb6cf243e9947400090736e61f67ad37487b9",
+      "sha256": "c8189b9923a2af4e5832a1c16b9846b5758fd75017634291d4347c4eb67b0dfb",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/core/covenant_breach.py",
+      "git_blob": "c4728f4484dbbebdaca6d3376e7a01e122874f9b",
+      "sha256": "1eb7c27bd02cc3fed4ae1e67304d516936fc7d3d8451949f38f99e957a560e58",
+      "numeric_literals": 5,
+      "numeric_tokens": 5
+    },
+    {
+      "path": "analytics/core/epc_helper.py",
+      "git_blob": "9c21ecfcc51b548a1bc2126b19820b7958b81d2a",
+      "sha256": "26327bda3bc100609f331888a92ea8801b8b90587d0c70e4be92cb775cd29848",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/core/exceedance.py",
+      "git_blob": "82acebd570a4ee407d7a2e32a3731327f8504268",
+      "sha256": "cf999cf2e600c4d2a6418661403105ef89061a589d526d3b9961fab7eaf0543f",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "analytics/core/metrics.py",
+      "git_blob": "c7648e4f5d8095e34c6a09636d87f550d0e7bcf1",
+      "sha256": "d430709245ddab5c6affe978860f42c8b92043a9f7cab3f675212fb8499a2b85",
+      "numeric_literals": 59,
+      "numeric_tokens": 59
+    },
+    {
+      "path": "analytics/core/parameter_solvers.py",
+      "git_blob": "7688d5435ad17f2f91db74304ca63245ac1549e9",
+      "sha256": "fed701973dc7139bb65e19d29162cc5d8b276d520c29b143aae35985d971d692",
+      "numeric_literals": 63,
+      "numeric_tokens": 63
+    },
+    {
+      "path": "analytics/core/returns.py",
+      "git_blob": "4b8314e593333ea9ad57ce214a8569376ae39b7f",
+      "sha256": "90b1dd36437c540725c7111220e59e67b6783b46fb5b76506ef2dbaa52e6705d",
+      "numeric_literals": 58,
+      "numeric_tokens": 58
+    },
+    {
+      "path": "analytics/core/risk_metrics.py",
+      "git_blob": "c540919c2c5150229cc116dd929f960a09837ebb",
+      "sha256": "b555b6b53b03cafa4d7f3c68138d15fe00d5a7e7d09e49a6ef915c2f4aa8b450",
+      "numeric_literals": 39,
+      "numeric_tokens": 39
+    },
+    {
+      "path": "analytics/core/sensitivity_runner.py",
+      "git_blob": "ae78d1a9e75f89647e0640944333cd4d909da4fb",
+      "sha256": "9176d0c0533c50fd0c2f4629aae13eb2eabcab53da5f8d2b0b57bc8ecdd362cb",
+      "numeric_literals": 14,
+      "numeric_tokens": 14
+    },
+    {
+      "path": "analytics/cost/__init__.py",
+      "git_blob": "632f47a730c415d0fe830d85fb308eb3265e94d2",
+      "sha256": "983dd38055e274066278643a45d18850a0af419118c5e39059790c6050df4387",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/cost/benchmark.py",
+      "git_blob": "973d4b60d1cac4c6ed4bb1a94b243ddc4fe94ca4",
+      "sha256": "e9fdc53bbd32abf51fcb5228c2f85717a03677a64e5925c7eb4cb2156b42b33a",
+      "numeric_literals": 9,
+      "numeric_tokens": 9
+    },
+    {
+      "path": "analytics/cost/contingency.py",
+      "git_blob": "caa000d8123ef194d3ff56f989e869e580de6cbd",
+      "sha256": "84f2668a9b704f83664553caaea97301431b056952d08131cf79c8d38a749288",
+      "numeric_literals": 9,
+      "numeric_tokens": 9
+    },
+    {
+      "path": "analytics/cost/cost_basis.py",
+      "git_blob": "fd6e3f8c41d1882f8cc06361db6613a905506af0",
+      "sha256": "48c2b3d7c01b758d9e9720eb40883923a506998a73d7d6814475736f279b4b6f",
+      "numeric_literals": 2,
+      "numeric_tokens": 2
+    },
+    {
+      "path": "analytics/cost/estimate_class.py",
+      "git_blob": "a69b7e22a33771206976be8f5f73ebd4ca69e3fd",
+      "sha256": "3a6bd3eb4cae681dfb0b7c0d9b7b191410d9c8e3bda04ce2e1520e092a337faf",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/cost/mc_capex.py",
+      "git_blob": "6f552f1cbe78a00e4293479693523a0357d686eb",
+      "sha256": "1fe6d8ddccdda58259ffac1393b5d0380e9e98c287699669e4a092da4834c161",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/dashboard/streamlit_app.py",
+      "git_blob": "81a9ec2dd4fb75d90c164fffa46918c8f9d2b682",
+      "sha256": "5e36d4a852cbc0b64a468fdb365036b2e6db49413c5b4bfbdba34fbc27061214",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/development_readiness.py",
+      "git_blob": "d9f6c995e8782ca80e80db3bfb314e8b081949b6",
+      "sha256": "6757ef4dba41776e5bfb4669247c67a9a6e45ed0ddeab447a04b74a657bb589a",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/dscr_sensitivity.py",
+      "git_blob": "1396dba354bc024e2ac7ebec8dfef76a613d3c92",
+      "sha256": "da24e29efdb0a7e8c8013c14047e2c9c60621b9af50ce7841c5c0df7dc18124f",
+      "numeric_literals": 41,
+      "numeric_tokens": 41
+    },
+    {
+      "path": "analytics/evaluate_scenario.py",
+      "git_blob": "1eb9c66279cf62176a9a6d3d9c5404c8f36e4b32",
+      "sha256": "919a4b7f8da056663877f734989917b07f4271452842f26a966bd9538a0c574b",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/evaluation_v14.py",
+      "git_blob": "fbc9ab368f2f6dd18fe9ae82a1869d65b3468025",
+      "sha256": "af4c2b790c7b14156e9aa8a8080f75270638557c7b8be254b375620276528a8e",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/evidence_register.py",
+      "git_blob": "1638b1443b60e860e9c71311be7c0314de59ec95",
+      "sha256": "8b8b9cdec8536b3e1307cf7af5ea50d8e4a649c048a9c504dfb221a0a7e5926e",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/evidence_score.py",
+      "git_blob": "9dfe8bc7dd6b53acf960611de9be5af7792e50ca",
+      "sha256": "a3d3202f5c9ea0d1292f5833c6e941bf18e938a0456e143d54ce2f6ab3b4dcc4",
+      "numeric_literals": 18,
+      "numeric_tokens": 18
+    },
+    {
+      "path": "analytics/executive_workbook.py",
+      "git_blob": "6f51029c3619b5facd5b63f335e56623c1b64d40",
+      "sha256": "d81ee20c9fce2e6ffb3ed1635638f663ec7b49fd11f697aaa27e7dd5103ac11f",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/export_helpers.py",
+      "git_blob": "0d0ed2a2dc50cb1961e9a3cb13ebc401633ea308",
+      "sha256": "97cdb9c6f78900fea0241451e40530be62c28c6b14c10e7ac87a95af39fec451",
+      "numeric_literals": 43,
+      "numeric_tokens": 43
+    },
+    {
+      "path": "analytics/feasibility_execution.py",
+      "git_blob": "3b3e44b60e181463b6d07851ded2b5c989ee95d7",
+      "sha256": "42bf1df615c8f5e475a2c08109119f068946eb60d93691a070ec890df98f2fe8",
+      "numeric_literals": 93,
+      "numeric_tokens": 93
+    },
+    {
+      "path": "analytics/feasibility_report_contract/__init__.py",
+      "git_blob": "bb7f9961590cad40be4a6aeadb12e0697536ba61",
+      "sha256": "e17c5dd8fb6c7c9cb89c71487164200b6d399f62cfe6eaaac4adad5e41c10f6b",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/feasibility_report_contract/assembly_authority.py",
+      "git_blob": "ce102f11b3d1b988f991855c19d518906c701dbf",
+      "sha256": "05e0e6c3101603e71afa9baeb7b310512a9337d5e9ecda21a05e0855b547683e",
+      "numeric_literals": 38,
+      "numeric_tokens": 38
+    },
+    {
+      "path": "analytics/feasibility_report_contract/assessment_scope.py",
+      "git_blob": "b4cee1b38cf2424c2a55bd21b19baafd793dde3e",
+      "sha256": "707a1e5d22d9b831e65e42d87690e6b951d77cceab172c43c1f7909c3c4e36a6",
+      "numeric_literals": 39,
+      "numeric_tokens": 39
+    },
+    {
+      "path": "analytics/feasibility_report_contract/context_binding.py",
+      "git_blob": "d000108039f10f1753991900d3c05602cf153639",
+      "sha256": "66a7e0d4508eb416fd7b77549e889d16f134e22d39e4c4cadb94d1da6abbc10d",
+      "numeric_literals": 178,
+      "numeric_tokens": 178
+    },
+    {
+      "path": "analytics/feasibility_report_contract/engine_identity.py",
+      "git_blob": "cab27b4ac37b93414dd4700e1c941c42496a1a41",
+      "sha256": "429496446635e6cf14c0d5da0bdeb0e9663629e9efcf3b949f6d8abc41b0d4a8",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/feasibility_report_contract/package.py",
+      "git_blob": "0a0e3ee804765c32063acdbec0469bbbf802f74a",
+      "sha256": "f4fef3b85a061cff5bb8ecf74d21fc2782a73a009226ddee1fa3d8adfa233454",
+      "numeric_literals": 7,
+      "numeric_tokens": 7
+    },
+    {
+      "path": "analytics/feasibility_report_contract/project_case.py",
+      "git_blob": "68f89520d43c2e8cbe8aed831b697a4d198db3e0",
+      "sha256": "6d1ea97befe758a3c9f34bb74eee84b65b3650f621ac6f379f3c0dbeafcd6e7e",
+      "numeric_literals": 127,
+      "numeric_tokens": 127
+    },
+    {
+      "path": "analytics/feasibility_report_contract/records.py",
+      "git_blob": "ae5da42641bc57e5e968bfd142a98028094c8dc8",
+      "sha256": "d130d63d8d165ea5d74db0a87a8bc453d2e51c9306ade65a3618218cc104d2e0",
+      "numeric_literals": 5,
+      "numeric_tokens": 5
+    },
+    {
+      "path": "analytics/feasibility_report_contract/result_facade.py",
+      "git_blob": "32aa6a5758c50929ba3d0108535ba246c2905f69",
+      "sha256": "bb0c60497b71830b42b154b25e078e1451473f157b4ef3b707ba7c30c480dcc5",
+      "numeric_literals": 59,
+      "numeric_tokens": 59
+    },
+    {
+      "path": "analytics/feasibility_report_contract/taxonomy_identity.py",
+      "git_blob": "1f404bef82e4ca81294bc6512777d7a4826c042b",
+      "sha256": "57f6bd85b35682eab3adb48566e43371106debcd77c318fe997ea8c463486825",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/feasibility_report_contract/vocabulary.py",
+      "git_blob": "239c58390e2f5728529a70a3e7131f7b439d5725",
+      "sha256": "786557a839f353ba73cebd3d81902a944165c4ffdb0aa45fcb065e3db37f81c4",
+      "numeric_literals": 13,
+      "numeric_tokens": 13
+    },
+    {
+      "path": "analytics/feasibility_result_projection.py",
+      "git_blob": "b3e41764743413d1e540d1605022ae90a31adfe9",
+      "sha256": "15ea8290273a333cb9c04ad7aa9a61b826a9b541ceb4c940b783275ec7d1a9c1",
+      "numeric_literals": 59,
+      "numeric_tokens": 59
+    },
+    {
+      "path": "analytics/feasibility_sections.py",
+      "git_blob": "4fb4f17ef573ef6055a916d42e4d6be31bc7fd2e",
+      "sha256": "cd69bdc70bf5b6ba125bb72de957e29e5cb2a90b7889b268bdf8f503aed6ba66",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/fx/__init__.py",
+      "git_blob": "955eec9dcc4b5674e5885c6091c9c02afe9820d1",
+      "sha256": "96209e0b9beb00a52863840d0bacee46fdcc2eb1a3a1540325d76d0c10974197",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/fx/fx_builder.py",
+      "git_blob": "0ad6f5d5fa2ee32f795809931340e4d73836d7f8",
+      "sha256": "e1962d1a0a4c83700b142def6326844b66cea72beaa0812e4238e633028f4841",
+      "numeric_literals": 56,
+      "numeric_tokens": 56
+    },
+    {
+      "path": "analytics/fx/fx_calibration.py",
+      "git_blob": "275fbe8424c0c39001f72a756ac916c96dc634db",
+      "sha256": "7ca64b24d9ece4da13cdf94868482fc92240b9fd09faa7aa4589f17df3cf69c5",
+      "numeric_literals": 55,
+      "numeric_tokens": 55
+    },
+    {
+      "path": "analytics/fx/fx_contracts.py",
+      "git_blob": "4226eb72b7414d060894a4da1c88919653536792",
+      "sha256": "e924abcbb3681772d1526b0a91540aa09ab49a1ce0ba251f62aaadf3961c9fe0",
+      "numeric_literals": 40,
+      "numeric_tokens": 40
+    },
+    {
+      "path": "analytics/fx/fx_fetch.py",
+      "git_blob": "5f0160d0e434f492ea98fe26df7eb76578809f79",
+      "sha256": "e162c929a65cf6365877e5fd6440b3c970430cf67cf13dd6ba0084582d7fb760",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "analytics/fx/fx_history.py",
+      "git_blob": "db7a8077630a53f449d7c270ff6e82f149b6e744",
+      "sha256": "9b87e3ffd80a2b2853fcd3569567390b38cb06b787dc33593b52b7f56a14e47e",
+      "numeric_literals": 39,
+      "numeric_tokens": 39
+    },
+    {
+      "path": "analytics/fx/fx_integration.py",
+      "git_blob": "9b71efd5d9a44265fbd4169ebe85a9c367e6bbb8",
+      "sha256": "a75d65176b8d960f45a39fa711982764ddbecf09509529cd481771d8146495b8",
+      "numeric_literals": 2,
+      "numeric_tokens": 2
+    },
+    {
+      "path": "analytics/fx_sensitivity_real.py",
+      "git_blob": "fa9633431e0656aa4094acda79325c689bf041a9",
+      "sha256": "41b04637cf116c6b73e006c07e0da6c63f3c3a71a2b9cf3250746d5fd6d02d9e",
+      "numeric_literals": 73,
+      "numeric_tokens": 73
+    },
+    {
+      "path": "analytics/gis/boundary_clip.py",
+      "git_blob": "0152546ae07c73b3d304b7fe1a5bfc26697ef490",
+      "sha256": "90a6cca67ecdbd632ac7d6efcd3b95bed3c467884fc5588aee7a4c7bcdd3f6aa",
+      "numeric_literals": 17,
+      "numeric_tokens": 17
+    },
+    {
+      "path": "analytics/gis/dem_ingest.py",
+      "git_blob": "8df780096a66c2bd7b36cbaa829ebedc818c54d8",
+      "sha256": "d3dffebcac4d779f68afe23ee7e61e206b565992f496346d9ab733ca1d180880",
+      "numeric_literals": 55,
+      "numeric_tokens": 55
+    },
+    {
+      "path": "analytics/gis/exclusion_mask.py",
+      "git_blob": "bc176bf1e2cb6fecc6545a925ba6803a7878f23f",
+      "sha256": "381d25e7b36c3cb7206fb3844bc8ed173f465b481df6954d9524b07a5173f7d4",
+      "numeric_literals": 25,
+      "numeric_tokens": 25
+    },
+    {
+      "path": "analytics/gis/geotiff_export.py",
+      "git_blob": "d672dbad08d80f1c22f754be14a7b42ae948212e",
+      "sha256": "ac1a3094c9d3b0131cd1cdb2dc7cc9d0db3c9a15f5b0b8aa48e240239ab0cdad",
+      "numeric_literals": 5,
+      "numeric_tokens": 5
+    },
+    {
+      "path": "analytics/gis/gis_export.py",
+      "git_blob": "764c8b2868a4b731513e856f6f517bc4e88a6adb",
+      "sha256": "8387b764c1e37234a5280207c09e844ae7c4474476be9001c9139d447b561467",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/gis/gwa_ingest.py",
+      "git_blob": "8ce568881961b07d79ffadbf1ed72078a417732f",
+      "sha256": "3069a484d404b5652e18a6a48918633bf4a80d086dac8d0b9e025303b4acbaed",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/gis/landcover_roughness.py",
+      "git_blob": "609a2d3d7044e9beea266ae4e14b3a7908fdd1db",
+      "sha256": "3d530d1b1127fafc137fd9d33d14ede28a1fff79b1ec56c8eec3cbb4227e3ca7",
+      "numeric_literals": 26,
+      "numeric_tokens": 26
+    },
+    {
+      "path": "analytics/gis/mcdm_suitability.py",
+      "git_blob": "73b4703e3eac0535e8c0a30f2df65236b7927db8",
+      "sha256": "14e9741f1e25360f4a118abbc989a9ad8131f5ccad310fff3d5ce477a029c3b1",
+      "numeric_literals": 45,
+      "numeric_tokens": 45
+    },
+    {
+      "path": "analytics/gis/rix.py",
+      "git_blob": "b7bb5e375e7f6e62d50a5e9c5602aa0760543acf",
+      "sha256": "defb11af5b654136336f1419e4198e3b661e14b5abdc77f442dfdf16150168d0",
+      "numeric_literals": 22,
+      "numeric_tokens": 22
+    },
+    {
+      "path": "analytics/grid/__init__.py",
+      "git_blob": "243f61a3fa338bd57755dbc33e0690cad3af9d34",
+      "sha256": "f00e2f61d0d48a7a8184427949b3b6e58a66c1fdcad6308f0e8840324d5e2233",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/grid/_pandapower_worker.py",
+      "git_blob": "a0bcaef992dd0b6d89e46e0c9c306cda154a38bd",
+      "sha256": "a10cad91339d72eb9d89d7cbb632feab672cb82b69188dee796856778e696131",
+      "numeric_literals": 3,
+      "numeric_tokens": 3
+    },
+    {
+      "path": "analytics/grid/capabilities/__init__.py",
+      "git_blob": "ed6661bb3e93770f098e9490255c1bc9072c148b",
+      "sha256": "56a4f49e3c3e193fd0bb35fe7e17533ddd577f482140f0430afabfedbc53afab",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/grid/capabilities/bess.py",
+      "git_blob": "bc7c720b34f695c35ad2ded51ba60c2445d68f34",
+      "sha256": "ddf5d3bd5bc529ac5b3ca6804df06647c47dcf662c8311b2426836feab039da5",
+      "numeric_literals": 18,
+      "numeric_tokens": 18
+    },
+    {
+      "path": "analytics/grid/capabilities/bess_soc.py",
+      "git_blob": "e61400f124f7244a5ec4713bd9242f3d01cbb4c6",
+      "sha256": "def74f00d0a638c2cdac8c4b3b4fcec9a949ad6a2926de15dbdf7b1d0425f005",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/grid/capabilities/solar.py",
+      "git_blob": "9d5cf44a4d3dd8f04b174e3f184c94ac47eff030",
+      "sha256": "76bb685f0342c30e2103c07a4167a2ba32334ff0e53d71156a6ecee0a349164e",
+      "numeric_literals": 9,
+      "numeric_tokens": 9
+    },
+    {
+      "path": "analytics/grid/capabilities/wind.py",
+      "git_blob": "7f382ebecbd2480e990474e42fb0a4527b731007",
+      "sha256": "2943eaeac535b18946237cb9d7827e64b2b91f75c8e6c86db7753cccc98c60ef",
+      "numeric_literals": 29,
+      "numeric_tokens": 29
+    },
+    {
+      "path": "analytics/grid/curtailment_qsts.py",
+      "git_blob": "374decfd737808444e3e6a3658b1176eb8813ac5",
+      "sha256": "e030c3784742cc9295dc3ed8cdab4ce1038a5bd924d9ecc61800fbe091ae9741",
+      "numeric_literals": 57,
+      "numeric_tokens": 57
+    },
+    {
+      "path": "analytics/grid/evaluate_grid.py",
+      "git_blob": "89f98bb01fa79e7ccb44ac312f93e095e16f1c79",
+      "sha256": "70b96e63cce46d50464e0c5ade73bbd9f69dd7d2beff789ddc6cd35856dc2ca1",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/grid/frequency_response.py",
+      "git_blob": "6a25fb07ed2d2baf240dccfad7aaac5a113c1fdc",
+      "sha256": "8150c1baa77a54531b11226cae4fcfc474b80c250c3dbd23d0e238d2b12da0ef",
+      "numeric_literals": 30,
+      "numeric_tokens": 30
+    },
+    {
+      "path": "analytics/grid/grid_interface_schema.py",
+      "git_blob": "51b299d1b780e0cfd0652b6eb28a1e39f4758082",
+      "sha256": "584788f74a24b2c2a12b7bcbab06c53031be1b7cfc75ebd05dcbf133ba6df002",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/grid/harmonics.py",
+      "git_blob": "0ea3ade75ab7ed002a7a160eec790a565622fb02",
+      "sha256": "ba9f453172bc6f772836ae13f7272d04d95e017a90b0612c7f55e309068d1a5f",
+      "numeric_literals": 87,
+      "numeric_tokens": 87
+    },
+    {
+      "path": "analytics/grid/hybrid/__init__.py",
+      "git_blob": "e8b8538b7a91633b2010bfdb1005dc7e4503eed5",
+      "sha256": "8c57fd7f7da49fcee35d2c0d2d7fcc848f4e56ef76ab0fa452f0efd7488daba0",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/grid/hybrid/frequency_response.py",
+      "git_blob": "8299f14eff89a460ccd9f838735b6617d3f37cff",
+      "sha256": "50d58087f820c4f869249133c1df2951ce8564674df583a2353126386270ece0",
+      "numeric_literals": 26,
+      "numeric_tokens": 26
+    },
+    {
+      "path": "analytics/grid/hybrid/poc_aggregation.py",
+      "git_blob": "c9e59987b560f585571a71aeaf471393a5127db7",
+      "sha256": "bd9b69301e1afa62c4a2323b06fd8b2ce6f34fd09ea7915fa617082b6a33b8a2",
+      "numeric_literals": 27,
+      "numeric_tokens": 27
+    },
+    {
+      "path": "analytics/grid/pandapower_screening.py",
+      "git_blob": "c214871f9b74fb9ea4c895e50b30c3d426fdc9ba",
+      "sha256": "ead60e1cc44a637e006da86763170c4c9cdc727ac4e45440a3102d7d87e3b373",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "analytics/grid/qsts_evidence.py",
+      "git_blob": "370a26746141250ad937bb333f8fdb592b5d535f",
+      "sha256": "90cb11497f0aa213dfb670111495b169575245ef6850b46e074cb3366e13c44e",
+      "numeric_literals": 10,
+      "numeric_tokens": 10
+    },
+    {
+      "path": "analytics/grid/reactive_screen.py",
+      "git_blob": "1d30c36f1b6d9ea7a05b5413341107e8191d2fb1",
+      "sha256": "2c3cbe1f91b378113287e942f7f4e286021dab845d478019bb54e9bc9b0aa70d",
+      "numeric_literals": 55,
+      "numeric_tokens": 55
+    },
+    {
+      "path": "analytics/grid/ride_through.py",
+      "git_blob": "d1e36ddfc758be39e37f578fbbafcffa9b759547",
+      "sha256": "236e114c56cab4439d6449bb8a97d5ea5368371c40792c996debd1ff2a2604e5",
+      "numeric_literals": 48,
+      "numeric_tokens": 48
+    },
+    {
+      "path": "analytics/grid/ride_through_poc.py",
+      "git_blob": "e71323230910bf7b0549d3f52cb8fbc11728aba2",
+      "sha256": "fd84ac18334e69181113741edd73e030a51521e7fba485c9b6f1a454ce8cd4aa",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/grid/short_circuit.py",
+      "git_blob": "ebd7af8de7d64a8d628969fb12f9d3c9863774b6",
+      "sha256": "1871cba4fd7e9f855d1802915a77a375a0f99f1419c02865457b665fec4f7274",
+      "numeric_literals": 14,
+      "numeric_tokens": 14
+    },
+    {
+      "path": "analytics/grid/synthetic_aep_qsts_output_records.py",
+      "git_blob": "bd6e18035405fb96d899eda0303bc1972055a784",
+      "sha256": "04795293afc15772d8d6afad4b7b29c35f1ddcc4488d9fb32a5d8240ab97cc0f",
+      "numeric_literals": 15,
+      "numeric_tokens": 15
+    },
+    {
+      "path": "analytics/grid/synthetic_feeder_placeholder.py",
+      "git_blob": "e362e6e3e0c6b6ee75750d97c4cf897c6feac1b8",
+      "sha256": "b032892ad324a22552665ca28be268fa81b499f1ff5fc3e410349337b8ca8072",
+      "numeric_literals": 192,
+      "numeric_tokens": 192
+    },
+    {
+      "path": "analytics/grid/synthetic_feeder_qsts_adapter.py",
+      "git_blob": "b0eb6ab678c0878c2c9e01d5e4b1085429eed820",
+      "sha256": "d63dfbc68fc8ca8fe920208aa92eaa6aadc1470adb016ad2c66e3e6cb9f23988",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/grid/synthetic_input_records.py",
+      "git_blob": "590ee0f4a3ea35f5fec38a7f25f32ed44c228372",
+      "sha256": "274c78b6a7cd10b188fbd401f8861f49743c8aaa05e25e76249aa93399478e50",
+      "numeric_literals": 5,
+      "numeric_tokens": 5
+    },
+    {
+      "path": "analytics/infeasibility_diagnostics.py",
+      "git_blob": "c5c2aceb8b548e69f6316ce042f48ba6cc60b5f2",
+      "sha256": "725df783e85619da4393d83e83c1e5a7650d968fdcfae77e138fea2ca8865627",
+      "numeric_literals": 7,
+      "numeric_tokens": 7
+    },
+    {
+      "path": "analytics/irr_bridge.py",
+      "git_blob": "b189adf72a0455fb558d4eb7361c013978b032bd",
+      "sha256": "79fb5bed574cf56e93febed3797ffc6dfcf0820b1cd0c47a689698f0d435f39f",
+      "numeric_literals": 21,
+      "numeric_tokens": 21
+    },
+    {
+      "path": "analytics/loader/aep_loader.py",
+      "git_blob": "319ae44b55414d5b5d0a689a8017a58ca6a6c7af",
+      "sha256": "15c887b6fe6f430328f49092fd4af27fb81d501411add19b28ab3d545a7d0c2f",
+      "numeric_literals": 15,
+      "numeric_tokens": 15
+    },
+    {
+      "path": "analytics/mc/__init__.py",
+      "git_blob": "56c69e4fdb6a16fcc933b5dac0445569217222aa",
+      "sha256": "a08730f59cc59bfe619c3c5b9de09d3877e1c4456a38d9f6c187e43e3b587b6a",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/mc/aggregate.py",
+      "git_blob": "3d5062e33ee1c81e3818c0df88e3296d0b104e84",
+      "sha256": "f9cec4e5f8a6781c441abdd70ff1d6df68c62b28d521645de7adbb9594937f2c",
+      "numeric_literals": 22,
+      "numeric_tokens": 22
+    },
+    {
+      "path": "analytics/mc/convergence.py",
+      "git_blob": "571daccaf27c531464b539b2a24f66c12486e537",
+      "sha256": "e4794b8d5c01915452b48b7a695e05651ed167abb5e247eeac15fddde5c05f48",
+      "numeric_literals": 33,
+      "numeric_tokens": 33
+    },
+    {
+      "path": "analytics/mc/correlation.py",
+      "git_blob": "035a16636656896a2e221e1b131a8de50098d802",
+      "sha256": "6da7eec0ffe3059506564960b8a2957d07e3b000793879ab605fff972ab86c7c",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/mc/covenant.py",
+      "git_blob": "20bda663bee262ee8c328d11dc8468ddd437ad45",
+      "sha256": "c155f24ec03db4dbad7ebfa77d8d7289856db3585054341cc79f4932d6cca0cd",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/mc/degradation.py",
+      "git_blob": "382b914389f6db8462b3f2c95ff765653a3f8a60",
+      "sha256": "ca22199df49a437a135b4c1f2de671bca4a658555612a46c0a7201b76f16653c",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/mc/engine.py",
+      "git_blob": "d15eec36e0f54f1179df838886f977e9c51a9baf",
+      "sha256": "6417388ad8efd8ff3dc402e7b2967015d84c33bdb3d0385a55d8c015eb1c14f3",
+      "numeric_literals": 93,
+      "numeric_tokens": 93
+    },
+    {
+      "path": "analytics/mc/exports.py",
+      "git_blob": "646785bf0382356c0a8ce461bfded1aa4f392db1",
+      "sha256": "ce3450d8fd02bedd2585d3f3e9e7c5bfc02f65704694ffd920d9193bdce6de85",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/mc/samplers.py",
+      "git_blob": "8341cde0141b5057e7f750a6ed95c38a3b819633",
+      "sha256": "eac3e55a86710f9171450737ec813bdbe676c4e7d18c2d32596ba2dfb82427a1",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "analytics/monte_carlo_v14.py",
+      "git_blob": "bdad13f2dbfe5c084d19a301c866eb9fa46ad4ab",
+      "sha256": "6a4a77ff2421362b57ca0fe983be7d54247114672b63e822514590272f5de104",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/operational/__init__.py",
+      "git_blob": "54f3e0298d62fdb639da4b3ff07b7443a979529a",
+      "sha256": "bb782e518f95a49fb8f59db50d07dc61bbfc957824c6f031258ce44c1b069bbf",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/operational/aep.py",
+      "git_blob": "0bd7d2cfde3dcad9c83029549db6ab46900be050",
+      "sha256": "5da5c47eb941c2ec69f961738da8849585da8b930c068e163f83c4f1cabf8d0c",
+      "numeric_literals": 47,
+      "numeric_tokens": 47
+    },
+    {
+      "path": "analytics/operational/contracts.py",
+      "git_blob": "15b641b00d6bc7039abc2df57722cae14e683e85",
+      "sha256": "1f67f5f3c0ef9674352042a93a92526dbf38f2b48e1d7e162c240409ff947b63",
+      "numeric_literals": 20,
+      "numeric_tokens": 20
+    },
+    {
+      "path": "analytics/operational/eya_bridge.py",
+      "git_blob": "b608f874c21870fa836d231b372836162e57ee39",
+      "sha256": "174e7a7ee753fdea8e70637725ec02a5449ec2c45f4742b2f236d055fe4bfda4",
+      "numeric_literals": 43,
+      "numeric_tokens": 43
+    },
+    {
+      "path": "analytics/operational/normalization.py",
+      "git_blob": "cffd9cf5a2e95b2775bbd1062c1305edf7920978",
+      "sha256": "c9461fb6f8fa865993dc33e8c5ebd3ec676892f1cb094e32a88af23c84f6bf6c",
+      "numeric_literals": 210,
+      "numeric_tokens": 210
+    },
+    {
+      "path": "analytics/optimization_v14.py",
+      "git_blob": "3ad5bab4bfe040b0eeb815e2eb3fd37ddb6d6383",
+      "sha256": "0a296706aa2a9ae9f606cb39d3dfdbd53887c76a023076069b69c90cd45b18ba",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/output_paths.py",
+      "git_blob": "eb9bd7d0b440649bfe6e900400472dae2859fb9f",
+      "sha256": "aa3b9581289a92a92b77112b0696b1c82020243504de5a03e2632f06a944a617",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/pipeline_analytics_v14.py",
+      "git_blob": "e6df0525124394cc7bfa885252d59cc29a7175fd",
+      "sha256": "150dc3460e366e18850fd845c26f128d56da5e3f114b76f781e262cdabe4fb18",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/pipeline_v14_enhanced.py",
+      "git_blob": "7db10e08dcf6a6406b7c37865bad9fd28170f904",
+      "sha256": "ebb3ee86cdb28486c5b726019f252bd52ba8b3f6d407479a8be4f7f8e9979d5f",
+      "numeric_literals": 112,
+      "numeric_tokens": 112
+    },
+    {
+      "path": "analytics/portfolio/__init__.py",
+      "git_blob": "6a65facc55559ebe85bc5315b353d8247057c84a",
+      "sha256": "62b05b7da8f5b6013294d2ffcddcdcf51ba85c4216c9d7957d0f728e61dcdbc6",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/portfolio/generation_aggregator.py",
+      "git_blob": "79ea58fe4a7a69993caab9073322c4245643121e",
+      "sha256": "264e23569a793eee18c6c20d8a650e1d3b22e562bc41aba3bb300b366f2711b3",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/portfolio/multi_tech_tornado.py",
+      "git_blob": "b894d5504d8228d4174b172a911154a178e607d4",
+      "sha256": "98af3118862dc66a2d523953f9a134fb31db682e02149be3af7011c01ebe0409",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/portfolio/poi_curtailment.py",
+      "git_blob": "0d331491879ad37d9f7db91ca0e6eea9bcfc3a86",
+      "sha256": "86a66775f7e9cfd3aa06a61aa6ef51745a7423111aadfebf657b7e66f7c6ebcb",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/portfolio/tech_wbs.py",
+      "git_blob": "3748daeaa328f20cd998edcef6904efc205474fd",
+      "sha256": "a9411bd7dd957c0c9beb3090b231925c82e0e47011bb4ad5d4f3797152b66fa5",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/power_curves/oem_parser.py",
+      "git_blob": "5ab531a26ef9ff059b981a9549cd828c6d75d293",
+      "sha256": "0c10a769a18f2b35a61aa3d3bfd33a1abbe9d22d3c107326ef48a477a810abc9",
+      "numeric_literals": 33,
+      "numeric_tokens": 33
+    },
+    {
+      "path": "analytics/pysam_sandbox/__init__.py",
+      "git_blob": "0a61219db0c9975b5b9f8eacc491848f864382f9",
+      "sha256": "7998856e7fb1b6c27a3418a31a0898453a1b4d3a7a2b9d3b129729e0620a1c08",
+      "numeric_literals": 2,
+      "numeric_tokens": 2
+    },
+    {
+      "path": "analytics/pysam_sandbox/pysam_runner.py",
+      "git_blob": "d1da26e0e57da4b73cb19adac878a90b58cae03a",
+      "sha256": "4574d016e6ceba91005fd24f0309c3095e86a92fca596dd07f55acee43847c80",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "analytics/reproducible_workbook.py",
+      "git_blob": "f59b4e7d567149c9572bf06455afd7cda0c1e04f",
+      "sha256": "a22343b5540c566fa915ae36eacaeac26601fb79e0ee8284447bdf15d1bf549b",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "analytics/resource_contracts.py",
+      "git_blob": "864551494e7f0f41df0817851f6cb2d5739e5fff",
+      "sha256": "d0cf0c6eef6b62ba24b30f2599275532e2d6a3bf7d16d11fbe633c37b41d02dc",
+      "numeric_literals": 13,
+      "numeric_tokens": 13
+    },
+    {
+      "path": "analytics/run_manifest.py",
+      "git_blob": "23633b1ffe3821193c090845b7c371237036fb9d",
+      "sha256": "42cd5101682b77dc0111ccc5a7e8af58134b7c4c7d851fa90a6ced7a9bf3d09a",
+      "numeric_literals": 5,
+      "numeric_tokens": 5
+    },
+    {
+      "path": "analytics/run_modes.py",
+      "git_blob": "9037d75a93b89a082c50e862ca7835fdd1b916c3",
+      "sha256": "3bdc992ffb3ca21c0a284a49c84c2fe7f5ffa1b04dcf8cf6230a1d6cf92266eb",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/scenario_analytics.py",
+      "git_blob": "72cd17eb895b148600c20ee484ea8ffbea234334",
+      "sha256": "8359dc6f0715dc275d3a5ce268d48807cbb5e3cda26d573862c520bf6ebe5ad4",
+      "numeric_literals": 17,
+      "numeric_tokens": 17
+    },
+    {
+      "path": "analytics/scenario_loader.py",
+      "git_blob": "7da4df9ae79ed2983daa48b54ce1a95003bfcf5f",
+      "sha256": "b8bb85a7e1b788ff9ca34231f63ec86797b4b4022dfc53218e3c190a63e84f32",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/schema_guard.py",
+      "git_blob": "0262c27d543c5bcecb5adaeb49077c9c74891d77",
+      "sha256": "e9f19b11fde443d24afbfa3c23bd85e3cc47e09e805cf788a551f3d7d0082902",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/sensitivity/__init__.py",
+      "git_blob": "5a480ae30af2cf548a47919e559f228d3ffa4c73",
+      "sha256": "cc926e9abe6bc278d4987231c45af795bece3c61b699637b22bfc231c483892c",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/sensitivity/adapters.py",
+      "git_blob": "7f1560eaebe20d548c11285df8cdd5cfe927f07f",
+      "sha256": "d6e27993ef6bc9beea6b51b6e47a6a0d387f8ed99712af20279580811ebaf82a",
+      "numeric_literals": 8,
+      "numeric_tokens": 8
+    },
+    {
+      "path": "analytics/sensitivity/dashboard_demo.py",
+      "git_blob": "ff83ccc7a812f3605b51d0f9f0a904561ae1ca7b",
+      "sha256": "046f4667678caeba3a70c828b33ef1f123fe018c8b8694b769988f52599e062b",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/sensitivity/docstrings.py",
+      "git_blob": "5e6134c2abb5d835f17a8225ec8186064100f7a3",
+      "sha256": "817bc646c0d0da055e15abb93ad7020fd6d4c27da4a94b0f72c9b9f379e83786",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/sensitivity/dscr.py",
+      "git_blob": "87bacfda55cb1b671f5d07d93cd3786edb91e280",
+      "sha256": "665521aa1047f209bfc40eec988874ab52033c4065e5d0f2cd1ee1574068863e",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/sensitivity/engine.py",
+      "git_blob": "d921074994d08ef3e02cc274768f155df506494e",
+      "sha256": "868586f85f00fb4237cf60efd92abdd76e2d5c1b3178e8cc2fea6c720209bcf4",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/sensitivity/export.py",
+      "git_blob": "6fa3c65083b1879a866b78d4ceba65977f2e1689",
+      "sha256": "60015d172a4eb373d799fed916672bdba5bb5cf830007444e5fa724345324a0f",
+      "numeric_literals": 4,
+      "numeric_tokens": 4
+    },
+    {
+      "path": "analytics/sensitivity/global_sa.py",
+      "git_blob": "1f996b958e075ca7c2a6464933870540f5943d06",
+      "sha256": "7eac5108da2e70933ee96a1e41025fff37d1de5d1ae5922b6438633e9fe7f1fe",
+      "numeric_literals": 51,
+      "numeric_tokens": 51
+    },
+    {
+      "path": "analytics/sensitivity/interaction.py",
+      "git_blob": "39834588e5e2f3ef94ad5e7b6fbc7f47fd580550",
+      "sha256": "cf9adb6a17712af04a3350abd4871882bdad1da494459fc9cd9ed08be0578cca",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "analytics/sensitivity/optimizer.py",
+      "git_blob": "f8373ffcc4bb3092103272b9eff30f3e858e4694",
+      "sha256": "e2169974894c85112761ca308ca39e157a3a793a39ae9d0f3025d70c2d57eee9",
+      "numeric_literals": 15,
+      "numeric_tokens": 15
+    },
+    {
+      "path": "analytics/sensitivity/tail_risk.py",
+      "git_blob": "fb1bc75c5cb637f94399f1b20059e8618b8d3116",
+      "sha256": "e605f74afd8b049a6fa4599e7f2d58c2e2547b2c38bed194cf6038242ab91dbb",
+      "numeric_literals": 18,
+      "numeric_tokens": 18
+    },
+    {
+      "path": "analytics/sensitivity/tax.py",
+      "git_blob": "fb70c83d62e44bd928976b81fd4ae77b7dae049e",
+      "sha256": "8eefa0ed74851ad1a579ced93be30c82218d46bf78fd56dd80c2f01c318f53bb",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/sensitivity/validation.py",
+      "git_blob": "50144126fd3d21716b50207382700c7f94059756",
+      "sha256": "2e56a4895050adf7cdc3960de75989ec7c2c72488ebfcfc8b5c0c57f32098f8e",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/sensitivity_pareto.py",
+      "git_blob": "8af5da329e76ed897e8621a33201ab4b8a12cf4f",
+      "sha256": "c66f12d59fe85e2924d46501221e65dac47825144324b24242f0a71490703a19",
+      "numeric_literals": 3,
+      "numeric_tokens": 3
+    },
+    {
+      "path": "analytics/sensitivity_v14.py",
+      "git_blob": "01430262843b33f1e5e03c85756d18e80977d44d",
+      "sha256": "ea63aa1fd5fa0f92729e762452e3e1fab8ce450faee6a0e30cf161c06eba8763",
+      "numeric_literals": 1,
+      "numeric_tokens": 1
+    },
+    {
+      "path": "analytics/simulation/monte_carlo_aep.py",
+      "git_blob": "d6f2372a7f67270760b3b186f2d8c127335c0709",
+      "sha256": "3fb2f71ba541a788556515e7e56219958df9f1a49e093dbb02867585e443d09e",
+      "numeric_literals": 45,
+      "numeric_tokens": 45
+    },
+    {
+      "path": "analytics/synthetic_qsts_finance_counterfactual.py",
+      "git_blob": "bf3f9af7598ef439170ef8d22385d8b612d4098e",
+      "sha256": "26bca9e9d781dba5c7db2a6f914009494f49b412b1b4455f203d464f547d6544",
+      "numeric_literals": 17,
+      "numeric_tokens": 17
+    },
+    {
+      "path": "analytics/three_statement.py",
+      "git_blob": "65b2c30c06493ad9380c16ef6e64b18d8afe3e4e",
+      "sha256": "e9268431e440957d9e584816fff61b0f6de23e98c61683a9d5f923a46fba114f",
+      "numeric_literals": 45,
+      "numeric_tokens": 45
+    },
+    {
+      "path": "analytics/wacc_sensitivity.py",
+      "git_blob": "6a9cd59fed99b16b6cf3c9cf48bbf84150c6d46b",
+      "sha256": "91cffb43c2d2b881c6a88c3d6874d281ff97988f7b69bc31b63b3e4804e4707f",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/wind/__init__.py",
+      "git_blob": "7412711af10663ad548b6246e8974997bea7406f",
+      "sha256": "5dfedddeaa0666ef5624ab5b205e2874a7e3ccdead062bec2c3643c69f61404c",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/wind/aep_summary_builder.py",
+      "git_blob": "568d3f4be96a5be6d83d9297e30b8242f8251e9e",
+      "sha256": "45ac6323e03533276e2a89165a7029617ff91d590bf59095c27b453db6dfd5e4",
+      "numeric_literals": 32,
+      "numeric_tokens": 32
+    },
+    {
+      "path": "analytics/wind/aep_tornado.py",
+      "git_blob": "060414bd0e9812611d7f8ce48d9a95d6bf94b948",
+      "sha256": "e0d43e5c8f0530185b49ae5f893550fcdabf5fc356c24b798f098bacd28386f0",
+      "numeric_literals": 33,
+      "numeric_tokens": 33
+    },
+    {
+      "path": "analytics/wind/crossval_interface_schema.py",
+      "git_blob": "128ae3bb4c7b406731835bfed937391d1b6e8c85",
+      "sha256": "df3d1f696dbaebe78d5354557f4a62f0aa4cd1db2d3909103cae9a7f368cb80d",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/wind/era5_interface_schema.py",
+      "git_blob": "e626dd4f31ec9b52d20b6ee14421afac3e1b39ef",
+      "sha256": "5c39e20421f108077b2a24c89384803da36a33171ac73d8e54ace4b56e2d6494",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/wind/losses_model.py",
+      "git_blob": "f874463eee25d795aaae7f0516067a8f832ebd9d",
+      "sha256": "bab2d0bc10ed5d8c1b9f218206e0cf68d060885ca75e53772b3f8103cb22138a",
+      "numeric_literals": 23,
+      "numeric_tokens": 23
+    },
+    {
+      "path": "analytics/wind/mc_aep_weibull.py",
+      "git_blob": "3a6725072cb81edd0ab79a77bd74d37d50757594",
+      "sha256": "0c63285c419fc421982d36dfd25426ef62606c21f23156ce722856fe0f6ad143",
+      "numeric_literals": 29,
+      "numeric_tokens": 29
+    },
+    {
+      "path": "analytics/wind/pipeline_aep_v14.py",
+      "git_blob": "63cb581166cbae8bcb18425c817f5029c4f7ad76",
+      "sha256": "0730896a1f488c6f49ee6d7971350620291ce729ac8a273ddfe7eea1b05f93f7",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/wind/siting_metadata.py",
+      "git_blob": "ce67eb73c9de6b0f0206bf3746307626da9c4adf",
+      "sha256": "304c1a8e9c67bbffbd306c0bcf69be9e5761b7bab2b127356fd6e557995717d0",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "analytics/wind/wind_integration.py",
+      "git_blob": "62bf41cbeed3c9f74da3ab0c19ee7c23bdf31fbf",
+      "sha256": "1d0811db2a88981a6d292d414ff69ab5aba90371057e2accf1bddd7966e64525",
+      "numeric_literals": 18,
+      "numeric_tokens": 18
+    },
+    {
+      "path": "analytics/wind/wind_interface_schema.py",
+      "git_blob": "a97d3228b2f109f0601b361d031a0f1ad3e1a6bb",
+      "sha256": "5190bfe110176738cf51cd993ff4f3db12b35aaea63550cddfd24fe34f76d50a",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "analytics/wind/wind_rose.py",
+      "git_blob": "293e2eee8e68c8954c563b262617710a68833d98",
+      "sha256": "d505e327e3bfb170ca9af3514a178a4a7f637b3aec932f0daa796a368af5f10e",
+      "numeric_literals": 37,
+      "numeric_tokens": 37
+    },
+    {
+      "path": "constants.py",
+      "git_blob": "f9963cb98b9425da3a5433268c414dd361d4cc10",
+      "sha256": "c79f95152fbe2f819352e8959a6c1f3f975deb3502778bfa49e5ce5228ca11c6",
+      "numeric_literals": 9,
+      "numeric_tokens": 9
+    },
+    {
+      "path": "finance/__init__.py",
+      "git_blob": "bfa569c93be584e97b2f9238bfc274a36dda1543",
+      "sha256": "67db4203323c75e3dabf14f976fb0a5e7b2e23772146a8cbdeddc33ccd398e9d",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/bess_lcos.py",
+      "git_blob": "79c709c895025bf37a6f8a496dc393735e8c7f7b",
+      "sha256": "86f2cd218b6e362bc5b0a4afff4bb4bbd12c33fadcc2bf02c8a3255782df3a11",
+      "numeric_literals": 41,
+      "numeric_tokens": 41
+    },
+    {
+      "path": "finance/bess_project_economics.py",
+      "git_blob": "8ec79573f6a49b2950016cdec8b6af28e9810efc",
+      "sha256": "f44d32c4ebb1d8520bf556a083b58ad53651c311db2aebad50e8ee43fb7c162e",
+      "numeric_literals": 35,
+      "numeric_tokens": 35
+    },
+    {
+      "path": "finance/bess_revenue.py",
+      "git_blob": "bbf850a9ef4f720d1b848ac3d73679d216b6a83e",
+      "sha256": "40a62156e6cc4ab71a96bcc0cb5e72ccaf854234854832843996f96703323fc6",
+      "numeric_literals": 51,
+      "numeric_tokens": 51
+    },
+    {
+      "path": "finance/cashflow/__init__.py",
+      "git_blob": "6efe08573f7b2fb1e30e2ddb53db81161c26183e",
+      "sha256": "a9abe70faca4c23a42bd766d49a06e6c689ef25d67c487d893b1ddb30a762300",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/cashflow_v14.py",
+      "git_blob": "8e45148327c413b6e46d5304186cc82017c3c9a2",
+      "sha256": "6e3bba5b170554d49a63541005fbbae41efd2bc0e342358ea00fb14a95e99002",
+      "numeric_literals": 58,
+      "numeric_tokens": 58
+    },
+    {
+      "path": "finance/cashflow_v14_contracts.py",
+      "git_blob": "061bed72f8fd6f7051980b2c3c1471229be7014b",
+      "sha256": "51a743fafcb5c1a2be85b82e84b800ce3c7226ccd609cef0ac60b458ec8da386",
+      "numeric_literals": 6,
+      "numeric_tokens": 6
+    },
+    {
+      "path": "finance/cashflow_v14_fx.py",
+      "git_blob": "b125eba91a624dbaae8754303faba4ccccb04271",
+      "sha256": "496e28387e5018257631f334fdc4f4909c9becd1cafd1544b21d55e609af200e",
+      "numeric_literals": 38,
+      "numeric_tokens": 38
+    },
+    {
+      "path": "finance/cashflow_v14_params.py",
+      "git_blob": "99d4a93ba215225b9b18c4526091154f33a7055f",
+      "sha256": "d69f4cd729a4e69a66a7ae9e17897207ab17b2fee6a5e8c1c807ec1467f83e97",
+      "numeric_literals": 56,
+      "numeric_tokens": 56
+    },
+    {
+      "path": "finance/cashflow_v14_production.py",
+      "git_blob": "f70d2188d8ec3873027fd9e4b78b44955f77eb57",
+      "sha256": "4a09e242cc89d5b61f4412527aad7d60aa4fb17e1d64de0fd71a67285d9cd238",
+      "numeric_literals": 22,
+      "numeric_tokens": 22
+    },
+    {
+      "path": "finance/cashflow_v14_tax.py",
+      "git_blob": "57466c9575098a90838a60d67dfe4c0e97f5aad7",
+      "sha256": "a38b7f8e962e3b7a1b5a5436c7b66aec6860eda1f23d0c12e7c0743016029072",
+      "numeric_literals": 67,
+      "numeric_tokens": 67
+    },
+    {
+      "path": "finance/cashflow_v14_utils.py",
+      "git_blob": "677a81ecdf2eaded11125b2e5d639ffd2c3d16c7",
+      "sha256": "10d936ce627c87fe556e99a529a456301696630371ad87eb85b69c9b4e7ba713",
+      "numeric_literals": 3,
+      "numeric_tokens": 3
+    },
+    {
+      "path": "finance/debt_v14.py",
+      "git_blob": "ee1d464ba2caa3dfc29f94bb542ad255774d0d45",
+      "sha256": "bcf8cf3ffeb6b48f2cdf33464b54ff38ec8b69b2e8a8099ea82bf783db303bb4",
+      "numeric_literals": 290,
+      "numeric_tokens": 290
+    },
+    {
+      "path": "finance/epc_helper_v14.py",
+      "git_blob": "8fb5aa6322637a7df08053feeedb448a409043f9",
+      "sha256": "1621382300d3b0e98c70cdd056bcc09a94754585537363e2bd8f4ee840581a98",
+      "numeric_literals": 14,
+      "numeric_tokens": 14
+    },
+    {
+      "path": "finance/epc_margin.py",
+      "git_blob": "cb177677ef01c4f31f9208cb49d56d2c88c25ff2",
+      "sha256": "3b89a6ee71e0c1ee018f5e9aeccc8eea5ab44bbe6c219d5edfcd14d88009df8f",
+      "numeric_literals": 24,
+      "numeric_tokens": 24
+    },
+    {
+      "path": "finance/equity/__init__.py",
+      "git_blob": "f76c4e13676e0835767a330eae341bb5abe3acbe",
+      "sha256": "a46c0aa79d8b239ef1c065b26d5b58a0d540276cbaa1ee79fb031eeb33bd8085",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/equity_distribution_v14_hydra.py",
+      "git_blob": "ae5e84f7f1d83a0337a3d280ba86d28869874e2a",
+      "sha256": "f74ab92244095350ca1e50fe832a6ed4424caf90d575fcfca0f922d6e047a67b",
+      "numeric_literals": 124,
+      "numeric_tokens": 124
+    },
+    {
+      "path": "finance/equity_v14.py",
+      "git_blob": "667decf697b3586bc368d56a94327c17484e4936",
+      "sha256": "050c5dcd1af93093043d1690f5dad6f7d9e2acfdd5760e9740205cc49a404548",
+      "numeric_literals": 17,
+      "numeric_tokens": 17
+    },
+    {
+      "path": "finance/grid/__init__.py",
+      "git_blob": "e817b49f9359c35bcaf65075f2463ceb308710d6",
+      "sha256": "5ce3f5fdb7fc978fe73134140c4b870bee3fff29179b8e6d7307693576e1182a",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/grid/grid_types.py",
+      "git_blob": "835eeb1ba20de7682933297b2e457e77a333ed14",
+      "sha256": "d244f2e72553bddb670295e044d8082d60fed2f67f0eb911ae9647dcea35e477",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/import_levies.py",
+      "git_blob": "476a272627f8f760696d133ce2322cccb8db866b",
+      "sha256": "4432260b29741b05506ce263d5c71667afd5a1b85f45c46866f903f692747629",
+      "numeric_literals": 16,
+      "numeric_tokens": 16
+    },
+    {
+      "path": "finance/irr.py",
+      "git_blob": "36ba86b44b94253428f3b2b21cd98c4586604a44",
+      "sha256": "9afed163338735560b1bc3696c19f23fbba8bee35e9f41acbd2af9ae32140ff4",
+      "numeric_literals": 66,
+      "numeric_tokens": 66
+    },
+    {
+      "path": "finance/irr_config.py",
+      "git_blob": "5c93cecdeb72d9045e2585265c27b2dbae45da40",
+      "sha256": "fa97cce91a7a66e58696a2011e7720cf4e3c18ff2740fc7d0e835320e8888b1e",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/period_grid_v14.py",
+      "git_blob": "313f06b2c66ff7045add25a787538b8266c3dd46",
+      "sha256": "9630b90c10f517d850197bccef0de03f12f8a4f7ebe5b47a394f213045fe4217",
+      "numeric_literals": 12,
+      "numeric_tokens": 12
+    },
+    {
+      "path": "finance/self_curtailment_v14.py",
+      "git_blob": "375f497a3877e9425b22cd3f2d6d796b6f3196fe",
+      "sha256": "94b34a9577b8f5c95b64b0178a962ef9fcce9216bced311e398e26a69849cf24",
+      "numeric_literals": 14,
+      "numeric_tokens": 14
+    },
+    {
+      "path": "finance/subannual_rows_v14.py",
+      "git_blob": "b6b2912e826aa6daa034302b9818924f7111886b",
+      "sha256": "c9c575ef7bf4ef4d854403f32bd4dd8f5b7d42c8e6124ff11c930e89398db102",
+      "numeric_literals": 11,
+      "numeric_tokens": 11
+    },
+    {
+      "path": "finance/tech_types.py",
+      "git_blob": "d845e9199226e1f93f6a05c397f1b1d932d8e13b",
+      "sha256": "361dc3020e39b6fb05322667bb90e54e209e601c8bed5766146e22d9f3a6eb47",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/utils.py",
+      "git_blob": "e8216e745920255cf2ff2082179bb461f17785ce",
+      "sha256": "9ea95db732184a0a0bd2a16bc72cc96407b6ce9fcfdf7c40b97c57a87f362613",
+      "numeric_literals": 0,
+      "numeric_tokens": 0
+    },
+    {
+      "path": "finance/wacc_v14.py",
+      "git_blob": "df2fd9543be8d2ad9869118332aa1111c12b522f",
+      "sha256": "dc1a1099efd7350c580359b903352e188892df40ac21690e3f006bbb13e13742",
+      "numeric_literals": 75,
+      "numeric_tokens": 75
+    }
+  ]
+}
