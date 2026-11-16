@@ -18,7 +18,7 @@
 | GDrive `aruna.kulatunga@gmail.com` | `desktop clean up DEc 17 2025` | 358 | Mixed Dec-2025 desktop dump: Sep-2025 Final EIA, CEB BESS RFPs, SL tariff/Cabinet/EOI policy + heavy dutchbay-epc-model code/audit artifacts |
 | iCloud `Documents-MacMini` | (loose at root) | 57 | Working root: CEB RFP volumes, SL energy law/policy, Dutch Bay & Kalpitiya & Mannar EIAs, LCOE/BESS sheets, reverse-auction research, turbine-layout GIS |
 | iCloud `Documents-MacMini` | `SPPA final draft 100 pages` | 103 | CEB Standardized PPA (Final Draft, 25 Jul 2025) — one ~100-page doc split one-page-per-PDF |
-| iCloud `Documents-MacMini` | `Envision BESS proposals` | 27 | Envision 10×16 / 10 MW–40 MWh capacity-charge BESS proposal package to CEB (mid-2025) |
+| iCloud `Documents-MacMini` | the battery supplier's BESS proposals folder (name withheld) | 27 | A generic battery supplier's 10×16 / 10 MW–40 MWh capacity-charge BESS proposal package to CEB (mid-2025) |
 | iCloud `Documents-MacMini` | `DutchBay_Backups` | 21 | Model backups: cashflow/sensitivity/Monte-Carlo CSVs, scenario data, dev notes |
 | iCloud `Documents-MacMini` | `OneDrive_13_2-18-2025` | 9 | OneDrive snapshot: Kalpitiya/Envision turbine-layout drawings + KML/SHP source layers |
 | iCloud `Documents-MacMini` | `Kollonnawa BESS` | 8 | PSSREIP-5B (Rev. 2, Aug 2025) — 8-volume tender/feasibility set for Kollonnawa 100 MW BESS |
@@ -92,17 +92,17 @@ The flagship project — EIA in three languages, feasibility, financials, statut
 
 ---
 
-## (d) BESS — Kollonnawa & Envision
+## (d) BESS — Kollonnawa & a generic battery supplier
 
 **Kollonnawa 100 MW (single-site)** — `Kollonnawa BESS` folder: `PSSREIP-5B - Volume 1 … Volume 8 - Rev. 2 - August 2025.pdf` — 8-volume tender/feasibility set for the Kollonnawa BESS (distinct model). Levelised-cost-of-storage (LCOS) case note for Kollonnawa — loose at root (private/internal).
 
-**Envision distributed BESS (10×16 / 10 MW–40 MWh capacity-charge)** — `Envision BESS proposals` folder:
-- Envision BESS commercial proposal package — multiple editions incl. the CEB proposal documents, 10×16 / 10 MW–40 MWh internal design sheets, capacity-charge (LKR/MW/mo) calculators and math annex, technical/economic case, deployment dataset, competitive-landscape analysis, commercial positioning, energy-density comparison and tender Addendum No. 2 (private/internal).
-- Envision 100 MW/200 MWh BESS proposal — loose at root (private/internal).
+**A generic battery supplier's distributed BESS (10×16 / 10 MW–40 MWh capacity-charge)** — the supplier's BESS proposals folder (name withheld):
+- The supplier's BESS commercial proposal package — multiple editions incl. the CEB proposal documents, 10×16 / 10 MW–40 MWh internal design sheets, capacity-charge (LKR/MW/mo) calculators and math annex, technical/economic case, deployment dataset, competitive-landscape analysis, commercial positioning, energy-density comparison and tender Addendum No. 2 (private/internal).
+- The supplier's 100 MW/200 MWh BESS proposal — loose at root (private/internal).
 
 **NSO 250 MW / 1000 MWh standalone BESS tender (2026)** — repository corpus at
 `docs/source_materials/nso_bess_250mw_2026/`: controlling RFP Volumes I-III, paper
-advertisement, two confidential Envision design calculations (10 MW/40 MWh dated 29 July and
+advertisement, two confidential design calculations from a generic battery supplier (10 MW/40 MWh dated 29 July and
 the distinct 11 MW/44 MWh configuration dated 5 August), a 21 July supplier functional-
 requirements checklist, searchable MarkItDown extracts, the initial gap review, the 31 July
 detailed gap statement and the 6 August ingress evaluation. The newest evaluation captures the
@@ -110,7 +110,7 @@ full 15-year 11 MW/44 MWh performance curve and all checklist rows, distinguishe
 `Yes`, 7 `No` and 1 `Partial` from verified evidence, and records the energy, RTE, temperature,
 GFM, ride-through and power-quality closure gaps. *(source files govern over derived analysis;
 public-space publication is authorised by the 31 July record and the project owner's 16 August
-record of Envision verbal confirmation for the newly ingressed material)*
+record of the supplier's verbal confirmation for the newly ingressed material)*
 
 **NSO 250 MW checklist dossier (21 August 2026)** — the supplier evidence package
 assembled against the same tender by the bidder, 72 files / 58 unique
@@ -155,18 +155,16 @@ basis, and standby-regulation and ancillary-service energy both added to it with
 reconciliation), and that there is **no aggregate cap on liquidated damages** while the capacity
 charge can fall to **LKR 0** in a month missing 97 % availability, outside that cap.
 
-**Envision corporate brochure and OEM archive re-supply (ingressed 1 September 2026)** - the
-22-page `ver 2603` corporate brochure is preserved at
-`docs/source_materials/nso_bess_250mw_2026/oem/envision/corporate/` with its complete MarkItDown
-extract. It gives attributed corporate, wind, storage, hydrogen and net-zero-park context, but its
-96 percent efficiency, 15,000-cycle, zero-accident, LCOE and project-scale statements have no
-product-specific test or assurance basis and close no tender gap. The brochure also carries
-internally different wind totals and time spans (more than 80 versus more than 100 GW; three versus
-four years), which are retained as version drift rather than reconciled by inference. The supplied
-`Archive.zip` has 50 payload instances / 48 unique hashes; every payload was already canonical in
-the repository, so only its outer-package deduplication receipt was added and no duplicate payload
-was retained. Evaluation:
-`docs/source_materials/nso_bess_250mw_2026/reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md`.
+**Battery supplier's corporate brochure and OEM archive re-supply (ingressed 1 September 2026)** -
+a generic battery supplier's 22-page corporate brochure is preserved in the NSO 250 MW repository
+corpus above, with its complete MarkItDown extract. It gives attributed corporate, wind, storage,
+hydrogen and net-zero-park context, but its 96 percent efficiency, 15,000-cycle, zero-accident,
+LCOE and project-scale statements have no product-specific test or assurance basis and close no
+tender gap. The brochure also carries internally different corporate totals and time spans, which
+are retained as version drift rather than reconciled by inference. The supplied archive has 50
+payload instances / 48 unique hashes; every payload was already canonical in the repository, so
+only its outer-package deduplication receipt was added and no duplicate payload was retained. The
+ingress evaluation sits with the corpus's other reviews.
 
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 

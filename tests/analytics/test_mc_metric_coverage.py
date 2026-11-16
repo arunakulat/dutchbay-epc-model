@@ -210,9 +210,11 @@ def test_engine_gateway_keeps_independent_samples_through_tail_diagnostics(
         Path(__file__).resolve().parents[2]
         / "scenarios/dutchbay_lendercase_2025Q4.yaml"
     )
-    result = engine.run_monte_carlo_analysis(
-        base_config=yaml.safe_load(config_path.read_text()), n_trials=3, seed=42
-    )
+    config = yaml.safe_load(config_path.read_text())
+    # The lender case runs fixed-debt stress (#962 item 4), which evaluates the base case
+    # once more; this fixture feeds exactly three trial rows, so turn the stress off.
+    config["monte_carlo"]["fixed_debt_stress"] = False
+    result = engine.run_monte_carlo_analysis(base_config=config, n_trials=3, seed=42)
     assert result.dscr_min_p10 == pytest.approx(1.102)
     assert result.trials["equity_irr"] == [None, 0.11, 0.12]
     assert result.metadata["toy_fallback_count"] == result.failed_iterations == 0

@@ -766,6 +766,11 @@ examined in full in the separately delivered deep-research credibility report.
   records both bases (`dsra_at_close_basis`, `payment_support`). Sri Lanka payment-security
   precedents, such as CEB's escrow and standby letter of credit, are not DSRA requirements.
   Actual reserve and support terms await an authenticated term sheet (#920).
+- **Major-maintenance reserve and distribution lock-up.** No major-maintenance reserve is
+  modelled; the debt service reserve is the only reserve account. The distribution lock-up is
+  one test, each period's DSCR against the scenario's lock-up covenant, with no forward-looking
+  test and no multi-tier (cash sweep or default) structure. Both await transaction terms
+  (#1400), and the `model_limitations` block discloses the absence in every report.
 - **Statutory and structural levers.** Several levers (dividend withholding, interest
   withholding gross-up, senior credit-support fees, import levies, P90 debt binding, FX
   hedging) default off. Confirm which are enabled before citing headline KPIs.
