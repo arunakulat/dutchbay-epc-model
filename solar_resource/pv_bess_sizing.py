@@ -239,6 +239,9 @@ class Pricing:
         bess_usd_per_kwh: BESS all-in price per kWh of nameplate energy.
         wind_capex_usd_per_kw: The fixed turbine's placeholder.
         pv_opex_usd_per_kwp_year, bess_opex_usd_per_kwh_year: O&M placeholders.
+        bess_augmentation_reserve_usd_per_kwh: The augmentation reserve's share of the
+            all-in BESS price (the reserve grossed up by land and auxiliaries), the same in
+            the low, mode and high cases.
     """
 
     module_fob_usd_per_wp: Triangular
@@ -250,6 +253,7 @@ class Pricing:
     wind_capex_usd_per_kw: float
     pv_opex_usd_per_kwp_year: float
     bess_opex_usd_per_kwh_year: float
+    bess_augmentation_reserve_usd_per_kwh: float = 0.0
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> "Pricing":
@@ -375,6 +379,10 @@ class Pricing:
             bess_opex_usd_per_kwh_year=_num(
                 opex["bess_usd_per_kwh_year"], "opex.bess_usd_per_kwh_year", lo=0.0
             ),
+            bess_augmentation_reserve_usd_per_kwh=float(
+                bess["augmentation_reserve_usd_per_kwh_base"]
+            )
+            / (1.0 - float(bess["land_and_auxiliaries_share_base"])),
         )
 
 
@@ -757,6 +765,136 @@ class Uncertainty:
         return out
 
 
+#: The keys of the project sizing config's ``battery_health`` block.
+BATTERY_HEALTH_KEYS = (
+    "fade_pct_per_year",
+    "fade_basis",
+    "augment_below_soh",
+    "restore_to_soh",
+    "augmentation_usd_per_kwh",
+    "augmentation_basis",
+    "replaces_price_reserve",
+)
+
+
+@dataclass(frozen=True)
+class BatteryHealth:
+    """Capacity fade with augmentation events (#1578 L-11).
+
+    The battery loses ``fade_pct_per_year`` of its nameplate energy each year, linearly,
+    plus each trial's ``residual_fade_pct_per_year``. Before an operating year whose
+    start-of-year state of health (SoH) would fall below ``augment_below_soh``, cells are
+    added to restore ``restore_to_soh``; the event costs ``augmentation_usd_per_kwh`` per
+    kWh added and is paid in that year. The battery then fades again from the restored SoH
+    at the same rate, new and old cells alike.
+
+    Attributes:
+        fade_pct_per_year: Base-case linear fade, percent of nameplate per year.
+        fade_basis: Where the rate comes from (text, carried into the summary).
+        augment_below_soh: The SoH below which an augmentation is made.
+        restore_to_soh: The SoH an augmentation restores.
+        augmentation_usd_per_kwh: The price of one added kWh, in the BESS price's USD.
+        augmentation_basis: Where that price comes from (text).
+        replaces_price_reserve: The explicit events replace the augmentation reserve held
+            inside the BESS all-in price, so every BESS price draw is reduced by that
+            reserve's share of the all-in (:attr:`Pricing.bess_augmentation_reserve_usd_per_kwh`).
+    """
+
+    fade_pct_per_year: float
+    fade_basis: str
+    augment_below_soh: float
+    restore_to_soh: float
+    augmentation_usd_per_kwh: float
+    augmentation_basis: str
+    replaces_price_reserve: bool
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "BatteryHealth":
+        """Build from the project sizing config's ``battery_health`` block."""
+        _strict(raw, BATTERY_HEALTH_KEYS, "battery_health")
+        if not isinstance(raw["replaces_price_reserve"], bool):
+            raise ValueError("battery_health.replaces_price_reserve must be a boolean")
+        for key in ("fade_basis", "augmentation_basis"):
+            if not isinstance(raw[key], str) or not raw[key].strip():
+                raise ValueError(f"battery_health.{key} must be non-empty text")
+        out = cls(
+            fade_pct_per_year=_num(
+                raw["fade_pct_per_year"], "battery_health.fade_pct_per_year", lo=0.0
+            ),
+            fade_basis=" ".join(raw["fade_basis"].split()),
+            augment_below_soh=_num(
+                raw["augment_below_soh"], "battery_health.augment_below_soh", lo=0.0
+            ),
+            restore_to_soh=_num(
+                raw["restore_to_soh"], "battery_health.restore_to_soh", lo=0.0
+            ),
+            augmentation_usd_per_kwh=_num(
+                raw["augmentation_usd_per_kwh"],
+                "battery_health.augmentation_usd_per_kwh",
+                lo=0.0,
+            ),
+            augmentation_basis=" ".join(raw["augmentation_basis"].split()),
+            replaces_price_reserve=raw["replaces_price_reserve"],
+        )
+        if not 0.0 < out.augment_below_soh < out.restore_to_soh <= 1.0:
+            raise ValueError(
+                "battery_health: need 0 < augment_below_soh < restore_to_soh <= 1"
+            )
+        return out
+
+    def soh_path(
+        self, fade_fraction: float, years: int
+    ) -> Tuple[List[float], List[Tuple[int, float]]]:
+        """The SoH in each operating year and the augmentation events.
+
+        Args:
+            fade_fraction: This trial's whole fade, a fraction of nameplate per year (the
+                base rate plus the trial's residual).
+            years: Operating years.
+
+        Returns:
+            ``(soh, events)``: the SoH each year carries (year 1 starts at beginning of
+            life, 1.0, so year ``y`` before any event is ``1 - fade * (y - 1)``), and one
+            ``(year, fraction_of_nameplate_added)`` per augmentation.
+        """
+        if fade_fraction < 0.0:
+            raise ValueError("battery_health: fade must be non-negative")
+        path: List[float] = []
+        events: List[Tuple[int, float]] = []
+        origin_year, origin_soh = 1, 1.0
+        for year in range(1, years + 1):
+            # From the last origin, not year on year, so no rounding accumulates.
+            soh = origin_soh - fade_fraction * (year - origin_year)
+            if soh < self.augment_below_soh:
+                events.append((year, self.restore_to_soh - soh))
+                origin_year, origin_soh = year, self.restore_to_soh
+                soh = self.restore_to_soh
+            path.append(soh)
+        return path, events
+
+
+def fade_rate_from_soh_curve(soh_pct: Sequence[float]) -> Dict[str, Any]:
+    """The linear fade a SoH curve implies, and the year it first falls below 80%.
+
+    ``soh_pct[0]`` is beginning of life and ``soh_pct[k]`` the SoH at the end of year
+    ``k``. Used to derive a committed rate from a curve that stays outside the repository;
+    the result also gives the year the curve and the rate first fall below 80%.
+    """
+    if len(soh_pct) < 2 or any(not math.isfinite(float(s)) for s in soh_pct):
+        raise ValueError("a SoH curve needs beginning of life and at least one year")
+    last = len(soh_pct) - 1
+    rate = (float(soh_pct[0]) - float(soh_pct[last])) / last
+    below = next((k for k, s in enumerate(soh_pct) if float(s) < 80.0), None)
+    return {
+        "fade_pct_per_year": rate,
+        "curve_years": last,
+        "curve_first_end_of_year_below_80_pct": below,
+        "line_first_end_of_year_below_80_pct": (
+            math.floor((float(soh_pct[0]) - 80.0) / rate) + 1 if rate > 0.0 else None
+        ),
+    }
+
+
 #: Order of the LHS dimensions.
 DIMENSIONS = (
     "module_fob_usd_per_wp",
@@ -986,6 +1124,9 @@ class Context:
             RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
             2026 methodology's convention, s.5.1.2). False keeps the dispatcher's convention (the
             nameplate is what a full charge absorbs; the loss is on discharge).
+        project_opex: The scenario's O&M basis (#1646), or ``None`` (the cited prices' O&M).
+        battery_health: Fade with augmentation events (#1578 L-11), or ``None`` (the cited
+            prices' linear residual fade, with the augmentation reserve left in the price).
     """
 
     scenario: Mapping[str, Any]
@@ -998,6 +1139,7 @@ class Context:
     fixed_opex_usd_per_year: float
     losses_on_charge: bool = False
     project_opex: Optional[ProjectOpexBasis] = None
+    battery_health: Optional[BatteryHealth] = None
 
 
 def _bess_for(
@@ -1023,11 +1165,19 @@ def engine_overrides(
     pv_capex_usd: float,
     bess_capex_usd: float,
     opex_usd_per_year: float,
+    augmentation_capex_usd: Optional[Mapping[int, float]] = None,
 ) -> Dict[str, Any]:
     """The scenario fields that carry one sized and priced unit (the dispatcher's wiring).
 
     A scenario without a ``wind`` technology (the separate solar + BESS project) carries no
     wind capex, and its generation nameplate is the unit's AC capacity.
+
+    ``augmentation_capex_usd`` (operating year -> USD) is set when the context models
+    battery health; it is then always written, empty or not, so a scenario's own schedule
+    never survives the override. Each event carries only the cash: the dispatcher already
+    put the restored energy into the export path that ``mdsc_fade_pct_annual`` matches, so
+    ``restore_to_soh`` is the engine's own state of health in that year, which leaves the
+    engine's BESS revenue unchanged by the event.
     """
     techs = ctx.scenario["generation"]["technologies"]
     wind_capex = float(techs["wind"]["capex_usd"]) if "wind" in techs else 0.0
@@ -1060,6 +1210,16 @@ def engine_overrides(
     if ctx.project_opex is not None:
         _, _, components = ctx.project_opex.at_size(point.dc_mwp, point.bess_energy_mwh)
         overrides["opex.currency_split.components"] = components
+    if augmentation_capex_usd is not None:
+        fade = rep.bess_mdsc_fade_pct_annual
+        overrides[f"{t}.bess_1.revenue.augmentation_schedule"] = [
+            {
+                "year": int(year),
+                "capex_usd": float(usd),
+                "restore_to_soh": min(1.0, (1.0 - fade) ** (int(year) - 1)),
+            }
+            for year, usd in sorted(augmentation_capex_usd.items())
+        ]
     return overrides
 
 
@@ -1071,10 +1231,15 @@ def unit_pretax_cashflows_usd(
     opex_escalation_pct: float,
     lkr_per_usd: float,
     construction_years: int,
+    augmentation_capex_usd: Optional[Mapping[int, float]] = None,
 ) -> List[float]:
-    """The unit's own pre-tax cash flow: capex at t=0, a build lag, then revenue less O&M."""
+    """The unit's own pre-tax cash flow: capex at t=0, a build lag, then revenue less O&M
+    and less any augmentation (operating year -> USD)."""
+    aug = augmentation_capex_usd or {}
     ops = [
-        r / lkr_per_usd - opex_usd_year1 * (1.0 + opex_escalation_pct / 100.0) ** t
+        r / lkr_per_usd
+        - opex_usd_year1 * (1.0 + opex_escalation_pct / 100.0) ** t
+        - float(aug.get(t + 1, 0.0))
         for t, r in enumerate(revenue_lkr)
     ]
     return [-capex_usd] + [0.0] * construction_years + ops
@@ -1133,14 +1298,38 @@ def evaluate_point(
     v = trials.values
     n = trials.n
     fade = v["residual_fade_pct_per_year"] / 100.0
-    if (fade * (years - 1) >= 1.0).any():
-        raise ValueError("residual fade exhausts the battery within the horizon")
+    health = ctx.battery_health
+    # Per trial: operating year -> augmentation capex (USD), or None without health.
+    augmentation: List[Optional[Dict[int, float]]] = [None] * n
+    soh_rows: List[List[float]] = []
     # Columns: trial-major, year-minor.
     yrs = np.arange(years, dtype=np.float64)
     scale = (
         v["yield_multiplier"][:, None] * np.asarray(point.warranty)[None, :]
     ).ravel()
-    energy = (point.bess_energy_mwh * (1.0 - fade[:, None] * yrs[None, :])).ravel()
+    if health is None:
+        if (fade * (years - 1) >= 1.0).any():
+            raise ValueError("residual fade exhausts the battery within the horizon")
+        energy = (point.bess_energy_mwh * (1.0 - fade[:, None] * yrs[None, :])).ravel()
+    else:
+        for j in range(n):
+            soh, events = health.soh_path(
+                health.fade_pct_per_year / 100.0 + float(fade[j]), years
+            )
+            soh_rows.append(soh)
+            augmentation[j] = {
+                year: added
+                * point.bess_energy_mwh
+                * 1000.0
+                * health.augmentation_usd_per_kwh
+                for year, added in events
+            }
+        energy = (point.bess_energy_mwh * np.asarray(soh_rows)).ravel()
+    reserve = (
+        ctx.pricing.bess_augmentation_reserve_usd_per_kwh
+        if health is not None and health.replaces_price_reserve
+        else 0.0
+    )
     rte = np.repeat(v["round_trip_efficiency"], years)
     sums = dispatch_columns(
         point.pv_base_mw,
@@ -1212,7 +1401,12 @@ def evaluate_point(
             inverter_usd_per_wac=float(v["inverter_usd_per_wac"][j]),
             bop_usd_per_wp=float(v["bop_usd_per_wp"][j]),
         )
-        bess_capex = point.bess_energy_mwh * 1000.0 * float(v["bess_usd_per_kwh"][j])
+        bess_price = float(v["bess_usd_per_kwh"][j]) - reserve
+        if bess_price < 0.0:
+            raise ValueError(
+                "the BESS price is below the augmentation reserve it holds"
+            )
+        bess_capex = point.bess_energy_mwh * 1000.0 * bess_price
         overrides = engine_overrides(
             ctx,
             rep,
@@ -1220,6 +1414,7 @@ def evaluate_point(
             pv_capex_usd=pv_capex,
             bess_capex_usd=bess_capex,
             opex_usd_per_year=opex,
+            augmentation_capex_usd=augmentation[j],
         )
         kpis = evaluator(raw_config=ctx.scenario, overrides=overrides)
         rate = float(kpis["discount_rate_used"])
@@ -1230,6 +1425,7 @@ def evaluate_point(
             opex_escalation_pct=esc,
             lkr_per_usd=lkr_per_usd,
             construction_years=lag,
+            augmentation_capex_usd=augmentation[j],
         )
         u_irr = irr(flows)
         row = {
@@ -1251,6 +1447,16 @@ def evaluate_point(
                 "overrides": overrides,
                 "year1": asdict(path[0]),
             }
+            if health is not None:
+                result.base["battery_health"] = {
+                    "soh_by_year": soh_rows[j],
+                    "augmentation_capex_usd_by_year": {
+                        str(k): val
+                        for k, val in sorted((augmentation[j] or {}).items())
+                    },
+                    "bess_price_usd_per_kwh": bess_price,
+                    "reserve_removed_usd_per_kwh": reserve,
+                }
             continue
         for m in METRICS:
             result.trials[m].append(row[m])
@@ -1792,6 +1998,7 @@ PROJECT_SIZING_KEYS = (
     "readings",
     "monte_carlo",
     "uncertainty",
+    "battery_health",
     "plant",
     "objective",
     "curtailment_scenario",
@@ -2112,6 +2319,8 @@ SHIFT_KEYS = (
     "priority_term_years",
     "round_trip_efficiency",
     "scenario",
+    "fade_pct_per_year",
+    "augmentation_usd_per_kwh",
 )
 #: The scalar inputs a break-even search may move.
 BREAK_EVEN_INPUTS = (
@@ -2262,12 +2471,33 @@ def shifted_case(
         if not isinstance(updates, Mapping) or not updates:
             raise ValueError(f"{where}.scenario must map dotted paths to values")
         scenario = _with_dotted(scenario, updates, f"{where}.scenario")
+    health = ctx.battery_health
+    for key in ("fade_pct_per_year", "augmentation_usd_per_kwh"):
+        if key in shift and health is None:
+            raise ValueError(f"{where}.{key} needs the battery_health block")
+    if health is not None and "fade_pct_per_year" in shift:
+        health = dataclasses.replace(
+            health,
+            fade_pct_per_year=_num(
+                shift["fade_pct_per_year"], f"{where}.fade_pct_per_year", lo=0.0
+            ),
+        )
+    if health is not None and "augmentation_usd_per_kwh" in shift:
+        health = dataclasses.replace(
+            health,
+            augmentation_usd_per_kwh=_num(
+                shift["augmentation_usd_per_kwh"],
+                f"{where}.augmentation_usd_per_kwh",
+                lo=0.0,
+            ),
+        )
     moved = dataclasses.replace(
         ctx,
         pricing=pricing,
         tariff=tariff,
         scenario=scenario,
         project_opex=project_opex,
+        battery_health=health,
     )
     return moved, Trials(values=values)
 
@@ -2430,6 +2660,11 @@ def run_project_sizing(
 
     pricing = Pricing.from_mapping(pricing_cfg)
     uncertainty = Uncertainty.from_mapping(sizing_cfg["uncertainty"])
+    health = BatteryHealth.from_mapping(sizing_cfg["battery_health"])
+    if health.replaces_price_reserve and (
+        pricing.bess_augmentation_reserve_usd_per_kwh >= pricing.bess_usd_per_kwh.low
+    ):
+        raise ValueError("battery_health: the reserve exceeds the lowest BESS price")
     module = ModuleSpec.from_mapping(unit["module"])
     strings_design = design_string(
         module, StringDesignConfig.from_mapping(unit["string_design"])
@@ -2464,6 +2699,7 @@ def run_project_sizing(
         ),
         losses_on_charge=reg.losses_on_charge,
         project_opex=opex_basis,
+        battery_health=health,
     )
     trials = draw_trials(
         n_trials=n_trials,
@@ -2680,6 +2916,7 @@ def run_project_sizing(
         entry["base"] = {k: pres.base[k] for k in METRICS} | {
             "engine": pres.base["engine"],
             "year1": pres.base["year1"],
+            "battery_health": pres.base["battery_health"],
         }
         entry["metrics"] = {m: summarise_metric(pres.trials[m]) for m in METRICS}
         entry["year1_unit_export_mwh"] = summarise_metric(pres.year1_unit_export_mwh)
@@ -3083,6 +3320,17 @@ def run_project_sizing(
         "opex_basis": {
             "source": "scenario.opex.currency_split.components",
             **asdict(opex_basis),
+        },
+        "battery_health": {
+            **asdict(health),
+            "price_reserve_removed_usd_per_kwh": (
+                pricing.bess_augmentation_reserve_usd_per_kwh
+                if health.replaces_price_reserve
+                else 0.0
+            ),
+            "residual_fade_pct_per_year": asdict(
+                uncertainty.residual_fade_pct_per_year
+            ),
         },
         "bess_duration_h": duration,
         "losses_on_charge": reg.losses_on_charge,
