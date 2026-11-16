@@ -1046,3 +1046,120 @@ def test_removed_stale_outputs_are_listed_relative_to_the_export_dir(
         f"{QSTS_SYNTHETIC_OUTPUT_CLASS}/grid_screening_report.html",
     ]
     assert not (nested / "grid_screening_report.html").exists()
+
+
+# --------------------------------------------------------------------------------------------
+# #1760 assurance M-2 at cf357629: a config read between the figures and summary.json that is
+# not inside an emitter never stops the run.
+# --------------------------------------------------------------------------------------------
+
+_UNSET_ENV = "DUTCHBAY_TEST_1760_UNSET_VARIABLE"
+_UNRESOLVABLE = "${oc.env:" + _UNSET_ENV + "}"
+
+_UNREADABLE_KEYS = [
+    ("capital_risk_report", "path"),
+    ("capital_risk_report", "npv_metric"),
+    ("tech_comparison", "path"),
+    ("interaction_grid_report", "path"),
+    ("grid_screen_report", "path"),
+]
+_MODES = {
+    "default": {},
+    "emit_all_off": {"emit_all": False},
+    "no_write_artifacts": {"write_artifacts": False},
+}
+
+
+@pytest.mark.parametrize("mode", sorted(_MODES))
+@pytest.mark.parametrize(
+    "block,key", _UNREADABLE_KEYS, ids=[f"{b}.{k}" for b, k in _UNREADABLE_KEYS]
+)
+def test_an_unresolvable_emitter_key_never_stops_a_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    block: str,
+    key: str,
+    mode: str,
+) -> None:
+    monkeypatch.delenv(_UNSET_ENV, raising=False)
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        **{block: {key: _UNRESOLVABLE}},
+        **_MODES[mode],
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["kpis"] == _STUB_RESULT["kpis"]
+    run_dir = tmp_path / "run"
+    if mode == "no_write_artifacts":
+        assert not (run_dir / "summary.json").exists()
+        assert calls == []
+    else:
+        assert (run_dir / "kpis.json").is_file()
+        assert (run_dir / "summary.json").is_file()
+    if mode == "default":
+        assert calls == ["emit_executive_workbook"]
+        assert out["emitters"]["emit_executive_workbook"]["status"] == STATUS_RUN
+    if mode == "emit_all_off":
+        assert calls == []
+
+
+def test_an_explicit_emitter_with_an_unresolvable_path_stops_and_keeps_its_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Outside emit_all, an emitter switched on by name whose path cannot be read fails as it
+    did before #1756, and its default-path file is left alone: the path was configured.
+    """
+    monkeypatch.delenv(_UNSET_ENV, raising=False)
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir(parents=True)
+    earlier = run_dir / "interaction_grid_report.html"
+    earlier.write_text("earlier run", encoding="utf-8")
+    with pytest.raises(SystemExit) as stopped:
+        _run_cli(
+            tmp_path,
+            {"scenario_name": "t", "interaction_grid": {}},
+            emit_all=False,
+            emit_interaction_grid=True,
+            interaction_grid_report={"path": _UNRESOLVABLE},
+        )
+    capsys.readouterr()
+    assert stopped.value.code == 1
+    assert calls == []
+    assert earlier.read_text(encoding="utf-8") == "earlier run"
+    assert (run_dir / "kpis.json").is_file()
+
+
+def test_a_scenario_that_cannot_be_read_again_lists_every_default_emitter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The re-plan reads the effective scenario again after the figures; if that read
+    fails, each emitter emit_all would switch on is listed as not run and the run goes on.
+    A switch set by name keeps its own decision."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+
+    def unreadable(path: Any) -> Any:
+        raise OSError("scenario gone")
+
+    monkeypatch.setattr(rfp, "load_scenario_config", unreadable)
+    _run_cli(tmp_path, {"scenario_name": "t"}, emit_grid_screen=False)
+    out = json.loads(capsys.readouterr().out)
+    assert calls == []
+    assert out["kpis"] == _STUB_RESULT["kpis"]
+    for flag in EMIT_FLAGS:
+        entry = out["emitters"][flag]
+        if flag == "emit_grid_screen":
+            assert entry == {"status": STATUS_OFF, "source": "explicit"}
+            continue
+        assert entry["status"] == STATUS_NOT_RUN
+        assert entry["reason"] == (
+            "the effective scenario cannot be read again to plan the emitters: "
+            "OSError: scenario gone"
+        )
+    assert (tmp_path / "run" / "summary.json").is_file()

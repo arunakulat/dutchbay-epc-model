@@ -13,7 +13,10 @@
     that is not a list, or an entry without a `label`, without a `config` or naming a file
     that does not exist. The check applies the emitter's own rules. Any other error while
     reading an emitter's inputs, such as an interpolation that cannot resolve, is listed with
-    its reason too.
+    its reason too. After the figures are written, a config value read only to decide which
+    earlier files to clear (an emitter's `path`, the capital-risk `npv_metric`) that cannot
+    be read is logged and its default used, so it never stops the run; an emitter that runs
+    reads the same key itself and fails as before.
   - `emit_all` writes files only in a run that writes its figures. With
     `write_artifacts=false` it switches no emitter on: each one not switched on by name is
     listed as not run with that reason, and the run writes nothing into the export

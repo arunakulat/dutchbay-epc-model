@@ -116,6 +116,7 @@ Version: 2.3.0 (Lender-Grade Pipeline + Equity Distribution + Wind→Finance Int
 from __future__ import annotations
 
 import csv
+import dataclasses
 import json
 import logging
 import os
@@ -1254,11 +1255,37 @@ def cli(cfg: DictConfig) -> None:
         # result['emitters'] whenever emit_all is on, which is the default; a run with
         # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
         if emit_all and isinstance(result, dict):
+            # The engine read this scenario file earlier in the run; if it cannot be read
+            # again, every emitter emit_all would switch on is listed as not run with the
+            # reason, and the run goes on (#1760 assurance M-2 audit at cf357629).
+            replan_error: str | None = None
+            try:
+                replan_scenario = dict(load_scenario_config(str(effective_config)))
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - listed with its reason, never silent
+                replan_scenario = {}
+                replan_error = (
+                    "the effective scenario cannot be read again to plan the emitters: "
+                    f"{type(exc).__name__}: {exc}"
+                )
             emit_plan = plan_emitters(
-                cfg,
-                dict(load_scenario_config(str(effective_config))),
-                write_artifacts=write_artifacts,
+                cfg, replan_scenario, write_artifacts=write_artifacts
             )
+            if replan_error is not None:
+                emit_plan = {
+                    flag: (
+                        dataclasses.replace(
+                            decision,
+                            run=False,
+                            status=STATUS_NOT_RUN,
+                            reason=replan_error,
+                        )
+                        if decision.source == "emit_all"
+                        else decision
+                    )
+                    for flag, decision in emit_plan.items()
+                }
             emit_executive_workbook = emit_plan["emit_executive_workbook"].run
             emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
             emit_interaction_grid = emit_plan["emit_interaction_grid"].run
@@ -1292,21 +1319,56 @@ def cli(cfg: DictConfig) -> None:
         #   listed as removed.
         from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
 
-        def _configured(block: Any) -> Any:
-            # A malformed (list or scalar) block names no path (#1760 domain D-1).
-            return block.get("path", None) if isinstance(block, Mapping) else None
+        unreadable: set[str] = set()
+
+        def _read_optional(block: Any, key: str, default: Any, where: str) -> Any:
+            # Every config read between the figures and summary.json that is not inside an
+            # emitter goes through here (#1760 assurance M-2 at cf357629). These reads only
+            # say which default-path files to keep or clear, so a value that cannot be read
+            # (a malformed block, or an interpolation such as ${oc.env:...} that does not
+            # resolve) falls back to the default and is logged; it never stops the run. An
+            # emitter that runs reads the same key itself, inside _run_emitter, and fails
+            # there as before (#1760 domain D-1 for malformed blocks).
+            if not isinstance(block, Mapping):
+                return default
+            try:
+                return block.get(key, default)
+            except Exception as exc:  # noqa: BLE001 - logged, never silent
+                unreadable.add(where)
+                logger.warning(
+                    "%s.%s cannot be read (%s: %s); using %r to decide which default"
+                    " outputs to clear",
+                    where,
+                    key,
+                    type(exc).__name__,
+                    exc,
+                    default,
+                )
+                return default
 
         configured_paths: dict[str, Any] = {
             "emit_executive_workbook": executive_workbook_path,
-            "emit_capital_risk_report": _configured(capital_risk_report_cfg),
-            "emit_interaction_grid": _configured(interaction_grid_cfg),
-            "emit_tech_comparison": _configured(tech_comparison_cfg),
-            "emit_grid_screen": _configured(grid_screen_cfg),
+            "emit_capital_risk_report": _read_optional(
+                capital_risk_report_cfg, "path", None, "capital_risk_report"
+            ),
+            "emit_interaction_grid": _read_optional(
+                interaction_grid_cfg, "path", None, "interaction_grid_report"
+            ),
+            "emit_tech_comparison": _read_optional(
+                tech_comparison_cfg, "path", None, "tech_comparison"
+            ),
+            "emit_grid_screen": _read_optional(
+                grid_screen_cfg, "path", None, "grid_screen_report"
+            ),
         }
-        npv_metric = (
-            capital_risk_report_cfg.get("npv_metric", "equity_npv")
-            if isinstance(capital_risk_report_cfg, Mapping)
-            else "equity_npv"
+        config_block_of = {
+            "emit_capital_risk_report": "capital_risk_report",
+            "emit_interaction_grid": "interaction_grid_report",
+            "emit_tech_comparison": "tech_comparison",
+            "emit_grid_screen": "grid_screen_report",
+        }
+        npv_metric = _read_optional(
+            capital_risk_report_cfg, "npv_metric", "equity_npv", "capital_risk_report"
         )
         default_outputs: dict[str, list[Path]] = {
             "emit_executive_workbook": [export_dir_scoped / "executive_workbook.xlsx"],
@@ -1361,7 +1423,14 @@ def cli(cfg: DictConfig) -> None:
         # carries on, and its figures are already written. An emitter switched on explicitly
         # still stops the run on failure (FRAMEWORK-02), as before #1756.
         def _run_emitter(flag: str, emit: Callable[[], None]) -> None:
-            if not owns_default_paths and not configured_paths.get(flag):
+            # Outside emit_all's ownership, a default path is cleared only for an emitter that
+            # is attempted there: not when a path is configured, nor when the configured path
+            # could not be read (the emitter then fails reading it, as before #1756).
+            if (
+                not owns_default_paths
+                and not configured_paths.get(flag)
+                and config_block_of.get(flag) not in unreadable
+            ):
                 for stale in _clear_default_outputs(flag):
                     logger.info(
                         "%s: removed earlier output %s before running",
