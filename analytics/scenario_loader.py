@@ -32,6 +32,7 @@ from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.loader.aep_loader import builtin_approved_sources_manifest
+from finance.cashflow_v14_params import refuse_authored_usd_fx_reference
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +277,8 @@ def load_scenario_config(
             "Invalid FX configuration: scalar 'fx' not supported; "
             "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"
         )
+    # The USD opex FX reference belongs to the override gateways (#1578 N-4).
+    refuse_authored_usd_fx_reference(cfg, str(config_path))
 
     # An AUTHORED scenario's capacity_mw × capacity_factor (the engine's revenue basis)
     # must reconcile with any bankable net AEP it also declares — caught here at load
