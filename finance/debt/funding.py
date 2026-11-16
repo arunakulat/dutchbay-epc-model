@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Tuple
 
 from finance.debt.capex import _extract_capex_base_usd, _extract_capex_usd
+from finance.debt.constants import DSRA_TARGET_BASIS
 from finance.debt.helpers import _as_float, _section_case_insensitive, _truthy_flag
 from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
+from finance.utils import as_float
+
+
+def _resolve_dsra_target_months(
+    dsra_cfg: Mapping[str, Any],
+    fin: Mapping[str, Any],
+    reserves: Mapping[str, Any],
+) -> Tuple[float, str]:
+    """Return the DSRA target months and the key that set them, in one walk (#920).
+
+    Precedence: ``Financing_Terms.dsra.target_months``, then ``Financing_Terms.dsra_months``,
+    then ``Financing_Terms.reserves.dsra_months``, then the engine's 6 months. A key that is
+    present shadows the rungs below it even when its value is null, as the nested
+    ``dict.get`` read always did. When the winning value is null or not a number, the
+    months are the 6-month fallback and the source is ``code_default``, so a source name is
+    never shown beside a figure that key did not set.
+    """
+    raw: Any = None
+    source = "code_default"
+    for mapping, key, path in (
+        (dsra_cfg, "target_months", "Financing_Terms.dsra.target_months"),
+        (fin, "dsra_months", "Financing_Terms.dsra_months"),
+        (reserves, "dsra_months", "Financing_Terms.reserves.dsra_months"),
+    ):
+        if key in mapping:
+            raw, source = mapping[key], path
+            break
+    # The same coercion _as_float applies: None here means it fell back to 6.0.
+    if as_float(raw, None) is None:
+        source = "code_default"
+    return _as_float(raw, 6.0), source
 
 
 def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, Any]:
@@ -33,12 +65,7 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     # was silently ignored.
     _reserves = fin.get("reserves")
     reserves: Mapping[str, Any] = _reserves if isinstance(_reserves, Mapping) else {}
-    target_months = _as_float(
-        dsra_cfg.get(
-            "target_months", fin.get("dsra_months", reserves.get("dsra_months"))
-        ),
-        6.0,
-    )
+    target_months, target_source = _resolve_dsra_target_months(dsra_cfg, fin, reserves)
 
     construction_periods = int(_as_float(core.get("construction_periods"), 0))
     ds = core.get("debt_service_total", []) or []
@@ -100,6 +127,16 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     return {
         "fund_at_close": fund_at_close,
         "dsra_target_months": round(target_months, 2),
+        "dsra_target_source": target_source,
+        "dsra_target_basis": DSRA_TARGET_BASIS,
+        # #920 DOM-1: what these months size. With fund_at_close off they size nothing;
+        # the reserve built from operating cash is sized by the equity waterfall's own
+        # ``min_reserve_months``, labelled in ``equity_distribution.equity_summary``.
+        "dsra_target_governs": (
+            "initial_dsra_at_close"
+            if fund_at_close
+            else "nothing_reserve_sized_by_equity_min_reserve_months"
+        ),
         "initial_dsra_usd": round(initial_dsra, 2),
         "dsra_at_close_basis": (
             "funded_at_close" if fund_at_close else "none_built_from_operating_cash"
