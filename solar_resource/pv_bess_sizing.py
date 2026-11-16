@@ -1124,9 +1124,9 @@ class Context:
             RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
             2026 methodology's convention, s.5.1.2). False keeps the dispatcher's convention (the
             nameplate is what a full charge absorbs; the loss is on discharge).
-        project_opex: The scenario's O&M basis (#1646), or ``None`` (PR 3's prices).
-        battery_health: Fade with augmentation events (#1578 L-11), or ``None`` (PR 3's
-            linear residual fade, with the augmentation reserve left in the price).
+        project_opex: The scenario's O&M basis (#1646), or ``None`` (the cited prices' O&M).
+        battery_health: Fade with augmentation events (#1578 L-11), or ``None`` (the cited
+            prices' linear residual fade, with the augmentation reserve left in the price).
     """
 
     scenario: Mapping[str, Any]
