@@ -124,7 +124,7 @@ import sys
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 import hydra
 import yaml
@@ -132,6 +132,7 @@ from omegaconf import DictConfig, OmegaConf
 
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.emit_selection import (
+    STATUS_FAILED,
     STATUS_NOT_RUN,
     emit_all_requested,
     plan_emitters,
@@ -1185,7 +1186,7 @@ def cli(cfg: DictConfig) -> None:
 
         # #1756: under emit_all, decide which emitters apply to this run from the effective
         # scenario. One whose inputs are absent is recorded as not run with its reason; one that
-        # applies runs and, if it fails, stops the run. The plan is recorded under
+        # applies runs and, if it fails, is recorded as failed (below). The plan is recorded under
         # result['emitters'] whenever emit_all is on, which is the default; a run with
         # emit_all=false records no plan and is byte-identical to the behaviour before #1756.
         if emit_all and isinstance(result, dict):
@@ -1204,160 +1205,8 @@ def cli(cfg: DictConfig) -> None:
                         "emit_all: %s not run (%s)", decision.flag, decision.reason
                     )
 
-        # #656 (slice 3): optional single-scenario Executive Workbook emission.
-        # OFF unless emit_executive_workbook=true (committed scenarios leave it
-        # off → byte-identical). Reads no live ERA5: the resource-trend sheet is
-        # sourced only from a long_term_trend block riding in the frozen wind
-        # export (when one was supplied). Fails loudly on error, since the caller
-        # explicitly opted into the workbook (CESSPIT).
-        if emit_executive_workbook and isinstance(result, dict):
-            workbook_out = (
-                Path(str(executive_workbook_path))
-                if executive_workbook_path
-                else export_dir_scoped / "executive_workbook.xlsx"
-            )
-            wind_export_payload = (
-                _read_wind_export_payload(resolved_wind_json_path)
-                if resolved_wind_json_path is not None
-                else None
-            )
-            # #727: a frozen solar export can ALSO carry a long_term_trend block (GHI
-            # dimming/brightening). The workbook fills ONE ResourceTrend sheet; wind
-            # takes precedence when both are present (see the HYBRID note in
-            # emit_executive_workbook_from_pipeline). Solar-only runs fill it from solar.
-            solar_export_payload = (
-                _read_solar_export_payload(resolved_solar_json_path)
-                if resolved_solar_json_path is not None
-                else None
-            )
-            written = emit_executive_workbook_from_pipeline(
-                result,
-                workbook_out,
-                wind_export=wind_export_payload,
-                solar_export=solar_export_payload,
-            )
-            result["executive_workbook_path"] = str(written)
-            logger.info("Wrote Executive Workbook to %s", written)
-
-        # #779: optional capital-risk (Monte-Carlo) report emission. OFF unless
-        # emit_capital_risk_report=true (committed scenarios leave it off →
-        # byte-identical). Runs the canonical MC (allow_toy_fallback forced false)
-        # over a bounded n and renders a lender report with the capital-risk
-        # section. Fails loud on error, since the caller explicitly opted in
-        # (CESSPIT). Imported lazily so the report stack (jinja/matplotlib) is not
-        # pulled onto the finance CLI's import path unless this step runs.
-        if emit_capital_risk_report and isinstance(result, dict):
-            from app.reports.capital_risk_emit import (
-                DEFAULT_CAPITAL_RISK_N_TRIALS,
-                emit_capital_risk_report_from_pipeline,
-            )
-
-            cr_path_raw = capital_risk_report_cfg.get("path", None)
-            cr_out = (
-                Path(str(cr_path_raw))
-                if cr_path_raw
-                else export_dir_scoped / "capital_risk_report.html"
-            )
-            cr_seed_raw = capital_risk_report_cfg.get("seed", None)
-            cr_written = emit_capital_risk_report_from_pipeline(
-                result,
-                effective_config,
-                cr_out,
-                n_trials=int(
-                    capital_risk_report_cfg.get(
-                        "n_trials", DEFAULT_CAPITAL_RISK_N_TRIALS
-                    )
-                ),
-                seed=int(cr_seed_raw) if cr_seed_raw is not None else None,
-                npv_metric=str(capital_risk_report_cfg.get("npv_metric", "equity_npv")),
-            )
-            result["capital_risk_report_path"] = str(cr_written)
-            logger.info("Wrote capital-risk report to %s", cr_written)
-
-        # #739 slice-2: optional two-factor interaction-grid report emission. OFF unless
-        # emit_interaction_grid=true (committed scenarios leave it off → byte-identical). Builds
-        # the grid (N×M full-pipeline evaluations — heavy, batch-path only, never the synchronous
-        # HTTP report route; the #645 latency ledger) from the config-required interaction_grid
-        # block and renders a lender report with that section. Fails loud on a missing/malformed
-        # block, since the caller explicitly opted in (CESSPIT). Imported lazily so the report
-        # stack is not pulled onto the finance CLI's import path unless this step runs.
-        if emit_interaction_grid and isinstance(result, dict):
-            from app.reports.interaction_grid_emit import (
-                emit_interaction_grid_report_from_pipeline,
-            )
-
-            ig_path_raw = interaction_grid_cfg.get("path", None)
-            ig_out = (
-                Path(str(ig_path_raw))
-                if ig_path_raw
-                else export_dir_scoped / "interaction_grid_report.html"
-            )
-            ig_written = emit_interaction_grid_report_from_pipeline(
-                result,
-                effective_config,
-                ig_out,
-            )
-            result["interaction_grid_report_path"] = str(ig_written)
-            logger.info("Wrote interaction-grid report to %s", ig_written)
-
-        # #745 slice-1: optional cross-technology headline-KPI comparison report emission. OFF
-        # unless emit_tech_comparison=true (committed scenarios leave it off → byte-identical).
-        # Runs the CANONICAL pipeline per compared config (heavy multi-run — batch-path only, never
-        # the synchronous HTTP report route; the #645 latency ledger) so every column reconciles to
-        # that config's own committed headline KPIs, and renders a lender report with that section.
-        # Fails loud on an absent/empty/malformed scenarios list or a missing scenario path, since
-        # the caller explicitly opted in (CESSPIT). Imported lazily so the report stack is not
-        # pulled onto the finance CLI's import path unless this step runs.
-        if emit_tech_comparison and isinstance(result, dict):
-            from app.reports.tech_comparison_emit import (
-                emit_tech_comparison_report_from_pipeline,
-            )
-
-            tc_path_raw = tech_comparison_cfg.get("path", None)
-            tc_out = (
-                Path(str(tc_path_raw))
-                if tc_path_raw
-                else export_dir_scoped / "tech_comparison_report.html"
-            )
-            tc_written = emit_tech_comparison_report_from_pipeline(
-                result,
-                effective_config,
-                tc_out,
-                scenarios=tech_comparison_cfg.get("scenarios", None),
-            )
-            result["tech_comparison_report_path"] = str(tc_written)
-            logger.info("Wrote tech-comparison report to %s", tc_written)
-
-        # #884 D8: optional advisory grid-screening report emission. OFF unless
-        # emit_grid_screen=true (committed scenarios leave it off → byte-identical). The grid
-        # study is ADVISORY (bankable=false) and NEVER feeds finance (CFADS/IRR/DSCR unchanged),
-        # so emission derives no committed KPI. Composes the in-house grid screens and writes a
-        # STANDALONE advisory HTML report carrying the un-suppressible SCREENING-not-bankable +
-        # EMT-gap caveat + dependency/verification provenance. Fails loud on a missing/disabled
-        # grid block, since the caller explicitly opted in (CESSPIT). Heavy screens (pandapower/
-        # ANDES/OpenDSS) run here on the batch path only, never the synchronous HTTP report route
-        # (the #645 latency ledger); a missing [grid] engine degrades that screen (CASPER), not
-        # crashes. Imported lazily so the report stack is not pulled onto the finance CLI's import
-        # path unless this step runs.
-        if emit_grid_screen and isinstance(result, dict):
-            from app.reports.grid_screening_emit import (
-                emit_grid_screening_report_from_pipeline,
-            )
-
-            gs_path_raw = grid_screen_cfg.get("path", None)
-            gs_out = (
-                Path(str(gs_path_raw))
-                if gs_path_raw
-                else export_dir_scoped / "grid_screening_report.html"
-            )
-            gs_written = emit_grid_screening_report_from_pipeline(
-                result,
-                effective_config,
-                gs_out,
-            )
-            result["grid_screening_report_path"] = str(gs_written)
-            logger.info("Wrote grid-screening report to %s", gs_written)
-
+        # #1756: the figures are written BEFORE any emitter runs, so an analysis that fails can
+        # never remove them. summary.json, which records the emitters' outcome, is written after.
         if write_artifacts:
             # #735: route through the single-source resolver. Default (run_scoped=False) returns
             # the configured root unchanged, so committed runs write to the same paths
@@ -1365,9 +1214,6 @@ def cli(cfg: DictConfig) -> None:
             # JSON/CSV block co-scopes with the four report emitters under the same directory.
             export_dir = export_dir_scoped
             _safe_mkdir(export_dir)
-
-            _write_json(export_dir / "summary.json", result)
-            logger.info("Wrote summary.json to %s", export_dir / "summary.json")
 
             if isinstance(result, dict):
                 if "kpis" in result:
@@ -1400,7 +1246,207 @@ def cli(cfg: DictConfig) -> None:
                         "Wrote annual_rows.csv to %s", export_dir / "annual_rows.csv"
                     )
 
-            logger.info("All artifacts written to: %s", str(export_dir.resolve()))
+        # #1756: an emitter switched on by emit_all (the default) that raises is recorded as
+        # failed, with its error, under result['emitters'] and logged as an error; the run
+        # carries on, and its figures are already written. An emitter switched on explicitly
+        # still stops the run on failure (FRAMEWORK-02), as before #1756.
+        def _run_emitter(flag: str, emit: Callable[[], None]) -> None:
+            if emit_plan[flag].source != "emit_all" or not isinstance(result, dict):
+                emit()
+                return
+            try:
+                emit()
+            except Exception as exc:  # noqa: BLE001 - recorded and logged, never silent
+                reason = f"{type(exc).__name__}: {exc}"
+                logger.error("emit_all: %s failed (%s)", flag, reason)
+                result["emitters"][flag] = {
+                    "status": STATUS_FAILED,
+                    "source": "emit_all",
+                    "reason": reason,
+                }
+
+        # #656 (slice 3): optional single-scenario Executive Workbook emission.
+        # OFF unless emit_executive_workbook=true (committed scenarios leave it
+        # off → byte-identical). Reads no live ERA5: the resource-trend sheet is
+        # sourced only from a long_term_trend block riding in the frozen wind
+        # export (when one was supplied). Fails loudly on error, since the caller
+        # explicitly opted into the workbook (CESSPIT).
+        if emit_executive_workbook and isinstance(result, dict):
+
+            def _emit_executive_workbook() -> None:
+                workbook_out = (
+                    Path(str(executive_workbook_path))
+                    if executive_workbook_path
+                    else export_dir_scoped / "executive_workbook.xlsx"
+                )
+                wind_export_payload = (
+                    _read_wind_export_payload(resolved_wind_json_path)
+                    if resolved_wind_json_path is not None
+                    else None
+                )
+                # #727: a frozen solar export can ALSO carry a long_term_trend block (GHI
+                # dimming/brightening). The workbook fills ONE ResourceTrend sheet; wind
+                # takes precedence when both are present (see the HYBRID note in
+                # emit_executive_workbook_from_pipeline). Solar-only runs fill it from solar.
+                solar_export_payload = (
+                    _read_solar_export_payload(resolved_solar_json_path)
+                    if resolved_solar_json_path is not None
+                    else None
+                )
+                written = emit_executive_workbook_from_pipeline(
+                    result,
+                    workbook_out,
+                    wind_export=wind_export_payload,
+                    solar_export=solar_export_payload,
+                )
+                result["executive_workbook_path"] = str(written)
+                logger.info("Wrote Executive Workbook to %s", written)
+
+            _run_emitter("emit_executive_workbook", _emit_executive_workbook)
+
+        # #779: optional capital-risk (Monte-Carlo) report emission. OFF unless
+        # emit_capital_risk_report=true (committed scenarios leave it off →
+        # byte-identical). Runs the canonical MC (allow_toy_fallback forced false)
+        # over a bounded n and renders a lender report with the capital-risk
+        # section. Fails loud on error, since the caller explicitly opted in
+        # (CESSPIT). Imported lazily so the report stack (jinja/matplotlib) is not
+        # pulled onto the finance CLI's import path unless this step runs.
+        if emit_capital_risk_report and isinstance(result, dict):
+
+            def _emit_capital_risk_report() -> None:
+                from app.reports.capital_risk_emit import (
+                    DEFAULT_CAPITAL_RISK_N_TRIALS,
+                    emit_capital_risk_report_from_pipeline,
+                )
+
+                cr_path_raw = capital_risk_report_cfg.get("path", None)
+                cr_out = (
+                    Path(str(cr_path_raw))
+                    if cr_path_raw
+                    else export_dir_scoped / "capital_risk_report.html"
+                )
+                cr_seed_raw = capital_risk_report_cfg.get("seed", None)
+                cr_written = emit_capital_risk_report_from_pipeline(
+                    result,
+                    effective_config,
+                    cr_out,
+                    n_trials=int(
+                        capital_risk_report_cfg.get(
+                            "n_trials", DEFAULT_CAPITAL_RISK_N_TRIALS
+                        )
+                    ),
+                    seed=int(cr_seed_raw) if cr_seed_raw is not None else None,
+                    npv_metric=str(
+                        capital_risk_report_cfg.get("npv_metric", "equity_npv")
+                    ),
+                )
+                result["capital_risk_report_path"] = str(cr_written)
+                logger.info("Wrote capital-risk report to %s", cr_written)
+
+            _run_emitter("emit_capital_risk_report", _emit_capital_risk_report)
+
+        # #739 slice-2: optional two-factor interaction-grid report emission. OFF unless
+        # emit_interaction_grid=true (committed scenarios leave it off → byte-identical). Builds
+        # the grid (N×M full-pipeline evaluations — heavy, batch-path only, never the synchronous
+        # HTTP report route; the #645 latency ledger) from the config-required interaction_grid
+        # block and renders a lender report with that section. Fails loud on a missing/malformed
+        # block, since the caller explicitly opted in (CESSPIT). Imported lazily so the report
+        # stack is not pulled onto the finance CLI's import path unless this step runs.
+        if emit_interaction_grid and isinstance(result, dict):
+
+            def _emit_interaction_grid() -> None:
+                from app.reports.interaction_grid_emit import (
+                    emit_interaction_grid_report_from_pipeline,
+                )
+
+                ig_path_raw = interaction_grid_cfg.get("path", None)
+                ig_out = (
+                    Path(str(ig_path_raw))
+                    if ig_path_raw
+                    else export_dir_scoped / "interaction_grid_report.html"
+                )
+                ig_written = emit_interaction_grid_report_from_pipeline(
+                    result,
+                    effective_config,
+                    ig_out,
+                )
+                result["interaction_grid_report_path"] = str(ig_written)
+                logger.info("Wrote interaction-grid report to %s", ig_written)
+
+            _run_emitter("emit_interaction_grid", _emit_interaction_grid)
+
+        # #745 slice-1: optional cross-technology headline-KPI comparison report emission. OFF
+        # unless emit_tech_comparison=true (committed scenarios leave it off → byte-identical).
+        # Runs the CANONICAL pipeline per compared config (heavy multi-run — batch-path only, never
+        # the synchronous HTTP report route; the #645 latency ledger) so every column reconciles to
+        # that config's own committed headline KPIs, and renders a lender report with that section.
+        # Fails loud on an absent/empty/malformed scenarios list or a missing scenario path, since
+        # the caller explicitly opted in (CESSPIT). Imported lazily so the report stack is not
+        # pulled onto the finance CLI's import path unless this step runs.
+        if emit_tech_comparison and isinstance(result, dict):
+
+            def _emit_tech_comparison() -> None:
+                from app.reports.tech_comparison_emit import (
+                    emit_tech_comparison_report_from_pipeline,
+                )
+
+                tc_path_raw = tech_comparison_cfg.get("path", None)
+                tc_out = (
+                    Path(str(tc_path_raw))
+                    if tc_path_raw
+                    else export_dir_scoped / "tech_comparison_report.html"
+                )
+                tc_written = emit_tech_comparison_report_from_pipeline(
+                    result,
+                    effective_config,
+                    tc_out,
+                    scenarios=tech_comparison_cfg.get("scenarios", None),
+                )
+                result["tech_comparison_report_path"] = str(tc_written)
+                logger.info("Wrote tech-comparison report to %s", tc_written)
+
+            _run_emitter("emit_tech_comparison", _emit_tech_comparison)
+
+        # #884 D8: optional advisory grid-screening report emission. OFF unless
+        # emit_grid_screen=true (committed scenarios leave it off → byte-identical). The grid
+        # study is ADVISORY (bankable=false) and NEVER feeds finance (CFADS/IRR/DSCR unchanged),
+        # so emission derives no committed KPI. Composes the in-house grid screens and writes a
+        # STANDALONE advisory HTML report carrying the un-suppressible SCREENING-not-bankable +
+        # EMT-gap caveat + dependency/verification provenance. Fails loud on a missing/disabled
+        # grid block, since the caller explicitly opted in (CESSPIT). Heavy screens (pandapower/
+        # ANDES/OpenDSS) run here on the batch path only, never the synchronous HTTP report route
+        # (the #645 latency ledger); a missing [grid] engine degrades that screen (CASPER), not
+        # crashes. Imported lazily so the report stack is not pulled onto the finance CLI's import
+        # path unless this step runs.
+        if emit_grid_screen and isinstance(result, dict):
+
+            def _emit_grid_screen() -> None:
+                from app.reports.grid_screening_emit import (
+                    emit_grid_screening_report_from_pipeline,
+                )
+
+                gs_path_raw = grid_screen_cfg.get("path", None)
+                gs_out = (
+                    Path(str(gs_path_raw))
+                    if gs_path_raw
+                    else export_dir_scoped / "grid_screening_report.html"
+                )
+                gs_written = emit_grid_screening_report_from_pipeline(
+                    result,
+                    effective_config,
+                    gs_out,
+                )
+                result["grid_screening_report_path"] = str(gs_written)
+                logger.info("Wrote grid-screening report to %s", gs_written)
+
+            _run_emitter("emit_grid_screen", _emit_grid_screen)
+
+        if write_artifacts:
+            _write_json(export_dir_scoped / "summary.json", result)
+            logger.info("Wrote summary.json to %s", export_dir_scoped / "summary.json")
+            logger.info(
+                "All artifacts written to: %s", str(export_dir_scoped.resolve())
+            )
 
         print(json.dumps(result, indent=2, sort_keys=True))
 

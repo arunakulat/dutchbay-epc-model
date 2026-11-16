@@ -9,15 +9,18 @@ turns them all on at once. The rules:
   2026-11-16: the analyses run for every scenario unless switched off). ``emit_all=false``
   with every switch unset runs no emitter, as before this module.
 - Under ``emit_all``, an emitter whose inputs the run does not have is not run, and the plan
-  records why: no ``monte_carlo.parameters`` to sample, no ``interaction_grid`` block, no
-  ``tech_comparison.scenarios`` list, or no grid block with ``study_enabled: true``. An emitter
-  that has its inputs and still fails stops the run (``FRAMEWORK-02``), because nothing here
-  catches its error.
-- An emitter switched on explicitly is always attempted, so a missing input fails loud, as it
-  did before this module.
+  records why: no ``monte_carlo.parameters`` the Monte Carlo engine can read, no
+  ``interaction_grid`` block, no ``tech_comparison.scenarios`` list, or no grid block with
+  ``study_enabled: true``.
+- The CLI writes the run's figures before any emitter runs. An emitter that ran under
+  ``emit_all`` and raised is recorded as ``failed`` with its error under
+  ``result['emitters']`` and logged as an error; the run still completes.
+- An emitter switched on explicitly is always attempted, and its failure stops the run
+  (``FRAMEWORK-02``), as it did before this module.
 
-The applicability checks look only for the presence of an emitter's inputs. They do not
-validate them: a declared but malformed block is the emitter's to refuse. The lender guards in
+The Monte Carlo parameters are read with the engine's own parser. The other applicability
+checks look only for the presence of an emitter's inputs; a declared but malformed block is
+the emitter's to refuse. The lender guards in
 the emitters themselves (the capital-risk report's trial floor and forced fail-loud Monte Carlo)
 are untouched.
 
@@ -39,10 +42,12 @@ EMIT_FLAGS: Tuple[str, ...] = (
     "emit_grid_screen",
 )
 
-#: Plan statuses.
+#: Plan statuses. ``failed`` is set by the CLI, not the plan: an emitter that ran under
+#: ``emit_all`` and raised.
 STATUS_RUN = "run"
 STATUS_NOT_RUN = "not_run"
 STATUS_OFF = "off"
+STATUS_FAILED = "failed"
 
 
 @dataclass(frozen=True)
@@ -94,9 +99,20 @@ def _needs_monte_carlo_parameters(
     scenario: Mapping[str, Any], cfg: Any
 ) -> Optional[str]:
     mc = scenario.get("monte_carlo")
-    if isinstance(mc, Mapping) and mc.get("parameters"):
-        return None
-    return "the scenario declares no monte_carlo.parameters to sample"
+    if not (isinstance(mc, Mapping) and mc.get("parameters")):
+        return "the scenario declares no monte_carlo.parameters to sample"
+    # Read the parameters with the Monte Carlo engine's own parser before the run, so a block
+    # the engine would refuse is listed with the engine's reason instead of failing the run
+    # after the figures (FRAMEWORK-02 pre-flight). Imported here to keep the engine off the
+    # CLI's import path when no Monte Carlo is planned.
+    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+
+    try:
+        names, _, kinds, _, _ = MonteCarloEngine._extract_param_definitions(scenario)
+        MonteCarloEngine._refuse_native_capex_conflicts(scenario, names, kinds)
+    except MonteCarloConfigError as exc:
+        return f"the Monte Carlo engine cannot read monte_carlo.parameters: {exc}"
+    return None
 
 
 def _needs_interaction_grid(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
