@@ -12,7 +12,9 @@ pin the three parts of that for ``finance.bess_project_economics``:
 from __future__ import annotations
 
 import copy
+import hashlib
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -125,17 +127,45 @@ def test_charging_cycles_default_to_the_declared_discharge_cycles() -> None:
     assert spec.cycles_per_year == 300.0
 
 
+#: sha256 of the lower-cased word tokens (and adjacent token pairs) the module must not
+#: contain: the battery supplier's name, its product names and a tender reference prefix.
+#: Held as digests so this public file does not write the names it guards against (#1776
+#: assurance M-1). A digest is checked against every token and every adjacent pair.
+_GUARDED_TOKEN_DIGESTS = frozenset(
+    {
+        "8ebc1ca3dc4b3cf19a0b02bbd10a47f6339af8aa6d24dd7b89d785176ca67d27",
+        "970ec274ca867815174ebe4eff19282000f9495a6c7254e94991d1fb4dc3df30",
+        "b81c8201acfc7639be3bd3d7f875ba5ca76e422fa2163cec9dace50662b637a7",
+        "e2cc900a1480fdd6ffa89ce9778ebef4f44ca724949e7035db6a099e76361ecf",
+    }
+)
+
+
+def _token_digests(text: str) -> set[str]:
+    tokens = re.findall(r"[a-z0-9]+", text.lower())
+    pairs = [f"{a} {b}" for a, b in zip(tokens, tokens[1:])]
+    return {hashlib.sha256(t.encode()).hexdigest() for t in [*tokens, *pairs]}
+
+
 def test_module_names_no_supplier_tender_or_utility() -> None:
     text = MODULE.read_text(encoding="utf-8")
-    for pattern in (
-        r"huawei",
-        r"luna\s*2000",
-        r"\bCEB\b",
-        r"TR/REP",
-        r"price offer",
-        r"\bSL\b",
-    ):
+    assert not _token_digests(text) & _GUARDED_TOKEN_DIGESTS
+    for pattern in (r"\bCEB\b", r"price offer", r"\bSL\b"):
         assert not re.search(pattern, text, re.IGNORECASE), pattern
+
+
+def test_the_name_guard_detects_a_guarded_token() -> None:
+    """The guard is live: the module as it stood on main before #1774 trips it."""
+    base = subprocess.run(
+        ["git", "show", "46a6d700:finance/bess_project_economics.py"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if base.returncode != 0:
+        pytest.skip("base commit not available in this clone")
+    assert _token_digests(base.stdout) & _GUARDED_TOKEN_DIGESTS
 
 
 # --------------------------------------------------------------------------- pre-flight
@@ -204,6 +234,15 @@ def test_full_block_is_valid() -> None:
             "warranty_schedule[0].year: must be a positive whole operating year",
         ),
         (_block(sources="a quote"), "bess_economics.sources: must be a list"),
+        (_block(notes=["a list"]), "bess_economics.notes: must be text"),
+        (
+            _block(capex={"equipment_usd": 1.0, "warranty_is_dutiable": "yes"}),
+            "bess_economics.capex.warranty_is_dutiable: must be true or false",
+        ),
+        (
+            _block(warranty_schedule=[{"year": 1, "lkr": 1.0, "usd": 2.0}]),
+            "warranty_schedule[0].usd: unknown key",
+        ),
         (_block(opex_escalation_pct=150), "opex_escalation_pct: must be <= 100.0"),
     ],
 )
@@ -269,11 +308,15 @@ def test_result_entry_carries_every_capacity_charge_battery() -> None:
 # --------------------------------------------------------------------------- pipeline
 
 
-def _scenario_with_block(tmp_path: Path, block: Dict[str, Any] | None) -> Path:
+def _scenario_with_block(
+    tmp_path: Path, block: Dict[str, Any] | None, *, life_years: int | None = None
+) -> Path:
     raw = yaml.safe_load(CAPACITY_CHARGE_SCENARIO.read_text(encoding="utf-8"))
     raw = copy.deepcopy(raw)
     if block is not None:
         raw["bess_economics"] = block
+    if life_years is not None:
+        raw["project"]["life_years"] = life_years
     path = tmp_path / "scenario.yaml"
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     return path
@@ -307,6 +350,23 @@ def test_pipeline_runs_the_analysis_for_a_scenario_that_opts_in(tmp_path: Path) 
     # KPI-neutral: the scenario's own figures do not move.
     for key in ("kpis", "annual_rows", "debt_result", "equity_distribution"):
         assert result[key] == base[key], key
+
+
+def test_pipeline_adds_nothing_when_the_block_is_disabled(tmp_path: Path) -> None:
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline_enhanced
+
+    path = _scenario_with_block(tmp_path, {"enabled": False})
+    result = run_v14_pipeline_enhanced(str(path))
+    assert result["status"] == "success"
+    assert "bess_project_economics" not in result
+
+
+def test_pipeline_passes_the_scenario_life_not_a_constant(tmp_path: Path) -> None:
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline_enhanced
+
+    path = _scenario_with_block(tmp_path, _block(), life_years=20)
+    result = run_v14_pipeline_enhanced(str(path))
+    assert result["bess_project_economics"]["project_years"] == 20
 
 
 def test_pipeline_preflight_refuses_a_bad_block(tmp_path: Path) -> None:

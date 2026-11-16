@@ -3,8 +3,10 @@
 The module turns a standalone battery project's commercial inputs (a CIF capex quote, a
 capacity-charge tender, the capacity-charge effective-cost method) into project economics:
 landed capex, the effective-cost curve (LKR/kWh, charging EXCLUDED), the separate
-charging-cost lever, and a standalone cashflow -> IRR / NPV / LCOS. Every project figure here
-is an illustrative round number, not any supplier's or tender's figure.
+charging-cost lever, and a standalone cashflow -> IRR / NPV / LCOS. Every price and cost
+figure here is an illustrative round number, not any supplier's quote. The fixture's
+400 discharge cycles a year is a round illustrative basis, declared as a scenario input
+(the module holds no default).
 
 The tests assert REAL, hand-checkable economics (a known capex + capacity charge -> a
 hand-derived duty / effective-cost / IRR / NPV), the CESSPIT fail-loud guards, and — the
