@@ -12,9 +12,9 @@ issuecomment-6901889800, and issuecomment-6893178345 N-4):
 * the code fallback ``DEFAULT_ENGINE_PATH_STATUS`` is pinned;
 * the calibrated drift driver is held by one real trial, not a constructor flag.
 
-Not covered here, because it waits on an owner ruling: whether a drift that starts
-late replaces the USD path from the first drifted year only. The tests below assert
-the drifted years and leave the earlier years unpinned.
+A drift that starts late replaces the USD path from its first drifted year only, and
+the earlier years keep the own path (owner ruling, 2026-11-16 14:28Z). That split is
+pinned in ``test_fx_drift_late_start_1578.py``; the late-drift test below holds it too.
 """
 
 from __future__ import annotations
@@ -79,14 +79,17 @@ def _with_fx(cfg: Dict[str, Any], **fx: Any) -> Dict[str, Any]:
 
 
 def test_drift_only_in_later_years_replaces_the_path_there() -> None:
-    """Flat for the first ten operating years, then 5%/yr (kills 'first year only')."""
+    """Flat for eleven operating years, then 5%/yr (kills 'first year only')."""
     base = _cfg()
     years = len(_paths(base)[1])
     drift = [0.0] * 11 + [0.05] * (years + 10)
     curve, path = _paths(_shape_only(base, annual_depr=drift))
     _, own = _paths(base)
-    assert curve[0] == curve[9]  # the model curve is still flat in year 10
-    for i in range(10, years):
+    assert curve[0] == curve[10]  # the model curve is still flat in year 11
+    first = 11  # the first operating year whose curve departs from the flat base
+    assert curve[first] != curve[0]
+    assert path[:first] == own[:first]  # the years before it keep the own path
+    for i in range(first, years):
         assert path[i] == curve[i], i
         assert path[i] != own[i], i
 
