@@ -1,20 +1,19 @@
-"""Standalone BESS project economics — landed capex, CEB effective-cost, IRR/NPV/LCOS.
+"""Standalone BESS project economics: landed capex, effective cost, IRR, NPV and LCOS.
 
-This module turns the **real 2025 Sri Lankan commercial inputs** for a standalone battery
-project into workable project economics, for the CEB distributed-BESS tender case and the
-DutchBay ~11 MW Kalpitiya BESS. It is the "put it together" layer over the existing BESS
-pieces, adding the four things issue #863 asks for that were not modelled anywhere:
+Turns a standalone battery project's commercial inputs into project economics, for any
+scenario that declares a ``bess_economics`` block (#863, #1774). The block, not this module,
+holds every project figure: the quote, the duty basis, the cycling basis and the charging
+price. It is the "put it together" layer over the existing BESS pieces, adding four things:
 
-1. **Landed capex** from a Huawei-LUNA2000-style **CIF quote structure** (equipment CIF +
-   optional 15-yr warranties/service + freight) + a **Sri Lanka customs/duty layer**
-   ("extra at actual", buyer scope) + a **USD -> LKR FX** translation. The CIF price is
-   NOT the installed cost; the duty/freight/FX layers are what the buyer actually pays.
-2. **CEB effective-cost curve** — the tender's own methodology,
+1. **Landed capex** from a CIF quote structure (equipment CIF + optional warranties or
+   service + freight) + an import customs/duty layer ("at actual", buyer scope) + a
+   USD -> LKR FX translation. The CIF price is NOT the installed cost; the duty, freight
+   and FX layers are what the buyer actually pays.
+2. **Capacity-charge effective-cost curve**, the method capacity-charge battery tenders use:
    ``effective LKR/kWh = annual capacity charge / degradation-adjusted annual discharge``,
-   over life (rising as energy degrades while the flat charge stays constant). Per the CEB
-   ``BESS Energy Cost`` doc this **EXCLUDES the charging cost** — that omission is disclosed
-   in the result, not hidden.
-3. **The separate charging-cost lever** the CEB method omits:
+   over life (rising as energy degrades while the flat charge stays constant). The method
+   **EXCLUDES the charging cost**; that omission is disclosed in the result, not hidden.
+3. **The separate charging-cost lever** the method omits:
    ``energy_to_charge_mwh x charging_tariff_lkr_per_kwh x 1/RTE`` (the round-trip loss makes
    the charge-side energy larger than the discharge-side). Required for a full P&L.
 4. **A standalone BESS cashflow -> IRR / NPV / LCOS**: ``landed capex`` at t0, then per year
@@ -36,36 +35,31 @@ IMPORTED, never re-derived:
 * FX: :func:`finance.cashflow_v14_fx._fx_curve` (the config-first, fail-loud FX routine — no
   hardcoded rate).
 
-This module adds ONLY the capex-ingest, the CEB effective-cost curve, the charging lever, and
+This module adds ONLY the capex ingest, the effective-cost curve, the charging lever, and
 the standalone-cashflow assembly. It computes the discharge/SoH energy the SAME way the LCOS
 and revenue paths do, so the three cannot diverge.
 
-KPI-NEUTRAL / DEFAULT-OFF (the cardinal rule)
----------------------------------------------
-This is a **standalone, opt-in analysis** off the committed cashflow path. It:
+HOW A SCENARIO REACHES IT (KPI-neutral, opt-in)
+-----------------------------------------------
+Any scenario reaches it through the canonical pipeline: ``run_v14_pipeline`` calls
+:func:`bess_economics_result` and returns the result under ``bess_project_economics`` when the
+scenario declares ``bess_economics.enabled: true`` (#1774). It is a separate cashflow for the
+battery as its own project, so it:
 
-* is reached ONLY through :func:`compute_bess_project_economics`, which nothing on the
-  committed 5th-gen cashflow path calls;
 * refuses to run unless the scenario carries an explicit ``bess_economics.enabled: true``
-  opt-in (:func:`bess_economics_requested`) — absent that flag it does nothing;
-* touches nothing that feeds CFADS/IRR/DSCR of a committed generation scenario.
+  opt-in (:func:`bess_economics_requested`); absent that flag the result has no such key;
+* touches nothing that feeds the CFADS/IRR/DSCR of the scenario's own cashflow.
 
-Wiring these BESS economics INTO a committed multi-tech case (so the capacity charge, the
-degradation, and the charging cost move the project's KPIs) is a SEPARATE, user-gated step —
-NOT this module. See the module ``__doc__`` note and issue #863.
+Folding these economics INTO a multi-technology case's own cashflow (so the capacity charge,
+the degradation and the charging cost move the project's KPIs) is a separate, owner-gated
+step, NOT this module.
 
-PROVENANCE (honest, no fabricated figures)
-------------------------------------------
-The default CIF line items, the customs/duty basis, the capacity-charge band, the 400
-cycles/yr and 2.5%/yr degradation, and the "charging cost excluded" caveat all come from the
-real primary-source docs for the CEB ``TR/REP&PM/ICB/2025/003/C`` 160 MW / 640 MWh (16-site)
-standalone-BESS procurement: the Huawei LUNA2000 CIF price offer (``251002 - Price Offer -
-CIF Basis.pdf``: equipment sub-total $4,829,679.59, optional service $907,264.63), the CEB
-tender results (``TENDER RESULTS.xlsx``: capacity charge ~1.46-2.4M LKR/MW/month), and the
-CEB energy-cost methodology (``BESS Energy Cost - CEB.pdf``: 42.57 MWh @ COD, 400 cycles/yr,
-97.5%->62.5% degradation, "Charging Cost NOT considered"). A BESS is NOT a
-``capacity_factor x tariff`` generator; nothing here treats it as one. Nothing in this module
-supplies a default capex or duty rate silently — a scenario must declare them (CESSPIT).
+INPUTS (no hidden business values)
+----------------------------------
+Nothing in this module supplies a default capex, duty rate or cycling basis: a scenario must
+declare ``bess_economics.capex.equipment_usd`` and ``bess_economics.discharge_cycles_per_year``
+(CESSPIT). :func:`validate_bess_economics_block` checks a declared block strictly in pre-flight.
+A BESS is NOT a ``capacity_factor x tariff`` generator; nothing here treats it as one.
 """
 
 from __future__ import annotations
@@ -89,8 +83,6 @@ from .irr import irr, npv
 _ENABLED_KEY = "enabled"
 #: The scenario block that carries the standalone-BESS economics inputs.
 _ECONOMICS_BLOCK = "bess_economics"
-#: Default discharge cycles/year for the CEB effective-cost basis (CEB doc: 400/yr ~ 1.1/day).
-_DEFAULT_CYCLES_PER_YEAR = 400.0
 _KWH_PER_MWH = 1000.0
 
 
@@ -175,7 +167,7 @@ def bess_economics_requested(config: Mapping[str, Any]) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. Landed capex — Huawei-CIF structure + SL customs/duty + USD->LKR FX
+# 1. Landed capex — CIF quote structure + import customs/duty + USD->LKR FX
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -184,7 +176,7 @@ class LandedCapex:
     """The buyer's landed capex for a CIF-quoted BESS, in both USD and LKR.
 
     The CIF equipment price is only the ex-tax, ex-duty starting point; the buyer additionally
-    pays freight (if not already CIF-included), Sri Lanka customs/duty "at actual", and bears
+    pays freight (if not already CIF-included), import customs/duty "at actual", and bears
     the USD->LKR translation. ``equipment_usd`` + ``freight_usd`` = the dutiable base; duty is
     ``duty_pct`` of that (or an explicit ``duty_usd`` override); optional warranties are a
     financed capex add-on. ``fx_rate_lkr_per_usd`` is the year-0 spot from the project FX curve.
@@ -219,16 +211,16 @@ class LandedCapex:
 def resolve_landed_capex(
     config: Mapping[str, Any], *, fx_rate_lkr_per_usd: float
 ) -> LandedCapex:
-    """Build the buyer's landed capex from a CIF quote structure + SL duty + FX.
+    """Build the buyer's landed capex from a CIF quote structure + import duty + FX.
 
     Reads ``bess_economics.capex``:
 
-    * ``equipment_usd`` (REQUIRED) — the CIF equipment sub-total (e.g. Huawei $4,829,679.59).
+    * ``equipment_usd`` (REQUIRED) — the CIF equipment sub-total.
     * ``freight_usd`` (optional, default 0) — freight if quoted separately from CIF.
     * ``optional_warranty_usd`` (optional, default 0) — 15-yr warranties/service financed as
-      capex (e.g. Huawei $907,264.63). NOT dutiable by default (a service line, not goods);
+      capex. NOT dutiable by default (a service line, not goods);
       set ``warranty_is_dutiable: true`` to include it in the dutiable base.
-    * ``customs_duty_pct`` (optional, default 0) — SL customs/duty as a fraction of the
+    * ``customs_duty_pct`` (optional, default 0) — import customs/duty as a fraction of the
       dutiable base, OR
     * ``customs_duty_usd`` (optional) — an explicit duty amount (overrides ``_pct``).
 
@@ -289,7 +281,9 @@ def resolve_landed_capex(
         customs_duty_usd = _require_non_negative(
             duty_usd_raw, block=blk, field_name="customs_duty_usd"
         )
-        notes.append("SL customs/duty taken from an explicit customs_duty_usd amount.")
+        notes.append(
+            "import customs/duty taken from an explicit customs_duty_usd amount."
+        )
     else:
         duty_pct = _optional_ratio(
             capex.get("customs_duty_pct"),
@@ -299,7 +293,7 @@ def resolve_landed_capex(
         )
         customs_duty_usd = dutiable_base * duty_pct
         notes.append(
-            f"SL customs/duty = {duty_pct:.4g} x the dutiable base "
+            f"import customs/duty = {duty_pct:.4g} x the dutiable base "
             "(CIF quotes are ex-tax; duty is buyer scope, 'at actual')."
         )
 
@@ -320,7 +314,7 @@ def resolve_landed_capex(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2. CEB effective-cost curve (LKR/kWh) — charging cost EXCLUDED (the CEB method)
+# 2. Capacity-charge effective-cost curve (LKR/kWh) — charging cost EXCLUDED
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -333,9 +327,9 @@ def _discharge_mwh_for_year(
 ) -> float:
     """Degradation-adjusted annual DISCHARGE energy (MWh) for one BESS in one year.
 
-    ``energy_per_cycle_mwh x cycles_per_year x soh(year)`` — the same nameplate-energy x
-    state-of-health basis the CEB energy-cost doc uses (42.57 MWh @ COD x 400 cycles/yr, then
-    scaled by the 97.5%->62.5% SoH curve). The SoH comes from
+    ``energy_per_cycle_mwh x cycles_per_year x soh(year)`` — the nameplate-energy x
+    state-of-health basis of the capacity-charge effective-cost method (nameplate energy at
+    COD x the declared cycles per year, scaled by the SoH curve). The SoH comes from
     :func:`finance.bess_revenue.mdsc_soh_for_year` so it is IDENTICAL to the revenue/LCOS
     curves.
     """
@@ -343,30 +337,47 @@ def _discharge_mwh_for_year(
     return energy_per_cycle_mwh * cycles_per_year * soh
 
 
-def ceb_effective_cost_curve(
+def _required_cycles_per_year(config: Mapping[str, Any]) -> float:
+    """Read the REQUIRED ``bess_economics.discharge_cycles_per_year`` (> 0); raise when absent.
+
+    The cycling basis is a project input, not a code default (#1774): it differs by tender,
+    by dispatch and by contract, so a scenario must declare it.
+    """
+    raw = _nested_get(config, _ECONOMICS_BLOCK, "discharge_cycles_per_year")
+    cycles = _as_float(raw)
+    if cycles is None or cycles <= 0.0:
+        raise ValueError(
+            f"{_ECONOMICS_BLOCK}.discharge_cycles_per_year={raw!r} must be a positive "
+            "number of full discharge cycles per year (a required input; there is no "
+            "code default)."
+        )
+    return cycles
+
+
+def capacity_charge_effective_cost_curve(
     config: Mapping[str, Any], *, years: int
 ) -> Optional[List[Dict[str, Any]]]:
-    """The CEB effective-cost curve for every capacity-charge BESS (LKR/kWh over life).
+    """The effective-cost curve for every capacity-charge BESS (LKR/kWh over life).
 
-    Replicates the CEB ``BESS Energy Cost`` methodology per operating year::
+    Applies the capacity-charge effective-cost method per operating year::
 
         effective_lkr_per_kwh(t) = annual_capacity_charge_lkr(t) / annual_discharge_kwh(t)
 
     where ``annual_capacity_charge_lkr`` is the flat charge x the year-indexed SoH (from
     :func:`finance.bess_revenue.bess_revenue_lkr_for_year`) and ``annual_discharge_kwh`` is the
     degradation-adjusted discharge (``energy_per_cycle x cycles/yr x soh(t) x 1000``). Both
-    numerator and denominator fade with the SAME SoH, so — matching the CEB result — the cost
+    numerator and denominator fade with the SAME SoH, so the cost
     RISES over life only because the discharge basis falls faster than the (SoH-scaled) charge
     where the charge does not fade; with an ``mdsc_fade`` opt-in they share the fade and the
-    curve is flatter. Charge cycles/yr default to 400 (the CEB doc); overridable via
+    curve is flatter. The cycles per year come from the REQUIRED
     ``bess_economics.discharge_cycles_per_year``.
 
-    **CHARGING COST IS EXCLUDED** — exactly as the CEB doc states ("Charging Cost NOT
-    considered"). Each row carries that disclosure; the charging cost is a SEPARATE lever
+    **CHARGING COST IS EXCLUDED**, as the method itself excludes it. Each row carries that
+    disclosure; the charging cost is a SEPARATE lever
     (:func:`charging_cost_lkr_for_year`).
 
     Returns ``None`` when the scenario has no capacity-charge BESS (energy-tariff BESSes are
-    not part of the CEB capacity-charge method). ``lkr_per_kwh`` is ``None`` for a year whose
+    not part of the capacity-charge method). ``lkr_per_kwh`` is ``None`` for a year whose
     discharge basis is zero (undefined, not silently zero).
 
     Args:
@@ -376,12 +387,17 @@ def ceb_effective_cost_curve(
     Returns:
         A list of ``{technology, year, capacity_charge_lkr, discharge_mwh, lkr_per_kwh,
         charging_excluded, note}`` rows (one per capacity-charge BESS per year), or ``None``.
+
+    Raises:
+        ValueError: A capacity-charge BESS is present but
+            ``bess_economics.discharge_cycles_per_year`` is absent or not positive.
     """
     specs = resolve_bess_specs(config)
     if not specs:
         return None
-    cyc = _as_float(_nested_get(config, _ECONOMICS_BLOCK, "discharge_cycles_per_year"))
-    cycles_per_year = cyc if (cyc is not None and cyc > 0) else _DEFAULT_CYCLES_PER_YEAR
+    if not any(spec.get("model") == "capacity_charge" for spec in specs):
+        return None
+    cycles_per_year = _required_cycles_per_year(config)
 
     rows: List[Dict[str, Any]] = []
     have_capacity_charge = False
@@ -426,7 +442,8 @@ def ceb_effective_cost_curve(
                     "lkr_per_kwh": lkr_per_kwh,
                     "charging_excluded": True,
                     "note": (
-                        "CEB method: capacity charge / degradation-adjusted discharge; "
+                        "capacity-charge method: capacity charge / degradation-adjusted "
+                        "discharge; "
                         "CHARGING COST EXCLUDED (add charging_cost_lkr_for_year for a full "
                         "P&L)."
                     ),
@@ -438,19 +455,19 @@ def ceb_effective_cost_curve(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3. Charging-cost lever (the piece the CEB method omits)
+# 3. Charging-cost lever (the piece the capacity-charge method omits)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
 class ChargingCostSpec:
-    """The (opt-in) charging-cost lever the CEB effective-cost method deliberately omits.
+    """The (opt-in) charging-cost lever the effective-cost method deliberately omits.
 
     A capacity-charge BESS must be CHARGED before it can discharge; the charge-side energy is
     ``discharge / RTE`` (the round-trip loss), priced at the ``charging_tariff_lkr_per_kwh``
     (the grid/off-peak energy the operator buys). This is ``0`` unless a scenario opts in with
     ``bess_economics.charging`` — so a run that does not model charging still gets a coherent
-    (CEB-style, charging-excluded) result.
+    (charging-excluded) result.
     """
 
     charging_tariff_lkr_per_kwh: float
@@ -463,8 +480,9 @@ def resolve_charging_cost_spec(config: Mapping[str, Any]) -> Optional[ChargingCo
 
     Reads ``bess_economics.charging``: ``tariff_lkr_per_kwh`` (REQUIRED when the block is
     present — the price of charge energy), ``round_trip_efficiency`` (optional, default 0.85 —
-    NREL ATB 2024, matching :mod:`finance.bess_revenue`), and ``cycles_per_year`` (optional,
-    default 400 — the CEB discharge basis). Absent block => ``None`` => no charging cost.
+    NREL ATB 2024, matching :mod:`finance.bess_revenue`), and ``cycles_per_year`` (optional;
+    absent, it is the block's required ``discharge_cycles_per_year``, so the two cannot
+    disagree silently). Absent block => ``None`` => no charging cost.
     """
     charging = _nested_get(config, _ECONOMICS_BLOCK, "charging")
     if not isinstance(charging, Mapping):
@@ -483,8 +501,15 @@ def resolve_charging_cost_spec(config: Mapping[str, Any]) -> Optional[ChargingCo
         raise ValueError(
             f"{blk}.round_trip_efficiency must be > 0 (charge energy = discharge / RTE)."
         )
-    cyc = _as_float(charging.get("cycles_per_year"))
-    cycles_per_year = cyc if (cyc is not None and cyc > 0) else _DEFAULT_CYCLES_PER_YEAR
+    if charging.get("cycles_per_year") is None:
+        cycles_per_year = _required_cycles_per_year(config)
+    else:
+        cycles_per_year = _as_float(charging.get("cycles_per_year")) or 0.0
+        if cycles_per_year <= 0.0:
+            raise ValueError(
+                f"{blk}.cycles_per_year={charging.get('cycles_per_year')!r} must be a "
+                "positive number of cycles per year."
+            )
     return ChargingCostSpec(
         charging_tariff_lkr_per_kwh=tariff,
         round_trip_efficiency=rte,
@@ -502,7 +527,7 @@ def charging_cost_lkr_for_year(
 
         charging_cost_lkr = (discharge_mwh / RTE) x 1000 x tariff_lkr_per_kwh
 
-    Returns ``0.0`` when ``charging`` is ``None`` (the CEB-style, charging-excluded case).
+    Returns ``0.0`` when ``charging`` is ``None`` (the charging-excluded case).
     """
     if charging is None:
         return 0.0
@@ -576,8 +601,8 @@ def compute_bess_project_economics(
         t>0:  capacity_revenue - opex - charging_cost - warranty_draw - augmentation_capex
 
     then computes the periodic project IRR (:func:`finance.irr.irr`) and NPV
-    (:func:`finance.irr.npv` at ``discount_rate``) of that series, and attaches the CEB
-    effective-cost curve and the read-only LCOS (:func:`finance.bess_lcos.compute_lcos`).
+    (:func:`finance.irr.npv` at ``discount_rate``) of that series, and attaches the
+    capacity-charge effective-cost curve and the read-only LCOS (:func:`finance.bess_lcos.compute_lcos`).
 
     Opex, the warranty draw schedule, and the charging tariff are all opt-in
     ``bess_economics.*`` inputs; absent, they are zero (a clean capex->capacity-revenue view).
@@ -607,7 +632,7 @@ def compute_bess_project_economics(
         raise ValueError(f"project_years={project_years!r} must be a positive integer.")
 
     specs = resolve_bess_specs(config)
-    if not specs:
+    if not specs or not any(spec.get("model") == "capacity_charge" for spec in specs):
         return None
 
     # Year-0 FX spot from the project's own FX routine — no hardcoded rate. A standalone BESS
@@ -617,10 +642,7 @@ def compute_bess_project_economics(
     landed = resolve_landed_capex(config, fx_rate_lkr_per_usd=fx0)
 
     charging = resolve_charging_cost_spec(config)
-    cyc = _as_float(_nested_get(config, _ECONOMICS_BLOCK, "discharge_cycles_per_year"))
-    discharge_cycles = (
-        cyc if (cyc is not None and cyc > 0) else _DEFAULT_CYCLES_PER_YEAR
-    )
+    discharge_cycles = _required_cycles_per_year(config)
 
     # Optional opex (LKR/yr, flat) and warranty draw schedule ({year, lkr}); default empty.
     opex_lkr_per_year = _optional_non_negative(
@@ -637,7 +659,7 @@ def compute_bess_project_economics(
     )
     warranty_draws = _resolve_warranty_draws(config)
 
-    effective_cost = ceb_effective_cost_curve(config, years=project_years)
+    effective_cost = capacity_charge_effective_cost_curve(config, years=project_years)
     lcos_specs = resolve_lcos_specs(config) or []
     lcos_by_tech = {s.technology: s for s in lcos_specs}
 
@@ -698,14 +720,15 @@ def compute_bess_project_economics(
             )
 
         notes = [
-            "STANDALONE, OPT-IN analysis — off the committed cashflow path; wiring these "
-            "economics into a committed multi-tech case is a separate, user-gated step.",
-            "landed capex from the CIF quote structure + SL customs/duty + USD->LKR FX; "
+            "STANDALONE, OPT-IN analysis: the battery as its own project, separate from "
+            "the scenario's own cashflow; folding these economics into a multi-technology "
+            "case is a separate, owner-gated step.",
+            "landed capex from the CIF quote structure + import customs/duty + USD->LKR FX; "
             "the CIF price is ex-tax/ex-duty (buyer bears duty 'at actual').",
         ]
         if charging is None:
             notes.append(
-                "charging cost NOT modelled (CEB effective-cost method excludes it); opt in "
+                "charging cost NOT modelled (the effective-cost method excludes it); opt in "
                 "via bess_economics.charging for a full P&L."
             )
         out.append(
@@ -765,13 +788,266 @@ def _resolve_warranty_draws(config: Mapping[str, Any]) -> Dict[int, float]:
     return draws
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. Pre-flight contract and the pipeline entry point (#1774)
+# ─────────────────────────────────────────────────────────────────────────────
+
+#: The keys a ``bess_economics`` block may hold. Anything else is a typo or an input this
+#: module does not read, so pre-flight refuses it rather than ignoring it.
+_BLOCK_KEYS: Tuple[str, ...] = (
+    "enabled",
+    "capex",
+    "discharge_cycles_per_year",
+    "charging",
+    "opex_lkr_per_year",
+    "opex_escalation_pct",
+    "warranty_schedule",
+    "sources",
+    "notes",
+)
+_CAPEX_KEYS: Tuple[str, ...] = (
+    "equipment_usd",
+    "freight_usd",
+    "optional_warranty_usd",
+    "warranty_is_dutiable",
+    "customs_duty_pct",
+    "customs_duty_usd",
+)
+_CHARGING_KEYS: Tuple[str, ...] = (
+    "tariff_lkr_per_kwh",
+    "round_trip_efficiency",
+    "cycles_per_year",
+)
+_WARRANTY_EVENT_KEYS: Tuple[str, ...] = ("year", "lkr")
+
+
+def _check_keys(
+    block: Mapping[str, Any], allowed: Tuple[str, ...], path: str, errors: List[str]
+) -> None:
+    for key in block:
+        if key not in allowed:
+            errors.append(f"{path}.{key}: unknown key (allowed: {', '.join(allowed)})")
+
+
+def _check_number(
+    block: Mapping[str, Any],
+    key: str,
+    path: str,
+    errors: List[str],
+    *,
+    required: bool = False,
+    positive: bool = False,
+    upper: Optional[float] = None,
+) -> None:
+    if key not in block or block[key] is None:
+        if required:
+            errors.append(
+                f"{path}.{key}: required when {_ECONOMICS_BLOCK}.enabled is true"
+            )
+        return
+    value = _as_float(block[key])
+    if value is None:
+        errors.append(f"{path}.{key}: must be a finite number (got {block[key]!r})")
+        return
+    if value < 0.0 or (positive and value == 0.0):
+        bound = "> 0" if positive else ">= 0"
+        errors.append(f"{path}.{key}: must be {bound} (got {block[key]!r})")
+    elif upper is not None and value > upper:
+        errors.append(f"{path}.{key}: must be <= {upper} (got {block[key]!r})")
+
+
+def validate_bess_economics_block(config: Mapping[str, Any], errors: List[str]) -> None:
+    """Check a declared ``bess_economics`` block strictly, appending one error per fault.
+
+    Present-only: a scenario without the block gets no error and is unchanged. A declared
+    block is refused on an unknown key, a wrong type or an out-of-range value, naming the
+    path (``FRAMEWORK-02``). When ``enabled`` is true the inputs with no code default,
+    ``capex.equipment_usd`` and ``discharge_cycles_per_year``, are required.
+
+    Args:
+        config: The scenario config.
+        errors: The pre-flight error list to append to.
+    """
+    if _ECONOMICS_BLOCK not in config:
+        return
+    path = _ECONOMICS_BLOCK
+    block = config.get(_ECONOMICS_BLOCK)
+    if not isinstance(block, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(block).__name__})")
+        return
+    _check_keys(block, _BLOCK_KEYS, path, errors)
+    enabled = block.get(_ENABLED_KEY, False)
+    if not isinstance(enabled, bool):
+        errors.append(f"{path}.{_ENABLED_KEY}: must be true or false (got {enabled!r})")
+        enabled = False
+
+    capex = block.get("capex")
+    if capex is None:
+        if enabled:
+            errors.append(f"{path}.capex: required when {path}.enabled is true")
+    elif not isinstance(capex, Mapping):
+        errors.append(f"{path}.capex: must be a mapping (got {type(capex).__name__})")
+    else:
+        cpath = f"{path}.capex"
+        _check_keys(capex, _CAPEX_KEYS, cpath, errors)
+        _check_number(capex, "equipment_usd", cpath, errors, required=bool(enabled))
+        for key in ("freight_usd", "optional_warranty_usd", "customs_duty_usd"):
+            _check_number(capex, key, cpath, errors)
+        _check_number(capex, "customs_duty_pct", cpath, errors, upper=1.0)
+        dutiable = capex.get("warranty_is_dutiable")
+        if dutiable is not None and not isinstance(dutiable, bool):
+            errors.append(
+                f"{cpath}.warranty_is_dutiable: must be true or false (got {dutiable!r})"
+            )
+
+    _check_number(
+        block,
+        "discharge_cycles_per_year",
+        path,
+        errors,
+        required=bool(enabled),
+        positive=True,
+    )
+    _check_number(block, "opex_lkr_per_year", path, errors)
+    _check_number(block, "opex_escalation_pct", path, errors, upper=100.0)
+
+    charging = block.get("charging")
+    if charging is not None:
+        hpath = f"{path}.charging"
+        if not isinstance(charging, Mapping):
+            errors.append(f"{hpath}: must be a mapping (got {type(charging).__name__})")
+        else:
+            _check_keys(charging, _CHARGING_KEYS, hpath, errors)
+            if charging.get("tariff_lkr_per_kwh") is None:
+                errors.append(
+                    f"{hpath}.tariff_lkr_per_kwh: required when {hpath} is declared"
+                )
+            else:
+                _check_number(charging, "tariff_lkr_per_kwh", hpath, errors)
+            _check_number(
+                charging,
+                "round_trip_efficiency",
+                hpath,
+                errors,
+                positive=True,
+                upper=1.0,
+            )
+            _check_number(charging, "cycles_per_year", hpath, errors, positive=True)
+
+    schedule = block.get("warranty_schedule")
+    if schedule is not None:
+        wpath = f"{path}.warranty_schedule"
+        if not isinstance(schedule, (list, tuple)):
+            errors.append(f"{wpath}: must be a list of {{year, lkr}} events")
+        else:
+            for i, event in enumerate(schedule):
+                epath = f"{wpath}[{i}]"
+                if not isinstance(event, Mapping):
+                    errors.append(f"{epath}: must be a mapping {{year, lkr}}")
+                    continue
+                _check_keys(event, _WARRANTY_EVENT_KEYS, epath, errors)
+                year = _as_float(event.get("year"))
+                if year is None or year != int(year) or year < 1:
+                    errors.append(
+                        f"{epath}.year: must be a positive whole operating year "
+                        f"(got {event.get('year')!r})"
+                    )
+                if event.get("lkr") is None:
+                    errors.append(f"{epath}.lkr: required")
+                else:
+                    _check_number(event, "lkr", epath, errors)
+
+    sources = block.get("sources")
+    if sources is not None and (
+        not isinstance(sources, (list, tuple))
+        or not all(isinstance(item, str) and item.strip() for item in sources)
+    ):
+        errors.append(f"{path}.sources: must be a list of non-empty strings")
+    notes = block.get("notes")
+    if notes is not None and not isinstance(notes, str):
+        errors.append(f"{path}.notes: must be text (got {type(notes).__name__})")
+
+
+#: Status of a requested analysis in the pipeline result.
+STATUS_RUN = "run"
+STATUS_NOT_APPLICABLE = "not_applicable"
+STATUS_FAILED = "failed"
+
+_BASIS = (
+    "standalone battery project: its own cashflow, separate from the scenario's "
+    "cashflow; no scenario KPI uses it"
+)
+
+
+def bess_economics_failure(reason: str) -> Dict[str, Any]:
+    """The result entry for an opted-in analysis that could not run, with its reason.
+
+    Args:
+        reason: Why it could not run (the refused input, naming its path).
+
+    Returns:
+        ``{"status": "failed", "reason": ..., "basis": ..., "projects": []}``.
+    """
+    return {"status": STATUS_FAILED, "reason": reason, "basis": _BASIS, "projects": []}
+
+
+def bess_economics_result(
+    config: Mapping[str, Any], *, discount_rate: float, project_years: int
+) -> Optional[Dict[str, Any]]:
+    """The pipeline's ``bess_project_economics`` entry for any scenario (#1774).
+
+    Returns ``None`` when the scenario does not opt in, so the pipeline adds no key and the
+    result is byte-identical. When it opts in, returns ``{"status": "run", "projects": [...]}``
+    with one :meth:`BessProjectEconomics.as_dict` per capacity-charge battery, or
+    ``{"status": "not_applicable", "reason": ...}`` when the scenario declares no
+    capacity-charge battery, so an opted-in analysis is never dropped silently.
+
+    Args:
+        config: The resolved scenario config.
+        discount_rate: The scenario's project discount rate (decimal).
+        project_years: The scenario's project life in years.
+
+    Returns:
+        The result entry, or ``None`` when the scenario does not opt in.
+
+    Raises:
+        ValueError: A required ``bess_economics`` input is missing or invalid.
+    """
+    if not bess_economics_requested(config):
+        return None
+    projects = compute_bess_project_economics(
+        config, discount_rate=discount_rate, project_years=project_years
+    )
+    basis = _BASIS
+    if not projects:
+        return {
+            "status": STATUS_NOT_APPLICABLE,
+            "reason": (
+                "bess_economics is enabled but generation.technologies declares no "
+                "type: bess technology with revenue_model capacity_charge"
+            ),
+            "basis": basis,
+            "projects": [],
+        }
+    return {
+        "status": STATUS_RUN,
+        "basis": basis,
+        "discount_rate": float(discount_rate),
+        "project_years": int(project_years),
+        "projects": [project.as_dict() for project in projects],
+    }
+
+
 __all__ = [
     "LandedCapex",
     "ChargingCostSpec",
     "BessProjectEconomics",
     "bess_economics_requested",
     "resolve_landed_capex",
-    "ceb_effective_cost_curve",
+    "capacity_charge_effective_cost_curve",
+    "validate_bess_economics_block",
+    "bess_economics_result",
+    "bess_economics_failure",
     "resolve_charging_cost_spec",
     "charging_cost_lkr_for_year",
     "compute_bess_project_economics",

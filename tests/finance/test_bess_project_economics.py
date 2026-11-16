@@ -1,9 +1,10 @@
 """Unit tests for ``finance.bess_project_economics`` — standalone BESS project economics.
 
-This module turns the real 2025 Sri Lankan BESS commercial inputs (a Huawei-CIF-style capex
-quote, the CEB capacity-charge tender, the CEB energy-cost methodology) into project
-economics: landed capex, the CEB effective-cost curve (LKR/kWh, charging EXCLUDED), the
-separate charging-cost lever, and a standalone cashflow -> IRR / NPV / LCOS.
+The module turns a standalone battery project's commercial inputs (a CIF capex quote, a
+capacity-charge tender, the capacity-charge effective-cost method) into project economics:
+landed capex, the effective-cost curve (LKR/kWh, charging EXCLUDED), the separate
+charging-cost lever, and a standalone cashflow -> IRR / NPV / LCOS. Every project figure here
+is an illustrative round number, not any supplier's or tender's figure.
 
 The tests assert REAL, hand-checkable economics (a known capex + capacity charge -> a
 hand-derived duty / effective-cost / IRR / NPV), the CESSPIT fail-loud guards, and — the
@@ -21,7 +22,7 @@ from finance.bess_project_economics import (
     ChargingCostSpec,
     LandedCapex,
     bess_economics_requested,
-    ceb_effective_cost_curve,
+    capacity_charge_effective_cost_curve,
     charging_cost_lkr_for_year,
     compute_bess_project_economics,
     resolve_charging_cost_spec,
@@ -47,7 +48,11 @@ def _capacity_cfg(
     }
     if revenue_overrides:
         revenue.update(revenue_overrides)
-    economics: dict = {"enabled": enabled, "capex": {"equipment_usd": equipment_usd}}
+    economics: dict = {
+        "enabled": enabled,
+        "capex": {"equipment_usd": equipment_usd},
+        "discharge_cycles_per_year": 400.0,
+    }
     if economics_overrides:
         # Deep-merge the capex sub-block so callers can add capex fields cleanly.
         if "capex" in economics_overrides:
@@ -115,32 +120,32 @@ def test_compute_returns_none_without_capacity_charge_bess() -> None:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 1. Landed capex — CIF structure + SL customs/duty + USD->LKR FX
+# 1. Landed capex — CIF structure + import customs/duty + USD->LKR FX
 # ═════════════════════════════════════════════════════════════════════════════
 
 
 def test_landed_capex_hand_checked_duty_and_fx() -> None:
-    """Huawei-basis capex: equipment $4,829,679.59 + 15% duty + $907,264.63 warranty.
+    """CIF capex: equipment $5,000,000 + 15% duty + $900,000 warranty.
 
-    dutiable base = 4,829,679.59; duty = 0.15 x base = 724,451.94; warranty non-dutiable.
-    landed USD = base + duty + warranty = 6,461,396.16; landed LKR = x 300.
+    dutiable base = 5,000,000; duty = 0.15 x base = 750,000; warranty non-dutiable.
+    landed USD = base + duty + warranty = 6,650,000; landed LKR = x 300.
     """
     cfg = {
         "bess_economics": {
             "enabled": True,
             "capex": {
-                "equipment_usd": 4_829_679.59,
-                "optional_warranty_usd": 907_264.63,
+                "equipment_usd": 5_000_000.0,
+                "optional_warranty_usd": 900_000.0,
                 "customs_duty_pct": 0.15,
             },
         }
     }
     lc = resolve_landed_capex(cfg, fx_rate_lkr_per_usd=300.0)
     assert isinstance(lc, LandedCapex)
-    assert lc.dutiable_base_usd == pytest.approx(4_829_679.59)
-    assert lc.customs_duty_usd == pytest.approx(724_451.9385)
-    assert lc.landed_capex_usd == pytest.approx(6_461_396.1685)
-    assert lc.landed_capex_lkr == pytest.approx(6_461_396.1685 * 300.0)
+    assert lc.dutiable_base_usd == pytest.approx(5_000_000.0)
+    assert lc.customs_duty_usd == pytest.approx(750_000.0)
+    assert lc.landed_capex_usd == pytest.approx(6_650_000.0)
+    assert lc.landed_capex_lkr == pytest.approx(6_650_000.0 * 300.0)
     assert lc.fx_rate_lkr_per_usd == 300.0
 
 
@@ -244,19 +249,19 @@ def test_landed_capex_rejects_out_of_range_duty_pct() -> None:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 2. CEB effective-cost curve (LKR/kWh) — charging cost EXCLUDED
+# 2. Capacity-charge effective-cost curve (LKR/kWh) — charging cost EXCLUDED
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_ceb_effective_cost_year1_hand_checked() -> None:
-    """CEB method, year 1, no fade:
+def test_effective_cost_year1_hand_checked() -> None:
+    """Effective-cost method, year 1, no fade:
 
     charge = 2,000,000 x 10 MW x 12 = 240,000,000 LKR/yr
     discharge = 40 MWh x 400 cycles x SoH 1.0 = 16,000 MWh = 16,000,000 kWh
     effective = 240,000,000 / 16,000,000 = 15.0 LKR/kWh — and charging is EXCLUDED.
     """
     cfg = _capacity_cfg()
-    curve = ceb_effective_cost_curve(cfg, years=2)
+    curve = capacity_charge_effective_cost_curve(cfg, years=2)
     assert curve is not None
     row = curve[0]
     assert row["technology"] == "bess_unit"
@@ -268,24 +273,24 @@ def test_ceb_effective_cost_year1_hand_checked() -> None:
     assert "CHARGING COST EXCLUDED" in row["note"]
 
 
-def test_ceb_effective_cost_charge_and_discharge_share_soh() -> None:
+def test_effective_cost_charge_and_discharge_share_soh() -> None:
     """When the modelled charge fades with SoH, numerator and denominator share the SAME SoH,
     so the per-year ratio is constant — documenting that the effective-cost curve is coupled
     to the single-source-of-truth SoH curve (finance.bess_revenue.mdsc_soh_for_year)."""
     cfg = _capacity_cfg(revenue_overrides={"mdsc_fade_pct_annual": 0.025})
-    curve = ceb_effective_cost_curve(cfg, years=5)
+    curve = capacity_charge_effective_cost_curve(cfg, years=5)
     assert curve is not None
     ratios = [r["lkr_per_kwh"] for r in curve]
     assert all(v == pytest.approx(ratios[0]) for v in ratios)
 
 
-def test_ceb_effective_cost_flat_charge_degrading_discharge_rises() -> None:
-    """The genuine CEB result shape: a FLAT capacity charge over a DEGRADING discharge basis
-    makes the effective LKR/kWh RISE over life (the CEB doc's ~15 -> 24 LKR/kWh curve). The
+def test_effective_cost_flat_charge_degrading_discharge_rises() -> None:
+    """The method's result shape: a FLAT capacity charge over a DEGRADING discharge basis
+    makes the effective LKR/kWh RISE over life. The
     tender pays a flat charge (independent of SoH); we reconstruct that flat-charge cost over
     the module's degradation-adjusted discharge and confirm it rises."""
     cfg = _capacity_cfg(revenue_overrides={"mdsc_fade_pct_annual": 0.025})
-    curve = ceb_effective_cost_curve(cfg, years=3)
+    curve = capacity_charge_effective_cost_curve(cfg, years=3)
     assert curve is not None
     flat_charge = 240_000_000.0  # 2M x 10 MW x 12 (the tender's fixed charge)
     tender_costs = [flat_charge / (r["discharge_mwh"] * 1000.0) for r in curve]
@@ -293,21 +298,21 @@ def test_ceb_effective_cost_flat_charge_degrading_discharge_rises() -> None:
     assert tender_costs[2] > tender_costs[1]
 
 
-def test_ceb_effective_cost_energy_from_power_times_duration() -> None:
+def test_effective_cost_energy_from_power_times_duration() -> None:
     """Energy basis falls back to power_mw x duration_h when energy_mwh is absent.
 
     10 MW x 4 h = 40 MWh per cycle => same 15.0 LKR/kWh as the explicit-energy case.
     """
     cfg = _capacity_cfg()
     del cfg["generation"]["technologies"]["bess_unit"]["energy_mwh"]
-    curve = ceb_effective_cost_curve(cfg, years=1)
+    curve = capacity_charge_effective_cost_curve(cfg, years=1)
     assert curve is not None
     assert curve[0]["discharge_mwh"] == pytest.approx(16_000.0)
     assert curve[0]["lkr_per_kwh"] == pytest.approx(15.0)
 
 
-def test_ceb_effective_cost_none_for_energy_tariff_only() -> None:
-    """An energy-tariff BESS is not part of the CEB capacity-charge method => None."""
+def test_effective_cost_none_for_energy_tariff_only() -> None:
+    """An energy-tariff BESS is not part of the capacity-charge method => None."""
     cfg = {
         "generation": {
             "technologies": {
@@ -324,26 +329,29 @@ def test_ceb_effective_cost_none_for_energy_tariff_only() -> None:
             }
         }
     }
-    assert ceb_effective_cost_curve(cfg, years=5) is None
+    assert capacity_charge_effective_cost_curve(cfg, years=5) is None
 
 
-def test_ceb_effective_cost_none_without_bess() -> None:
+def test_effective_cost_none_without_bess() -> None:
     """No BESS => None."""
     assert (
-        ceb_effective_cost_curve({"generation": {"technologies": {}}}, years=5) is None
+        capacity_charge_effective_cost_curve(
+            {"generation": {"technologies": {}}}, years=5
+        )
+        is None
     )
 
 
-def test_ceb_effective_cost_respects_contract_years() -> None:
+def test_effective_cost_respects_contract_years() -> None:
     """The curve stops at the BESS contract term."""
     cfg = _capacity_cfg(revenue_overrides={"contract_years": 3})
-    curve = ceb_effective_cost_curve(cfg, years=10)
+    curve = capacity_charge_effective_cost_curve(cfg, years=10)
     assert curve is not None
     assert [r["year"] for r in curve] == [1, 2, 3]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 3. Charging-cost lever (the piece the CEB method omits)
+# 3. Charging-cost lever (the piece the effective-cost method omits)
 # ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -362,7 +370,7 @@ def test_charging_cost_hand_checked_with_rte_inflation() -> None:
 
 
 def test_charging_cost_zero_without_lever() -> None:
-    """No charging lever (None) => zero charging cost (the CEB-style case)."""
+    """No charging lever (None) => zero charging cost (the charging-excluded case)."""
     assert charging_cost_lkr_for_year(None, 16_000.0) == 0.0
 
 
@@ -500,7 +508,7 @@ def test_economics_augmentation_is_a_cash_outflow() -> None:
 
 
 def test_economics_attaches_lcos_and_effective_cost() -> None:
-    """The result carries the read-only LCOS view and the CEB effective-cost curve."""
+    """The result carries the read-only LCOS view and the effective-cost curve."""
     res = compute_bess_project_economics(
         _capacity_cfg(), discount_rate=0.10, project_years=15
     )[0]
