@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 import pytest
 import yaml
@@ -23,6 +23,13 @@ from analytics.emit_selection import (
     plan_report,
 )
 
+#: A scenario file that exists, for a well-formed tech_comparison entry.
+_EXISTING_CONFIG = str(
+    Path(__file__).resolve().parents[2]
+    / "scenarios"
+    / "dutchbay_lendercase_2025Q4.yaml"
+)
+
 _ALL_INPUTS_SCENARIO: Dict[str, Any] = {
     "monte_carlo": {"parameters": [{"name": "x"}]},
     "interaction_grid": {"metric": "project_irr"},
@@ -30,7 +37,7 @@ _ALL_INPUTS_SCENARIO: Dict[str, Any] = {
 }
 _ALL_INPUTS_CFG: Dict[str, Any] = {
     "emit_all": True,
-    "tech_comparison": {"scenarios": [{"label": "a", "config": "a.yaml"}]},
+    "tech_comparison": {"scenarios": [{"label": "a", "config": _EXISTING_CONFIG}]},
 }
 
 
@@ -122,6 +129,66 @@ def test_malformed_tech_comparison_list_is_listed_not_raised(
         "tech_comparison.scenarios must be a list of {label, config} entries; "
         f"got {type_name}"
     )
+
+
+#: Malformed ``tech_comparison`` blocks (#1760 domain D-1 at fce4232a): the whole block's
+#: shape, not just ``.scenarios``. Each pairs the block with the start of the plan's reason.
+_MALFORMED_TECH_COMPARISON = [
+    ([1, 2], "tech_comparison must be a mapping with a scenarios list; got ListConfig"),
+    (5, "tech_comparison must be a mapping with a scenarios list; got int"),
+    ("a.yaml", "tech_comparison must be a mapping with a scenarios list; got str"),
+    ({"path": "x.html"}, "the run config lists no tech_comparison.scenarios"),
+    ({"scenarios": [5]}, "tech_comparison.scenarios[0] must be a mapping"),
+    (
+        {"scenarios": [{"config": _EXISTING_CONFIG}]},
+        "tech_comparison.scenarios[0] must declare a non-empty 'label'",
+    ),
+    (
+        {"scenarios": [{"label": "a"}]},
+        "tech_comparison.scenarios[0] ('a') must declare a 'config' path",
+    ),
+    (
+        {"scenarios": [{"label": "a", "config": "no/such/scenario.yaml"}]},
+        "tech_comparison.scenarios[0] ('a') config path does not exist",
+    ),
+]
+
+
+@pytest.mark.parametrize(("block", "reason"), _MALFORMED_TECH_COMPARISON)
+def test_a_malformed_tech_comparison_block_is_listed_not_raised(
+    block: Any, reason: str
+) -> None:
+    """#1760 domain D-1 at fce4232a: list, scalar and missing-key shapes are all listed."""
+    cfg = OmegaConf.create({"emit_all": True, "tech_comparison": block})
+    decision = plan_emitters(cfg, {})["emit_tech_comparison"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason is not None and decision.reason.startswith(reason)
+
+
+@pytest.mark.parametrize(("block", "reason"), _MALFORMED_TECH_COMPARISON)
+def test_the_plan_and_the_emitter_refuse_the_same_blocks(
+    block: Any, reason: str
+) -> None:
+    """The plan mirrors the emitter's resolver, so what it lists the emitter would refuse."""
+    from app.reports.tech_comparison_emit import resolve_tech_comparison_scenarios
+
+    cfg = OmegaConf.create({"tech_comparison": block})
+    node = cfg.tech_comparison
+    with pytest.raises((ValueError, AttributeError, TypeError)):
+        resolve_tech_comparison_scenarios(
+            node.get("scenarios", None) if isinstance(node, Mapping) else node
+        )
+
+
+def test_a_well_formed_tech_comparison_block_runs_in_both() -> None:
+    from app.reports.tech_comparison_emit import resolve_tech_comparison_scenarios
+
+    block = {"scenarios": [{"label": "a", "config": _EXISTING_CONFIG}]}
+    cfg = OmegaConf.create({"emit_all": True, "tech_comparison": block})
+    assert plan_emitters(cfg, {})["emit_tech_comparison"].status == STATUS_RUN
+    assert resolve_tech_comparison_scenarios(cfg.tech_comparison.scenarios) == [
+        ("a", _EXISTING_CONFIG)
+    ]
 
 
 def test_disabled_grid_study_is_not_applicable() -> None:
@@ -469,6 +536,31 @@ def test_cli_default_with_a_malformed_tech_comparison_list_writes_figures_and_co
     assert (run_dir / "summary.json").exists()
 
 
+@pytest.mark.parametrize(
+    "block",
+    [[1, 2], 5, {"scenarios": [{"label": "a"}]}],
+    ids=["list", "scalar", "no-config"],
+)
+def test_cli_default_with_a_malformed_tech_comparison_block_writes_figures_and_completes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    block: Any,
+) -> None:
+    """#1760 domain D-1 at fce4232a: the run exits normally with its figures, as main does."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path, {"scenario_name": "t"}, write_artifacts=True, tech_comparison=block
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert calls == ["emit_executive_workbook"]
+    assert out["emitters"]["emit_tech_comparison"]["status"] == STATUS_NOT_RUN
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    assert (run_dir / "summary.json").exists()
+
+
 def test_cli_writes_the_figures_before_the_emitter_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -536,28 +628,84 @@ def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_that_fails(
     assert entry["removed_stale_outputs"] == ["executive_workbook.xlsx"]
 
 
-@pytest.mark.parametrize(
-    "overrides",
-    [
-        {"emit_all": False},
-        {"capital_risk_report": {"path": "elsewhere/capital_risk_report.html"}},
-    ],
-)
-def test_cli_keeps_outputs_it_does_not_own(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    overrides: Dict[str, Any],
+def test_cli_emit_all_off_keeps_every_earlier_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """emit_all=false clears nothing, and an explicitly configured path is the caller's."""
+    """emit_all=false clears nothing."""
     calls: List[str] = []
     _install_recording_emitters(monkeypatch, calls)
     run_dir = tmp_path / "run"
     _plant_stale_capital_risk(run_dir)
-    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True, **overrides)
+    _run_cli(tmp_path, {"scenario_name": "t"}, write_artifacts=True, emit_all=False)
     capsys.readouterr()
     for name in _STALE_CAPITAL_RISK:
         assert (run_dir / name).read_text(encoding="utf-8") == "earlier run", name
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        {"scenario_name": "t"},
+        {"scenario_name": "t", "monte_carlo": {"parameters": [{"name": "x"}]}},
+    ],
+    ids=["not-run", "run"],
+)
+def test_cli_default_clears_the_default_path_when_a_path_is_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    scenario: Dict[str, Any],
+) -> None:
+    """#1760 domain D-2 at fce4232a: under emit_all the default path is the run's own.
+
+    With the report sent to a configured path, this run never writes the default path, so an
+    earlier run's report and PNG there are cleared and listed, whether the emitter ran or not.
+    The configured path itself is never touched.
+    """
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    configured = tmp_path / "elsewhere" / "capital_risk_report.html"
+    configured.parent.mkdir()
+    configured.write_text("the caller's", encoding="utf-8")
+    _run_cli(
+        tmp_path,
+        scenario,
+        write_artifacts=True,
+        capital_risk_report={"path": str(configured)},
+    )
+    out = json.loads(capsys.readouterr().out)
+    for name in _STALE_CAPITAL_RISK:
+        assert not (run_dir / name).exists(), name
+    assert configured.read_text(encoding="utf-8") == "the caller's"
+    entry = out["emitters"]["emit_capital_risk_report"]
+    expected = STATUS_RUN if "monte_carlo" in scenario else STATUS_NOT_RUN
+    assert entry["status"] == expected
+    assert ("emit_capital_risk_report" in calls) is (expected == STATUS_RUN)
+    assert entry["removed_stale_outputs"] == list(_STALE_CAPITAL_RISK)
+    summary = json.loads((run_dir / "summary.json").read_text())
+    assert summary["emitters"]["emit_capital_risk_report"] == entry
+
+
+def test_cli_default_keeps_files_beside_a_configured_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A configured path in the run's own directory: its companion PNG there is kept."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    run_dir = tmp_path / "run"
+    _plant_stale_capital_risk(run_dir)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        write_artifacts=True,
+        capital_risk_report={"path": str(run_dir / "my_report.html")},
+    )
+    out = json.loads(capsys.readouterr().out)
+    for name in _STALE_CAPITAL_RISK:
+        assert (run_dir / name).read_text(encoding="utf-8") == "earlier run", name
+    assert "removed_stale_outputs" not in out["emitters"]["emit_capital_risk_report"]
 
 
 def test_cli_default_removes_an_earlier_run_s_output_for_an_emitter_switched_off(

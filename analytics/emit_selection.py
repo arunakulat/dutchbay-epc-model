@@ -10,16 +10,17 @@ turns them all on at once. The rules:
   with every switch unset runs no emitter, as before this module.
 - Under ``emit_all``, an emitter whose inputs the run does not have is not run, and the plan
   records why: no ``monte_carlo.parameters`` the Monte Carlo engine can read, no
-  ``interaction_grid`` block, no ``tech_comparison.scenarios`` list (or a value that is not a
-  list), or no grid block with ``study_enabled: true``.
+  ``interaction_grid`` block, no well-formed ``tech_comparison`` block (a mapping whose
+  ``scenarios`` list holds ``{label, config}`` entries naming files that exist), or no grid
+  block with ``study_enabled: true``.
 - The CLI writes the run's figures before any emitter runs. An emitter that ran under
   ``emit_all`` and raised is recorded as ``failed`` with its error under
   ``result['emitters']`` and logged as an error; the run still completes.
 - An emitter switched on explicitly is always attempted, and its failure stops the run
   (``FRAMEWORK-02``), as it did before this module.
 
-The Monte Carlo parameters are read with the engine's own parser, and
-``tech_comparison.scenarios`` must be a list. The other applicability checks look only for the
+The Monte Carlo parameters are read with the engine's own parser, and the ``tech_comparison``
+block is checked by the emitter's own rules. The other applicability checks look only for the
 presence of an emitter's inputs; a declared but malformed block is the emitter's to refuse. The lender guards in
 the emitters themselves (the capital-risk report's trial floor and forced fail-loud Monte Carlo)
 are untouched.
@@ -32,6 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
 #: Every optional emitter switch, in the order the CLI runs them.
@@ -131,20 +133,52 @@ def _needs_interaction_grid(scenario: Mapping[str, Any], cfg: Any) -> Optional[s
 def _needs_tech_comparison_scenarios(
     scenario: Mapping[str, Any], cfg: Any
 ) -> Optional[str]:
+    """Check the whole ``tech_comparison`` block's shape, as the emitter would.
+
+    Every malformed shape is listed with its reason rather than raised: this check also runs
+    before the finance run, and a default run must still write its figures (owner ruling
+    2026-11-16 07:15Z). The rules are those of
+    :func:`app.reports.tech_comparison_emit.resolve_tech_comparison_scenarios`, which is not
+    imported here so that the report stack stays off the CLI's import path; a test holds the
+    two to the same verdicts.
+    """
     block = _get(cfg, "tech_comparison")
-    entries = block.get("scenarios", None) if hasattr(block, "get") else None
+    if block is None:
+        return "the run config lists no tech_comparison.scenarios"
+    # OmegaConf's DictConfig is a Mapping; its ListConfig is not, and ListConfig.get takes an
+    # index, so a list-shaped block must be refused before any .get (#1760 domain D-1).
+    if not isinstance(block, Mapping):
+        return (
+            "tech_comparison must be a mapping with a scenarios list; "
+            f"got {type(block).__name__}"
+        )
+    entries = block.get("scenarios", None)
     if entries is None:
         return "the run config lists no tech_comparison.scenarios"
-    # A malformed value (``5``, a string, a mapping) is listed with its reason rather than
-    # raising here: this check also runs before the finance run, and a default run must still
-    # write its figures (owner ruling 2026-11-16 07:15Z).
-    if isinstance(entries, (str, bytes)) or not isinstance(entries, Sequence):
+    if isinstance(entries, (str, bytes, Mapping)) or not isinstance(entries, Sequence):
         return (
             "tech_comparison.scenarios must be a list of {label, config} entries; "
             f"got {type(entries).__name__}"
         )
     if not len(entries):
         return "the run config lists no tech_comparison.scenarios"
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, Mapping):
+            return (
+                f"tech_comparison.scenarios[{i}] must be a mapping with 'label' and "
+                f"'config'; got {type(entry).__name__}"
+            )
+        label = entry.get("label", None)
+        if not isinstance(label, str) or not label:
+            return f"tech_comparison.scenarios[{i}] must declare a non-empty 'label'"
+        config = entry.get("config", None)
+        if not isinstance(config, str) or not config:
+            return f"tech_comparison.scenarios[{i}] ('{label}') must declare a 'config' path"
+        if not Path(config).exists():
+            return (
+                f"tech_comparison.scenarios[{i}] ('{label}') config path does not exist: "
+                f"{config}"
+            )
     return None
 
 

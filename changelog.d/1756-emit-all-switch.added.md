@@ -8,14 +8,19 @@
     `result['emitters']`, which every default run now carries. Monte Carlo parameters are
     read with the engine's own parser before the run, so a block the engine cannot read,
     including a non-numeric bound such as `low: null`, is listed with the parser's error.
-    A `tech_comparison.scenarios` value that is not a list (for example `5`) is listed the
-    same way, with its type, rather than stopping the run before the figures are written.
+    A malformed `tech_comparison` block is listed the same way, with its reason, rather than
+    stopping the run: a block that is not a mapping (a list, a number), a `scenarios` value
+    that is not a list, or an entry without a `label`, without a `config` or naming a file
+    that does not exist. The check applies the emitter's own rules.
   - The default export directory is shared between runs. While `emit_all` is on, an emitter
     that is not run, fails, or is switched off explicitly (for example
     `emit_capital_risk_report=false` for a fast run) has its earlier output at the default
-    path removed, so another run's report never sits beside this run's figures. The entry
-    under `emitters` names the removed files in `removed_stale_outputs`. An explicitly
-    configured path and `emit_all=false` leave files alone.
+    path removed, so another run's report never sits beside this run's figures. So does an
+    emitter whose output goes to a configured path, whether it ran or not, because this run
+    never writes its default path. The entry under `emitters` names the removed files in
+    `removed_stale_outputs`. A configured path itself is never touched, nor is a default-path
+    file in the configured path's own directory (where the capital-risk PNG is written), and
+    `emit_all=false` leaves every file alone.
   - The run writes `kpis.json`, `debt_result.json`, `equity_distribution.json` and
     `annual_rows.csv` before it plans or runs any emitter. An emitter switched on by `emit_all` that
     fails is recorded as `failed` with its error and logged; the run completes. An emitter

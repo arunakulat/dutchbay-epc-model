@@ -1445,11 +1445,14 @@ def cli(cfg: DictConfig) -> None:
 
             _run_emitter("emit_grid_screen", _emit_grid_screen)
 
-        # #1756 (domain review F-2, D-1): the default export directory is shared between runs, so
-        # an emitter that emit_all lists as not run, that fails, or that is switched off
-        # explicitly while emit_all is on must not leave an earlier run's output at its default
-        # path beside this run's figures. Only default paths are cleared; an explicitly
-        # configured path is the caller's, and emit_all=false clears nothing.
+        # #1756 (domain review F-2, D-1; #1760 domain D-2): the default export directory is
+        # shared between runs, and under emit_all its default paths are this run's own. So an
+        # emitter's default-path output that this run did not write is cleared and listed under
+        # ``removed_stale_outputs``: the emitter was listed as not run, failed, was switched off
+        # explicitly, or writes to a configured path instead. A configured path is the caller's
+        # and is never cleared, nor is any default-path file in the configured path's own
+        # directory, where an emitter writes its companion files (the capital-risk PNG).
+        # emit_all=false clears nothing.
         if (
             emit_all
             and isinstance(result, dict)
@@ -1457,57 +1460,64 @@ def cli(cfg: DictConfig) -> None:
         ):
             from analytics.contracts_v14 import QSTS_SYNTHETIC_OUTPUT_CLASS
 
+            def _configured(block: Any) -> Any:
+                # A malformed (list or scalar) block names no path (#1760 domain D-1).
+                return block.get("path", None) if isinstance(block, Mapping) else None
+
+            configured_paths: dict[str, Any] = {
+                "emit_executive_workbook": executive_workbook_path,
+                "emit_capital_risk_report": _configured(capital_risk_report_cfg),
+                "emit_interaction_grid": _configured(interaction_grid_cfg),
+                "emit_tech_comparison": _configured(tech_comparison_cfg),
+                "emit_grid_screen": _configured(grid_screen_cfg),
+            }
+            npv_metric = (
+                capital_risk_report_cfg.get("npv_metric", "equity_npv")
+                if isinstance(capital_risk_report_cfg, Mapping)
+                else "equity_npv"
+            )
             default_outputs: dict[str, list[Path]] = {
-                "emit_executive_workbook": (
-                    []
-                    if executive_workbook_path
-                    else [export_dir_scoped / "executive_workbook.xlsx"]
-                ),
-                "emit_capital_risk_report": (
-                    []
-                    if capital_risk_report_cfg.get("path", None)
-                    else [
-                        export_dir_scoped / "capital_risk_report.html",
-                        export_dir_scoped
-                        / "npv_distribution_{}.png".format(
-                            capital_risk_report_cfg.get("npv_metric", "equity_npv")
-                        ),
-                    ]
-                ),
-                "emit_interaction_grid": (
-                    []
-                    if interaction_grid_cfg.get("path", None)
-                    else [export_dir_scoped / "interaction_grid_report.html"]
-                ),
-                "emit_tech_comparison": (
-                    []
-                    if tech_comparison_cfg.get("path", None)
-                    else [export_dir_scoped / "tech_comparison_report.html"]
-                ),
-                "emit_grid_screen": (
-                    []
-                    if grid_screen_cfg.get("path", None)
-                    else [
-                        export_dir_scoped / "grid_screening_report.html",
-                        export_dir_scoped
-                        / QSTS_SYNTHETIC_OUTPUT_CLASS
-                        / "grid_screening_report.html",
-                    ]
-                ),
+                "emit_executive_workbook": [
+                    export_dir_scoped / "executive_workbook.xlsx"
+                ],
+                "emit_capital_risk_report": [
+                    export_dir_scoped / "capital_risk_report.html",
+                    export_dir_scoped / "npv_distribution_{}.png".format(npv_metric),
+                ],
+                "emit_interaction_grid": [
+                    export_dir_scoped / "interaction_grid_report.html"
+                ],
+                "emit_tech_comparison": [
+                    export_dir_scoped / "tech_comparison_report.html"
+                ],
+                "emit_grid_screen": [
+                    export_dir_scoped / "grid_screening_report.html",
+                    export_dir_scoped
+                    / QSTS_SYNTHETIC_OUTPUT_CLASS
+                    / "grid_screening_report.html",
+                ],
             }
             for flag, entry in result["emitters"].items():
                 if not isinstance(entry, dict):
                     continue
                 source, status = entry.get("source"), entry.get("status")
-                # Not run or failed under emit_all, or switched off explicitly while emit_all is
-                # on (domain review D-1 at 43a58859): either way this run wrote nothing there.
+                configured = configured_paths.get(flag)
+                # This run wrote nothing at the default paths when the emitter was not run or
+                # failed under emit_all, was switched off explicitly while emit_all is on
+                # (domain review D-1 at 43a58859), or writes to a configured path (#1760 D-2).
                 if not (
                     (source == "emit_all" and status in (STATUS_NOT_RUN, STATUS_FAILED))
                     or (source == "explicit" and status == STATUS_OFF)
+                    or configured
                 ):
                     continue
+                kept_dir = (
+                    Path(str(configured)).resolve().parent if configured else None
+                )
                 removed: list[str] = []
                 for stale in default_outputs.get(flag, []):
+                    if kept_dir is not None and stale.resolve().parent == kept_dir:
+                        continue
                     if stale.is_file():
                         stale.unlink()
                         removed.append(stale.name)
