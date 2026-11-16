@@ -42,6 +42,7 @@ defaults:
 wake_rebaseline:
   frozen_wake_15_pct: 7.28          # resource.losses.wake_loss_pct before #1577 (15 turbines)
   output_decimals: 2                # the scenarios carry the wake loss to 2 dp
+  per_turbine_rose_png: null        # a path draws the per-turbine waked roses (#1589 sensitivity)
 
   turbine:
     curve_key: iea_reference_10mw   # wind_resource/config/power_curves.yaml (carries Ct)
