@@ -1164,10 +1164,18 @@ def run_v14_pipeline_enhanced(
 
         # #1569: a declared capex price date escalates capex.usd_total to the
         # construction draws, once, on the configuration evaluated below. Without a
-        # capex.price_basis block the config is unchanged.
-        from finance.capex_price_basis import apply_capex_price_basis
+        # capex.price_basis block the config is unchanged. #1591 D-1/A-1: any other
+        # capex amount the engine reads is escalated automatically, and disclosed in
+        # the result's "capex_price_basis" block (present only then) and the log.
+        from finance.capex_price_basis import (
+            apply_capex_price_basis,
+            automatic_escalation,
+        )
 
         cfg = apply_capex_price_basis(cfg)
+        capex_price_basis_auto = automatic_escalation(cfg)
+        if capex_price_basis_auto is not None:
+            metrics.validation_warnings.append(capex_price_basis_auto["warning"])
 
         # Reproducibility stamp (#577): built INSIDE the engine from the ALREADY-
         # RESOLVED ``cfg`` (no config re-load), immediately after resolution + schema
@@ -1509,6 +1517,9 @@ def run_v14_pipeline_enhanced(
             },
             "run_manifest": run_manifest,
         }
+        if capex_price_basis_auto is not None:
+            # Render-when-present: a run with no automatic escalation keeps its keys.
+            result["capex_price_basis"] = capex_price_basis_auto
 
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",

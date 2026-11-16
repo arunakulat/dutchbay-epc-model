@@ -13,6 +13,12 @@
 # line holds every transitive dependency (requests, CacheControl, urllib3, ...) to the lock
 # too: the auditor's HTTP stack is part of what decides a verdict. pip resolves the path
 # relative to this file.
+#
+# The constraint is also how this file reaches the lock's patched versions of packages it
+# never names: soupsieve==4.1 (#1626, GHSA-mmhr-3c5m-f64f) and tornado==6.6.1 (#1649,
+# GHSA-5cjw-f85j-cv6r). GitHub's dependency graph read this file before those lock bumps
+# and kept reporting soupsieve 3.0.4 and tornado 6.6 against it (Dependabot #188, #189);
+# a lock-only bump does not make it read this file again (#1353).
 -c ../requirements.txt
 bandit==1.9.4
 pip-audit==2.10.1
