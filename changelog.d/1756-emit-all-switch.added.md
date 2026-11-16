@@ -8,6 +8,8 @@
     `result['emitters']`, which every default run now carries. Monte Carlo parameters are
     read with the engine's own parser before the run, so a block the engine cannot read,
     including a non-numeric bound such as `low: null`, is listed with the parser's error.
+    A `tech_comparison.scenarios` value that is not a list (for example `5`) is listed the
+    same way, with its type, rather than stopping the run before the figures are written.
   - The default export directory is shared between runs. While `emit_all` is on, an emitter
     that is not run, fails, or is switched off explicitly (for example
     `emit_capital_risk_report=false` for a fast run) has its earlier output at the default

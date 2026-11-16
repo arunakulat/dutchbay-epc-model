@@ -105,6 +105,25 @@ def test_empty_tech_comparison_list_is_not_applicable() -> None:
     assert plan["emit_tech_comparison"].status == STATUS_NOT_RUN
 
 
+@pytest.mark.parametrize(
+    ("scenarios", "type_name"),
+    [(5, "int"), ("a.yaml", "str"), ({"label": "a"}, "DictConfig")],
+)
+def test_malformed_tech_comparison_list_is_listed_not_raised(
+    scenarios: Any, type_name: str
+) -> None:
+    """Assurance review L-1 at 43a58859: a malformed value is listed, never raised."""
+    cfg = OmegaConf.create(
+        {"emit_all": True, "tech_comparison": {"scenarios": scenarios}}
+    )
+    decision = plan_emitters(cfg, {})["emit_tech_comparison"]
+    assert decision.status == STATUS_NOT_RUN
+    assert decision.reason == (
+        "tech_comparison.scenarios must be a list of {label, config} entries; "
+        f"got {type_name}"
+    )
+
+
 def test_disabled_grid_study_is_not_applicable() -> None:
     plan = plan_emitters({"emit_all": True}, {"grid": {"study_enabled": False}})
     assert plan["emit_grid_screen"].status == STATUS_NOT_RUN
@@ -423,6 +442,28 @@ def test_cli_default_with_a_null_monte_carlo_bound_writes_figures_and_completes(
     out = json.loads(capsys.readouterr().out)
     assert calls == ["emit_executive_workbook"]
     assert out["emitters"]["emit_capital_risk_report"]["status"] == STATUS_NOT_RUN
+    run_dir = tmp_path / "run"
+    assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
+    assert (run_dir / "summary.json").exists()
+
+
+def test_cli_default_with_a_malformed_tech_comparison_list_writes_figures_and_completes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Assurance review L-1 at 43a58859: the early plan must not stop the run (07:15Z ruling)."""
+    calls: List[str] = []
+    _install_recording_emitters(monkeypatch, calls)
+    _run_cli(
+        tmp_path,
+        {"scenario_name": "t"},
+        write_artifacts=True,
+        tech_comparison={"scenarios": 5},
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert calls == ["emit_executive_workbook"]
+    entry = out["emitters"]["emit_tech_comparison"]
+    assert entry["status"] == STATUS_NOT_RUN
+    assert entry["reason"].endswith("got int")
     run_dir = tmp_path / "run"
     assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
     assert (run_dir / "summary.json").exists()

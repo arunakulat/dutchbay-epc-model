@@ -471,3 +471,42 @@ def test_f5_notice_renders_on_the_cover_when_set() -> None:
         )
         == without
     )
+
+
+_F5_BLOCK = (
+    "    {% if ctx.f5_notice %}\n"
+    '    <p class="f5-notice"><strong>F-5 non-reliance notice:</strong>'
+    " {{ ctx.f5_notice }}</p>\n"
+    "    {% endif %}\n"
+)
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {},
+        {"fx_fallback_note": "FX fell back to the static assumption."},
+        {"fx_warning": "FX integration failed."},
+        {"fx_fallback_note": "a", "fx_warning": "b"},
+    ],
+    ids=["plain", "fx_fallback_note", "fx_warning", "both_fx_notices"],
+)
+def test_f5_block_adds_no_bytes_when_unset(update: Dict[str, Any]) -> None:
+    """#1760 L-2: without a notice, a report renders exactly as the template without the block.
+
+    The FX fallback note sits in the same template; its whitespace control must not change.
+    """
+    from app.reports.renderer import _TEMPLATE_DIR, _TEMPLATE_NAME, _environment
+
+    source = (_TEMPLATE_DIR / _TEMPLATE_NAME).read_text(encoding="utf-8")
+    assert source.count(_F5_BLOCK) == 1
+    without_block = _environment().from_string(source.replace(_F5_BLOCK, ""))
+    ctx = _context().model_copy(update=update)
+    assert render_report_html(ctx) == without_block.render(ctx=ctx)
+
+
+def test_fx_fallback_note_keeps_its_trimmed_layout() -> None:
+    """#1760 L-2: the FX fallback note's closing tag runs straight into the section close."""
+    note = "FX fell back to the static assumption."
+    html = render_report_html(_context().model_copy(update={"fx_fallback_note": note}))
+    assert f"{note}</p>  </section>" in html
