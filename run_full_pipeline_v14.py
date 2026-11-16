@@ -757,8 +757,10 @@ def cli(cfg: DictConfig) -> None:
                 - emit_all: If true (the default, also when unset), every emit_*
                   switch below that is left null turns on. An explicit switch wins. An emitter whose inputs the
                   run lacks is not run and is listed with its reason under
-                  result['emitters']; one that applies and fails stops the run.
-                  See analytics.emit_selection.
+                  result['emitters']. The figures are written first; an emitter
+                  that emit_all turns on and that fails is listed as failed and the
+                  run completes, while one switched on explicitly still stops the
+                  run when it fails. See analytics.emit_selection.
             Optional fields (#656 slice 3 — Executive Workbook emission; follows
             emit_all, so ON by default since #1756; KPIs are byte-identical either way):
                 - emit_executive_workbook: If true, write a single-scenario

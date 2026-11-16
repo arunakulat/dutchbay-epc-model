@@ -381,17 +381,28 @@ def test_unreadable_monte_carlo_parameters_are_listed_not_run(
     assert fragment in decision.reason
 
 
-def test_non_numeric_monte_carlo_bound_is_listed_not_run() -> None:
-    """Domain review F-1: ``low: null`` raises TypeError in the parser; it is listed, not raised."""
+@pytest.mark.parametrize(
+    ("parameters", "error"),
+    [
+        ([{"name": "x", "low": None, "high": 0.2}], "TypeError"),
+        ([{"name": "x", "low": "abc", "high": 0.2}], "ValueError"),
+        ([{"name": "x", "low": 0.1, "high": [0.2]}], "TypeError"),
+        (5, "TypeError"),
+        ("x_std", "MonteCarloConfigError"),
+    ],
+)
+def test_any_unreadable_monte_carlo_parameters_are_listed_not_run(
+    parameters: Any, error: str
+) -> None:
+    """Domain review F-1: whatever the parser raises is listed, never raised."""
     plan = plan_emitters(
-        {"emit_all": True},
-        {"monte_carlo": {"parameters": [{"name": "x", "low": None, "high": 0.2}]}},
+        {"emit_all": True}, {"monte_carlo": {"parameters": parameters}}
     )
     decision = plan["emit_capital_risk_report"]
     assert decision.status == STATUS_NOT_RUN
     assert decision.reason is not None
     assert decision.reason.startswith(
-        "the Monte Carlo engine cannot read monte_carlo.parameters: TypeError: "
+        f"the Monte Carlo engine cannot read monte_carlo.parameters: {error}: "
     )
 
 
