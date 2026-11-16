@@ -67,7 +67,12 @@ def _valid_config() -> dict:
         },
         "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
         "returns": {"project_discount_rate": 0.10},  # required since #1429
-        "debt": {"target_dscr": 1.4, "interest_rate_pct": 6.0, "term_years": 18},
+        "debt": {
+            "debt_ratio": 0.70,  # no code default since #1429
+            "target_dscr": 1.4,
+            "interest_rate_pct": 6.0,
+            "term_years": 18,
+        },
     }
 
 
@@ -208,7 +213,15 @@ def test_strict_validation_rejects_malformed_present_debt_tenor() -> None:
 
 
 def test_strict_validation_accepts_config_with_no_debt_block() -> None:
-    """A config with NO debt block still passes — debt specs never force presence."""
+    """A config with NO debt block passes once it declares the terms the engine reads.
+
+    The debt layer reads a block-less config's gearing and target DSCR from the top
+    level. Before #1429 it filled both in (0.70, 1.30) when absent; now pre-flight
+    refuses their absence, naming the key, and accepts them declared.
+    """
     cfg = _valid_config()
     cfg.pop("debt")
+    with pytest.raises(ConfigValidationError, match=r"debt_ratio is required"):
+        validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+    cfg.update(debt_ratio=0.70, target_dscr=1.30)
     validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])  # must not raise

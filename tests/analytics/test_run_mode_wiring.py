@@ -36,6 +36,7 @@ def _toy_config_no_capex() -> Dict[str, Any]:
         "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.05},
         "Financing_Terms": {
             "debt_ratio": 0.6,
+            "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 10,
             "rates": {"usd_nominal": 0.06},
         },
@@ -50,6 +51,7 @@ def _cost_free_debt_config() -> Dict[str, Any]:
         "capex": {"usd_total": 1.0e8},
         "Financing_Terms": {
             "debt_ratio": 0.6,
+            "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 10,
             "rates": {"usd_nominal": 0.0},
         },
