@@ -985,8 +985,8 @@ class ReportContext(BaseModel):
     refinance_coverage: Optional[RefinanceCoverageBlock] = None
     manifest: Dict[str, Any]
     #: F-5 non-reliance notice shown on the cover (#1760). Set by the capital-risk emitter, whose
-    #: report every default CLI run now writes and the release asset ships; None (the default)
-    #: omits it, so every other report stays byte-identical.
+    #: report a run that writes its figures now writes by default and the release asset
+    #: ships; None (the default) omits it, so every other report stays byte-identical.
     f5_notice: Optional[str] = None
 
 
