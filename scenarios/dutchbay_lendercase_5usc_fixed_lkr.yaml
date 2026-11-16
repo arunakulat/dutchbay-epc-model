@@ -435,9 +435,8 @@ monte_carlo:
   seed: 42
   # Lender runs never substitute toy KPIs for a failed trial (#962 item 1; owner ruling
   # 2026-11-15 extended to this variant): a trial whose full v14 evaluation raises stops
-  # the run instead. capex.derive_from_breakdown cross-checks capex.usd_total against the
-  # breakdown, so the capex.usd_total sweep below declares reconcile_breakdown: pro_rata
-  # and every breakdown line scales with the sampled total (#1762).
+  # the run instead. capex.derive_from_breakdown makes every trial refuse the sampled
+  # capex.usd_total, so this file's Monte Carlo now stops (follow-up on #962).
   allow_toy_fallback: false
   
   # Wind resource uncertainty (dominant risk driver)
@@ -475,7 +474,6 @@ monte_carlo:
       low: 165351199.44
       high: 228342132.56
       distribution: uniform
-      reconcile_breakdown: pro_rata   # scale capex.breakdown with the sampled total (#1762)
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
       high: 367.0

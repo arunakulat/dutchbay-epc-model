@@ -9,17 +9,17 @@
     #1695 domain lane listed (M-1), a bare `capex` sweep on a USD scenario, and
     `capex.input.amount` on an already resolved native config (with a message to start from
     the authored config). A base config that does not itself resolve is left to the trials,
-    so smoke configs behave as before. Every committed list-form Monte Carlo scenario passes.
+    so smoke configs behave as before. Every committed list-form Monte Carlo scenario passes
+    except the 5 US-cent fixed-LKR variant, whose trials all failed already (below).
     The hand-kept native guard list stays as the first, more specific check.
-  - 5 US-cent fixed-LKR variant (#1762). Its CAPEX derives from `capex.breakdown`, so a
-    sampled `capex.usd_total` failed the breakdown cross-check on every trial and the
-    capital-risk Monte Carlo stopped at trial 0. A parameter can now declare
-    `reconcile_breakdown: pro_rata`: each breakdown line scales with the sampled total, a
-    uniform overrun or underrun. The engine refuses the key on any other parameter, without
-    `derive_from_breakdown`, with a QRA contingency, or with an empty breakdown.
-    `scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml` declares it on its CAPEX sweep, and
-    the variant's Monte Carlo now runs its trials. Its deterministic run does not read the
-    key.
+  - Breakdown reconciliation (#1762, engine half). A `capex.usd_total` sweep on a
+    `capex.derive_from_breakdown` scenario failed the breakdown cross-check on every trial.
+    A parameter can now declare `reconcile_breakdown: pro_rata`: each breakdown line scales
+    with the sampled total, a uniform overrun or underrun. The engine refuses the key on
+    any other parameter, without `derive_from_breakdown`, with a QRA contingency, or with
+    an empty breakdown. No committed scenario declares it yet, so the 5 US-cent fixed-LKR
+    variant's sweep is now refused before sampling, with the fix named, instead of
+    stopping at trial 0; declaring it on that lender scenario is a separate R3 change.
   - Fixed-debt stress on the covenant basis (#1728). `metadata.fixed_debt_stress` now divides
     each trial's operating-row CFADS, net of the base (committed-debt) senior fee, by the base
     debt service, with the bridge period's service folded into operating year 1 as
@@ -34,3 +34,5 @@
     falls outside the stress (its coverage is disclosed separately). The lender case's
     stress figures move onto the stricter basis; they remain metadata under F-5 and support no
     covenant, lender or IC representation. Monte Carlo summaries and trials are unchanged.
+    The lender case's comment and the web job's docstring that called the stress basis
+    unfolded are corrected.

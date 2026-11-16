@@ -130,18 +130,18 @@ def test_healthy_kalpitiya_lender_run_reports_the_fallback_off_and_unused() -> N
     assert result.failed_iterations == 0
 
 
-def test_five_us_cent_lender_run_completes_with_no_toy_trials() -> None:
-    """The variant derives CAPEX from its breakdown. Its ``capex.usd_total`` sweep
-    declares ``reconcile_breakdown: pro_rata`` (#1762), so every trial runs for real with
-    the fallback off, instead of the run stopping at trial 0.
+def test_five_us_cent_lender_run_is_refused_before_sampling() -> None:
+    """The variant derives CAPEX from its breakdown, so every trial refuses the sampled
+    ``capex.usd_total``. On main the run stopped at trial 0; the pre-sampling dry run
+    (#1629) now refuses the sweep before any trial and names the opt-in fix (#1762).
     """
+    from analytics.mc.engine import MonteCarloConfigError
+
     logging.disable(logging.WARNING)
     try:
-        result = run_monte_carlo_analysis(
-            base_config=_load(_FIVE_US_CENT), n_trials=2, seed=42
-        )
+        with pytest.raises(MonteCarloConfigError, match="reconcile_breakdown"):
+            run_monte_carlo_analysis(
+                base_config=_load(_FIVE_US_CENT), n_trials=2, seed=42
+            )
     finally:
         logging.disable(logging.NOTSET)
-    assert result.metadata["allow_toy_fallback"] is False
-    assert result.metadata["toy_fallback_count"] == 0
-    assert result.failed_iterations == 0

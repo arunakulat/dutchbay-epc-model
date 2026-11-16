@@ -232,12 +232,66 @@ class TestFailLoud:
         )
         logging.disable(logging.WARNING)
         try:
-            with pytest.raises(RuntimeError, match="MC trial 1 published no CFADS"):
+            with pytest.raises(
+                RuntimeError, match="MC trial 1 published no CFADS"
+            ) as err:
                 mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=1).run(
                     n_trials=2
                 )
         finally:
             logging.disable(logging.NOTSET)
+        # Raised by the stress check itself, not re-wrapped as a failed trial evaluation.
+        assert "toy-metric fallback" not in str(err.value)
+
+    def test_the_stress_check_sits_outside_the_trial_fail_soft_handler(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An error in the stress check propagates even on a permissive run: it is never
+        caught by the trial's handler and turned into a toy trial."""
+        calls = iter([1.5])
+
+        def _helper(*_a: object) -> float:
+            try:
+                return next(calls)  # the base check
+            except StopIteration:
+                raise ValueError("stress check failed") from None
+
+        monkeypatch.setattr(mc_engine, "_trial_fixed_debt_min_dscr", _helper)
+        cfg = _cfg(fixed_debt=True)
+        cfg["monte_carlo"]["allow_toy_fallback"] = True
+        logging.disable(logging.WARNING)
+        try:
+            with pytest.raises(ValueError, match="stress check failed"):
+                mc_engine.MonteCarloEngine(cfg, seed=1).run(n_trials=2)
+        finally:
+            logging.disable(logging.NOTSET)
+
+    def test_permissive_run_with_one_failed_trial_keeps_the_stress(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A toy-fallback trial contributes no stress observation; the others do."""
+        real = mc_engine.evaluate_with_overrides
+        trial_calls = {"n": 0}
+
+        def _evaluate(*args: Any, **kwargs: Any) -> Any:
+            if kwargs.get("overrides"):
+                trial_calls["n"] += 1
+                if trial_calls["n"] == 2:
+                    raise RuntimeError("simulated trial failure")
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(mc_engine, "evaluate_with_overrides", _evaluate)
+        cfg = _cfg(fixed_debt=True)
+        cfg["monte_carlo"]["allow_toy_fallback"] = True
+        logging.disable(logging.WARNING)
+        try:
+            result = mc_engine.MonteCarloEngine(cfg, seed=1).run(n_trials=3)
+        finally:
+            logging.disable(logging.NOTSET)
+        assert result.metadata["toy_fallback_count"] == 1
+        fixed = result.metadata["fixed_debt_stress"]
+        assert fixed["status"] == "ok"
+        assert fixed["n"] == 2
 
     def test_permissive_run_records_why_the_stress_is_missing(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture

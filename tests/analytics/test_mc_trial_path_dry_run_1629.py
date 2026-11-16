@@ -1,13 +1,15 @@
-"""Monte Carlo trial-path guards: the pre-sampling dry run (#1629) and the 5 US-cent
-variant's breakdown reconciliation (#1762).
+"""Monte Carlo trial-path guards: the pre-sampling dry run (#1629) and the opt-in
+breakdown reconciliation (#1762).
 
 The engine merges the base config with each parameter's low and high bound and runs the
 trial path's own config checks (strict pre-flight and CAPEX resolution) before sampling.
 A sweep those checks refuse is refused up front, with the parameter and bound named,
 instead of failing trial by trial. A ``capex.usd_total`` sweep on a scenario that derives
 CAPEX from its breakdown can opt in to ``reconcile_breakdown: pro_rata``, which scales
-every breakdown line with the sampled total so the trial path's cross-check holds.
-Offline: committed scenarios only. No figure is asserted.
+every breakdown line with the sampled total so the trial path's cross-check holds. The
+committed 5 US-cent variant does not declare it here (that scenario change is its own
+R3 pull request), so its sweep is refused before sampling. The reconciliation tests opt
+in on a copy. Offline: committed scenarios only. No figure is asserted.
 """
 
 from __future__ import annotations
@@ -52,22 +54,24 @@ def _capex_param(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cast(Dict[str, Any], param)
 
 
+def _reconciled() -> Dict[str, Any]:
+    """The 5 US-cent variant with ``reconcile_breakdown: pro_rata`` set on a copy."""
+    cfg = _load(_FIVE_US_CENT)
+    _capex_param(cfg)["reconcile_breakdown"] = "pro_rata"
+    return cfg
+
+
 # ── #1762: the 5 US-cent variant ────────────────────────────────────────────────
 
 
-def test_five_us_cent_capex_sweep_declares_the_breakdown_reconciliation() -> None:
-    cfg = _load(_FIVE_US_CENT)
-    assert cfg["capex"]["derive_from_breakdown"] is True
-    assert _capex_param(cfg)["reconcile_breakdown"] == "pro_rata"
-
-
-def test_without_the_reconciliation_the_sweep_is_refused_before_sampling(
+def test_five_us_cent_sweep_is_refused_before_sampling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Negative control: on main every trial refused the sampled total; now the engine
-    refuses the sweep before any trial runs, and says how to fix it."""
+    """On main every trial refused the sampled total and the run stopped at trial 0; now
+    the engine refuses the committed sweep before any trial runs, and says how to fix it."""
     cfg = _load(_FIVE_US_CENT)
-    del _capex_param(cfg)["reconcile_breakdown"]
+    assert cfg["capex"]["derive_from_breakdown"] is True
+    assert "reconcile_breakdown" not in _capex_param(cfg)
 
     def _no_trial(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("a trial ran before the refusal")
@@ -85,7 +89,7 @@ def test_without_the_reconciliation_the_sweep_is_refused_before_sampling(
 def test_each_trial_scales_the_breakdown_to_the_sampled_total(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cfg = _load(_FIVE_US_CENT)
+    cfg = _reconciled()
     base_lines = cfg["capex"]["breakdown"]
     seen: List[Dict[str, Any]] = []
     real = mc_engine.evaluate_with_overrides
@@ -113,7 +117,7 @@ def test_each_trial_scales_the_breakdown_to_the_sampled_total(
 
 def test_the_reconciled_capex_lever_moves_the_outputs() -> None:
     """Not a dead lever: sweeping only CAPEX spreads the project NPV."""
-    cfg = _load(_FIVE_US_CENT)
+    cfg = _reconciled()
     cfg["monte_carlo"]["parameters"] = [_capex_param(cfg)]
     cfg["monte_carlo"]["fixed_debt_stress"] = False
     result = run_monte_carlo_analysis(base_config=cfg, n_trials=4, seed=3)
@@ -157,7 +161,7 @@ def test_the_reconciled_capex_lever_moves_the_outputs() -> None:
 def test_reconcile_breakdown_is_refused_where_it_would_not_mean_pro_rata(
     mutate: Any, match: str
 ) -> None:
-    cfg = _load(_FIVE_US_CENT)
+    cfg = _reconciled()
     mutate(cfg)
     with pytest.raises(MonteCarloConfigError, match=match):
         MonteCarloEngine(cfg)
@@ -180,7 +184,6 @@ def test_a_bound_that_fails_alone_is_named() -> None:
     """A sweep refused at one bound only is still refused: the trials near it fail."""
     cfg = _load(_FIVE_US_CENT)
     param = _capex_param(cfg)
-    del param["reconcile_breakdown"]
     base_total = float(cfg["capex"]["usd_total"])
     param["low"], param["high"] = base_total, base_total * 1.5
     cfg["monte_carlo"]["parameters"] = [param]
@@ -204,11 +207,12 @@ def test_a_config_whose_base_does_not_resolve_is_left_to_the_trials() -> None:
     assert result.metadata["toy_fallback_count"] == 2
 
 
-def test_every_committed_list_form_scenario_passes_the_dry_run() -> None:
-    """Census: the dry run refuses no committed Monte Carlo scenario. Mapping-form
-    ``monte_carlo.parameters`` blocks are refused by the existing schema check, as on
-    main, and are out of scope here."""
+def test_census_the_dry_run_refuses_only_the_five_us_cent_variant() -> None:
+    """Census: the dry run refuses no committed Monte Carlo scenario except the 5 US-cent
+    variant, whose trials all failed on main. Mapping-form ``monte_carlo.parameters``
+    blocks are refused by the existing schema check, as on main, and are out of scope."""
     checked = 0
+    refused = []
     for path in sorted(_SCENARIOS.rglob("*.yaml")):
         try:
             cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -217,6 +221,11 @@ def test_every_committed_list_form_scenario_passes_the_dry_run() -> None:
         mc = cfg.get("monte_carlo") if isinstance(cfg, dict) else None
         if not isinstance(mc, dict) or not isinstance(mc.get("parameters"), list):
             continue
-        MonteCarloEngine(cfg)
+        try:
+            MonteCarloEngine(cfg)
+        except MonteCarloConfigError as exc:
+            assert "#1629" in str(exc)
+            refused.append(path.name)
         checked += 1
     assert checked >= 17
+    assert refused == [_FIVE_US_CENT.name]
