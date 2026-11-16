@@ -1,7 +1,19 @@
 """
-ERA5 Wind Data Processing for Dutch Bay Wind Farm
-==================================================
-Extracts wind speed data from ERA5 NetCDF and extrapolates to 150m hub height.
+ERA5 wind data processing for a wind farm's turbine positions.
+==============================================================
+Extracts wind speed data from an ERA5 NetCDF and extrapolates it to the 150 m hub height
+at each counted turbine position of a layout file.
+
+The layout comes from configuration, never from this script (#1775): a YAML file holding a
+``layout.turbines`` list, at its top level or under one top-level block, each entry with
+``id``, ``lat_deg``, ``lon_deg`` and an optional ``role``. Only ``role: counted`` entries (or
+entries without a role) are processed; an ``external_waker`` stands in the flow but belongs
+to another project, so it is listed and skipped. DutchBay's layout is
+``conf/dutchbay_wake_14_turbines.yaml``.
+
+Usage::
+
+    python scripts/process_era5_wind_data.py <era5.nc> <layout.yaml> [<output_dir>]
 
 Author: DutchBay EPC Model Team
 Date: 2025-12-21
@@ -9,32 +21,18 @@ Sprint: 10 (Wind AEP Pipeline)
 """
 
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, cast
+from typing import Any, Dict, List, Mapping, Tuple, cast
 
 import numpy as np
 import pandas as pd
 import xarray as xr
+import yaml
 
-# Dutch Bay turbine coordinates (from ENVISION_ROAD-DATA.pdf)
-TURBINE_LOCATIONS = {
-    "T1": (8.297753, 79.756695),
-    "T2": (8.292500, 79.754700),
-    "T3": (8.288099, 79.752885),
-    "T4": (8.282523, 79.750837),
-    "T5": (8.278638, 79.747152),
-    "T6": (8.279222, 79.753385),
-    "T7": (8.274800, 79.745500),
-    "T8": (8.275226, 79.754207),
-    "T9": (8.270700, 79.744700),
-    "T10": (8.270049, 79.752069),
-    "T11": (8.268449, 79.748162),
-    "T12": (8.263538, 79.743361),
-    "T13": (8.259128, 79.742588),
-    "T14": (8.254646, 79.746097),
-    "T15": (8.252500, 79.741500),
-}
+#: The role of a turbine whose energy belongs to the layout's own project.
+COUNTED_ROLE = "counted"
 
 HUB_HEIGHT = 150  # meters
 
@@ -194,15 +192,74 @@ def process_turbine_location(
     return df, stats
 
 
-def main():
+def load_turbine_layout(
+    layout_file: str,
+) -> Tuple[Dict[str, Tuple[float, float]], List[str]]:
+    """Read the counted turbine positions from a layout YAML.
+
+    Args:
+        layout_file: A YAML file with a ``layout.turbines`` list at its top level or under
+            exactly one top-level block.
+
+    Returns:
+        ``{id: (lat_deg, lon_deg)}`` for the counted turbines in file order, and the ids of
+        the turbines skipped as another project's ``external_waker``.
+
+    Raises:
+        ValueError: The file holds no single ``layout.turbines`` list, an entry is malformed,
+            an id repeats, a role is unknown, or no turbine is counted.
+    """
+    doc = yaml.safe_load(Path(layout_file).read_text(encoding="utf-8"))
+    if not isinstance(doc, Mapping):
+        raise ValueError(f"{layout_file}: must hold a mapping")
+    holders: List[Mapping[str, Any]] = []
+    if isinstance(doc.get("layout"), Mapping):
+        holders.append(doc)
+    holders += [
+        v
+        for v in doc.values()
+        if isinstance(v, Mapping) and isinstance(v.get("layout"), Mapping)
+    ]
+    if len(holders) != 1:
+        raise ValueError(
+            f"{layout_file}: expected exactly one layout.turbines list, "
+            f"found {len(holders)}"
+        )
+    turbines = holders[0]["layout"].get("turbines")
+    if not isinstance(turbines, list) or not turbines:
+        raise ValueError(f"{layout_file}: layout.turbines must be a non-empty list")
+    counted: Dict[str, Tuple[float, float]] = {}
+    skipped: List[str] = []
+    for i, t in enumerate(turbines):
+        if not isinstance(t, Mapping) or not {"id", "lat_deg", "lon_deg"} <= set(t):
+            raise ValueError(
+                f"{layout_file}: layout.turbines[{i}] needs id, lat_deg and lon_deg"
+            )
+        tid = str(t["id"])
+        if tid in counted or tid in skipped:
+            raise ValueError(f"{layout_file}: turbine id {tid!r} repeats")
+        role = str(t.get("role", COUNTED_ROLE))
+        if role == COUNTED_ROLE:
+            counted[tid] = (float(t["lat_deg"]), float(t["lon_deg"]))
+        elif role == "external_waker":
+            skipped.append(tid)
+        else:
+            raise ValueError(f"{layout_file}: turbine {tid}: unknown role {role!r}")
+    if not counted:
+        raise ValueError(f"{layout_file}: no counted turbine")
+    return counted, skipped
+
+
+def main(
+    netcdf_file: str, layout_file: str, output_dir_name: str = "wind_data_output"
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Main processing pipeline."""
     print("=" * 70)
-    print("ERA5 Wind Data Processing for Dutch Bay Wind Farm")
+    print("ERA5 wind data processing at the counted turbine positions")
     print("=" * 70)
 
-    # File paths
-    netcdf_file = "reanalysis-era5-single-levels-timeseries-sfcaey35zsb.nc"
-    output_dir = Path("wind_data_output")
+    turbine_locations, skipped = load_turbine_layout(layout_file)
+    output_dir = Path(output_dir_name)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"\nOutput directory: {output_dir.absolute()}")
@@ -214,13 +271,16 @@ def main():
     # We'll use the same wind data for all turbines as ERA5 is ~31km resolution
     print("\nNote: ERA5 timeseries data is for a single location (~31km grid).")
     print(
-        "Using this data for all 15 turbine locations (acceptable for site assessment)."
+        f"Using this data for all {len(turbine_locations)} counted turbine locations "
+        "(acceptable for site assessment)."
     )
+    if skipped:
+        print(f"Skipped as another project's turbines: {', '.join(skipped)}")
 
     all_data = []
     all_stats = []
 
-    for turbine_id, (lat, lon) in TURBINE_LOCATIONS.items():
+    for turbine_id, (lat, lon) in turbine_locations.items():
         df, stats = process_turbine_location(ds, time_dim, turbine_id, lat, lon)
         all_data.append(df)
         all_stats.append(stats)
@@ -234,14 +294,14 @@ def main():
     df_combined["hour"] = pd.to_datetime(df_combined["timestamp"]).dt.hour
 
     # Save hourly data
-    hourly_file = output_dir / "dutchbay_wind_150m_hourly.csv"
+    hourly_file = output_dir / "wind_150m_hourly.csv"
     df_combined.to_csv(hourly_file, index=False)
     print(f"\n✓ Saved hourly data: {hourly_file}")
     print(f"  Records: {len(df_combined):,}")
 
     # Save summary statistics
     stats_df = pd.DataFrame([vars(s) for s in all_stats])
-    stats_file = output_dir / "dutchbay_wind_150m_summary.csv"
+    stats_file = output_dir / "wind_150m_summary.csv"
     stats_df.to_csv(stats_file, index=False)
     print(f"\n✓ Saved summary statistics: {stats_file}")
 
@@ -249,14 +309,16 @@ def main():
     monthly = (
         df_combined.groupby(["turbine_id", "month"])["ws_150m"].mean().reset_index()
     )
-    monthly_file = output_dir / "dutchbay_wind_150m_monthly.csv"
+    monthly_file = output_dir / "wind_150m_monthly.csv"
     monthly.to_csv(monthly_file, index=False)
     print(f"✓ Saved monthly averages: {monthly_file}")
 
     # Calculate site-wide average
     site_avg = df_combined.groupby("timestamp")["ws_150m"].mean()
     site_stats = {
-        "site": "Dutch Bay (15 turbines)",
+        "layout_file": layout_file,
+        "turbines_counted": len(turbine_locations),
+        "turbines_skipped": skipped,
         "mean_ws_150m": float(site_avg.mean()),
         "std_ws_150m": float(site_avg.std()),
         "p50_ws_150m": float(site_avg.quantile(0.50)),
@@ -266,7 +328,7 @@ def main():
         "years_of_data": len(site_avg) / 8760,
     }
 
-    site_file = output_dir / "dutchbay_site_average.json"
+    site_file = output_dir / "site_average.json"
     with open(site_file, "w") as f:
         json.dump(site_stats, f, indent=2)
     print(f"✓ Saved site average: {site_file}")
@@ -293,4 +355,7 @@ def main():
 
 
 if __name__ == "__main__":
-    df, stats = main()
+    if len(sys.argv) not in (3, 4):
+        print(__doc__)
+        sys.exit(2)
+    main(*sys.argv[1:])

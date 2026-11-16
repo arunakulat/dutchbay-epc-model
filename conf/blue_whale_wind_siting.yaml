@@ -21,8 +21,8 @@ defaults:
   - override hydra/hydra_logging: disabled
 
 site:
-  # DutchBay turbine T2, WGS84. Source: scripts/process_era5_wind_data.py TURBINE_LOCATIONS,
-  # which cites ENVISION_ROAD-DATA.pdf (not in this repository). The local metric frame is
+  # DutchBay turbine T2, WGS84. Source: the layout in conf/dutchbay_wake_14_turbines.yaml,
+  # from ENVISION_ROAD-DATA.pdf (not in this repository). The local metric frame is
   # centred here, and the Blue Whale turbine stands here (turbine_placement below).
   reference_point_name: T2
   reference_lat_deg: 8.2925
