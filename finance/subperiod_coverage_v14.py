@@ -146,6 +146,7 @@ DEBT_ENRICHMENT_KEYS = frozenset(
         "cf_pre_debt",
         "debt_service_total",
         "interest_usd",
+        "senior_fee_deferred_usd",
     }
 )
 
