@@ -26,6 +26,32 @@ def _section_case_insensitive(
     return value if isinstance(value, Mapping) else None
 
 
+def _required_number(value: Any, path: str) -> float:
+    """Return a required financing term as a finite float, or refuse naming ``path``.
+
+    The debt engine used to fill an absent gearing, target DSCR or flat downside factor
+    with Dutch Bay figures (0.70, 1.30, 0.80). Those terms now come only from the
+    scenario YAML; there is no code default (#1429).
+
+    Args:
+        value: The declared value, or ``None`` when the key is absent.
+        path: The YAML path to name in the refusal, e.g. ``Financing_Terms.debt_ratio``.
+
+    Returns:
+        The declared value as a float.
+
+    Raises:
+        ValueError: If the value is absent, not numeric or not finite.
+    """
+    number = as_float(value, None)
+    if number is None or not math.isfinite(number):
+        raise ValueError(
+            f"{path} is required and must be a finite number (got {value!r}); "
+            "there is no code default (#1429). Declare it in the scenario YAML."
+        )
+    return float(number)
+
+
 def _get(d: Dict[str, Any], path: List[str], default: Any = None) -> Any:
     return get_nested(d, path, default)
 

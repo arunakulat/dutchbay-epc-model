@@ -701,6 +701,8 @@ def _authored_config(
         },
         "debt": {
             "jurisdiction_code": debt_jurisdiction,
+            # Required since #1429: no code default for the gearing (was 0.70).
+            "debt_ratio": 0.70,
             "target_dscr": 1.4,
             "interest_rate_pct": 6,
             "term_years": 18,
