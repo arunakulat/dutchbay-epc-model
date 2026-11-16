@@ -65,6 +65,14 @@ def _paths(cfg: Dict[str, Any]) -> tuple[List[float], List[float]]:
 
 
 def _with_fx(cfg: Dict[str, Any], **fx: Any) -> Dict[str, Any]:
+    """Merge ``fx`` overrides as a gateway does, passing them to the helper."""
+    out = copy.deepcopy(cfg)
+    out["fx"].update(fx)
+    return with_usd_opex_fx_reference(cfg, out, {"fx": dict(fx)})
+
+
+def _with_fx_shape_only(cfg: Dict[str, Any], **fx: Any) -> Dict[str, Any]:
+    """The same merge with no overrides passed: only the shape comparison applies."""
     out = copy.deepcopy(cfg)
     out["fx"].update(fx)
     return with_usd_opex_fx_reference(cfg, out)
@@ -143,13 +151,79 @@ def test_helper_marks_a_drift_override_equal_to_the_authored_drift() -> None:
     assert USD_FX_DRIFT_OVERRIDE not in _split(merged)
 
 
-@pytest.mark.parametrize("key", sorted(FX_DRIFT_KEYS))
+_DRIFT_KEYS_LITERAL = [
+    "annual_depr",
+    "annual_depr_pct",
+    "depr_pct",
+    "curve",
+    "curve_lkr_per_usd",
+]
+
+
+def test_drift_key_set_is_pinned() -> None:
+    assert FX_DRIFT_KEYS == frozenset(_DRIFT_KEYS_LITERAL)
+
+
+def _fx_reading(key: str) -> Dict[str, Any]:
+    """A base fx block whose curve reads ``key``, at the wind spot and 0%/yr."""
+    spot = float(_cfg()["fx"]["start_lkr_per_usd"])
+    if key in ("curve", "curve_lkr_per_usd"):
+        return {key: [spot] * 60}
+    return {"start_lkr_per_usd": spot, key: 0.0}
+
+
+@pytest.mark.parametrize("key", _DRIFT_KEYS_LITERAL)
 def test_helper_marks_every_drift_key(key: str) -> None:
     base = _cfg()
-    out = with_usd_opex_fx_reference(
-        base, copy.deepcopy(base), {"fx": {key: base["fx"].get(key)}}
-    )
+    base["fx"] = _fx_reading(key)
+    value = base["fx"][key]
+    out = with_usd_opex_fx_reference(base, copy.deepcopy(base), {"fx": {key: value}})
     assert _split(out)[USD_FX_DRIFT_OVERRIDE] is True
+
+
+@pytest.mark.parametrize(
+    "authored, override, reads",
+    [
+        # The committed wind block authors annual_depr: 0.0, which the curve reads first.
+        ({}, {"annual_depr_pct": 3.0}, "fx.annual_depr"),
+        ({}, {"depr_pct": 3.0}, "fx.annual_depr"),
+        # An explicit curve list wins over every parametric key.
+        ({"curve": [333.79] * 60}, {"annual_depr": 0.03}, "fx.curve"),
+        ({"curve_lkr_per_usd": [333.79] * 60}, {"annual_depr_pct": 3.0}, "fx.curve"),
+        # annual_depr_pct, when truthy, is read before depr_pct.
+        (
+            {"annual_depr": None, "annual_depr_pct": 2.0},
+            {"depr_pct": 3.0},
+            "fx.annual_depr_pct",
+        ),
+    ],
+)
+def test_helper_refuses_a_drift_override_the_curve_does_not_read(
+    authored: Dict[str, Any], override: Dict[str, Any], reads: str
+) -> None:
+    """A shadowed drift key would not move the curve, yet would replace the path."""
+    base = _cfg()
+    base["fx"].update(authored)
+    merged = copy.deepcopy(base)
+    merged["fx"].update(override)
+    with pytest.raises(ValueError, match=reads.replace(".", r"\.")):
+        with_usd_opex_fx_reference(base, merged, {"fx": override})
+
+
+def test_gateway_refuses_a_percent_form_stress_beside_annual_depr() -> None:
+    with pytest.raises(ValueError, match=r"fx\.annual_depr_pct"):
+        evaluate_with_overrides(WIND, {"fx.annual_depr_pct": 3.0})
+
+
+def test_percent_form_stress_runs_at_the_stated_drift_when_it_is_read() -> None:
+    """Without annual_depr, fx.annual_depr_pct = 3 is the same stress as 3%/yr."""
+    base = _cfg()
+    del base["fx"]["annual_depr"]
+    curve_pct, path_pct = _paths(_with_fx(base, annual_depr_pct=3.0))
+    curve_dec, path_dec = _paths(_with_fx(base, annual_depr=0.03))
+    assert path_pct == curve_pct
+    for i, (a, b) in enumerate(zip(path_pct, path_dec, strict=True)):
+        assert a == pytest.approx(b, rel=1e-12), i
 
 
 def test_helper_does_not_mark_a_spot_or_curve_neutral_override() -> None:
@@ -335,6 +409,32 @@ def test_non_flat_base_curve_drift_override_uses_the_stressed_curve() -> None:
     spot = float(base["fx"]["start_lkr_per_usd"])
     # One construction period: year 1 is the spot advanced one step at the drawn rate.
     assert path1[0] == pytest.approx(spot * 1.05, rel=1e-12)
+
+
+def test_drift_flag_path_is_year_aligned_on_a_non_flat_base_curve() -> None:
+    """Closed form through the flag branch: no shift of the curve by a year."""
+    base = _non_flat(_cfg())
+    spot = float(base["fx"]["start_lkr_per_usd"])
+    for drift in (0.0317, 0.03):
+        out = _with_fx(base, annual_depr=drift)
+        assert _split(out)[USD_FX_DRIFT_OVERRIDE] is True
+        curve1, path1 = _paths(out)
+        assert path1 == curve1
+        for i, p1 in enumerate(path1):
+            assert p1 == pytest.approx(spot * (1 + drift) ** (1 + i), rel=1e-12), i
+
+
+def test_shape_branch_alone_replaces_the_path_on_a_drift() -> None:
+    """Without overrides passed (no flag), a changed shape still replaces the path."""
+    base = _cfg()
+    out = _with_fx_shape_only(base, annual_depr=0.03)
+    assert USD_FX_DRIFT_OVERRIDE not in _split(out)
+    curve1, path1 = _paths(out)
+    assert path1 == curve1
+    # The comparison tolerance is tight (relative 1e-12): a 1e-9/yr drift is a change
+    # of shape and replaces the path, while float noise in a spot rescaling is not.
+    near_curve, near_path = _paths(_with_fx_shape_only(base, annual_depr=1e-9))
+    assert near_path == near_curve
 
 
 def test_without_an_own_path_the_reference_is_never_set_and_model_curve_rules() -> None:

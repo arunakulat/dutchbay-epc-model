@@ -16,7 +16,11 @@
     one equal to the authored drift, so a 0%/yr override on the flat-curve wind project gives the
     same result as 1e-9/yr (project IRR 12.76%) with no jump back to the base case (owner ruling,
     2026-11-16). A spot-only or curve-neutral change keeps the own path, which already anchors on
-    the merged spot.
+    the merged spot. An override of a drift key that the merged `fx` block shadows (a percent
+    form beside `annual_depr`, or a parametric key beside an explicit curve) is refused with a
+    `ValueError` naming the key the curve reads; before, it would have put the USD share on an
+    unmoved curve. A percent-of-base tornado on the wind project's zero drift is a pair of 0%/yr
+    stresses, about 35 bp above the base case, reported as a flat bar.
   - `analytics/evaluation_v14.py` (`evaluate_with_overrides`, `evaluate_scenario_from_dict`) and
     `analytics/evaluate_scenario.py`: these Python override gateways, which the Monte Carlo and
     sensitivity tools use, call it after merging. The web API's `/run-pipeline` overrides

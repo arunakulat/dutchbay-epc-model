@@ -924,7 +924,12 @@ ruling of 2026-11-15), and any drift override is a stress, even one equal to the
 (the owner's ruling of 2026-11-16). A 0%/yr override on the wind project, its model curve's own
 drift, therefore gives project IRR 12.76% and equity IRR 11.03%, with opex LKR 5,298M, the same as
 a near-zero drift of 1e-9/yr, so there is no jump at that boundary. The base case, with no
-override, does not move. On the wind project a 3%/yr drift stress now gives project IRR 9.50% (9.60% before)
+override, does not move. A one-way tornado that sweeps the drift by a percentage of its authored
+value therefore runs two 0%/yr stresses on this project: both ends sit about 35 basis points above
+the base case (12.76% against 12.41%) and the bar is reported flat. An override of a drift key the
+FX curve does not read (`fx.annual_depr_pct` or `fx.depr_pct` beside the authored `fx.annual_depr`,
+or a parametric key beside an explicit curve) is refused, naming the key to use, because it would
+not move the curve the USD share is then put on. On the wind project a 3%/yr drift stress now gives project IRR 9.50% (9.60% before)
 and equity IRR 6.61% (6.74%), with life-of-project opex LKR 6,213M (6,013M); at 5.89%/yr, 6.35%
 (7.04%) and LKR 7,523M. A drift below 2.44% now lowers the USD opex (1%/yr: LKR 5,563M). A
 spot-only stress is unchanged, since the path already anchors on the spot. The solar + BESS

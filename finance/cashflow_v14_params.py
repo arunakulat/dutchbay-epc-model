@@ -599,6 +599,58 @@ FX_DRIFT_KEYS = frozenset(
 )
 
 
+def _fx_drift_keys_read(fx: Mapping[str, Any]) -> frozenset[str] | None:
+    """Return the drift key(s) the FX curve resolver reads from this ``fx`` block.
+
+    Mirrors ``finance.cashflow_v14_fx._fx_curve``: a non-empty explicit curve list wins
+    (``curve`` before ``curve_lkr_per_usd``); otherwise ``annual_depr`` when present,
+    even 0.0; otherwise ``annual_depr_pct``, then ``depr_pct``, the first that is
+    truthy (when neither is, both read as 0). ``None`` when the block has neither a
+    curve list nor a parametric start, which the resolver itself refuses.
+    """
+    curve_key = "curve" if fx.get("curve") else "curve_lkr_per_usd"
+    curve = fx.get(curve_key)
+    if isinstance(curve, (list, tuple)) and len(curve) > 0:
+        return frozenset({curve_key})
+    if not any(
+        fx.get(k) is not None
+        for k in ("start_lkr_per_usd", "start", "base", "base_rate")
+    ):
+        return None
+    if fx.get("annual_depr") is not None:
+        return frozenset({"annual_depr"})
+    if fx.get("annual_depr_pct"):
+        return frozenset({"annual_depr_pct"})
+    if fx.get("depr_pct"):
+        return frozenset({"depr_pct"})
+    return frozenset({"annual_depr_pct", "depr_pct"})
+
+
+def _refuse_shadowed_drift_override(
+    named: frozenset[str], merged_fx: Mapping[str, Any]
+) -> None:
+    """Refuse an override of a drift key that the merged ``fx`` block shadows.
+
+    Such an override would not move the model curve, yet as a drift override it
+    would put the USD share on that curve: a 3%/yr stress written as
+    ``fx.annual_depr_pct`` beside an authored ``fx.annual_depr: 0.0`` would run the
+    share at 0%/yr. It is refused, naming the key the curve does read.
+    """
+    read = _fx_drift_keys_read(merged_fx)
+    if read is None:
+        return
+    shadowed = sorted(named - read)
+    if shadowed:
+        raise ValueError(
+            "FX drift override names "
+            + ", ".join(f"fx.{k}" for k in shadowed)
+            + ", which the FX curve does not read in this scenario: "
+            + " / ".join(f"fx.{k}" for k in sorted(read))
+            + " takes precedence, so the stress would not move the curve. Override "
+            "the key the curve reads instead (#1578 L-12)."
+        )
+
+
 def _usd_fx_drift_override(split: Mapping[str, Any]) -> bool:
     """Return ``opex.currency_split.usd_fx_drift_override`` validated as a bool.
 
@@ -676,7 +728,10 @@ def with_usd_opex_fx_reference(
 
     The merged config is returned unchanged (the same object) when there is no USD
     path, when a reference is already set, or when the overrides name no drift key and
-    ``fx`` did not change. Otherwise a copy is returned with fresh ``opex`` and
+    ``fx`` did not change. An override of a drift key that the merged ``fx`` block
+    shadows (a percent form beside ``annual_depr``, or a parametric key beside an
+    explicit curve) is refused, because it would not move the curve the USD share is
+    then put on. Otherwise a copy is returned with fresh ``opex`` and
     ``currency_split`` mappings, so no input is mutated.
     """
     opex = merged.get("opex")
@@ -693,10 +748,16 @@ def with_usd_opex_fx_reference(
     if not isinstance(base_fx, Mapping):
         return merged
     fx_overrides = (overrides or {}).get("fx")
-    drift_override = isinstance(fx_overrides, Mapping) and any(
-        key in fx_overrides for key in FX_DRIFT_KEYS
+    named = (
+        frozenset(k for k in fx_overrides if k in FX_DRIFT_KEYS)
+        if isinstance(fx_overrides, Mapping)
+        else frozenset()
     )
-    if not drift_override and merged.get("fx") == base_fx:
+    drift_override = bool(named)
+    merged_fx = merged.get("fx")
+    if drift_override and isinstance(merged_fx, Mapping):
+        _refuse_shadowed_drift_override(named, merged_fx)
+    if not drift_override and merged_fx == base_fx:
         return merged
     new_split: Dict[str, Any] = {
         **dict(split),
