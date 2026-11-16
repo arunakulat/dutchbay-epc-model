@@ -43,32 +43,13 @@ _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 
 #: (repository-relative path, rule, the literal's opening text) -> why it stays.
 ALLOWED: Dict[Tuple[str, str, str], str] = {
-    # Site-named schema versions: renamed by U2 to U4 (#1578 universal ruling).
+    # Site-named schema versions: renamed by U2 and U4 (#1578 universal ruling). #1725
+    # already renamed the PV + BESS sizing ones.
     (
         "analytics/wind/wind_bess_options.py",
         "site-name",
         "blue_whale_wind_bess_options_v1",
     ): "U2",
-    (
-        "solar_resource/pv_bess_sizing.py",
-        "site-name",
-        "blue_whale_pv_bess_pricing_v1",
-    ): "U3",
-    (
-        "solar_resource/pv_bess_sizing.py",
-        "site-name",
-        "blue_whale_pv_bess_sizing_v1",
-    ): "U3",
-    (
-        "solar_resource/pv_bess_sizing.py",
-        "site-name",
-        "blue_whale_pucsl_fit_2026_v1",
-    ): "U3",
-    (
-        "solar_resource/pv_bess_sizing.py",
-        "site-name",
-        "blue_whale_solar_bess_project_sizing_v1",
-    ): "U3",
     (
         "analytics/finance/blue_whale_fx_tenor_screening.py",
         "site-name",
