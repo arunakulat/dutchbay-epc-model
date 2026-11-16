@@ -151,12 +151,6 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "scripts/run_blue_whale_wind_siting_v14.py": (5, _BLUE_WHALE_RUNNER),
     "scripts/generate_financing_questionnaire.py": (1, _QUESTIONNAIRE),
     "analysis_tools/financing_questionnaire.py": (4, _QUESTIONNAIRE),
-    "scripts/generate_solar_assessment_report.py": (
-        8,
-        "solar assessment report (#1784): its site block and narrative are dropped and "
-        "its code moves into the shared report code (owner's card, 2026-11-16: drop the "
-        "site, reuse its code)",
-    ),
     "analytics/wind/blue_whale_equipment_parity.py": (
         17,
         "single-site adapter kept by #1755 for its byte-identical legacy output; its "
