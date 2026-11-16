@@ -702,6 +702,31 @@ def test_the_turbine_reference_point_must_be_the_placed_turbine() -> None:
         cli.check_turbine_reference_point(raw, s_moved)
 
 
+def test_the_reference_point_check_reads_the_shared_placement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The check reads ``placed_turbine_lat_lon``, the one reading of the point (#1686 D-3)."""
+    raw = yaml.safe_load(CONF.read_text())
+    s_cfg = yaml.safe_load((REPO_ROOT / raw["turbine"]["siting_config"]).read_text())
+    # Under both placement rules, the shared helper and the runner's own placement (still
+    # used for the shadow-flicker geometry) give the same point, bit for bit.
+    for rule in ("reference_point", "coastal_setback"):
+        site = dict(s_cfg["site"], turbine_placement=rule)
+        frame, placement, _ = cli.place_siting_turbine(dict(s_cfg, site=site))
+        lon, lat = frame.to_lon_lat(placement.turbine_east_m, placement.turbine_north_m)
+        coast = json.loads((REPO_ROOT / site["coastline_geojson"]).read_text())
+        assert sf.placed_turbine_lat_lon(site, s_cfg["coastal_setback"], coast) == (
+            float(lat),
+            float(lon),
+        )
+    # A check that bypassed the helper would not see this move.
+    monkeypatch.setattr(
+        sf, "placed_turbine_lat_lon", lambda site, setback, coast: (8.0, 79.0)
+    )
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(raw, s_cfg)
+
+
 def test_the_script_carries_no_hub_height_literal() -> None:
     """130 m lives in shear.hub_height_m; the script reads it (#1538 domain D-1)."""
     import ast
@@ -986,20 +1011,40 @@ def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
         cli.measured_profiles(
             four, alt_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
         )
-    # One height under two spellings is still one height (#1657 D-3).
+    # One height under two spellings is refused before any fit, so it can never pass the
+    # floor as a second height (#1657 D-3).
     twice = four.assign(**{"Speed 110.0 m": four[names["110"]]})
     twice_m = dict(alt_m, speed_avg={**names, "110.0": "Speed 110.0 m"})
-    with pytest.raises(ValueError, match=floor):
+    with pytest.raises(ValueError, match="names the 110 m height twice"):
         cli.measured_profiles(
             twice, twice_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
         )
-    # A non-finite height above the floor is not a second height.
+    # A non-finite height above the floor is refused, not counted as a second height.
     beyond = four.assign(**{"Speed inf m": four[names["110"]]})
     beyond_m = dict(alt_m, speed_avg={**names, "inf": "Speed inf m"})
-    with pytest.raises(ValueError, match=floor):
+    with pytest.raises(ValueError, match="must be finite and above 0 m"):
         cli.measured_profiles(
             beyond, beyond_m, dict(alt_s, log_fit_upper_from_height_m=110.0), n
         )
+    # A height spelled twice is refused even beside two other distinct upper heights, where
+    # the floor alone would pass and the fits would count it twice (#1633 domain R-1).
+    with pytest.raises(ValueError, match="names the 110 m height twice"):
+        cli.measured_profiles(twice, twice_m, alt_s, n)
+    # Zero, negative and non-finite heights are refused by name wherever they sit, not by
+    # numpy inside the all-heights fit (#1633 domain R-2, assurance AS-1).
+    for bad in ("0", "-10", "nan"):
+        below = four.assign(**{f"Speed {bad} m": four[names["40"]]})
+        below_m = dict(alt_m, speed_avg={**names, bad: f"Speed {bad} m"})
+        with pytest.raises(ValueError, match="must be finite and above 0 m"):
+            cli.measured_profiles(below, below_m, alt_s, n)
+    zero_floor_m = dict(alt_m, speed_avg={"0": names["40"], **names})
+    with pytest.raises(ValueError, match="must be finite and above 0 m"):
+        cli.measured_profiles(
+            four, zero_floor_m, dict(alt_s, log_fit_upper_from_height_m=0.0), n
+        )
+    word_m = dict(alt_m, speed_avg={**names, "top": names["110"]})
+    with pytest.raises(ValueError, match="is not a height in metres"):
+        cli.measured_profiles(four, word_m, alt_s, n)
     # Unordered speed map produces identical labels and values
     unordered_names = {h: names[h] for h in ("75", "110", "40", "90", "60")}
     unordered_m = dict(alt_m, speed_avg=unordered_names)
@@ -1165,13 +1210,23 @@ def test_timezone_evidence_moves_with_its_temperature_pressure_and_month_floor()
     )
     # A passing-evidence case at a second pressure height (40 m)
     at40 = cli.timezone_evidence(mast, s["ref"], mcfg, {**tz, "pressure_height_m": 40})
-    assert at40["s2_pressure_tide_maximum_mast_clock_h"] == pytest.approx(
-        ten["s2_pressure_tide_maximum_mast_clock_h"] + 0.5, abs=0.02
-    )
+
+    # S2 is a 12-hour harmonic, so the lag is read on the 12-hour circle: a 10 m maximum
+    # near 12 h must still read as a 0.5 h lag at 40 m (#1633 domain R-3).
+    def s2_lag_h(later: float, earlier: float) -> float:
+        return (later - earlier + 6.0) % 12.0 - 6.0
+
+    assert s2_lag_h(11.8 + 0.5 - 12.0, 11.8) == pytest.approx(0.5)
+    assert s2_lag_h(
+        at40["s2_pressure_tide_maximum_mast_clock_h"],
+        ten["s2_pressure_tide_maximum_mast_clock_h"],
+    ) == pytest.approx(0.5, abs=0.02)
     months10 = ten["s2_maximum_mast_clock_h_by_month"]
     months40 = at40["s2_maximum_mast_clock_h_by_month"]
     assert len(months40) == len(months10) == 4
-    assert months40 == pytest.approx([h + 0.5 for h in months10], abs=0.02)
+    assert [s2_lag_h(a, b) for a, b in zip(months40, months10, strict=True)] == (
+        pytest.approx([0.5] * 4, abs=0.02)
+    )
     with pytest.raises(ValueError, match="does not support"):
         cli.timezone_evidence(mast, s["ref"], mcfg, {**tz, "pressure_height_m": 50})
     with pytest.raises(ValueError, match="no mast.pressure_kpa channel at 50 m"):
@@ -1248,6 +1303,11 @@ def _rerun_differences(got: Any, want: Any, path: str = "") -> list[str]:
     """Return where a re-run summary departs from the committed one; empty when they agree."""
     if isinstance(want, dict) and isinstance(got, dict):
         if not path:
+            # The re-run must carry each unpinned key; only its value goes unchecked
+            # (#1690 lane Low-1).
+            missing = sorted(_RERUN_UNPINNED_KEYS - set(got))
+            if missing:
+                return [f"/: the re-run carries no {missing}"]
             got = {k: v for k, v in got.items() if k not in _RERUN_UNPINNED_KEYS}
             want = {k: v for k, v in want.items() if k not in _RERUN_UNPINNED_KEYS}
         if set(got) != set(want):
@@ -1309,12 +1369,29 @@ def test_rerun_comparison_tolerates_only_float_rounding_and_the_version() -> Non
     assert _rerun_differences({**want, "extra": 1}, want)
     nested_version = changed(("receptors", 0, "model_version"), "15.27.0")
     assert _rerun_differences(nested_version, want)
-    assert (
-        _rerun_differences(
-            {k: v for k, v in want.items() if k != "model_version"}, want
-        )
-        == []
+    # A re-run without model_version is refused, not passed because the key is stripped
+    # from both sides (#1690 lane Low-1).
+    assert _rerun_differences(
+        {k: v for k, v in want.items() if k != "model_version"}, want
+    ) == ["/: the re-run carries no ['model_version']"]
+    # The tolerance is 1e-9 relative: 5e-10 passes and 2e-9 does not (#1690 lane Low-2).
+    assert not _rerun_differences(
+        changed(("receptors", 0, "distance_m"), 53.21 * (1 + 5e-10)), want
     )
+    assert _rerun_differences(
+        changed(("receptors", 0, "distance_m"), 53.21 * (1 + 2e-9)), want
+    )
+    # Non-finite floats match only themselves (#1690 lane Low-3).
+    nan_want = changed(("receptors", 1, "distance_m"), float("nan"))
+    assert not _rerun_differences(json.loads(json.dumps(nan_want)), nan_want)
+    assert _rerun_differences(want, nan_want)
+    assert _rerun_differences(nan_want, want)
+    inf_want = changed(("receptors", 1, "distance_m"), float("inf"))
+    assert not _rerun_differences(json.loads(json.dumps(inf_want)), inf_want)
+    assert _rerun_differences(
+        changed(("receptors", 1, "distance_m"), -math.inf), inf_want
+    )
+    assert _rerun_differences(nan_want, inf_want)
 
 
 _PRIVATE = (
