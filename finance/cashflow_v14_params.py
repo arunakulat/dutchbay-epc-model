@@ -313,6 +313,11 @@ class OpexCurrencySplit:
             changed, the engine translates the USD share on the stressed model curve
             in place of its own path (:func:`with_usd_opex_fx_reference`). ``None``
             for an authored scenario.
+        usd_fx_drift_override: ``True`` when the override explicitly set an FX drift
+            key (see :data:`FX_DRIFT_KEYS`), even to the authored value: the engine
+            then translates the USD share on the model curve whatever its shape, so
+            any drift override is a stress (owner ruling, 2026-11-16). ``False`` for an
+            authored scenario.
     """
 
     usd_share: float
@@ -320,6 +325,7 @@ class OpexCurrencySplit:
     lkr_escalation: float
     usd_lkr_depreciation: float | None
     usd_fx_reference: Dict[str, Any] | None = None
+    usd_fx_drift_override: bool = False
 
 
 _OPEX_SPLIT_KEYS = frozenset(
@@ -330,6 +336,7 @@ _OPEX_SPLIT_KEYS = frozenset(
         "lkr_escalation_pct",
         "usd_lkr_depreciation_pct",
         "usd_fx_reference",
+        "usd_fx_drift_override",
         "basis",
         "source",
         "note",
@@ -578,10 +585,37 @@ def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | 
         lkr_escalation=lkr_escalation,
         usd_lkr_depreciation=depreciation,
         usd_fx_reference=_usd_fx_reference(split, depreciation),
+        usd_fx_drift_override=_usd_fx_drift_override(split),
     )
 
 
 USD_FX_REFERENCE = "usd_fx_reference"
+USD_FX_DRIFT_OVERRIDE = "usd_fx_drift_override"
+
+#: Keys of the ``fx`` block that set the model curve's drift. An override that names
+#: any of them, even with the authored value, is an FX drift stress.
+FX_DRIFT_KEYS = frozenset(
+    {"annual_depr", "annual_depr_pct", "depr_pct", "curve", "curve_lkr_per_usd"}
+)
+
+
+def _usd_fx_drift_override(split: Mapping[str, Any]) -> bool:
+    """Return ``opex.currency_split.usd_fx_drift_override`` validated as a bool.
+
+    The flag has a meaning only beside a reference, which the gateway sets with it.
+    """
+    flag = split.get(USD_FX_DRIFT_OVERRIDE)
+    if flag is None:
+        return False
+    where = f"opex.currency_split.{USD_FX_DRIFT_OVERRIDE}"
+    if not isinstance(flag, bool):
+        raise ValueError(f"{where} must be true or false; got {flag!r}")
+    if flag and split.get(USD_FX_REFERENCE) is None:
+        raise ValueError(
+            f"{where} applies only beside {USD_FX_REFERENCE}, which the override "
+            "gateway sets with it"
+        )
+    return flag
 
 
 def _usd_fx_reference(
@@ -615,28 +649,35 @@ def _usd_fx_reference(
 
 
 def with_usd_opex_fx_reference(
-    base: Mapping[str, Any], merged: Dict[str, Any]
+    base: Mapping[str, Any],
+    merged: Dict[str, Any],
+    overrides: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Pin the base ``fx`` block beside a USD opex path when overrides moved ``fx``.
+    """Pin the base ``fx`` block beside a USD opex path when overrides touched ``fx``.
 
     A scenario whose USD opex share has its own FX path
     (``opex.currency_split.usd_lkr_depreciation_pct``) does not read the model FX curve,
     so an override of ``fx`` (an FX stress, or a Monte Carlo drift draw) would not reach
     that share. The Python override gateways (``evaluate_with_overrides``,
     ``evaluate_scenario_from_dict`` and ``analytics.evaluate_scenario``) call this after
-    merging; the web API's ``/run-pipeline`` overrides do not yet. When the merged
-    ``fx`` block differs from the base one, the base block is recorded as
-    ``opex.currency_split.usd_fx_reference``. The engine compares the merged model
-    curve with that reference, each relative to its own spot. When the shape changed
-    (a drift stress or draw), the stressed model curve replaces the USD share's own path,
-    so a drift of x runs the share at x, not at x on top of the authored rate (owner
-    ruling, 2026-11-15). When only the spot or a curve-neutral key changed, the own path
-    is kept; it already anchors on the merged spot.
+    merging, passing the expanded (nested) overrides; the web API's ``/run-pipeline``
+    overrides do not yet.
+
+    When ``overrides`` names an FX drift key (:data:`FX_DRIFT_KEYS`) under ``fx``, the
+    override is a drift stress whatever its value, even the authored one (owner ruling,
+    2026-11-16: any override is a stress). The base ``fx`` block is recorded as
+    ``opex.currency_split.usd_fx_reference`` and ``usd_fx_drift_override`` is set, and
+    the engine translates the USD share on the model curve in place of its own path, so
+    a drift of x runs the share at x, not at x on top of the authored rate (owner ruling,
+    2026-11-15), and an override at the model curve's own drift does not jump back to
+    the own path. When ``fx`` changed without a drift key (a spot or curve-neutral
+    override), only the reference is recorded: the engine compares the two curves'
+    shapes, each relative to its own spot, and keeps the own path while they match.
 
     The merged config is returned unchanged (the same object) when there is no USD
-    path, when ``fx`` did not change, or when a reference is already set. Otherwise a
-    copy is returned with fresh ``opex`` and ``currency_split`` mappings, so neither
-    input is mutated.
+    path, when a reference is already set, or when the overrides name no drift key and
+    ``fx`` did not change. Otherwise a copy is returned with fresh ``opex`` and
+    ``currency_split`` mappings, so no input is mutated.
     """
     opex = merged.get("opex")
     if not isinstance(opex, Mapping):
@@ -649,14 +690,23 @@ def with_usd_opex_fx_reference(
     if split.get(USD_FX_REFERENCE) is not None:
         return merged
     base_fx = base.get("fx")
-    if not isinstance(base_fx, Mapping) or merged.get("fx") == base_fx:
+    if not isinstance(base_fx, Mapping):
         return merged
-    out = dict(merged)
-    out["opex"] = dict(opex)
-    out["opex"]["currency_split"] = {
+    fx_overrides = (overrides or {}).get("fx")
+    drift_override = isinstance(fx_overrides, Mapping) and any(
+        key in fx_overrides for key in FX_DRIFT_KEYS
+    )
+    if not drift_override and merged.get("fx") == base_fx:
+        return merged
+    new_split: Dict[str, Any] = {
         **dict(split),
         USD_FX_REFERENCE: copy.deepcopy(dict(base_fx)),
     }
+    if drift_override:
+        new_split[USD_FX_DRIFT_OVERRIDE] = True
+    out = dict(merged)
+    out["opex"] = dict(opex)
+    out["opex"]["currency_split"] = new_split
     return out
 
 
@@ -938,6 +988,9 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         opex_usd_fx_reference=(
             opex_split.usd_fx_reference if opex_split is not None else None
         ),
+        opex_usd_fx_drift_override=(
+            opex_split.usd_fx_drift_override if opex_split is not None else False
+        ),
         opex_pre_cod_years=_resolve_opex_pre_cod_years(raw),
     )
 
@@ -1188,4 +1241,5 @@ __all__ = [
     "_extract_parameters",
     "validate_parameters",
     "with_usd_opex_fx_reference",
+    "FX_DRIFT_KEYS",
 ]

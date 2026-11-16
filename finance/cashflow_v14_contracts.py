@@ -101,6 +101,11 @@ class CashflowParams:
       reference's, the stressed model curve replaces the own path, so an FX drift stress
       or a Monte Carlo drift draw runs the USD share at the drawn rate. A spot-only or
       curve-neutral change keeps the own path.
+    - opex_usd_fx_drift_override: bool (default False). Set with the reference when the
+      override explicitly named an FX drift key, even with the authored value. The
+      stressed model curve then replaces the own path whatever its shape, so any drift
+      override is a stress and there is no jump at the authored drift (owner ruling,
+      2026-11-16).
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
@@ -131,6 +136,7 @@ class CashflowParams:
     opex_lkr_escalation_pct: float = 0.0
     opex_usd_lkr_depreciation_pct: Optional[float] = None
     opex_usd_fx_reference: Optional[Dict[str, Any]] = None
+    opex_usd_fx_drift_override: bool = False
     opex_pre_cod_years: int = 0
 
 

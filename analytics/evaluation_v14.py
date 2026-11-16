@@ -382,9 +382,9 @@ def evaluate_scenario_from_dict(
         >>> kpis["project_irr"]
         0.142
     """
+    expanded = expand_dotted_overrides(overrides or {})
     merged_config = with_usd_opex_fx_reference(
-        config,
-        _deep_merge_config(config, expand_dotted_overrides(overrides or {})),
+        config, _deep_merge_config(config, expanded), expanded
     )
     result = _run_pipeline_with_config(merged_config)
 
@@ -462,12 +462,11 @@ def evaluate_with_overrides(
 
     # Merge overrides (dotted keys like "tax.corporate_tax_rate" are expanded to
     # nested form first so they actually apply — see expand_dotted_overrides).
-    merged_config = _deep_merge_config(
-        base_config, expand_dotted_overrides(overrides or {})
-    )
+    expanded = expand_dotted_overrides(overrides or {})
+    merged_config = _deep_merge_config(base_config, expanded)
     # An override of ``fx`` must also reach a USD opex share that has its own FX
     # path (opex.currency_split.usd_lkr_depreciation_pct; #1578 L-12).
-    merged_config = with_usd_opex_fx_reference(base_config, merged_config)
+    merged_config = with_usd_opex_fx_reference(base_config, merged_config, expanded)
 
     # Run pipeline
     full_result = _run_pipeline_with_config(

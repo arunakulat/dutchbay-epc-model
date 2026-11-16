@@ -284,9 +284,14 @@ def _prepare_cashflow_context(
             # is the fx block the path was authored against. Each curve is compared
             # relative to its own spot: a spot-only or curve-neutral change leaves the
             # shape equal, and the own path (already anchored on the merged spot) is
-            # kept. No reference (every authored scenario) leaves the path as built.
+            # kept. An override that named a drift key is a stress whatever its value
+            # (owner ruling, 2026-11-16): the model curve replaces the own path even when
+            # the drift equals the authored one, so there is no jump at that boundary.
+            # No reference (every authored scenario) leaves the path as built.
             reference = params_dict.get("opex_usd_fx_reference")
-            if reference is not None:
+            if reference is not None and params_dict.get("opex_usd_fx_drift_override"):
+                usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
+            elif reference is not None:
                 ref_config = {"fx": reference}
                 ref_spot = _financial_close_spot(ref_config)
                 if ref_spot is None:

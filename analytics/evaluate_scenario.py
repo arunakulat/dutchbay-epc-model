@@ -102,9 +102,10 @@ def evaluate_with_overrides(
     #    top-level key and silently dropped it — the phantom-solver footgun where a
     #    solver sweeping "capex.usd_total" through this gateway no-ops while the
     #    optimizer's gateway honours it. Nested-dict overrides pass through unchanged.
+    expanded = expand_dotted_overrides(overrides) if overrides else {}
     merged_cfg = (
         with_usd_opex_fx_reference(
-            raw_cfg, _deep_merge_dicts(raw_cfg, expand_dotted_overrides(overrides))
+            raw_cfg, _deep_merge_dicts(raw_cfg, expanded), expanded
         )
         if overrides
         else raw_cfg
