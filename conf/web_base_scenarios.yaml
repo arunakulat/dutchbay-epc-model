@@ -1,0 +1,11 @@
+# Web app base scenarios (#1759).
+#
+# The web wizard and the analysis jobs start from one of these committed scenarios and
+# merge the form fields over it (app.models.inputs.WindFarmInputs.to_scenario_config).
+# The variant names are fixed by the web form; which scenario each one loads is project
+# data, so it lives here and not in code. Paths are repository-relative.
+schema_version: web_base_scenarios_v1
+variants:
+  lendercase: scenarios/dutchbay_lendercase_2025Q4.yaml
+  basecase: scenarios/dutchbay_basecase_2025Q4.yaml
+  equitycase: scenarios/dutchbay_equitycase_2025Q4.yaml

@@ -241,9 +241,13 @@ def main() -> None:  # pragma: no cover - config-driven CLI (no argparse)
 
     from omegaconf import OmegaConf
 
-    cfg_path = os.environ.get(
-        "GIS_EXPORT_CONFIG", "wind_resource/config/gis_export_dutchbay.yaml"
-    )
+    # #1759: no site default; the run names its GIS config.
+    cfg_path = os.environ.get("GIS_EXPORT_CONFIG")
+    if not cfg_path:
+        raise SystemExit(
+            "GIS_EXPORT_CONFIG must name the GIS export config (a dedicated file or a "
+            "scenario with a gis: block); there is no default site"
+        )
     full = OmegaConf.to_container(OmegaConf.load(cfg_path), resolve=True)
     assert isinstance(full, dict)
     gis_cfg = full.get("gis", full)  # dedicated file OR a scenario `gis:` block

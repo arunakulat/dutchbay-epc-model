@@ -1,0 +1,44 @@
+# Approved AEP data sources (#1759).
+#
+# The source registry analytics.loader.aep_loader validates manifest source IDs against.
+# Source names, project references and descriptions are project data, so they live here
+# and not in code. The IDs are referenced by committed AEP manifests and must not change.
+# Loaded once at import into aep_loader.APPROVED_SOURCES (and its frozen
+# BUILTIN_APPROVED_SOURCES copy).
+schema_version: aep_approved_sources_v1
+sources:
+  OEM_ENVISION_EN171_65_PC:
+    type: OEM
+    description: Envision EN-171/6.5 MW certified power curve (canonical)
+    iec_standard: 61400-12-1:2022
+    certificate: CGC-B-FNc-2024-184
+    curve_key: envision_en171_6p5
+  OEM_VESTAS_V150_56_PC:
+    type: OEM
+    description: Vestas V150-5.6 MW power curve (150 m rotor). Proxy for the ~5 MW / <=160
+      m-rotor class at the Mullikulam (Mannar) 2x50 MW project; the spec turbine is the Envision
+      EN-156/5.0, whose certified curve is not yet in the store.
+    iec_standard: 61400-12-1:2022
+    curve_key: vestas_v150_5p6
+  OEM_ENVISION_EN171_10_PC:
+    type: OEM
+    description: Envision EN-171-10.0 MW power curve (PLACEHOLDER, extrapolated from 6.5 MW;
+      superseded by OEM_ENVISION_EN171_65_PC)
+    iec_standard: 61400-12-1:2022
+    certificate: CGC-B-FNc-2024-184 (extrapolated)
+  IEA_REFERENCE_10MW_198_PC:
+    type: REFERENCE
+    description: 'IEA Wind Task 37 10 MW reference turbine (198 m rotor, ~10.64 MW, 345 W/m2):
+      open community reference with published power + thrust (Ct) curves, used as a representative
+      low-specific-power 10 MW-class machine for the 15 x 10 MW DutchBay re-model. Not OEM-certified.
+      Density per 61400-12-1; uncertainty per 61400-15-2.'
+    iec_standard: 61400-12-1:2022
+    curve_key: iea_reference_10mw
+  ECMWF_ERA5_2020_2024_DUTCHBAY:
+    type: ECMWF
+    description: ERA5 reanalysis 2020-2024 for Dutch Bay
+    iec_standard: 61400-15-1:2025
+  NREL_WTK_SRI_LANKA_2020_2024:
+    type: NREL
+    description: NREL Wind Toolkit for Sri Lanka 2020-2024
+    iec_standard: 61400-15-1:2025

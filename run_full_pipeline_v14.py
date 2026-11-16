@@ -411,11 +411,17 @@ def _run_wind_producer(
     # The producer reads location from its own Hydra config; we extract it
     # from the scenario YAML so the two CLIs stay aligned.
     scenario_dict = _load_yaml_scenario(scenario_yaml_path)
-    location = (
-        scenario_dict.get("wind_resource", {}).get("location")
-        or scenario_dict.get("project", {}).get("location")
-        or "dutchbay"
-    )
+    location = scenario_dict.get("wind_resource", {}).get(
+        "location"
+    ) or scenario_dict.get("project", {}).get("location")
+    if not location:
+        # #1759: no site default. A scenario that names no location used to run as one
+        # particular site; the model is universal, so the scenario must say where it is.
+        raise ValueError(
+            "wind_auto_orchestrate needs the scenario to name its location "
+            "(wind_resource.location or project.location); "
+            f"{scenario_yaml_path} names none"
+        )
 
     # Producer prints JSON to stdout per its CLI contract; capture it.
     repo_root = Path(__file__).resolve().parent
