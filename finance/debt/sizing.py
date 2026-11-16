@@ -12,6 +12,7 @@ from finance.debt.helpers import (
     _as_float,
     _config_at_debt_ratio,
     _npv,
+    _required_number,
     _section_case_insensitive,
     _truthy_flag,
 )
@@ -143,11 +144,16 @@ def _resolve_downside_ratio(
     Config-first: an explicit ``Financing_Terms.downside_cfads_factor`` override, else the
     REAL bankable P90/P50 AEP ratio from ``expected_results`` (when
     ``downside_aep_source: p90``), else the legacy flat ``dscr_p99_downside_factor`` (0.80
-    proxy). Returns ``(ratio, source)``.
+    proxy). Returns ``(ratio, source)``. None of the three has a code default (#1429):
+    a declared factor must be a number, and the flat factor must be declared when the
+    other two do not resolve.
     """
     override = fin.get("downside_cfads_factor")
     if override is not None:
-        return _as_float(override, 0.80), "explicit_factor"
+        return (
+            _required_number(override, "Financing_Terms.downside_cfads_factor"),
+            "explicit_factor",
+        )
     source = str(fin.get("downside_aep_source", "p90")).lower()
     if source == "p90":
         er = _section_case_insensitive(config, "expected_results") or {}
@@ -155,7 +161,93 @@ def _resolve_downside_ratio(
         p90 = _as_float(er.get("net_aep_p90_gwh"), 0.0)
         if p50 > 0.0 and p90 > 0.0:
             return p90 / p50, "p90_aep"
-    return _as_float(fin.get("dscr_p99_downside_factor"), 0.80), "flat_factor"
+    return (
+        _required_number(
+            fin.get("dscr_p99_downside_factor"),
+            "Financing_Terms.dscr_p99_downside_factor (needed because neither "
+            "Financing_Terms.downside_cfads_factor nor an expected_results "
+            "net_aep_p50_gwh / net_aep_p90_gwh pair resolves)",
+        ),
+        "flat_factor",
+    )
+
+
+#: Financing_Terms.debt_sizing modes that run the DSCR autosolve (_maybe_autosolve_dscr).
+_DSCR_SIZING_MODES = ("dual_dscr", "auto_dscr", "dscr_sculpt")
+
+#: Where each financing section may declare the gearing, in the extractor's order.
+_GEARING_KEYS: Dict[str, Tuple[str, ...]] = {
+    "Financing_Terms.": ("debt_ratio", "debt_pct", "leverage_pct"),
+    "financing.": ("debt_ratio",),
+    "debt.": ("debt_ratio", "debt_ratio_pct", "leverage_pct"),
+    "": ("debt_ratio",),
+}
+
+
+def resolve_debt_sizing_terms(config: Mapping[str, Any]) -> Dict[str, float]:
+    """The required debt-sizing terms, refused at pre-flight when absent (#1429).
+
+    The engine used to fill an absent gearing, target DSCR or flat P99 downside factor
+    with Dutch Bay figures (0.70, 1.30, 0.80). Each is now read from YAML only and
+    refused where the engine uses it; this resolver makes the same reads up front so
+    ``analytics.schema_guard`` can refuse before evaluation, naming the path:
+
+    * the gearing and the target DSCR, from the section the debt layer reads
+      (``Financing_Terms``, else ``financing``, else ``debt``, else the top level);
+    * under a DSCR sizing mode, ``Financing_Terms.debt_ratio`` and
+      ``Financing_Terms.target_dscr`` themselves (the autosolve reads those keys), and
+      the flat ``Financing_Terms.dscr_p99_downside_factor`` whenever the autosolve would
+      read it: always without ``bind_downside``, and with it only when neither
+      ``downside_cfads_factor`` nor a P50/P90 AEP pair resolves.
+
+    Args:
+        config: The scenario configuration.
+
+    Returns:
+        The resolved terms, keyed ``debt_ratio`` and ``target_dscr`` (and
+        ``dscr_p99_downside_factor`` when it is read).
+
+    Raises:
+        ValueError: Naming the first required term that is absent or not a number.
+    """
+    from finance.debt.terms import _financing_key_prefix
+
+    prefix = _financing_key_prefix(config)
+    if prefix:
+        section = _section_case_insensitive(config, prefix[:-1]) or {}
+    else:
+        section = config
+    gearing_keys = _GEARING_KEYS[prefix]
+    gearing_key = next(
+        (k for k in gearing_keys if section.get(k) is not None), gearing_keys[0]
+    )
+    terms: Dict[str, float] = {
+        "debt_ratio": _required_number(
+            section.get(gearing_key), f"{prefix}{gearing_key}"
+        ),
+        "target_dscr": _required_number(
+            section.get("target_dscr"), f"{prefix}target_dscr"
+        ),
+    }
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    if str(fin.get("debt_sizing", "")).lower() not in _DSCR_SIZING_MODES:
+        return terms
+    terms["debt_ratio"] = _required_number(
+        fin.get("debt_ratio"), "Financing_Terms.debt_ratio"
+    )
+    terms["target_dscr"] = _required_number(
+        fin.get("target_dscr"), "Financing_Terms.target_dscr"
+    )
+    if _truthy_flag(fin.get("bind_downside")):
+        ratio, source = _resolve_downside_ratio(dict(config), fin)
+        if source == "flat_factor":
+            terms["dscr_p99_downside_factor"] = ratio
+    else:
+        terms["dscr_p99_downside_factor"] = _required_number(
+            fin.get("dscr_p99_downside_factor"),
+            "Financing_Terms.dscr_p99_downside_factor",
+        )
+    return terms
 
 
 def _gearing_hint(
@@ -199,11 +291,11 @@ def _maybe_autosolve_dscr(
     """
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     mode = str(fin.get("debt_sizing", "")).lower()
-    if mode not in ("dual_dscr", "auto_dscr", "dscr_sculpt"):
+    if mode not in _DSCR_SIZING_MODES:
         return config, None
 
-    target = _as_float(fin.get("target_dscr"), 1.30)
-    max_ratio = _as_float(fin.get("debt_ratio"), 0.70)
+    target = _required_number(fin.get("target_dscr"), "Financing_Terms.target_dscr")
+    max_ratio = _required_number(fin.get("debt_ratio"), "Financing_Terms.debt_ratio")
     solved = _solve_gearing_for_dscr(
         config,
         annual_rows,
@@ -241,7 +333,10 @@ def _maybe_autosolve_dscr(
             binding_gearing, binding_case = solved_p90, "P90"
         downside = downside_ratio
     else:
-        downside = _as_float(fin.get("dscr_p99_downside_factor"), 0.80)
+        downside = _required_number(
+            fin.get("dscr_p99_downside_factor"),
+            "Financing_Terms.dscr_p99_downside_factor",
+        )
         downside_source = "flat_factor"
 
     resized = copy.deepcopy(config)

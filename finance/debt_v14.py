@@ -97,6 +97,7 @@ from finance.debt.sizing import (  # noqa: F401
     _maybe_autosolve_dscr,
     _resolve_downside_ratio,
     _solve_gearing_for_dscr,
+    resolve_debt_sizing_terms,
     size_debt_with_dual_dscr,
 )
 from finance.debt.terms import (  # noqa: F401
