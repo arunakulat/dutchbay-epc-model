@@ -250,6 +250,10 @@ def _enrich_annual_rows_with_debt(
     # touches cf_after_debt.
     balloon_interest_accrued = list(debt_result.get("balloon_interest") or [])
     balloon_interest_paid = list(debt_result.get("balloon_interest_paid") or [])
+    # Senior fee a cash sweep could not pay, carried at the end of each balloon period
+    # (#1539). Same PERIOD index; None where the balloon path does not govern. Surfaced
+    # on each row so the equity waterfall settles the arrears ahead of any distribution.
+    senior_fee_deferred = list(debt_result.get("senior_fee_deferred_usd") or [])
     # debt_service_total is PERIOD-indexed (offset by the construction + bridge
     # lead-in). Align each annual row to its debt period via the canonical map;
     # positional indexing attributed each year an earlier (higher-CFADS) year's
@@ -401,6 +405,16 @@ def _enrich_annual_rows_with_debt(
         )
         out["balloon_interest_paid_usd"] = _period_value(
             balloon_interest_paid, period_idx
+        )
+        # None (not 0.0) where the balloon path does not govern this period: the
+        # waterfall then carries the last governed balance forward (#1539).
+        deferred_value = (
+            senior_fee_deferred[period_idx]
+            if 0 <= period_idx < len(senior_fee_deferred)
+            else None
+        )
+        out["senior_fee_deferred_usd"] = (
+            None if deferred_value is None else float(deferred_value)
         )
         out["cf_after_debt"] = (
             cf_pre_debt - debt_service_value - balloon_resolution_value
@@ -1054,6 +1068,9 @@ def _update_kpis_with_equity_distribution(
         # P2-F3-01 (#1398): a DSCR<1 year's shortfall and the sponsor cure that funded it.
         ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
         ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
+        # #1539: the deferred senior fee still unpaid after the waterfall settled what
+        # its cash could. Overwrites the engine-level figure metrics.py published.
+        ("senior_fee_unpaid_at_horizon_usd", "senior_fee_deferred_residual"),
     ):
         value = summary_raw.get(source_key)
         if value is not None:
@@ -1147,10 +1164,18 @@ def run_v14_pipeline_enhanced(
 
         # #1569: a declared capex price date escalates capex.usd_total to the
         # construction draws, once, on the configuration evaluated below. Without a
-        # capex.price_basis block the config is unchanged.
-        from finance.capex_price_basis import apply_capex_price_basis
+        # capex.price_basis block the config is unchanged. #1591 D-1/A-1: any other
+        # capex amount the engine reads is escalated automatically, and disclosed in
+        # the result's "capex_price_basis" block (present only then) and the log.
+        from finance.capex_price_basis import (
+            apply_capex_price_basis,
+            automatic_escalation,
+        )
 
         cfg = apply_capex_price_basis(cfg)
+        capex_price_basis_auto = automatic_escalation(cfg)
+        if capex_price_basis_auto is not None:
+            metrics.validation_warnings.append(capex_price_basis_auto["warning"])
 
         # Reproducibility stamp (#577): built INSIDE the engine from the ALREADY-
         # RESOLVED ``cfg`` (no config re-load), immediately after resolution + schema
@@ -1492,6 +1517,9 @@ def run_v14_pipeline_enhanced(
             },
             "run_manifest": run_manifest,
         }
+        if capex_price_basis_auto is not None:
+            # Render-when-present: a run with no automatic escalation keeps its keys.
+            result["capex_price_basis"] = capex_price_basis_auto
 
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",

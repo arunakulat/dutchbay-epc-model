@@ -488,6 +488,12 @@ SECDEP_01_REQUIRED_CONTROLS = (
     "committed declarative keys",
     "runner-host state",
     "runtime environment files",
+    "any preceding workflow step (it can change the checkout, the toolchain or the GitHub "
+    "runtime environment files)",
+    "a cancel-in-progress other than false is rejected",
+    "a concurrency value written wholly as one expression",
+    "does not stop GitHub cancelling a pending run",
+    "any strategy on the gate job is rejected",
     "environment-selected vulnerability service",
     "asserted clean against the committed Makefile",
     "No expectation assumes the allowlist is empty",

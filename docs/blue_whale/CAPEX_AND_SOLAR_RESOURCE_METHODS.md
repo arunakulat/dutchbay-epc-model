@@ -50,8 +50,8 @@ Every anchor, normalised to USD per kW of installed wind capacity, or USD per kW
 
 | Anchor | Kind | Date | Scope | Basis | Use |
 |---|---|---|---|---|---|
-| Envision 10 MW / 40 MWh offer, public per-kWh restatement (`scenarios/nso250_ltl_unit_base.yaml`) | public figure; split private | 2026-08-31 | CIF Colombo excluding duty and taxes: DC block, PCS and MV, SCADA and EMS, commissioning guidance, transport | USD 99.50 per kWh contracted | equipment weight 0.125 |
-| Envision 11 MW / 44 MWh offer (`scenarios/nso250_ltl_unit_upside.yaml`) | public figure; split private | 2026-08-31 | as above | USD 98.68 per kWh contracted | equipment weight 0.125 |
+| A generic battery supplier's 10 MW / 40 MWh offer, public per-kWh restatement (`scenarios/nso250_ltl_unit_base.yaml`) | public figure; split private | 2026-08-31 | CIF Colombo excluding duty and taxes: DC block, PCS and MV, SCADA and EMS, commissioning guidance, transport | USD 99.50 per kWh contracted | equipment weight 0.125 |
+| A generic battery supplier's 11 MW / 44 MWh offer (`scenarios/nso250_ltl_unit_upside.yaml`) | public figure; split private | 2026-08-31 | as above | USD 98.68 per kWh contracted | equipment weight 0.125 |
 | Second OEM quotation (`NSO250MW-OFFERS-HANDLING-2026-09-04`) | private, blended only | 2026-08-31 | containers, PCS and MV skid, EMS, commissioning; one site; no Incoterm | per kWh contracted (11 MW x 4 h assumed) | equipment weight 0.25 (treated as FOB, freight +4%) |
 | NSO 250 bid-implied equipment (`scenarios/nso250_ltl_unit_bidimplied.yaml`) | public | 2026-09 | what the winning bids can carry at 14%, not a price | USD 48.88 per kWh contracted | comparison only (the private bid-opening analysis behind it was not used further) |
 | NSO 250 build-up (`scenarios/nso250_ltl_unit_base.yaml`) | public | 2026-09 | BoP 14.00, augmentation 8.00 per kWh, land and auxiliaries 10% of total | per kWh contracted | BoP (low, mode), augmentation, land share |
@@ -140,7 +140,7 @@ At the mode the wind project (turbine 8,899,980 plus the USD 2.0M B26 line) is U
 IRENA, 1,420 EIA prudent) and below the USD 1,300/kW placeholder it replaces. The BESS mode is
 4.3% above PR 3's 135.00, mainly because the Blue Whale scenarios carry no `taxes_indirect`
 block, so the levies now sit in the capex, and because of the EPC wrap; the blended equipment
-CIF (89.19) is 10% below the Envision restatement.
+CIF (89.19) is 10% below the generic battery supplier's restatement.
 
 ## 5. Solar resource and efficacy at the site
 
@@ -243,6 +243,14 @@ loses value at the margin, so the run returns its grid floor, not an optimum: 10
 "Battery floor 0.1 MW, PV unchanged"). The blended BESS price is applied per kWh at that size,
 which a small battery is unlikely to achieve (L-10). The battery curve, sensitivities and
 break-even values are in `STATUS.md`.
+
+From scenario v0.10 (#1578 L-11) the solar + BESS sizing models the battery's fade and its
+augmentation explicitly, so it takes the NSO 250 augmentation reserve (USD 8.00/kWh before land
+and auxiliaries, 8.89 in the all-in) out of every BESS price: the mode it applies is USD
+131.85/kWh. The blend itself, and the all-in the pricing config states, are unchanged; the
+hybrid and PR 3's sizing still carry the reserve. Each augmentation is priced at the equipment
+line (USD 103.55/kWh added, an assumption). Method and figures: `STATUS.md`, "Battery fade and
+augmentation".
 
 ## 7. References
 
