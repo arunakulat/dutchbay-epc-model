@@ -6,10 +6,15 @@
     except grid screening, and `emit_all=false` runs no emitter, as before.
   - An emitter whose inputs the run lacks is not run. The run records why under
     `result['emitters']`, which every default run now carries. Monte Carlo parameters are
-    read with the engine's own parser before the run, so a block the engine cannot read is
-    listed with the engine's reason.
+    read with the engine's own parser before the run, so a block the engine cannot read,
+    including a non-numeric bound such as `low: null`, is listed with the parser's error.
+  - The default export directory is shared between runs. Under `emit_all`, an emitter that
+    is not run or fails has its earlier output at the default path removed, so another
+    run's report never sits beside this run's figures. The entry under `emitters` names the
+    removed files in `removed_stale_outputs`. An explicitly configured path, an explicit
+    switch and `emit_all=false` leave files alone.
   - The run writes `kpis.json`, `debt_result.json`, `equity_distribution.json` and
-    `annual_rows.csv` before any emitter runs. An emitter switched on by `emit_all` that
+    `annual_rows.csv` before it plans or runs any emitter. An emitter switched on by `emit_all` that
     fails is recorded as `failed` with its error and logged; the run completes. An emitter
     switched on explicitly still stops the run when it fails.
   - Default runs change. They now write the executive workbook, and they write the
@@ -25,7 +30,8 @@
     `run_all_NOV26.sh` workbook and capital-risk step repeats what the default already
     wrote. The release asset gains the three files above.
   - The executive workbook carries the F-5 non-reliance notice on its first sheet
-    ("Summary"), one blank row below the KPI table (owner ruling, 2026-11-16 07:19Z).
+    ("Summary"), one blank row below the KPI table (owner ruling, 2026-11-16 07:19Z). The
+    capital-risk report carries the same notice on its cover. Other reports are unchanged.
   - KPIs, `debt_result`, the equity distribution and `annual_rows.csv` are byte-identical
     with `emit_all` on and off.
   - The emitters' lender guards are unchanged.
