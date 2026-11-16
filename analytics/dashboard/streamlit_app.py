@@ -10,11 +10,13 @@ removed/renamed APIs (the previous version imported five symbols that no longer
 exist; this is the cleaned rewrite).
 
 Run with:
-    streamlit run analytics/dashboard/streamlit_app.py
+    DUTCHBAY_DASHBOARD_SCENARIO=scenarios/<scenario>.yaml \\
+        streamlit run analytics/dashboard/streamlit_app.py
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -31,9 +33,13 @@ st.caption(
     "FastAPI /run-tornado/ endpoint (analytics.core.sensitivity_runner)."
 )
 
+# #1759: no site default. The scenario comes from DUTCHBAY_DASHBOARD_SCENARIO or the input.
 config_path = st.text_input(
-    "Scenario config path", "scenarios/dutchbay_lendercase_2025Q4.yaml"
+    "Scenario config path", os.environ.get("DUTCHBAY_DASHBOARD_SCENARIO", "")
 )
+if not config_path:
+    st.info("Enter the scenario YAML to analyse (or set DUTCHBAY_DASHBOARD_SCENARIO).")
+    st.stop()
 metric = st.selectbox(
     "Target metric",
     ["project_irr", "equity_irr", "project_npv", "min_dscr", "llcr", "plcr"],

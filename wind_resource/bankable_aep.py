@@ -40,7 +40,7 @@ from __future__ import annotations
 import difflib
 import logging
 from dataclasses import dataclass, fields
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -206,6 +206,24 @@ def gaussian_k_star(turbulence_intensity: float) -> float:
 
 
 @dataclass(frozen=True)
+class TurbineWake:
+    """One turbine's share of a wake run, in layout order.
+
+    ``sector_wake_loss_pct`` and ``sector_energy_share`` follow the wind-rose sectors
+    (sector 0 centred on North). The energy share is the turbine's waked energy rose: the
+    fraction of its waked energy that arrives from each sector.
+    """
+
+    index: int
+    counted: bool
+    aep_gross_gwh: float
+    aep_wake_gwh: float
+    wake_loss_pct: float
+    sector_wake_loss_pct: Tuple[float, ...]
+    sector_energy_share: Tuple[float, ...]
+
+
+@dataclass(frozen=True)
 class WakeResult:
     """Modeled wake loss over a layout."""
 
@@ -214,6 +232,9 @@ class WakeResult:
     n_turbines: int
     aep_gross_gwh: float
     aep_wake_gwh: float
+    #: Every turbine in layout order, counted or not (#1589 per-turbine sensitivity).
+    #: The farm figures above are computed exactly as before and do not depend on it.
+    per_turbine: Tuple[TurbineWake, ...] = ()
 
 
 def model_wake_loss(
@@ -333,7 +354,45 @@ def model_wake_loss(
         n_turbines=int(mask.sum()),
         aep_gross_gwh=aep_gross,
         aep_wake_gwh=aep_wake,
+        per_turbine=_per_turbine(sim, mask, n_sectors),
     )
+
+
+def _per_turbine(sim: Any, mask: np.ndarray, n_sectors: int) -> Tuple[TurbineWake, ...]:
+    """Split a PyWake simulation into per-turbine totals and sector roses.
+
+    PyWake resolves the rose into fine wind directions; each is assigned to its
+    North-centred sector the same way :mod:`analytics.wind.wind_rose` bins bearings.
+    """
+    waked = sim.aep().sum("ws")
+    gross = sim.aep(with_wake_loss=False).sum("ws")
+    wd = np.asarray(waked["wd"].values, dtype=float)
+    width = 360.0 / n_sectors
+    sector = np.floor(np.mod(wd + width / 2.0, 360.0) / width).astype(int) % n_sectors
+    w = np.asarray(waked.transpose("wt", "wd").values, dtype=float)
+    g = np.asarray(gross.transpose("wt", "wd").values, dtype=float)
+    out: List[TurbineWake] = []
+    for i in range(w.shape[0]):
+        w_sec = np.bincount(sector, weights=w[i], minlength=n_sectors)
+        g_sec = np.bincount(sector, weights=g[i], minlength=n_sectors)
+        w_tot, g_tot = float(w[i].sum()), float(g[i].sum())
+        out.append(
+            TurbineWake(
+                index=i,
+                counted=bool(mask[i]),
+                aep_gross_gwh=g_tot,
+                aep_wake_gwh=w_tot,
+                wake_loss_pct=100.0 * (1.0 - w_tot / g_tot) if g_tot > 0 else 0.0,
+                sector_wake_loss_pct=tuple(
+                    float(100.0 * (1.0 - ws_ / gs_)) if gs_ > 0 else 0.0
+                    for ws_, gs_ in zip(w_sec, g_sec, strict=True)
+                ),
+                sector_energy_share=tuple(
+                    float(v / w_tot) if w_tot > 0 else 0.0 for v in w_sec
+                ),
+            )
+        )
+    return tuple(out)
 
 
 @dataclass(frozen=True)
