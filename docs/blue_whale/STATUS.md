@@ -399,7 +399,7 @@ Relayed on #1353 (comments 6554212671 and 6554297502):
 | BESS all-in, USD/kWh | 78.75 | 135.00 | 143.41 | Public NSO 250 variants (bid-implied, base, stress) in `scenarios/nso250_ltl_unit_*.yaml` |
 | Turbine | fixed | 1,300/kW | fixed | Placeholder B09, inside the public 977-1,420 USD/kW range of `docs/knowledge_base/01_wind_epc_costs_and_scaling.md` |
 
-This sizing used no private Envision BESS offer price and no internal turbine price, and the
+This sizing used no private BESS offer price from a generic battery supplier and no internal turbine price, and the
 turbine cost does not change which unit size is best. The internal turbine prices are in private
 developer packages. Since PR 6 (#1540) the capex config and its methods note cite one of those
 packages by its handling-note identifier; the owner confirmed on 2026-11-07 that this reference is
