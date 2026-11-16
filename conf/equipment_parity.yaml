@@ -17,6 +17,9 @@ scenario: null
 
 method:
   hours_per_year: 8760
+  # The common operating life the reference authors' per-MWh figures assume. The site's
+  # own life never enters these rows.
+  reference_scaling_common_life_years: 20
   # Table 2, Ashuri et al. (2016), p. 60: 5 MW, 10 MW, 20 MW offshore reference scaling
   # counterexample showing that $/MWh does not necessarily fall with turbine rating.
   reference_scaling_counterexample:

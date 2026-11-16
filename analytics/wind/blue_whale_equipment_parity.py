@@ -58,6 +58,18 @@ TOP_KEY_MAP: Dict[str, str] = {
     "reference_scaling_counterexample": "ashuri_2016_counterexample",
 }
 CASE_KEY_MAP: Dict[str, str] = {"change_vs_benchmark_pct": "change_vs_mannar_pct"}
+SCALING_ROW_KEY_MAP: Dict[str, str] = {
+    "authors_common_life_equipment_usd_per_mwh": (
+        "authors_common_20y_equipment_usd_per_mwh"
+    )
+}
+
+#: The single-site output's purpose sentence. It states this site's own AEP status, so it
+#: lives here and not in the site-neutral module.
+LEGACY_PURPOSE = (
+    "Reproducible conditional equipment-cost parity benchmark (not a quote/forecast; "
+    "met-mast P50 AEP divisor remains under HOLD)"
+)
 
 _LEGACY_COST_BUILDUP_SCHEMA = "blue_whale.cost_buildup_evaluation.v1"
 
@@ -101,12 +113,18 @@ def compute_equipment_parity(
     method = {
         "hours_per_year": bw["hours_per_year"],
         "reference_scaling_counterexample": cfg["ashuri_2016_counterexample"],
+        "reference_scaling_common_life_years": cfg["ashuri_2016_common_life_years"],
     }
     out = compute_equipment_parity_from_block(block, method, repo_root)
     legacy = _rename(out, TOP_KEY_MAP)
+    legacy["purpose"] = LEGACY_PURPOSE
     legacy["results"] = _rename(out["results"], RESULT_KEY_MAP)
     legacy["sensitivity_cases"] = [
         _rename(case, CASE_KEY_MAP) for case in out["sensitivity_cases"]
+    ]
+    legacy[TOP_KEY_MAP["reference_scaling_counterexample"]] = [
+        _rename(row, SCALING_ROW_KEY_MAP)
+        for row in out["reference_scaling_counterexample"]
     ]
     return legacy
 

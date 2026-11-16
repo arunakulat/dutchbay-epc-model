@@ -11,6 +11,10 @@ run the analysis and a scenario without it gets "not applicable". The method inp
 per year and the published reference-scaling counterexample) come from the runner's method
 config. Nothing here names a site, a path or a figure.
 
+Every energy summary the block names must carry a non-empty ``hold`` field. The result
+reports it as ``site_aep_hold_status``, so the status of the AEP divisor is the site's own,
+never a sentence fixed in code.
+
 The results are conditional parity thresholds and uncalibrated sensitivities. They do not
 predict an OEM quote and change no scenario capex.
 
@@ -115,9 +119,10 @@ def compute_equipment_parity_from_block(
     Args:
         block: An ``equipment_cost_parity`` block (already validated by the caller, or
             built by the single-site adapter).
-        method: ``hours_per_year`` and ``reference_scaling_counterexample`` (a list of at
+        method: ``hours_per_year``, ``reference_scaling_counterexample`` (a list of at
             least two rows of ``rating_mw``, ``modelled_tcc_usd_2010_basis`` and
-            ``modelled_annual_mwh``).
+            ``modelled_annual_mwh``) and ``reference_scaling_common_life_years``, the
+            common life the reference authors' per-MWh figures use.
         repo_root: Repository root used to resolve the block's file references.
 
     Returns:
@@ -163,7 +168,10 @@ def compute_equipment_parity_from_block(
     cost_capacity = unit_m_mw * cap_b
     rate_capacity = cost_capacity / energy_b
     parity_cost = rate_m * energy_b
-    break_even_premium = yield_ratio - Decimal("1")
+    # The premium per MW at which the site's equipment cost per lifetime MWh equals the
+    # benchmark's. Lives may differ, so the yield ratio is scaled by the life ratio; with
+    # equal lives the ratio is exactly 1 and this is the yield ratio less one.
+    break_even_premium = yield_ratio * (life_b / life_m) - Decimal("1")
 
     # Independent exact Fraction cross-checks for parity and yield ratio.
     fr_yield_ratio = (Fraction(str(aep_b)) / Fraction(str(cap_b))) / (
@@ -200,6 +208,9 @@ def compute_equipment_parity_from_block(
             }
         )
 
+    common_life = _to_decimal(method["reference_scaling_common_life_years"])
+    if common_life <= 0:
+        raise ValueError("reference_scaling_common_life_years must be positive")
     scaling_rows: List[Dict[str, str]] = []
     for row in method["reference_scaling_counterexample"]:
         c = _to_decimal(row["modelled_tcc_usd_2010_basis"])
@@ -209,12 +220,12 @@ def compute_equipment_parity_from_block(
                 "rating_mw": str(row["rating_mw"]),
                 "modelled_tcc_usd_2010_basis": str(c),
                 "modelled_annual_mwh": str(e),
-                "authors_common_20y_equipment_usd_per_mwh": str(c / (e * life_b)),
+                "authors_common_life_equipment_usd_per_mwh": str(c / (e * common_life)),
             }
         )
     scaling_rise_pct = (
-        Decimal(scaling_rows[1]["authors_common_20y_equipment_usd_per_mwh"])
-        / Decimal(scaling_rows[0]["authors_common_20y_equipment_usd_per_mwh"])
+        Decimal(scaling_rows[1]["authors_common_life_equipment_usd_per_mwh"])
+        / Decimal(scaling_rows[0]["authors_common_life_equipment_usd_per_mwh"])
         - Decimal("1")
     ) * Decimal("100")
 
@@ -259,7 +270,7 @@ def compute_equipment_parity_from_block(
     return {
         "purpose": (
             "Reproducible conditional equipment-cost parity benchmark (not a quote/forecast; "
-            "met-mast P50 AEP divisor remains under HOLD)"
+            "the AEP divisor's status is site_aep_hold_status)"
         ),
         "benchmark_cost_status": str(bm["status"]),
         "site_aep_hold_status": aep_hold_note,

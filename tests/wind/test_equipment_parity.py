@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -17,6 +18,7 @@ import yaml
 from analytics.wind import blue_whale_equipment_parity as single_site
 from analytics.wind.equipment_parity import (
     RESULT_SCHEMA,
+    compute_equipment_parity_from_block,
     run_equipment_parity_for_scenario,
 )
 
@@ -26,6 +28,13 @@ METHOD_CONF = REPO_ROOT / "conf" / "equipment_parity.yaml"
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 MODULE = REPO_ROOT / "analytics" / "wind" / "equipment_parity.py"
 RUNNER = REPO_ROOT / "scripts" / "run_equipment_parity_v14.py"
+SINGLE_SITE_SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_equipment_parity_v14.py"
+
+#: sha256 of the single-site script's stdout. It has been this value on main since before
+#: #1755, and the move to the site-neutral module must not change a byte of it.
+SINGLE_SITE_STDOUT_SHA256 = (
+    "c61b26a6bb8bdcbfb30630b44454a646c4b7df3dfc177892a0216833a6ec3cbd"
+)
 
 
 def _yaml(path: Path) -> Dict[str, Any]:
@@ -95,6 +104,13 @@ def test_scenario_block_reproduces_the_single_site_result_exactly() -> None:
         {single_site.CASE_KEY_MAP.get(k, k): v for k, v in case.items()}
         for case in universal["sensitivity_cases"]
     ]
+    renamed[single_site.TOP_KEY_MAP["reference_scaling_counterexample"]] = [
+        {single_site.SCALING_ROW_KEY_MAP.get(k, k): v for k, v in row.items()}
+        for row in universal["reference_scaling_counterexample"]
+    ]
+    # The purpose sentence is the one key the adapter replaces: the site's own HOLD wording
+    # stays in the single-site module.
+    assert renamed.pop("purpose") != legacy.pop("purpose")
     assert json.dumps(renamed, sort_keys=True) == json.dumps(legacy, sort_keys=True)
 
     packages = _yaml(SITE_CONF)["cost_buildup_packages"]
@@ -169,6 +185,97 @@ def test_results_follow_the_block_not_a_fixed_site() -> None:
     assert float(d) == pytest.approx(2 * float(b))
 
 
+def _parity(block: Dict[str, Any]) -> Dict[str, Any]:
+    return compute_equipment_parity_from_block(block, _method(), REPO_ROOT)
+
+
+def _break_even_case(out: Dict[str, Any]) -> Dict[str, str]:
+    premium = out["results"]["break_even_equipment_price_per_mw_premium_pct"]
+    (case,) = [
+        c
+        for c in out["sensitivity_cases"]
+        if c["assumed_equipment_price_per_mw_change_pct"] == premium
+    ]
+    return case
+
+
+@pytest.mark.parametrize(
+    ("site_life", "benchmark_life"), [(25, 20), (20, 25), (20, 20)]
+)
+def test_break_even_is_at_parity_whatever_the_two_lives(
+    site_life: int, benchmark_life: int
+) -> None:
+    """D-1: at the break-even premium the cost per lifetime MWh equals the benchmark's."""
+    block = _block_from_single_site_conf()
+    block["operating_life_years"] = site_life
+    block["benchmark"]["operating_life_years"] = benchmark_life
+    out = _parity(block)
+    case = _break_even_case(out)
+    assert abs(float(case["change_vs_benchmark_pct"])) < 1e-30
+    assert float(case["equipment_cost_usd"]) == pytest.approx(
+        float(out["results"]["same_usd_per_mwh_parity_equipment_cost_usd"]), rel=1e-12
+    )
+
+
+def test_reference_rows_use_the_authors_life_not_the_site_life() -> None:
+    """D-2: the reference rows follow the method's common life, never the site's."""
+    block = _block_from_single_site_conf()
+    base = _parity(copy.deepcopy(block))["reference_scaling_counterexample"]
+    block["operating_life_years"] = 25
+    longer = _parity(block)["reference_scaling_counterexample"]
+    assert longer == base
+
+    method = _method()
+    method["reference_scaling_common_life_years"] = 25
+    rows = compute_equipment_parity_from_block(
+        _block_from_single_site_conf(), method, REPO_ROOT
+    )["reference_scaling_counterexample"]
+    key = "authors_common_life_equipment_usd_per_mwh"
+    assert float(rows[0][key]) == pytest.approx(float(base[0][key]) * 20 / 25)
+
+
+def test_hold_status_comes_from_the_energy_summary() -> None:
+    """D-3: the result states the summary's own hold field, and no fixed status text."""
+    block = _block_from_single_site_conf()
+    out = _parity(block)
+    summary = json.loads((REPO_ROOT / block["energy_summary"]).read_text("utf-8"))
+    assert out["site_aep_hold_status"] == summary["hold"].strip()
+    assert "HOLD" not in out["purpose"]
+    assert "met-mast" not in out["purpose"].lower()
+
+
+def test_single_site_script_output_is_byte_identical() -> None:
+    """The single-site script prints exactly the bytes it printed before #1755."""
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    proc = subprocess.run(
+        [sys.executable, str(SINGLE_SITE_SCRIPT)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        check=True,
+        timeout=300,
+    )
+    assert hashlib.sha256(proc.stdout).hexdigest() == SINGLE_SITE_STDOUT_SHA256
+
+
+def test_runner_refuses_a_wrong_schema_or_a_non_mapping_scenario(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    raw = _yaml(METHOD_CONF)
+    raw["scenario"] = str(LENDER_SCENARIO)
+    raw["schema_version"] = "equipment_parity_method_v0"
+    with pytest.raises(ValueError, match="schema_version"):
+        runner.run(raw)
+
+    listed = tmp_path / "list.yaml"
+    listed.write_text("- not\n- a mapping\n", encoding="utf-8")
+    raw = _yaml(METHOD_CONF)
+    raw["scenario"] = str(listed)
+    with pytest.raises(ValueError, match="must be a YAML mapping"):
+        runner.run(raw)
+
+
 def test_runner_reads_the_scenario_file(tmp_path: Path) -> None:
     scenario_path = tmp_path / "with_block.yaml"
     scenario_path.write_text(
@@ -217,6 +324,8 @@ def test_universal_module_holds_no_site_name_or_path() -> None:
         "dutch bay",
         "kalpitiya",
         "lot 5b",
+        "met-mast",
+        "met_mast",
         "conf/",
         "scenarios/",
         "docs/",
