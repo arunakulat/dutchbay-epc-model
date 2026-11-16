@@ -52,6 +52,7 @@ def _config(
     """Build a minimal debt-engine config with no draw or phasing supplied."""
     terms: dict[str, Any] = {
         "debt_ratio": DEBT_RATIO,
+        "target_dscr": 1.30,  # no code default since #1429
         "tenor_years": 5,
         "rates": {"usd_nominal": RATE},
         "mix": {"usd_commercial_min": 1.0},

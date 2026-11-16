@@ -135,8 +135,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--config",
         required=True,
-        help="Path to v14 scenario config YAML/JSON "
-        "(e.g. scenarios/dutchbay_lendercase_2025Q4.yaml).",
+        help="Path to v14 scenario config YAML/JSON (e.g. scenarios/example.yaml).",
     )
     parser.add_argument(
         "--fx-variation-pct",

@@ -26,6 +26,7 @@ from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import pandas as pd
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -40,56 +41,32 @@ IEC_STANDARDS = {
     "61400-21:2008": "Power quality characteristics",
 }
 
-APPROVED_SOURCES = {
-    "OEM_ENVISION_EN171_65_PC": {
-        "type": "OEM",
-        "description": "Envision EN-171/6.5 MW certified power curve (canonical)",
-        "iec_standard": "61400-12-1:2022",
-        "certificate": "CGC-B-FNc-2024-184",
-        # Store slug in wind_resource/config/power_curves.yaml — links the manifest
-        # source_id to the actual curve (closes the curve-selection identifier gap).
-        "curve_key": "envision_en171_6p5",
-    },
-    "OEM_VESTAS_V150_56_PC": {
-        "type": "OEM",
-        "description": (
-            "Vestas V150-5.6 MW power curve (150 m rotor). Proxy for the ~5 MW / "
-            "<=160 m-rotor class at the Mullikulam (Mannar) 2x50 MW project; the "
-            "spec turbine is the Envision EN-156/5.0, whose certified curve is not "
-            "yet in the store."
-        ),
-        "iec_standard": "61400-12-1:2022",
-        "curve_key": "vestas_v150_5p6",
-    },
-    "OEM_ENVISION_EN171_10_PC": {
-        "type": "OEM",
-        "description": "Envision EN-171-10.0 MW power curve (PLACEHOLDER, extrapolated from 6.5 MW; superseded by OEM_ENVISION_EN171_65_PC)",
-        "iec_standard": "61400-12-1:2022",
-        "certificate": "CGC-B-FNc-2024-184 (extrapolated)",
-    },
-    "IEA_REFERENCE_10MW_198_PC": {
-        "type": "REFERENCE",
-        "description": (
-            "IEA Wind Task 37 10 MW reference turbine (198 m rotor, ~10.64 MW, "
-            "345 W/m2): open community reference with published power + thrust (Ct) "
-            "curves, used as a representative low-specific-power 10 MW-class "
-            "machine for the 15 x 10 MW DutchBay re-model. Not OEM-certified. "
-            "Density per 61400-12-1; uncertainty per 61400-15-2."
-        ),
-        "iec_standard": "61400-12-1:2022",
-        "curve_key": "iea_reference_10mw",
-    },
-    "ECMWF_ERA5_2020_2024_DUTCHBAY": {
-        "type": "ECMWF",
-        "description": "ERA5 reanalysis 2020-2024 for Dutch Bay",
-        "iec_standard": "61400-15-1:2025",
-    },
-    "NREL_WTK_SRI_LANKA_2020_2024": {
-        "type": "NREL",
-        "description": "NREL Wind Toolkit for Sri Lanka 2020-2024",
-        "iec_standard": "61400-15-1:2025",
-    },
-}
+#: Repository-relative file holding the approved source registry (#1759). Source names,
+#: project references and descriptions are project data, so they live in configuration.
+APPROVED_SOURCES_CONFIG = (
+    Path(__file__).resolve().parents[2] / "conf" / "aep_approved_sources.yaml"
+)
+
+
+def _load_approved_sources(path: Path) -> Dict[str, Dict[str, Any]]:
+    """Read the approved source registry, failing loud on a malformed file."""
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    sources = loaded.get("sources") if isinstance(loaded, dict) else None
+    if not isinstance(sources, dict) or not sources:
+        raise ValueError(f"{path} must declare a non-empty 'sources' mapping")
+    out: Dict[str, Dict[str, Any]] = {}
+    for source_id, metadata in sources.items():
+        if not isinstance(metadata, dict) or not {"type", "description"} <= set(
+            metadata
+        ):
+            raise ValueError(f"{path}: sources.{source_id} needs type and description")
+        out[str(source_id)] = dict(metadata)
+    return out
+
+
+# Each entry's optional curve_key is the slug in wind_resource/config/power_curves.yaml
+# that links a manifest source_id to the actual curve.
+APPROVED_SOURCES = _load_approved_sources(APPROVED_SOURCES_CONFIG)
 
 # Immutable code-owned baseline for execution boundaries that must not inherit
 # process-global widening performed by an earlier authored-scenario load.  The public

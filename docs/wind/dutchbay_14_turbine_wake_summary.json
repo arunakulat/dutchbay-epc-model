@@ -7,7 +7,7 @@
   "layout": [
     {
       "id": "T1",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 856.23,
       "y_m": 2643.46
     },
@@ -19,79 +19,79 @@
     },
     {
       "id": "T3",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 436.52,
       "y_m": 1575.75
     },
     {
       "id": "T4",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 210.91,
       "y_m": 959.06
     },
     {
       "id": "T5",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -195.05,
       "y_m": 529.39
     },
     {
       "id": "T6",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 491.62,
       "y_m": 593.98
     },
     {
       "id": "T7",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -377.05,
       "y_m": 104.91
     },
     {
       "id": "T8",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 582.18,
       "y_m": 152.03
     },
     {
       "id": "T9",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -465.19,
       "y_m": -348.53
     },
     {
       "id": "T10",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": 346.64,
       "y_m": -420.53
     },
     {
       "id": "T11",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -83.79,
       "y_m": -597.49
     },
     {
       "id": "T12",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -612.72,
       "y_m": -1140.63
     },
     {
       "id": "T13",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -697.89,
       "y_m": -1628.36
     },
     {
       "id": "T14",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -311.3,
       "y_m": -2124.06
     },
     {
       "id": "T15",
-      "role": "dutchbay",
+      "role": "counted",
       "x_m": -817.77,
       "y_m": -2361.4
     }
@@ -151,7 +151,7 @@
     "ratio_t2_removed": 0.9495145991455103,
     "ratio_t2_waking": 0.9948216955956343
   },
-  "t2_proxy_note": "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy for the Blue Whale machine, whose curves are confidential and not read.",
+  "t2_proxy_note": "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy for the other project's machine there, whose curves are confidential and not read.",
   "wake_loss_14_pct": 7.32,
   "work_item": "#1577"
 }
