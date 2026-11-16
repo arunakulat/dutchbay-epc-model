@@ -104,8 +104,10 @@ is reported only to show what giving up the function would be worth.
   offer's DC rate, the same all-in factor; `bottom_up_price` in the summary), the held
   0.5 MW / 0.5 MWh unit costs about USD 141k all-in instead of 70k, and its project NPV change is
   about −147k instead of −79k. Cycled 0.5 / 2 becomes −162k, held 1 / 1 −233k and cycled 1 / 4
-  −221k (reading B). The ranking holds: the held unit stays the cheapest black-start option, and
-  no option beats wind-only. A small grid-forming inverter may carry a further premium.
+  −221k (reading B). Held 1 / 1 and cycled 1 / 4 swap places at that price (−233k against
+  −221k, where the flat price ranks held 1 / 1 ahead at −153k against −196k). The held
+  0.5 / 0.5 unit stays the cheapest option and the recommendation, and no option beats
+  wind-only. A small grid-forming inverter may carry a further premium.
 - **It does not firm a grid down-ramp.** If a wind lull counts against the ramp limit, firming
   needs about the turbine's rated 9.5 MW whatever Blue Whale's allocation is; the allocation
   sets only the energy (see the down-ramp section). If a lull does not count, the turbine's own

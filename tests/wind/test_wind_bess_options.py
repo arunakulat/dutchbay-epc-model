@@ -861,13 +861,39 @@ def test_committed_bottom_up_rows_recompute_through_the_engine() -> None:
     )
     committed = rr["bottom_up_price_base_basis"]["delta_project_npv_vs_wind_only"]
     assert delta == pytest.approx(committed, rel=1e-9)
-    # The ranking survives the bottom-up price: the held black-start unit stays cheaper than
-    # cycling 0.5 MW / 2 MWh with the reserve.
-    cycled = summary["options"]["cycled_0_5_2"]["readings"]["B"]
-    assert (
-        committed
-        > cycled["bottom_up_price_base_basis"]["delta_project_npv_vs_wind_only"]
-    )
+
+    # What the doc says about the bottom-up price (reading B): the held 0.5 / 0.5 unit stays
+    # the cheapest option, no option beats wind-only, and only held 1 / 1 and cycled 1 / 4
+    # swap places against the flat price.
+    def ranked(key: str) -> List[str]:
+        def value(name: str) -> float:
+            readings = summary["options"][name]["readings"]["B"]
+            if key == "flat":
+                return float(
+                    readings["bases"]["whole_wind_peak_rate"][
+                        "delta_project_npv_vs_wind_only"
+                    ]
+                )
+            return float(
+                readings["bottom_up_price_base_basis"]["delta_project_npv_vs_wind_only"]
+            )
+
+        return sorted(summary["options"], key=value, reverse=True)
+
+    flat, bottom_up = ranked("flat"), ranked("bottom_up")
+    assert flat[0] == bottom_up[0] == "held_0_5_0_5"
+    assert summary["recommended_option_reading_A"] == "held_0_5_0_5"
+    for row in summary["options"].values():
+        assert (
+            row["readings"]["B"]["bottom_up_price_base_basis"][
+                "delta_project_npv_vs_wind_only"
+            ]
+            < 0.0
+        )
+    swapped = [a for a, b in zip(flat, bottom_up, strict=True) if a != b]
+    assert sorted(swapped) == ["cycled_1_4", "held_1_1"]
+    assert flat.index("held_1_1") < flat.index("cycled_1_4")
+    assert bottom_up.index("cycled_1_4") < bottom_up.index("held_1_1")
 
 
 def test_cli_refuses_to_write_a_summary_from_an_overridden_config() -> None:
@@ -878,3 +904,38 @@ def test_cli_refuses_to_write_a_summary_from_an_overridden_config() -> None:
     raw["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
     with pytest.raises(ValueError, match="committed config"):
         cli._refuse_overrides(raw)
+
+
+def test_cli_main_refuses_an_overridden_config_before_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The entry point itself, not only the helper, must refuse an overridden config.
+
+    ``run`` is replaced by a recorder, so the test fails if ``main`` stops calling
+    ``_refuse_overrides`` before it runs and writes the summary.
+    """
+    from omegaconf import OmegaConf
+
+    cli = _cli()
+    calls: List[Any] = []
+
+    def fake_run(cfg: Any) -> Dict[str, Any]:
+        calls.append(cfg)
+        return {"ran": True}
+
+    monkeypatch.setattr(cli, "run", fake_run)
+    target = tmp_path / "summary.json"
+
+    clean = copy.deepcopy(_cfg())
+    clean["output"]["summary_json"] = str(target)
+    cli.main(OmegaConf.create(clean))  # only output.* differs: runs and writes
+    assert len(calls) == 1
+    assert json.loads(target.read_text()) == {"ran": True}
+
+    target.unlink()
+    overridden = copy.deepcopy(clean)
+    overridden["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
+    with pytest.raises(ValueError, match="committed config"):
+        cli.main(OmegaConf.create(overridden))
+    assert len(calls) == 1  # refused before ``run``
+    assert not target.exists()
