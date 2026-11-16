@@ -86,6 +86,24 @@ def _build_assessed_scenario(
     return apply_active_resource_basis(assessed, resource_assessment)
 
 
+def _without_fixed_debt_stress(scenario: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a copy of ``scenario`` with the fixed-debt stress turned off (#962).
+
+    The lender case declares ``monte_carlo.fixed_debt_stress: true`` for lender runs
+    (#962 item 4). Web jobs are screening runs, and the stress's breach probability is on
+    an unfolded, non-covenant basis with no label in the metadata block that the job
+    returns to API clients, so web jobs never run it (owner decision 2026-11-15). Only the
+    top level and the ``monte_carlo`` block are copied; the caller's dict is not changed.
+    """
+    mc_block = scenario.get("monte_carlo")
+    copied: Dict[str, Any] = dict(scenario)
+    copied["monte_carlo"] = {
+        **(mc_block if isinstance(mc_block, Mapping) else {}),
+        "fixed_debt_stress": False,
+    }
+    return copied
+
+
 def default_analysis(
     request: AnalysisJobRequest,
     assessed_scenario: Mapping[str, Any],
@@ -121,7 +139,7 @@ def default_analysis(
             f"Running Monte Carlo ({request.n_trials} trials) on the assessed case",
         )
         mc = run_monte_carlo_analysis(
-            base_config=assessed_scenario,
+            base_config=_without_fixed_debt_stress(assessed_scenario),
             n_trials=request.n_trials,
             seed=request.seed,
         )

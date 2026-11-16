@@ -1,7 +1,7 @@
 """Fixed-tilt PV array and BESS pad: module, strings, tables, row pitch, land and site fit.
 
 Sizes the photovoltaic array of a solar + BESS unit and checks whether it fits a lot, all
-driven by config (``conf/blue_whale_solar_bess.yaml``; ``ARCH-01``, ``FRAMEWORK-02``):
+driven by the solar + BESS unit config (``ARCH-01``, ``FRAMEWORK-02``):
 
 1. **Module and strings.** The module's warranted degradation path, and the longest
    string whose open-circuit voltage at the design minimum cell temperature stays within
@@ -805,7 +805,7 @@ class SiteFitConfig:
     """Inputs of the site fit.
 
     Attributes:
-        site_geojson: The placeholder lot and turbine (PR 1).
+        site_geojson: The site's lot and turbine (GeoJSON).
         coastline_geojson: Coastline the coastal setback is measured from.
         wind_siting_config: Config holding the ``site`` frame and ``coastal_setback``.
         foundation_diameter_m: Turbine foundation diameter.
