@@ -11,7 +11,19 @@ from analytics.reproducible_workbook import normalize_xlsx_reproducible
 
 PathLike = Union[str, Path]
 
+# Non-reliance notice written on the workbook's first sheet (owner ruling,
+# 2026-11-16 07:19Z, #1760). The workbook is produced on every default run once
+# the emitters follow emit_all, so it carries the same F-5 bar the HTML report and
+# the screening helpers carry. The wording is pinned by a test.
+EXECUTIVE_WORKBOOK_F5_CAVEAT = (
+    "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs for "
+    "screening and discussion only. They support no covenant, lender or IC "
+    "representation, and no quarterly CFADS or intra-year DSCR figure may be used "
+    "for covenant purposes."
+)
+
 __all__ = [
+    "EXECUTIVE_WORKBOOK_F5_CAVEAT",
     "build_executive_workbook",
     "frames_from_pipeline_result",
     "serialize_resource_trend",
@@ -45,6 +57,9 @@ def build_executive_workbook(
     - Optionally creates "ResourceTrend" when ``resource_trend_df`` is supplied
       (long-term wind-resource & trend commentary; IEC-61400-15 / MEASNET basis --
       see ``wind_resource.long_term_trend``).
+    - Writes the F-5 non-reliance notice (``EXECUTIVE_WORKBOOK_F5_CAVEAT``) in
+      column A of the "Summary" sheet, the first sheet, one blank row below the
+      KPI table.
     - Returns the resolved Path to the created workbook.
 
     Inputs
@@ -103,6 +118,12 @@ def build_executive_workbook(
             # Content is intentionally minimal; tests only care about row count.
             while summary_ws.max_row < 3:
                 summary_ws.append([""])
+
+        # F-5 non-reliance notice on the first sheet (owner ruling 07:19Z,
+        # 2026-11-16, #1760): one blank row, then the notice in column A.
+        first_ws = writer.book.worksheets[0]
+        first_ws.append([])
+        first_ws.append([EXECUTIVE_WORKBOOK_F5_CAVEAT])
 
     # Freeze the volatile document timestamps openpyxl bakes into the archive so
     # two builds of the same data are raw-ZIP-byte identical (#886): the byte

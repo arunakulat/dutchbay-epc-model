@@ -34,6 +34,7 @@ from omegaconf import OmegaConf
 
 import run_full_pipeline_v14 as rfp
 from analytics.executive_workbook import (
+    EXECUTIVE_WORKBOOK_F5_CAVEAT,
     emit_executive_workbook_from_pipeline,
     frames_from_pipeline_result,
     resource_trend_df_from_wind_export,
@@ -423,6 +424,47 @@ class TestEmitFromPipeline:
         assert "ResourceTrend" in wb.sheetnames
         header = [c.value for c in wb["ResourceTrend"][1]]
         assert header == ["Metric", "Value"]
+
+
+class TestF5NonRelianceNotice:
+    """Owner ruling 2026-11-16 07:19Z (#1760): the F-5 caveat sits on sheet one."""
+
+    def test_wording_is_pinned(self) -> None:
+        assert EXECUTIVE_WORKBOOK_F5_CAVEAT == (
+            "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs "
+            "for screening and discussion only. They support no covenant, lender or "
+            "IC representation, and no quarterly CFADS or intra-year DSCR figure may "
+            "be used for covenant purposes."
+        )
+
+    def test_first_sheet_carries_the_notice_below_the_kpi_table(
+        self, tmp_path, pipeline_result
+    ) -> None:
+        out = emit_executive_workbook_from_pipeline(
+            pipeline_result, tmp_path / "wb.xlsx"
+        )
+        wb = openpyxl.load_workbook(out)
+        first = wb.worksheets[0]
+        assert first.title == "Summary"
+        column_a = [row[0].value for row in first.iter_rows()]
+        # The notice is the last row, one blank row below the table, so the KPI
+        # table itself (header in row 1) is unchanged.
+        assert column_a[-1] == EXECUTIVE_WORKBOOK_F5_CAVEAT
+        assert column_a[-2] is None
+        assert column_a.count(EXECUTIVE_WORKBOOK_F5_CAVEAT) == 1
+        assert first.cell(row=1, column=1).value == "Metric"
+        # No other sheet carries it: one notice, on the first sheet.
+        for ws in wb.worksheets[1:]:
+            values = {c.value for row in ws.iter_rows() for c in row}
+            assert EXECUTIVE_WORKBOOK_F5_CAVEAT not in values, ws.title
+
+    def test_short_summary_is_padded_before_the_notice(self, tmp_path) -> None:
+        out = emit_executive_workbook_from_pipeline({}, tmp_path / "wb.xlsx")
+        first = openpyxl.load_workbook(out).worksheets[0]
+        assert first.cell(row=first.max_row, column=1).value == (
+            EXECUTIVE_WORKBOOK_F5_CAVEAT
+        )
+        assert first.max_row >= 5
 
 
 # ---------------------------------------------------------------------------
