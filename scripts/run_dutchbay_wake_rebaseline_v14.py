@@ -36,7 +36,9 @@ from analytics.power_curves.oem_parser import (
 )
 from wind_resource.bankable_aep import model_wake_loss
 
-_ROLES = ("dutchbay", "external_waker")
+#: counted = the scenario's own turbines, whose energy is counted (#1775: the role names
+#: no site); external_waker = stands in the flow and is not counted.
+_ROLES = ("counted", "external_waker")
 
 
 def project_layout(
@@ -196,7 +198,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         "synthetic_row": row,
         "t2_proxy_note": (
             "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy "
-            "for the Blue Whale machine, whose curves are confidential and not read."
+            "for the other project's machine there, whose curves are confidential and not "
+            "read."
         ),
     }
 
