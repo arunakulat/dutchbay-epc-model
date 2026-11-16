@@ -289,7 +289,7 @@ their conditional Grid Study job was skipped; those PR checks do not constitute 
 8,760-step convergence record.
 
 The shared `main` checkout contained ten pre-existing tracked deletions during the audit:
-seven NSO/Envision BESS source, review, or RFP PDFs; two feasibility report PDFs; and the
+seven NSO BESS (generic battery supplier) source, review, or RFP PDFs; two feasibility report PDFs; and the
 Kalpitiya solar TMY CSV. None was restored, staged, or modified. The Issue #923 source files
 were not locally modified.
 

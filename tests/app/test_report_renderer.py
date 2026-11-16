@@ -247,6 +247,18 @@ def test_html_contains_model_limitations_from_default_config() -> None:
     assert "Deterministic base case" in html
 
 
+def test_html_discloses_no_major_maintenance_reserve_or_multi_tier_lockup() -> None:
+    """#1400 (P3-COV-08), owner ruling 2026-11-15: until transaction terms exist, every
+    report states that neither mechanism is modelled, rather than implying coverage."""
+    html = " ".join(render_report_html(_context()).split())
+    assert "Major-maintenance reserve and distribution lock-up" in html
+    assert "no separately modelled major-maintenance reserve" in html
+    assert (
+        "no forward-looking (projected) DSCR test and no multi-tier structure" in html
+    )
+    assert "Nothing in this report covers either mechanism." in html
+
+
 def test_html_omits_model_limitations_when_config_has_none() -> None:
     """Render-when-present: a config with no model_limitations omits the section entirely."""
     from app.reports.report_config import load_report_config
