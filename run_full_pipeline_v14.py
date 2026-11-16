@@ -670,6 +670,39 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
 # ============================================================================
 
 
+def _run_epc_only_scenario(cfg: DictConfig, config: str) -> bool:
+    """Run an EPC-only scenario through the construction-margin model (#1780).
+
+    Args:
+        cfg: The Hydra config (``write_artifacts`` / ``export_dir`` are honoured).
+        config: The scenario path.
+
+    Returns:
+        ``False`` when the scenario is not EPC-only (or cannot be read here), so the
+        caller runs the full pipeline. ``True`` after printing the EPC-only result.
+
+    Raises:
+        SystemExit: Exit code 1 when the ``epc`` block does not compute.
+    """
+    from finance.epc_margin import epc_only_result, is_epc_only_scenario
+
+    try:
+        raw = _load_yaml_scenario(config)
+    except (OSError, ValueError, yaml.YAMLError):
+        return False
+    if not is_epc_only_scenario(raw):
+        return False
+    result = epc_only_result(raw, config)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if result["status"] != "success":
+        raise SystemExit(1)
+    if bool(cfg.get("write_artifacts", False)):
+        export_dir = Path(str(cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT)))
+        _safe_mkdir(export_dir)
+        _write_json(export_dir / "summary.json", result)
+    return True
+
+
 @hydra.main(
     version_base="1.3",
     config_path="conf",
@@ -879,6 +912,13 @@ def cli(cfg: DictConfig) -> None:
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
+
+    # #1780: an EPC-only scenario (an epc block and no operating project) is a
+    # construction-margin deal with no operating cashflow, so it runs the margin model
+    # alone and prints its result; it exits 1 when the block does not compute. A file
+    # that cannot be read here falls through, so the pipeline reports it as before.
+    if _run_epc_only_scenario(cfg, str(config)):
+        return
 
     # ------------------------------------------------------------------
     # Sprint 19 W.6: optional wind-resource ingestion.

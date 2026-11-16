@@ -1,27 +1,35 @@
-"""EPC construction-margin economics (e.g. the Kolonnawa BESS EPC tender).
+"""EPC construction-margin economics, for any scenario that declares an ``epc`` block.
 
-Some CEB BESS procurements are **EPC supply contracts**, not Build-Own-Operate tolling:
-the developer engineers, procures and constructs the BESS (batteries + ancillaries) and
-hands it over to CEB, which then owns and operates it (e.g. for night-peak supply). The
-developer's economics are therefore a **construction margin** — the EPC contract price
-less the supply/build cost, realised over the construction period — **not** a 15/20-year
-operational CFADS stream. This is a fundamentally different financial structure from the
-v14 operational cashflow engine (``finance.cashflow_v14``), so it lives in its own
-self-contained module rather than being shoehorned onto the operational path (which would
-be decorative — modelling a one-off construction deal as if it had an operating phase).
+Some procurements are **EPC supply contracts**, not build-own-operate projects: the
+contractor engineers, procures and constructs an asset (a battery system, for example) and
+hands it over to the client, which then owns and operates it. The contractor's economics
+are therefore a **construction margin** (the EPC contract price less the supply and build
+cost, realised over the construction period), **not** a 15- or 20-year operating cashflow.
+That is a different financial structure from the operating cashflow engine
+(``finance.cashflow_v14``), so the margin is computed here and reported beside it, never
+folded into it.
 
-What it computes from an ``epc`` config block: total cost, gross margin (and margin %),
+HOW A SCENARIO REACHES IT (#1780)
+    * Any scenario that declares an ``epc`` block gets ``result["epc_margin"]`` from the
+      canonical pipeline (``analytics.pipeline_v14_enhanced``). It moves no scenario KPI.
+    * An EPC-only scenario (an ``epc`` block and no operating project; see
+      :func:`is_epc_only_scenario`) runs through the main CLI ``run_full_pipeline_v14.py``,
+      which prints :func:`epc_only_result`.
+    * Pre-flight (``analytics.schema_guard``) checks a declared block with
+      :func:`validate_epc_block`, the same contract the computation reads.
+
+What it computes from the ``epc`` block: total cost, gross margin (and margin %),
 return-on-cost, the month-by-month net cashflow (milestone receipts minus cost outflows),
 the **peak working capital** the contractor must fund, and an annualised construction IRR
-(via :func:`finance.irr.irr` — ARCH-02). All values are in the contract currency (USD by
-convention here).
+(via :func:`finance.irr.irr`, ARCH-02). All values are in the contract currency (USD by
+convention here). Every figure comes from the scenario; the module holds no business value.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Any, List, Mapping, Optional, Sequence
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from finance.irr import irr
 
@@ -35,7 +43,7 @@ class EpcMarginResult:
     """Construction-margin economics of an EPC supply contract.
 
     Attributes:
-        contract_value: The EPC contract price the client (CEB) pays.
+        contract_value: The EPC contract price the client pays.
         total_cost: The contractor's total supply + build cost.
         gross_margin: ``contract_value - total_cost``.
         gross_margin_pct: ``gross_margin / contract_value`` (fraction).
@@ -210,4 +218,145 @@ def compute_epc_margin(config: Mapping[str, Any]) -> EpcMarginResult:
     )
 
 
-__all__ = ["EpcMarginResult", "compute_epc_margin"]
+# ---------------------------------------------------------------------------
+# Scenario contract, pre-flight and the pipeline's result entry (#1780)
+# ---------------------------------------------------------------------------
+
+#: The keys an ``epc`` block may carry. Anything else is refused (CESSPIT fail-loud).
+_EPC_KEYS = frozenset(
+    {
+        "description",
+        "contract_value_usd",
+        "cost",
+        "construction_months",
+        "payment_schedule",
+        "cost_schedule",
+    }
+)
+
+#: Top-level keys an EPC-only scenario may carry besides ``epc``.
+_EPC_ONLY_COMPANION_KEYS = frozenset({"metadata"})
+
+STATUS_RUN = "run"
+STATUS_FAILED = "failed"
+
+_BASIS = (
+    "EPC supply contract: a construction margin over the construction period, separate "
+    "from any operating cashflow; no scenario KPI uses it"
+)
+
+
+def validate_epc_block(config: Mapping[str, Any], errors: List[str]) -> None:
+    """Append the problems with a declared ``epc`` block to ``errors`` (present-only).
+
+    A scenario without the block gets no error. A declared block must be a mapping with
+    only the known keys, and must compute: the same checks :func:`compute_epc_margin`
+    applies, so pre-flight and the computation cannot drift.
+
+    Args:
+        config: The scenario mapping.
+        errors: The pre-flight error list, appended to in place.
+    """
+    if not isinstance(config, Mapping) or "epc" not in config:
+        return
+    epc = config["epc"]
+    if not isinstance(epc, Mapping):
+        errors.append(f"epc must be a mapping; got {type(epc).__name__}.")
+        return
+    unknown = sorted(str(k) for k in epc if k not in _EPC_KEYS)
+    if unknown:
+        errors.append(
+            f"epc has unknown key(s) {unknown}; allowed: {sorted(_EPC_KEYS)}."
+        )
+        return
+    try:
+        compute_epc_margin(config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
+def is_epc_only_scenario(config: Any) -> bool:
+    """Whether ``config`` is an EPC-only scenario: an ``epc`` block and no operating project.
+
+    True when the scenario carries an ``epc`` key and nothing else at the top level except
+    ``metadata``. Any other top-level block means an operating project, which runs through
+    the full pipeline (and gets the margin beside its own figures).
+    """
+    if not isinstance(config, Mapping) or "epc" not in config:
+        return False
+    return all(k == "epc" or k in _EPC_ONLY_COMPANION_KEYS for k in config)
+
+
+def epc_margin_failure(reason: str) -> Dict[str, Any]:
+    """The result entry for a declared ``epc`` block that could not be computed.
+
+    Args:
+        reason: Why it could not run.
+
+    Returns:
+        ``{"status": "failed", "reason": ..., "basis": ...}``.
+    """
+    return {"status": STATUS_FAILED, "reason": str(reason), "basis": _BASIS}
+
+
+def epc_margin_result(config: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The pipeline's ``epc_margin`` entry for any scenario (#1780).
+
+    Args:
+        config: The scenario mapping.
+
+    Returns:
+        ``None`` when the scenario declares no ``epc`` block. Otherwise
+        ``{"status": "run", "basis": ..., **EpcMarginResult fields}``.
+
+    Raises:
+        ValueError: The declared block is malformed (see :func:`validate_epc_block`).
+    """
+    if not isinstance(config, Mapping) or "epc" not in config:
+        return None
+    errors: List[str] = []
+    validate_epc_block(config, errors)
+    if errors:
+        raise ValueError("; ".join(errors))
+    return {"status": STATUS_RUN, "basis": _BASIS, **asdict(compute_epc_margin(config))}
+
+
+def epc_only_result(config: Mapping[str, Any], config_path: str) -> Dict[str, Any]:
+    """The main CLI's result for an EPC-only scenario (#1780).
+
+    Args:
+        config: An EPC-only scenario (:func:`is_epc_only_scenario`).
+        config_path: The scenario path, echoed back.
+
+    Returns:
+        ``{"status": "success", "scenario_kind": "epc_only", "config_path": ...,
+        "epc_margin": {...}}``, or ``status: "error"`` with the reason and the failed
+        ``epc_margin`` entry when the block does not compute.
+    """
+    base: Dict[str, Any] = {
+        "scenario_kind": "epc_only",
+        "config_path": str(config_path),
+    }
+    try:
+        entry = epc_margin_result(config)
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "error": str(exc),
+            **base,
+            "epc_margin": epc_margin_failure(str(exc)),
+        }
+    return {"status": "success", **base, "epc_margin": entry}
+
+
+__all__ = [
+    "EpcMarginResult",
+    "STATUS_FAILED",
+    "STATUS_RUN",
+    "compute_epc_margin",
+    "epc_margin_failure",
+    "epc_margin_result",
+    "epc_only_result",
+    "is_epc_only_scenario",
+    "validate_epc_block",
+]
