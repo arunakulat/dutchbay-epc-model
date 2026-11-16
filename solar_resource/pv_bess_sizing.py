@@ -1,15 +1,15 @@
-"""Seeded Monte Carlo sizing of the Blue Whale solar + BESS unit (``MRM-01``, ``TEST-03``).
+"""Seeded Monte Carlo sizing of a solar + BESS unit (``MRM-01``, ``TEST-03``).
 
-The turbine is fixed (Blue Whale PR 1). This module chooses the PV DC capacity and the BESS
+Any turbine on the site is fixed. This module chooses the PV DC capacity and the BESS
 energy of the solar + BESS unit on a decision grid, under cited and uncertain prices and
 uncertain yield, round-trip efficiency and battery fade. It adds no finance mathematics:
 
-* the unit is dispatched hourly with the rules of :mod:`solar_resource.pv_bess_dispatch`
-  (PR 2), evaluated for many trials and years at once by :func:`dispatch_columns`, an
+* the unit is dispatched hourly with the rules of :mod:`solar_resource.pv_bess_dispatch`,
+  evaluated for many trials and years at once by :func:`dispatch_columns`, an
   array form of that dispatcher which must reproduce it (``TEST-01``: the pre-existing
   dispatcher is the oracle);
-* each trial is mapped onto the engine's fields by PR 2's
-  :func:`~solar_resource.pv_bess_dispatch.engine_representation`, and the whole Blue Whale
+* each trial is mapped onto the engine's fields by the dispatcher's
+  :func:`~solar_resource.pv_bess_dispatch.engine_representation`, and the whole project
   scenario is evaluated through the gateway
   :func:`analytics.evaluation_v14.evaluate_with_overrides` (``ARCH-04``,
   ``FRAMEWORK-03``). Project NPV and IRR therefore come from the engine, which takes them
@@ -17,9 +17,12 @@ uncertain yield, round-trip efficiency and battery fade. It adds no finance math
 * a secondary, unit-only pre-tax NPV and IRR (the unit's capex, its dispatched revenue and
   its O&M, no tax or debt) use :func:`finance.irr.npv` and :func:`finance.irr.irr`.
 
-The module sits in ``solar_resource`` beside PR 2's dispatcher, whose rules it applies. It
-reaches the analytics layer only through the gateway, the LHS sampler and PR 1/PR 2's
+The module sits in ``solar_resource`` beside the dispatcher, whose rules it applies. It
+reaches the analytics layer only through the gateway, the LHS sampler and the siting and
 layout modules, so it adds no package edge to ``docs/architecture_import_graph.mmd``.
+
+The module is site-neutral (#1578 L-5): every site input, the site prefix of each
+config's ``schema_version`` and the names of the regulatory readings come from config.
 
 Sampling reuses the repository's Latin Hypercube sampler
 (:func:`analytics.mc.samplers.generate_lhs_samples`) with an explicit seed. The same draws
@@ -107,16 +110,27 @@ def _kpi(kpis: Mapping[str, Any], key: str) -> float:
     return float("nan") if value is None else float(value)
 
 
-def _project_irr(kpis: Mapping[str, Any]) -> float:
-    """The project IRR, NaN when the engine found none.
+#: ``analytics.core.metrics.PROJECT_IRR_COMPUTED``: the one ``project_irr_status`` under
+#: which ``project_irr`` is a solved rate (#1494). Kept as a literal so that this module
+#: reaches the analytics layer only through the gateway; a test pins it to the constant.
+_PROJECT_IRR_COMPUTED = "computed"
 
-    ``analytics.core.metrics`` leaves an IRR with no root in [-0.99, 5.0] unset, and the
-    gateway's KPI reader then reports it as 0.0 for display. A root-finder does not land on
-    exactly 0.0, so an exact 0.0 is read as undefined (FIN-01) and drops out of the
-    statistics; their ``n`` shows how many trials had an IRR.
+
+def _project_irr(kpis: Mapping[str, Any]) -> float:
+    """The project IRR, NaN when the engine reports none (#1578 L-8).
+
+    Since #1494 the engine reports an IRR its solver cannot resolve as undefined:
+    ``project_irr`` is ``None`` and ``project_irr_status`` is ``"undefined"``. The gateway's
+    numeric KPI surface leaves that key out, and :func:`_kpi` reads it as NaN. When the
+    mapping carries the status (a full engine result), any status other than ``computed``
+    is NaN too; ``not_computed`` marks the engine's 0.0 placeholder. A computed 0.0 is a
+    genuine break-even and is kept (FIN-01). NaN drops out of the statistics; their ``n``
+    shows how many trials had an IRR.
     """
-    value = _kpi(kpis, "project_irr")
-    return float("nan") if value == 0.0 else value
+    status = kpis.get("project_irr_status")
+    if status is not None and status != _PROJECT_IRR_COMPUTED:
+        return float("nan")
+    return _kpi(kpis, "project_irr")
 
 
 def _num(value: Any, where: str, *, lo: float = -math.inf) -> float:
@@ -127,6 +141,26 @@ def _num(value: Any, where: str, *, lo: float = -math.inf) -> float:
     if not math.isfinite(out) or out < lo:
         raise ValueError(f"{where} out of range; got {value!r}")
     return out
+
+
+#: The schema families of the configs this module reads (#1578 L-5). A config's
+#: ``schema_version`` is the family, or the family after a site prefix
+#: (``<site>_<family>``); the site is the config's to name, never this module's.
+PRICING_SCHEMA = "pv_bess_pricing_v1"
+SIZING_SCHEMA = "pv_bess_sizing_v1"
+REGULATORY_SCHEMA = "pucsl_fit_2026_v1"
+PROJECT_SIZING_SCHEMA = "solar_bess_project_sizing_v1"
+
+
+def _check_schema(value: Any, family: str, where: str) -> None:
+    """Refuse a ``schema_version`` that is neither ``family`` nor ``<site>_<family>``."""
+    if not isinstance(value, str) or not (
+        value == family
+        or (value.endswith("_" + family) and len(value) > len(family) + 1)
+    ):
+        raise ValueError(
+            f"{where}.schema_version must be {family} or <site>_{family}; got {value!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +228,7 @@ class InverterSpec:
 
 @dataclass(frozen=True)
 class Pricing:
-    """Frozen, cited prices (``conf/blue_whale_pv_bess_pricing.yaml``).
+    """Frozen, cited prices (the pricing config).
 
     Attributes:
         module_fob_usd_per_wp: Module price, FOB China.
@@ -237,10 +271,7 @@ class Pricing:
             ),
             "pricing",
         )
-        if raw["schema_version"] != "blue_whale_pv_bess_pricing_v1":
-            raise ValueError(
-                "pricing.schema_version must be blue_whale_pv_bess_pricing_v1"
-            )
+        _check_schema(raw["schema_version"], PRICING_SCHEMA, "pricing")
         if raw["currency"] != "USD":
             raise ValueError("pricing.currency must be USD")
         sources = raw["sources"]
@@ -453,7 +484,7 @@ def match_inverter(
 
 
 # ---------------------------------------------------------------------------
-# Array form of the PR 2 dispatcher
+# Array form of the dispatcher
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ColumnSums:
@@ -637,18 +668,14 @@ def annual_energy(
     usable_mwh: float,
     discharge_efficiency: float,
 ) -> AnnualEnergy:
-    """Column ``j`` as PR 2's :class:`AnnualEnergy` (the rules of its ``summarise``)."""
+    """Column ``j`` as the dispatcher's :class:`AnnualEnergy` (the rules of its ``summarise``)."""
     by_win_d = {w.name: float(sums.discharge_mwh_by_window[w.name][j]) for w in windows}
     by_win_pv = {k: float(v[j]) for k, v in sums.pv_export_mwh_by_window.items()}
     by_rate: Dict[str, float] = {r: 0.0 for r in SUPPORTED_RATES}
     by_rate["other"] += by_win_pv["outside"]
     for w in windows:
-        rate = (
-            "priority"
-            if w.rate == "priority" and year <= tariff.priority_term_years
-            else "other"
-        )
-        by_rate[rate] += by_win_d[w.name] + by_win_pv[w.name]
+        # The dispatcher's rule, not a copy of it (#1590 domain D-1).
+        by_rate[tariff.rate_name(w.rate, year)] += by_win_d[w.name] + by_win_pv[w.name]
     revenue = {
         "priority": by_rate["priority"] * _KWH_PER_MWH * tariff.priority_lkr_per_kwh,
         "other": by_rate["other"] * _KWH_PER_MWH * tariff.other_lkr_per_kwh,
@@ -947,17 +974,17 @@ class Context:
     """Fixed model context for every grid point.
 
     Attributes:
-        scenario: The Blue Whale scenario (a plain mapping).
-        bess_template: PR 2's battery config (power, efficiencies, SoC limits).
-        dispatch: PR 2's dispatch config.
-        tariff: PR 2's tariff config.
+        scenario: The project scenario (a plain mapping).
+        bess_template: The unit config's battery (power, efficiencies, SoC limits).
+        dispatch: The unit config's dispatch rules.
+        tariff: The unit config's tariff.
         wind: The fixed wind block.
         pricing: The cited prices.
         grid_civils_development_usd: Plant-level capex outside the unit (input B26).
         fixed_opex_usd_per_year: Wind O&M plus insurance, land and SPV (inputs B10, B28).
         losses_on_charge: Book the whole round-trip loss on charge, each trial at its own
             RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
-            2026 methodology's convention, s.5.1.2). False keeps PR 2's convention (the
+            2026 methodology's convention, s.5.1.2). False keeps the dispatcher's convention (the
             nameplate is what a full charge absorbs; the loss is on discharge).
     """
 
@@ -997,7 +1024,7 @@ def engine_overrides(
     bess_capex_usd: float,
     opex_usd_per_year: float,
 ) -> Dict[str, Any]:
-    """The Blue Whale scenario fields that carry one sized and priced unit (PR 2 wiring).
+    """The scenario fields that carry one sized and priced unit (the dispatcher's wiring).
 
     A scenario without a ``wind`` technology (the separate solar + BESS project) carries no
     wind capex, and its generation nameplate is the unit's AC capacity.
@@ -1364,10 +1391,10 @@ def run_sizing(
     """Run the seeded Monte Carlo over the decision grid.
 
     Args:
-        sizing_cfg: ``conf/blue_whale_pv_bess_sizing.yaml``.
-        unit_cfg: PR 2's ``conf/blue_whale_solar_bess.yaml``.
-        pricing_cfg: ``conf/blue_whale_pv_bess_pricing.yaml``.
-        scenario: The Blue Whale scenario mapping.
+        sizing_cfg: The sizing config (schema ``<site>_pv_bess_sizing_v1``).
+        unit_cfg: The solar + BESS unit config.
+        pricing_cfg: The pricing config (schema ``<site>_pv_bess_pricing_v1``).
+        scenario: The project scenario mapping.
         site: ``{"geometry", "coastal", "frame", "lot_lat", "lot_lon"}`` as built by
             :func:`site_context`.
         evaluator: The evaluation gateway (a stand-in only in tests).
@@ -1396,8 +1423,7 @@ def run_sizing(
     from solar_resource.pv_bess_dispatch import hourly_pv, with_array
 
     _strict(sizing_cfg, SIZING_KEYS, "sizing")
-    if sizing_cfg["schema_version"] != "blue_whale_pv_bess_sizing_v1":
-        raise ValueError("sizing.schema_version must be blue_whale_pv_bess_sizing_v1")
+    _check_schema(sizing_cfg["schema_version"], SIZING_SCHEMA, "sizing")
     grid = sizing_cfg["grid"]
     _strict(grid, ("dc_ac_ratios", "bess_energy_mwh", "bess_power_mw"), "sizing.grid")
     ratios = _grid_values(grid["dc_ac_ratios"], "grid.dc_ac_ratios")
@@ -1753,7 +1779,7 @@ def run_sizing(
 
 
 # ---------------------------------------------------------------------------
-# PR 4: the separate solar + BESS project under the PUCSL 2026 rules
+# The separate solar + BESS project under the PUCSL 2026 rules
 # ---------------------------------------------------------------------------
 PROJECT_SIZING_KEYS = (
     "schema_version",
@@ -1795,6 +1821,7 @@ class RegulatoryBasis:
         priority_lkr_per_kwh, other_lkr_per_kwh, wind_lkr_per_kwh: Annex 2 tariffs.
         reference_rte: The consultation reference case's RTE (a sensitivity).
         max_capacity_mw: The standardised-PPA capacity limit.
+        readings: The names of the limit's readings, in config order (#1578 L-5).
     """
 
     discharge_duration_h: float
@@ -1808,10 +1835,11 @@ class RegulatoryBasis:
     wind_lkr_per_kwh: float
     reference_rte: float
     max_capacity_mw: float
+    readings: Tuple[str, ...]
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> "RegulatoryBasis":
-        """Build from ``conf/blue_whale_pucsl_fit_2026.yaml``, checking its arithmetic.
+        """Build from the regulatory config, checking its arithmetic.
 
         Raises:
             ValueError: On a missing or unknown key, a source without a URL or file hash
@@ -1832,10 +1860,7 @@ class RegulatoryBasis:
             ),
             "regulatory",
         )
-        if raw["schema_version"] != "blue_whale_pucsl_fit_2026_v1":
-            raise ValueError(
-                "regulatory.schema_version must be blue_whale_pucsl_fit_2026_v1"
-            )
+        _check_schema(raw["schema_version"], REGULATORY_SCHEMA, "regulatory")
         sources = raw["sources"]
         if not isinstance(sources, Mapping) or not sources:
             raise ValueError("regulatory.sources must be a non-empty mapping")
@@ -1925,9 +1950,15 @@ class RegulatoryBasis:
             ),
             "regulatory.standardised_ppa_limit",
         )
-        if set(lim["readings"]) != {"A", "B"}:
+        names = lim["readings"]
+        if (
+            not isinstance(names, Mapping)
+            or not names
+            or any(not isinstance(k, str) or not k or k == "committed" for k in names)
+        ):
             raise ValueError(
-                "regulatory.standardised_ppa_limit.readings must be A and B"
+                "regulatory.standardised_ppa_limit.readings must map one or more "
+                "reading names (not 'committed') to their text"
             )
         term = bess["contract_years"]
         if isinstance(term, bool) or int(term) != term or int(term) < 1:
@@ -1946,6 +1977,7 @@ class RegulatoryBasis:
             wind_lkr_per_kwh=float(tar["wind"]),
             reference_rte=rte,
             max_capacity_mw=_num(lim["max_capacity_mw"], "max_capacity_mw", lo=0.0),
+            readings=tuple(names),
         )
 
     def check(
@@ -2011,7 +2043,7 @@ def _minute_of(hhmm: str) -> int:
 def apply_unit_overrides(
     unit_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
 ) -> Dict[str, Any]:
-    """PR 2's unit config with dotted-path replacements (each path must already exist).
+    """The unit config with dotted-path replacements (each path must already exist).
 
     Raises:
         ValueError: If a path is not in the unit config, so no key can be invented here.
@@ -2250,28 +2282,31 @@ def run_project_sizing(
     site: Mapping[str, Any],
     evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
 ) -> SizingRun:
-    """Size the separate solar + BESS project under both readings of the 10 MW limit.
+    """Size the separate solar + BESS project under each reading of the capacity limit.
 
     The decision variables are the PV DC (whole tables, up to the most the placeholder lot
     takes with the turbine kept), the PV AC and the BESS power, with the BESS energy fixed at
     the PUCSL 4 h. Every point that fits the lot and the inverter is evaluated once, with
-    PR 3's seeded trials, through :func:`evaluate_point`; each reading is then a filter on
-    those points, so the two recommendations share the same draws.
+    the same seeded trials as :func:`run_sizing`, through :func:`evaluate_point`; each
+    reading is then a filter on those points, so the recommendations share the same draws.
+    The readings are the ones the regulatory config names, and the sizing config gives the
+    limits of exactly those readings (#1578 L-5).
 
     The objective is config-named (``objective.metric`` and ``objective.statistic``).
     ``project_npv`` is the engine's after-tax project NPV of the whole project scenario
     (CFADS after corporate tax and the CFADS risk haircut, discounted at the engine's rate
-    through :func:`~analytics.evaluation_v14.evaluate_with_overrides`); PR 4's
+    through :func:`~analytics.evaluation_v14.evaluate_with_overrides`); the unit's
     ``unit_pretax_npv_usd`` (the unit's own capex, revenue and O&M, no tax or debt) stays
     selectable. ``objective.report_beside`` names the metrics whose distributions are
     reported at each reading's choice. A run restricted to one battery (a one-value
     ``grid.bess_power_mw``) chooses only the PV for that battery.
 
     Args:
-        sizing_cfg: ``conf/blue_whale_solar_bess_project_sizing.yaml``.
-        unit_cfg: PR 2's ``conf/blue_whale_solar_bess.yaml`` (before the overrides).
-        pricing_cfg: ``conf/blue_whale_pv_bess_pricing.yaml``.
-        regulatory_cfg: ``conf/blue_whale_pucsl_fit_2026.yaml``.
+        sizing_cfg: The project sizing config (schema
+            ``<site>_solar_bess_project_sizing_v1``).
+        unit_cfg: The solar + BESS unit config (before the overrides).
+        pricing_cfg: The pricing config (schema ``<site>_pv_bess_pricing_v1``).
+        regulatory_cfg: The regulatory config (schema ``<site>_pucsl_fit_2026_v1``).
         scenario: The solar + BESS project scenario mapping (no ``wind`` technology).
         site: As built by :func:`site_context`.
         evaluator: The evaluation gateway (a stand-in only in tests).
@@ -2301,10 +2336,7 @@ def run_project_sizing(
     from solar_resource.pv_bess_dispatch import hourly_pv, with_array
 
     _strict(sizing_cfg, PROJECT_SIZING_KEYS, "sizing")
-    if sizing_cfg["schema_version"] != "blue_whale_solar_bess_project_sizing_v1":
-        raise ValueError(
-            "sizing.schema_version must be blue_whale_solar_bess_project_sizing_v1"
-        )
+    _check_schema(sizing_cfg["schema_version"], PROJECT_SIZING_SCHEMA, "sizing")
     if "wind" in scenario["generation"]["technologies"]:
         raise ValueError("the solar + BESS project scenario must not carry the turbine")
     reg = RegulatoryBasis.from_mapping(regulatory_cfg)
@@ -2334,15 +2366,15 @@ def run_project_sizing(
     max_ratio = _num(grid["max_dc_ac_ratio"], "grid.max_dc_ac_ratio", lo=min_ratio)
     duration = _num(grid["bess_duration_h"], "grid.bess_duration_h", lo=0.0)
     readings_raw = sizing_cfg["readings"]
-    _strict(readings_raw, ("A", "B", "committed"), "readings")
-    readings = {k: _reading(readings_raw[k], k) for k in ("A", "B")}
+    _strict(readings_raw, (*reg.readings, "committed"), "readings")
+    readings = {k: _reading(readings_raw[k], k) for k in reg.readings}
     for name, r in readings.items():
         for key in READING_KEYS:
             if r[key] is not None and r[key] > reg.max_capacity_mw + 1e-12:  # type: ignore[operator]
                 raise ValueError(f"readings.{name}.{key} exceeds the statutory limit")
     committed = str(readings_raw["committed"])
     if committed not in readings:
-        raise ValueError("readings.committed must be A or B")
+        raise ValueError(f"readings.committed must be one of {', '.join(reg.readings)}")
     mc = sizing_cfg["monte_carlo"]
     _strict(mc, ("seed", "n_trials", "sampler", "include_base_case"), "monte_carlo")
     if mc["sampler"] != "lhs" or mc["include_base_case"] is not True:
@@ -3091,13 +3123,13 @@ def site_context(
     read_json: Callable[[str], Any],
     read_text: Optional[Callable[[str], str]] = None,
 ) -> Dict[str, Any]:
-    """PR 1's lot, coastline and setback for the land fit (as PR 2's runner builds them).
+    """The site's lot, coastline and setback for the land fit (as the unit runner builds them).
 
     Also the turbine-shadow source the unit config declares (``shading``; None when
-    ``pv_yield.turbine_shading_modelled`` is false), built as PR 2's runner builds it.
+    ``pv_yield.turbine_shading_modelled`` is false), built as the unit runner builds it.
 
     Args:
-        unit_cfg: PR 2's unit config.
+        unit_cfg: The solar + BESS unit config.
         read_json: Reads a repository-relative JSON or YAML file.
         read_text: Reads a repository-relative text file (the wind rose CSV); defaults to
             the repository root.

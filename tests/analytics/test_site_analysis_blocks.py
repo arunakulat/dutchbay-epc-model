@@ -18,8 +18,12 @@ import yaml
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
 from analytics.site_analysis_blocks import (
     SITE_ANALYSIS_BLOCKS,
+    SITE_ANALYSIS_NAMES,
+    STATUS_NOT_APPLICABLE,
+    STATUS_RUN,
     allowed_keys,
     declared_site_analysis_blocks,
+    plan_site_analyses,
     resolve_site_analysis_block,
     validate_site_analysis_blocks,
 )
@@ -174,6 +178,33 @@ def test_valid_block_passes_and_resolves(block: str) -> None:
 def test_absent_block_is_not_applicable(block: str) -> None:
     assert resolve_site_analysis_block({}, block) is None
     assert _errors({"project": {"name": "x"}}) == []
+
+
+def test_every_analysis_is_planned_for_a_scenario_without_blocks() -> None:
+    """On by default: all four are listed, each with the reason it does not apply."""
+    plan = plan_site_analyses(_lender_config())
+    assert list(plan) == list(SITE_ANALYSIS_BLOCKS)
+    for block, entry in plan.items():
+        assert entry == {
+            "analysis": SITE_ANALYSIS_NAMES[block],
+            "status": STATUS_NOT_APPLICABLE,
+            "reason": f"the scenario declares no {block} block",
+        }
+
+
+@pytest.mark.parametrize("block", SITE_ANALYSIS_BLOCKS)
+def test_a_declared_block_plans_its_analysis_to_run(block: str) -> None:
+    plan = plan_site_analyses({block: copy.deepcopy(VALID_BLOCKS[block])})
+    assert plan[block] == {"analysis": SITE_ANALYSIS_NAMES[block], "status": STATUS_RUN}
+    others = {name for name, entry in plan.items() if entry["status"] == STATUS_RUN}
+    assert others == {block}
+
+
+def test_plan_refuses_a_malformed_block() -> None:
+    with pytest.raises(ValueError, match="is malformed"):
+        body = copy.deepcopy(VALID_BLOCKS["equipment_cost_parity"])
+        body.pop("site")
+        plan_site_analyses({"equipment_cost_parity": body})
 
 
 def test_unknown_block_name_is_refused() -> None:

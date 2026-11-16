@@ -10,9 +10,12 @@ is the contract for the four top-level blocks those analyses read:
 - ``financing_screening``: FX and tenor screening;
 - ``equipment_cost_parity``: equipment cost parity.
 
-Every block is optional. An absent block means "not applicable", and nothing here runs for
-it, so a scenario without the blocks is byte-identical. A block that is present is checked
-strictly: an unknown key, a missing required key, a wrong type, a value out of range or a
+Every analysis is on by default for every scenario (owner ruling, 2026-11-16).
+:func:`plan_site_analyses` lists all four for any scenario. An analysis whose block the scenario
+declares is planned to run; one whose block is absent is listed as ``not_applicable`` with the
+reason, never skipped silently and never an error, because its site inputs can only come from
+the scenario. Validation adds nothing for an absent block, so a scenario without the blocks
+validates exactly as before. A block that is present is checked strictly: an unknown key, a missing required key, a wrong type, a value out of range or a
 referenced file that does not exist is an error that names the path (``FRAMEWORK-02``).
 Nothing here holds a site name, a path or a figure (``ARCH-01``): every value comes from the
 scenario.
@@ -51,6 +54,18 @@ SITE_ANALYSIS_BLOCKS: Tuple[str, ...] = (
     "financing_screening",
     "equipment_cost_parity",
 )
+
+#: What each block's analysis is called in a plan.
+SITE_ANALYSIS_NAMES: Dict[str, str] = {
+    "storage_options": "wind battery options",
+    "solar_storage_sizing": "PV + BESS sizing and dispatch",
+    "financing_screening": "FX and tenor screening",
+    "equipment_cost_parity": "equipment cost parity",
+}
+
+#: Plan statuses.
+STATUS_RUN = "run"
+STATUS_NOT_APPLICABLE = "not_applicable"
 
 #: The label every financing-screening block must carry: its results are screening
 #: figures under the F-5 HOLD, never lender terms.
@@ -525,7 +540,33 @@ def resolve_site_analysis_block(
     return resolved
 
 
+def plan_site_analyses(config: Mapping[str, Any]) -> Dict[str, Dict[str, str]]:
+    """List every site analysis for a scenario, and whether it applies.
+
+    Every analysis is on by default (owner ruling, 2026-11-16), so the plan always holds all
+    four, in :data:`SITE_ANALYSIS_BLOCKS` order. An analysis whose block the scenario declares
+    is ``run``; one without its block is ``not_applicable``, with the reason.
+
+    Raises:
+        ValueError: a declared block is malformed; the message lists every problem.
+    """
+    plan: Dict[str, Dict[str, str]] = {}
+    for block in SITE_ANALYSIS_BLOCKS:
+        entry = {"analysis": SITE_ANALYSIS_NAMES[block]}
+        if resolve_site_analysis_block(config, block) is None:
+            entry["status"] = STATUS_NOT_APPLICABLE
+            entry["reason"] = f"the scenario declares no {block} block"
+        else:
+            entry["status"] = STATUS_RUN
+        plan[block] = entry
+    return plan
+
+
 __all__ = [
+    "SITE_ANALYSIS_NAMES",
+    "STATUS_NOT_APPLICABLE",
+    "STATUS_RUN",
+    "plan_site_analyses",
     "COST_BUILDUP_ROUTES",
     "SCREENING_LABEL",
     "SITE_ANALYSIS_BLOCKS",
