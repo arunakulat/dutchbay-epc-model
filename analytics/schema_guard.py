@@ -425,6 +425,24 @@ def _validate_refinance_terms(raw_config: Mapping[str, Any], errors: list[str]) 
         errors.append(str(exc))
 
 
+def _validate_debt_sizing_terms(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse a scenario that omits a required debt-sizing term (#1429).
+
+    The gearing, the target DSCR and (when the DSCR autosolve reads it) the flat P99
+    downside factor have no code default. Runs whenever the ``debt`` module is
+    validated. Delegates to :func:`finance.debt_v14.resolve_debt_sizing_terms`, which
+    makes the engine's own reads, so pre-flight and the debt engine cannot disagree.
+    """
+    from finance.debt_v14 import resolve_debt_sizing_terms
+
+    try:
+        resolve_debt_sizing_terms(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_bridge_period_treatment(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -685,6 +703,12 @@ def validate_config_for_v14(
     # and are not asked for one.
     if "cashflow" in module_list:
         _validate_project_discount_rate(raw_config, errors)
+
+    # 2c. A run that sizes debt reads its gearing, target DSCR and (under DSCR sizing)
+    # downside factor from YAML; none has a code default (#1429). Every strict pipeline
+    # run validates "debt".
+    if "debt" in module_list:
+        _validate_debt_sizing_terms(raw_config, errors)
 
     # 3. Collect and validate registered specs for requested modules
     specs: list[Any] = []

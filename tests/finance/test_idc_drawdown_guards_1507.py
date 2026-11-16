@@ -21,6 +21,7 @@ def _base_config(
             "construction_schedule": schedule,
             "debt_drawdown_pct": draws,
             "debt_ratio": 0.50,
+            "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 5,
             "rates": {"usd_nominal": 0.10},
             "mix": {"usd_commercial_min": 1.0},
