@@ -131,6 +131,12 @@ import yaml
 from omegaconf import DictConfig, OmegaConf
 
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
+from analytics.emit_selection import (
+    STATUS_NOT_RUN,
+    emit_all_requested,
+    plan_emitters,
+    plan_report,
+)
 from analytics.executive_workbook import emit_executive_workbook_from_pipeline
 from analytics.output_paths import DEFAULT_PIPELINE_OUTPUT_ROOT, resolve_output_dir
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -745,6 +751,12 @@ def cli(cfg: DictConfig) -> None:
                   (default: 'P50' — the producer is deterministic P50 today).
                 - solar_technology: generation.technologies key the solar
                   export targets (default: 'solar').
+            Optional field (#1756 — one switch for all emitters; OFF by default):
+                - emit_all: If true, every emit_* switch below that is left null
+                  turns on. An explicit switch wins. An emitter whose inputs the
+                  run lacks is not run and is listed with its reason under
+                  result['emitters']; one that applies and fails stops the run.
+                  See analytics.emit_selection.
             Optional fields (#656 slice 3 — Executive Workbook emission; OFF
             by default — leaving emit_executive_workbook false preserves
             behaviour and keeps committed-scenario output byte-identical):
@@ -927,7 +939,14 @@ def cli(cfg: DictConfig) -> None:
     # never mutates KPIs, so committed-scenario runs (which leave this off) stay
     # byte-identical.
     # ------------------------------------------------------------------
-    emit_executive_workbook = bool(cfg.get("emit_executive_workbook", False))
+    # #1756: every emit_* switch is read through analytics.emit_selection, which adds
+    # emit_all (one switch for all emitters). An explicit switch wins over emit_all; an unset
+    # one follows it. With emit_all off (the default) each switch behaves exactly as before.
+    # This early plan validates the switches before the finance run; under emit_all the plan
+    # is made again against the effective scenario just before the emitters run.
+    emit_all = emit_all_requested(cfg)
+    emit_plan = plan_emitters(cfg, {} if emit_all else None)
+    emit_executive_workbook = emit_plan["emit_executive_workbook"].run
     executive_workbook_path = cfg.get("executive_workbook_path", None)
 
     # ------------------------------------------------------------------
@@ -940,12 +959,12 @@ def cli(cfg: DictConfig) -> None:
     # path, never the synchronous HTTP report route. Emission derives no committed
     # KPI, so leaving this off keeps committed scenarios byte-identical.
     # ------------------------------------------------------------------
-    emit_capital_risk_report = bool(cfg.get("emit_capital_risk_report", False))
+    emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
     capital_risk_report_cfg = cfg.get("capital_risk_report", None) or {}
 
     # #739 slice-2: optional two-factor interaction-grid report emission. OFF by default; the
     # drivers/metric are config-required (interaction_grid block), no default pair is imposed.
-    emit_interaction_grid = bool(cfg.get("emit_interaction_grid", False))
+    emit_interaction_grid = emit_plan["emit_interaction_grid"].run
     interaction_grid_cfg = cfg.get("interaction_grid_report", None) or {}
 
     # #683 (a): optional CLI-overridable wind-resource knobs. A ``resource_overrides``
@@ -960,7 +979,7 @@ def cli(cfg: DictConfig) -> None:
     # {label, config} entries), no default scenario pair is imposed. Each compared config is run
     # through the CANONICAL pipeline (strict), so every column reconciles to that config's own
     # committed headline KPIs (the lender-integrity basis, per #745).
-    emit_tech_comparison = bool(cfg.get("emit_tech_comparison", False))
+    emit_tech_comparison = emit_plan["emit_tech_comparison"].run
     tech_comparison_cfg = cfg.get("tech_comparison", None) or {}
 
     # #884 D8: optional advisory grid-screening report emission. OFF by default; the study is
@@ -968,7 +987,7 @@ def cli(cfg: DictConfig) -> None:
     # scenarios byte-identical. Requires the scenario's grid block with study_enabled: true
     # (the emitter fails loud otherwise — the caller opted in). The heavy screens are on this
     # batch path only; a missing [grid] engine degrades gracefully (CASPER).
-    emit_grid_screen = bool(cfg.get("emit_grid_screen", False))
+    emit_grid_screen = emit_plan["emit_grid_screen"].run
     grid_screen_cfg = cfg.get("grid_screen_report", None) or {}
 
     effective_config: str = str(config)
@@ -1162,6 +1181,26 @@ def cli(cfg: DictConfig) -> None:
             run_scoped=bool(cfg.get("run_scoped", False)),
             run_id=cfg.get("run_id", None),
         )
+
+        # #1756: under emit_all, decide which emitters apply to this run from the effective
+        # scenario. One whose inputs are absent is recorded as not run with its reason; one that
+        # applies runs and, if it fails, stops the run. The plan is recorded under
+        # result['emitters'] only when emit_all is on, so other runs stay byte-identical.
+        if emit_all and isinstance(result, dict):
+            emit_plan = plan_emitters(
+                cfg, dict(load_scenario_config(str(effective_config)))
+            )
+            emit_executive_workbook = emit_plan["emit_executive_workbook"].run
+            emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
+            emit_interaction_grid = emit_plan["emit_interaction_grid"].run
+            emit_tech_comparison = emit_plan["emit_tech_comparison"].run
+            emit_grid_screen = emit_plan["emit_grid_screen"].run
+            result["emitters"] = plan_report(emit_plan)
+            for decision in emit_plan.values():
+                if decision.status == STATUS_NOT_RUN:
+                    logger.info(
+                        "emit_all: %s not run (%s)", decision.flag, decision.reason
+                    )
 
         # #656 (slice 3): optional single-scenario Executive Workbook emission.
         # OFF unless emit_executive_workbook=true (committed scenarios leave it

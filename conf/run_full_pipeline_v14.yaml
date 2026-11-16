@@ -124,6 +124,25 @@ solar_export_scenario: P50
 solar_technology: solar
 
 # ---------------------------------------------------------------------------
+# #1756: one switch for all emitters (OFF by default).
+# emit_all: true turns on every emit_* switch below that is left null. A switch
+# set explicitly wins, so `emit_all=true emit_grid_screen=false` runs everything
+# except grid screening. Under emit_all, an emitter whose inputs this run lacks
+# (for example no monte_carlo.parameters, no interaction_grid block, no
+# tech_comparison.scenarios, no enabled grid study) is not run and is listed
+# with its reason under result['emitters']; one that has its inputs and fails
+# stops the run. The emitters' own lender guards are unchanged. A null switch
+# with emit_all off is off, exactly as before. See analytics/emit_selection.py;
+# tests/lint/test_emit_all_covers_every_emitter.py ties this list to the CLI.
+# ---------------------------------------------------------------------------
+emit_all: false
+
+# Switches with no section of their own below (null = follow emit_all).
+emit_interaction_grid: null
+emit_tech_comparison: null
+emit_grid_screen: null
+
+# ---------------------------------------------------------------------------
 # #656 (slice 3): single-scenario Executive Workbook emission (OFF by default).
 # When true, after a successful finance run this CLI writes a lender-facing
 # .xlsx via analytics.executive_workbook.emit_executive_workbook_from_pipeline
@@ -136,7 +155,8 @@ solar_technology: solar
 # ---------------------------------------------------------------------------
 
 # If true, write the single-scenario Executive Workbook after the finance run.
-emit_executive_workbook: false
+# Null follows emit_all (#1756).
+emit_executive_workbook: null
 
 # Target .xlsx path. When null, defaults to
 # '<export_dir>/executive_workbook.xlsx'. The written path is echoed back under
@@ -156,7 +176,8 @@ executive_workbook_path: null
 # ---------------------------------------------------------------------------
 
 # If true, render the capital-risk lender report after the finance run.
-emit_capital_risk_report: false
+# Null follows emit_all (#1756).
+emit_capital_risk_report: null
 
 capital_risk_report:
   # Bounded, report-appropriate trial count (NOT the scenario's 100k

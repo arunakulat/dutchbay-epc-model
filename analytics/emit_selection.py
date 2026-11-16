@@ -1,0 +1,181 @@
+"""Which optional emitters a ``run_full_pipeline_v14`` run writes (#1756).
+
+Each emitter has its own ``emit_*`` switch in ``conf/run_full_pipeline_v14.yaml``. ``emit_all``
+turns them all on at once. The rules:
+
+- A switch set explicitly (``true`` or ``false``) wins over ``emit_all``. So
+  ``emit_all=true emit_grid_screen=false`` runs everything except grid screening.
+- A switch left unset (``null``) follows ``emit_all``, which defaults to ``false``. With
+  ``emit_all`` off, nothing changes from the behaviour before this module.
+- Under ``emit_all``, an emitter whose inputs the run does not have is not run, and the plan
+  records why: no ``monte_carlo.parameters`` to sample, no ``interaction_grid`` block, no
+  ``tech_comparison.scenarios`` list, or no grid block with ``study_enabled: true``. An emitter
+  that has its inputs and still fails stops the run (``FRAMEWORK-02``), because nothing here
+  catches its error.
+- An emitter switched on explicitly is always attempted, so a missing input fails loud, as it
+  did before this module.
+
+The applicability checks look only for the presence of an emitter's inputs. They do not
+validate them: a declared but malformed block is the emitter's to refuse. The lender guards in
+the emitters themselves (the capital-risk report's trial floor and forced fail-loud Monte Carlo)
+are untouched.
+
+``EMIT_FLAGS`` lists every ``emit_*`` switch. A lint test ties it to the switches the CLI reads
+and the conf declares, so a new emitter cannot be left out of ``emit_all``.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple
+
+#: Every optional emitter switch, in the order the CLI runs them.
+EMIT_FLAGS: Tuple[str, ...] = (
+    "emit_executive_workbook",
+    "emit_capital_risk_report",
+    "emit_interaction_grid",
+    "emit_tech_comparison",
+    "emit_grid_screen",
+)
+
+#: Plan statuses.
+STATUS_RUN = "run"
+STATUS_NOT_RUN = "not_run"
+STATUS_OFF = "off"
+
+
+@dataclass(frozen=True)
+class EmitterDecision:
+    """One emitter's decision: whether it runs, and why."""
+
+    flag: str
+    run: bool
+    status: str
+    source: str
+    reason: Optional[str] = None
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Return the decision as a JSON-ready mapping."""
+        out: Dict[str, Any] = {"status": self.status, "source": self.source}
+        if self.reason is not None:
+            out["reason"] = self.reason
+        return out
+
+
+def _get(cfg: Any, key: str) -> Any:
+    getter = getattr(cfg, "get", None)
+    if getter is None:
+        raise TypeError(f"run config must be a mapping; got {type(cfg).__name__}")
+    return getter(key, None)
+
+
+def _switch(cfg: Any, key: str) -> Optional[bool]:
+    """Return an explicit switch value, or ``None`` when the switch is unset."""
+    value = _get(cfg, key)
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    raise ValueError(f"{key} must be true, false or null; got {value!r}")
+
+
+def emit_all_requested(cfg: Any) -> bool:
+    """Return the ``emit_all`` switch (``False`` when unset)."""
+    return bool(_switch(cfg, "emit_all"))
+
+
+def _needs_monte_carlo_parameters(
+    scenario: Mapping[str, Any], cfg: Any
+) -> Optional[str]:
+    mc = scenario.get("monte_carlo")
+    if isinstance(mc, Mapping) and mc.get("parameters"):
+        return None
+    return "the scenario declares no monte_carlo.parameters to sample"
+
+
+def _needs_interaction_grid(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
+    if isinstance(scenario.get("interaction_grid"), Mapping):
+        return None
+    return "the scenario declares no interaction_grid block"
+
+
+def _needs_tech_comparison_scenarios(
+    scenario: Mapping[str, Any], cfg: Any
+) -> Optional[str]:
+    block = _get(cfg, "tech_comparison")
+    entries = block.get("scenarios", None) if hasattr(block, "get") else None
+    if entries is not None and not isinstance(entries, (str, bytes)) and len(entries):
+        return None
+    return "the run config lists no tech_comparison.scenarios"
+
+
+def _needs_enabled_grid_study(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
+    grid = scenario.get("grid")
+    if isinstance(grid, Mapping) and grid.get("study_enabled") is True:
+        return None
+    return "the scenario declares no grid block with study_enabled: true"
+
+
+def _always(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
+    return None
+
+
+#: For each switch, a check that returns ``None`` when the run has the emitter's inputs, or the
+#: reason it does not.
+APPLICABILITY: Dict[str, Callable[[Mapping[str, Any], Any], Optional[str]]] = {
+    "emit_executive_workbook": _always,
+    "emit_capital_risk_report": _needs_monte_carlo_parameters,
+    "emit_interaction_grid": _needs_interaction_grid,
+    "emit_tech_comparison": _needs_tech_comparison_scenarios,
+    "emit_grid_screen": _needs_enabled_grid_study,
+}
+
+
+def plan_emitters(
+    cfg: Any, scenario: Optional[Mapping[str, Any]] = None
+) -> Dict[str, EmitterDecision]:
+    """Decide which emitters run.
+
+    Args:
+        cfg: The run config (``DictConfig`` or mapping).
+        scenario: The effective scenario mapping. Required when ``emit_all`` is on and any
+            switch is unset, because applicability is read from it; ignored otherwise.
+
+    Returns:
+        One :class:`EmitterDecision` per entry in :data:`EMIT_FLAGS`, in that order.
+    """
+    emit_all = emit_all_requested(cfg)
+    plan: Dict[str, EmitterDecision] = {}
+    for flag in EMIT_FLAGS:
+        explicit = _switch(cfg, flag)
+        if explicit is not None:
+            plan[flag] = EmitterDecision(
+                flag=flag,
+                run=explicit,
+                status=STATUS_RUN if explicit else STATUS_OFF,
+                source="explicit",
+            )
+            continue
+        if not emit_all:
+            plan[flag] = EmitterDecision(
+                flag=flag, run=False, status=STATUS_OFF, source="default"
+            )
+            continue
+        if scenario is None:
+            raise ValueError(
+                "emit_all needs the effective scenario to decide which emitters apply"
+            )
+        reason = APPLICABILITY[flag](scenario, cfg)
+        plan[flag] = EmitterDecision(
+            flag=flag,
+            run=reason is None,
+            status=STATUS_RUN if reason is None else STATUS_NOT_RUN,
+            source="emit_all",
+            reason=reason,
+        )
+    return plan
+
+
+def plan_report(plan: Mapping[str, EmitterDecision]) -> Dict[str, Dict[str, Any]]:
+    """Return the plan as the JSON block a run records under ``result['emitters']``."""
+    return {flag: decision.as_dict() for flag, decision in plan.items()}
