@@ -634,7 +634,7 @@ def make_location_map(
 
 def make_site_context_map(lat: float, lon: float, charts: Path) -> Path:
     """An imagery close-up of the site coordinate (contextily). Raises when unavailable."""
-    import contextily as cx  # type: ignore[import-untyped]
+    import contextily as cx  # type: ignore[import-untyped,unused-ignore]
     import matplotlib
 
     matplotlib.use("Agg")
