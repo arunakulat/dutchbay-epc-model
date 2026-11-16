@@ -1305,12 +1305,21 @@
     {% if ctx.yield_reconciliation %}
     {% set yr = ctx.yield_reconciliation %}
     <h3>Yield reconciliation</h3>
-    <p>
-      Status: <strong>{{ yr.status | replace("_", " ") }}</strong>.
-      {% if yr.gate_applied %}The load-time gate ran on this scenario and passed.{% else %}The load-time gate did not run on this configuration (an inline configuration).{% endif %}
-      {% if yr.tolerance_pct is not none %}Tolerance {{ "%.2f" | format(yr.tolerance_pct) }}%{% if yr.tolerance_overridden %} (audited override of the default){% endif %}.{% endif %}
-      {% if yr.reason %}{{ yr.reason }}.{% endif %}
-    </p>
+    {# One sentence per fact, joined with explicit spaces so block-tag trimming cannot run
+       them together. #}
+    {% set yr_parts = ["Status: <strong>" ~ (yr.status | replace("_", " ") | e) ~ "</strong>."] %}
+    {% if yr.gate_applied %}
+    {% set _ = yr_parts.append("The fail-loud reconciliation gate ran on this configuration and passed.") %}
+    {% else %}
+    {% set _ = yr_parts.append("The fail-loud reconciliation gate did not run on this configuration (for example an inline configuration or a screening run), so a deviation outside tolerance is reported here rather than refused.") %}
+    {% endif %}
+    {% if yr.tolerance_pct is not none %}
+    {% set _ = yr_parts.append("Tolerance " ~ ("%.2f" | format(yr.tolerance_pct)) ~ "%" ~ (" (audited override of the default)" if yr.tolerance_overridden else "") ~ ".") %}
+    {% endif %}
+    {% if yr.reason %}
+    {% set _ = yr_parts.append((yr.reason | e) ~ ".") %}
+    {% endif %}
+    <p>{{ yr_parts | join(" ") | safe }}</p>
     {% if yr.rows %}
     <table>
       <thead><tr><th>Check</th><th>Reference</th><th class="num">Reference (GWh)</th><th class="num">Compared (GWh)</th><th class="num">Deviation</th><th>Within tolerance</th></tr></thead>
@@ -1328,6 +1337,10 @@
       </tbody>
     </table>
     {% endif %}
+    <p class="disclaimer">This is a disclosure of a consistency check, not a yield basis. The engine
+      still bills revenue off capacity_mw &times; capacity_factor; the check compares that figure with
+      the scenario's own bankable references, so a scenario that declares none is not checked, and a
+      reference is only as current as the export it came from.</p>
     {% endif %}
     <h3>Methodology</h3>
     <p class="disclaimer">

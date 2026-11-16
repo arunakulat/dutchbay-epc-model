@@ -7,6 +7,8 @@ before.
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict
 
 from analytics.aep_reconciliation import build_yield_reconciliation_record
@@ -66,7 +68,11 @@ def test_report_restates_the_record() -> None:
 
     html = render_report_html(ctx)
     assert "Yield reconciliation" in html
-    assert "The load-time gate ran on this scenario and passed." in html
+    assert (
+        "The fail-loud reconciliation gate ran on this configuration and passed. "
+        "Tolerance 2.00%." in html
+    )
+    assert "not a yield basis" in html  # the caveat line under the table
     assert "351.00" in html
     assert "350.40" in html
     assert "-0.17%" in html  # (350.4 - 351) / 351 = -0.171%
@@ -86,7 +92,7 @@ def test_report_shows_an_override_and_an_out_of_tolerance_row() -> None:
     assert block.rows[0].within_tolerance is False
     html = render_report_html(ctx)
     assert "outside tolerance" in html
-    assert "audited override of the default" in html
+    assert "Tolerance 5.00% (audited override of the default)." in html
 
 
 def test_report_shows_not_applicable_with_its_reason() -> None:
@@ -104,4 +110,36 @@ def test_report_shows_not_applicable_with_its_reason() -> None:
     html = render_report_html(ctx)
     assert "not applicable" in html
     assert "did not run on this configuration" in html
+    assert "reported here rather than refused." in html
     assert record["reason"] in html
+
+
+def test_report_shows_the_p90_row(tmp_path: Path) -> None:
+    summary = tmp_path / "aep_summary.json"
+    summary.write_text(
+        json.dumps(
+            {"net_site_aep_gwh": 350.4, "exceedance": {"net_aep_p90_1yr_gwh": 300.0}}
+        )
+    )
+    record = _record(
+        351.0,
+        resource={"aep_summary_path": str(summary)},
+        expected_results={"net_aep_p50_gwh": 351.0, "net_aep_p90_gwh": 301.5},
+    )
+    ctx = build_report_context(
+        _case(),
+        generated_at=GENERATED_AT,
+        run_result={"yield_reconciliation": record},
+    )
+    block = ctx.yield_reconciliation
+    assert block is not None
+    p90_rows = [row for row in block.rows if row.check == "P90"]
+    (p90,) = p90_rows
+    assert p90.source == f"{summary}:exceedance.net_aep_p90_1yr_gwh"
+    assert p90.reference_gwh == 300.0
+    assert p90.compared_gwh == 301.5
+    assert p90.deviation_pct == record["p90"]["deviation_pct"]
+    assert p90.within_tolerance is True
+    html = render_report_html(ctx)
+    assert "<td>P90</td>" in html
+    assert "+0.50%" in html

@@ -265,3 +265,144 @@ def test_pipeline_result_carries_the_record_bound_to_the_manifest(
     assert inline["yield_reconciliation"]["status"] == "reconciled"
     # Disclosure only: the same scenario gives the same KPIs either way.
     assert inline["kpis"] == from_file["kpis"]
+
+
+# --- review follow-ups: exact boundary, non-positive references, seams ------------------
+
+
+def test_exactly_at_tolerance_is_within_as_the_gate_says() -> None:
+    """105 against 100 at 5%: relative == tolerance exactly; the gate passes, so does the record."""
+    cfg = _synthetic(
+        capacity_mw=105.0 / 8.76,
+        capacity_factor=1.0,
+        expected_results={"net_aep_p50_gwh": 100.0},
+        aep_reconciliation={"tolerance_pct": 5.0},
+    )
+    record = build_yield_reconciliation_record(cfg, gate_applied=False)
+    assert record["implied_net_aep_gwh"] == 105.0  # exact in binary64
+    assert _gate_passes(cfg)
+    (ref,) = record["p50"]["references"]
+    assert ref["deviation_pct"] == 5.0
+    assert ref["within_tolerance"] is True
+    assert record["status"] == "reconciled"
+    # One step tighter and both refuse.
+    cfg["aep_reconciliation"]["tolerance_pct"] = 4.999999
+    assert not _gate_passes(cfg)
+    assert build_yield_reconciliation_record(cfg, gate_applied=False)["status"] == (
+        "outside_tolerance"
+    )
+
+
+@pytest.mark.parametrize("reference", [0.0, -10.0])
+def test_non_positive_p50_reference_is_never_within(reference: float) -> None:
+    cfg = _synthetic(expected_results={"net_aep_p50_gwh": reference})
+    assert not _gate_passes(cfg)
+    record = build_yield_reconciliation_record(cfg, gate_applied=False)
+    (ref,) = record["p50"]["references"]
+    assert ref["within_tolerance"] is False
+    assert ref["deviation_pct"] is None
+    assert ref["note"] == "non-positive reference"
+    assert record["status"] == "outside_tolerance"
+
+
+@pytest.mark.parametrize(("frozen", "exported"), [(0.0, 300.0), (300.0, -1.0)])
+def test_non_positive_p90_is_never_within(
+    tmp_path: Path, frozen: float, exported: float
+) -> None:
+    summary = tmp_path / "aep_summary.json"
+    summary.write_text(
+        json.dumps(
+            {"net_site_aep_gwh": 350.4, "exceedance": {"net_aep_p90_1yr_gwh": exported}}
+        )
+    )
+    cfg = _synthetic(
+        expected_results={"net_aep_p90_gwh": frozen},
+        resource={"aep_summary_path": str(summary)},
+    )
+    assert not _gate_passes(cfg)
+    record = build_yield_reconciliation_record(cfg, gate_applied=False)
+    assert record["p90"]["within_tolerance"] is False
+    assert record["p90"]["deviation_pct"] is None
+    assert record["p90"]["note"] == "non-positive P90"
+    assert record["status"] == "outside_tolerance"
+
+
+def test_engine_records_where_the_gate_ran() -> None:
+    from analytics.aep_reconciliation import record_gate_applied_at_seam
+
+    cfg = _synthetic(expected_results={"net_aep_p50_gwh": 351.0})
+    assert build_yield_reconciliation_record(cfg, gate_applied=True)["gate_site"] == (
+        "scenario_load"
+    )
+    inline = build_yield_reconciliation_record(cfg, gate_applied=False)
+    assert inline["gate_site"] is None
+    result = {"yield_reconciliation": inline}
+    record_gate_applied_at_seam(result, "api_boundary")
+    assert inline["gate_applied"] is True
+    assert inline["gate_site"] == "api_boundary"
+    record_gate_applied_at_seam({}, "api_boundary")  # no record: nothing to do
+    record_gate_applied_at_seam(None, "api_boundary")
+
+
+def _spy_on_seam(monkeypatch: pytest.MonkeyPatch, module: Any) -> list[dict[str, Any]]:
+    """Wrap a module's record_gate_applied_at_seam to keep the result it marked."""
+    seen: list[dict[str, Any]] = []
+    real = module.record_gate_applied_at_seam
+
+    def spy(result: Any, gate_site: str) -> None:
+        real(result, gate_site)
+        seen.append(result)
+
+    monkeypatch.setattr(module, "record_gate_applied_at_seam", spy)
+    return seen
+
+
+@pytest.mark.slow
+def test_service_seam_behind_the_cases_routes_records_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.pipeline_service import run_finance_case
+
+    monkeypatch.chdir(REPO_ROOT)
+    scenario = load_scenario_config("scenarios/dutchbay_lendercase_2025Q4.yaml")
+    record = run_finance_case(scenario)["yield_reconciliation"]
+    assert record["gate_applied"] is True
+    assert record["gate_site"] == "service_seam"
+    assert record["status"] == "reconciled"
+    # A screening run skips the gate, and its record says so.
+    screening = run_finance_case(scenario, skip_bankable_reconciliation=True)
+    assert screening["yield_reconciliation"]["gate_applied"] is False
+    assert screening["yield_reconciliation"]["gate_site"] is None
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"config_path": "scenarios/dutchbay_lendercase_2025Q4.yaml"},
+        {
+            "config_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+            "overrides": {"tariff.lkr_per_kwh": 30.0},
+        },
+        "inline",
+    ],
+    ids=["config_path", "config_path_with_overrides", "inline_config"],
+)
+def test_run_pipeline_api_records_the_gate(
+    monkeypatch: pytest.MonkeyPatch, payload: Any
+) -> None:
+    import api.pipeline_api as pipeline_api
+    from api.pipeline_api import RunPipelineRequest, run_pipeline
+
+    monkeypatch.chdir(REPO_ROOT)
+    if payload == "inline":
+        payload = {
+            "config": load_scenario_config("scenarios/dutchbay_lendercase_2025Q4.yaml")
+        }
+    seen = _spy_on_seam(monkeypatch, pipeline_api)
+    run_pipeline(RunPipelineRequest(**payload))
+    (result,) = seen
+    record = result["yield_reconciliation"]
+    assert record["gate_applied"] is True
+    assert record["gate_site"] == "api_boundary"
+    assert record["status"] == "reconciled"

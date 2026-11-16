@@ -361,6 +361,12 @@ YIELD_STATUS_NOT_APPLICABLE = "not_applicable"
 YIELD_STATUS_NOT_CHECKED = "not_checked"
 
 
+#: ``gate_site`` values: where the fail-loud gate ran on the configuration a record describes.
+YIELD_GATE_SITE_SCENARIO_LOAD = "scenario_load"
+YIELD_GATE_SITE_API_BOUNDARY = "api_boundary"
+YIELD_GATE_SITE_SERVICE_SEAM = "service_seam"
+
+
 def _p50_comparisons(
     references: Mapping[str, float], implied_gwh: float, tolerance: float
 ) -> list[dict[str, Any]]:
@@ -462,6 +468,10 @@ def build_yield_reconciliation_record(
     record: dict[str, Any] = {
         "schema_version": YIELD_RECONCILIATION_SCHEMA_VERSION,
         "gate_applied": bool(gate_applied),
+        # Where the gate ran: ``scenario_load`` for a scenario file the engine loaded. A
+        # seam that gates an inline configuration itself and then hands it to the engine
+        # records its own name with :func:`record_gate_applied_at_seam`.
+        "gate_site": YIELD_GATE_SITE_SCENARIO_LOAD if gate_applied else None,
     }
     try:
         tolerance_pct = resolve_tolerance_pct(config)
@@ -547,7 +557,33 @@ def build_yield_reconciliation_record(
     return record
 
 
+def record_gate_applied_at_seam(result: Any, gate_site: str) -> None:
+    """Record that a seam ran the fail-loud gate on the configuration it passed the engine.
+
+    The engine marks a record ``gate_applied`` only when it loaded a scenario file itself.
+    The web API's ``/run-pipeline`` boundary and the service seam behind the ``/cases``
+    routes run :func:`reconcile_capacity_factor_with_bankable_aep` on an inline
+    configuration and then pass that same configuration to the engine, so the gate did run
+    on it. Call this right after the engine returns, and only when the gate ran. It
+    changes nothing else in the record and does nothing to a result without one.
+
+    Args:
+        result: The pipeline result.
+        gate_site: Where the gate ran, one of the ``YIELD_GATE_SITE_*`` values.
+    """
+    if not isinstance(result, dict):
+        return
+    record = result.get("yield_reconciliation")
+    if isinstance(record, dict):
+        record["gate_applied"] = True
+        record["gate_site"] = gate_site
+
+
 __all__ = [
+    "YIELD_GATE_SITE_API_BOUNDARY",
+    "YIELD_GATE_SITE_SCENARIO_LOAD",
+    "YIELD_GATE_SITE_SERVICE_SEAM",
+    "record_gate_applied_at_seam",
     "YIELD_RECONCILIATION_SCHEMA_VERSION",
     "YIELD_STATUS_NOT_APPLICABLE",
     "YIELD_STATUS_NOT_CHECKED",
