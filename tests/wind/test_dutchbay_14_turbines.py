@@ -3,7 +3,9 @@
 Three groups of checks:
 
 - the wake re-baseline reproduces from ``conf/dutchbay_wake_14_turbines.yaml``, and its
-  layout is the one the repository already records (``scripts/process_era5_wind_data.py``);
+  layout is the recorded one: the 15 positions are pinned by digest (they lived in
+  ``scripts/process_era5_wind_data.py`` until #1775 moved them to this config), and T2 is the
+  Blue Whale siting reference point;
 - every scenario built on the IEA 10 MW layout carries 14 turbines, the re-baselined wake,
   and capex and opex breakdowns that still sum to the totals the engine reads;
 - the per-turbine cost rule holds against the 15-turbine lines frozen at
@@ -12,7 +14,7 @@ Three groups of checks:
 
 from __future__ import annotations
 
-import ast
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -26,7 +28,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "run_dutchbay_wake_rebaseline_v14.py"
 CONF = REPO_ROOT / "conf" / "dutchbay_wake_14_turbines.yaml"
 SUMMARY = REPO_ROOT / "docs" / "wind" / "dutchbay_14_turbine_wake_summary.json"
-ERA5_SCRIPT = REPO_ROOT / "scripts" / "process_era5_wind_data.py"
 FROZEN_15 = (
     REPO_ROOT / "legacy_scenarios" / "dutchbay_lendercase_2025Q4_15_turbines.yaml"
 )
@@ -56,25 +57,33 @@ def _cli() -> ModuleType:
     return module
 
 
-def _recorded_turbine_locations() -> Dict[str, tuple]:
-    tree = ast.parse(ERA5_SCRIPT.read_text())
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "TURBINE_LOCATIONS"
-            for t in node.targets
-        ):
-            return ast.literal_eval(node.value)
-    raise AssertionError("TURBINE_LOCATIONS not found")
+#: SHA-256 of the 15 recorded positions (ENVISION_ROAD-DATA.pdf), one ``id,lat,lon`` line
+#: per turbine at 6 dp, T1 to T15. Computed from ``TURBINE_LOCATIONS`` in
+#: ``scripts/process_era5_wind_data.py`` at 1711fcf3, before #1775 moved the layout into
+#: configuration, so the config cannot drift from the record unnoticed.
+RECORDED_LAYOUT_SHA256 = (
+    "54547d208ddd94ef505aba796e4c06b96468097a886b6ebd28b0fd48a16b232f"
+)
+SITING_CONF = REPO_ROOT / "conf" / "blue_whale_wind_siting.yaml"
 
 
 def test_wake_layout_is_the_recorded_layout_with_t2_as_the_waker() -> None:
     conf = yaml.safe_load(CONF.read_text())["wake_rebaseline"]
     turbines = conf["layout"]["turbines"]
-    recorded = _recorded_turbine_locations()
-    assert {t["id"]: (t["lat_deg"], t["lon_deg"]) for t in turbines} == recorded
+    assert [t["id"] for t in turbines] == [f"T{i}" for i in range(1, 16)]
+    canon = "\n".join(
+        f"{t['id']},{t['lat_deg']:.6f},{t['lon_deg']:.6f}" for t in turbines
+    )
+    assert hashlib.sha256(canon.encode()).hexdigest() == RECORDED_LAYOUT_SHA256
+    # Independent record of T2: the Blue Whale siting reference point.
+    site = yaml.safe_load(SITING_CONF.read_text())["site"]
+    t2 = next(t for t in turbines if t["id"] == "T2")
+    assert site["reference_point_name"] == "T2"
+    assert round(t2["lat_deg"], 4) == site["reference_lat_deg"]
+    assert round(t2["lon_deg"], 4) == site["reference_lon_deg"]
     wakers = [t["id"] for t in turbines if t["role"] == "external_waker"]
     assert wakers == ["T2"]
-    assert sum(t["role"] == "dutchbay" for t in turbines) == 14
+    assert sum(t["role"] == "counted" for t in turbines) == 14
 
 
 def test_wake_rebaseline_reproduces_the_committed_summary() -> None:

@@ -27,9 +27,11 @@ params = [
         points=5,
     ),
 ]
-config_path = (
-    sys.argv[1] if len(sys.argv) > 1 else "scenarios/dutchbay_lendercase_2025Q4.yaml"
-)
+if len(sys.argv) < 2:
+    # #1775: the scenario is always the caller's choice; no site default.
+    print("usage: python scripts/ci/model_guard.py <scenario.yaml>")
+    sys.exit(2)
+config_path = sys.argv[1]
 
 problems = validate_parameter_ranges(config_path, params)
 if not problems.empty:
