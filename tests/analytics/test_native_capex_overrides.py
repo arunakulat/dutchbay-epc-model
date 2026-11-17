@@ -258,13 +258,60 @@ def test_mc_refuses_sweeps_every_native_trial_would_reject(
         "capex.usd_total",
         "capex.contingency_pct",
     }:
-        # The guard is native-only: the USD twin's engine is not refused.
+        # The native guard does not apply to the USD twin. The exact key "CAPEX" is
+        # the exception: it merges a scalar over the capex section, which every trial
+        # rejects since #1767, so the #1629 dry run refuses it on the USD twin as well.
         usd["monte_carlo"] = {"parameters": [param]}
-        MonteCarloEngine(usd)
+        if param["name"].lower() == "capex":
+            with pytest.raises(MonteCarloConfigError, match="refused before sampling"):
+                MonteCarloEngine(usd)
+        else:
+            MonteCarloEngine(usd)
     native["monte_carlo"] = {
         "parameters": [{"name": "capex.input.amount", "low": 1.0, "high": 2.0}]
     }
     MonteCarloEngine(native)
+
+
+@pytest.mark.parametrize(
+    ("name", "low", "high"),
+    [
+        ("capex.lkr_total", 1.0e9, 2.0e9),
+        ("capex.epc_usd", 1.0e6, 2.0e6),
+        ("capex.contingency", 1.0e6, 2.0e6),
+        ("capex.freight_pct", 0.01, 0.02),
+        ("capex.total_capex", 1.0e8, 2.0e8),
+        ("finance.capex_usd", 1.0e8, 2.0e8),
+    ],
+)
+def test_mc_dry_run_refuses_what_every_native_trial_refuses(
+    name: str, low: float, high: float
+) -> None:
+    """#1629 (#1695 domain M-1): names outside the hand-kept guard list are refused by
+    the pre-sampling dry run, on the authored and the resolved native config alike."""
+    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+
+    _usd, native = cases()
+    for cfg in (native, normalize_native_capex(native)):
+        cfg = copy.deepcopy(cfg)
+        cfg["monte_carlo"] = {"parameters": [{"name": name, "low": low, "high": high}]}
+        with pytest.raises(MonteCarloConfigError, match="refused before sampling"):
+            MonteCarloEngine(cfg)
+
+
+def test_mc_dry_run_sends_a_resolved_config_back_to_the_authored_one() -> None:
+    """#1629 item 3: on a resolved native config, ``capex.input.amount`` fails every
+    trial; the refusal says to start from the authored config."""
+    from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
+
+    _usd, native = cases()
+    amount = native["capex"]["input"]["amount"]
+    param = {"name": "capex.input.amount", "low": 0.9 * amount, "high": 1.1 * amount}
+    native["monte_carlo"] = {"parameters": [param]}
+    MonteCarloEngine(copy.deepcopy(native))  # the authored config is accepted
+    resolved = normalize_native_capex(native)
+    with pytest.raises(MonteCarloConfigError, match="start the Monte Carlo from"):
+        MonteCarloEngine(resolved)
 
 
 def test_batch_analytics_native_matches_usd(tmp_path: Path) -> None:

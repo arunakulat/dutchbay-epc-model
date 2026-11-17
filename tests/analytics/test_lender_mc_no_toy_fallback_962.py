@@ -130,14 +130,16 @@ def test_healthy_kalpitiya_lender_run_reports_the_fallback_off_and_unused() -> N
     assert result.failed_iterations == 0
 
 
-def test_five_us_cent_lender_run_stops_instead_of_reporting_toy_trials() -> None:
+def test_five_us_cent_lender_run_is_refused_before_sampling() -> None:
     """The variant derives CAPEX from its breakdown, so every trial refuses the sampled
-    ``capex.usd_total``. With the fallback on (main), every trial was a toy trial; with it
-    off, the run stops on the first failed trial.
+    ``capex.usd_total``. On main the run stopped at trial 0; the pre-sampling dry run
+    (#1629) now refuses the sweep before any trial and names the opt-in fix (#1762).
     """
+    from analytics.mc.engine import MonteCarloConfigError
+
     logging.disable(logging.WARNING)
     try:
-        with pytest.raises(RuntimeError, match="toy-metric fallback is disabled"):
+        with pytest.raises(MonteCarloConfigError, match="reconcile_breakdown"):
             run_monte_carlo_analysis(
                 base_config=_load(_FIVE_US_CENT), n_trials=2, seed=42
             )
