@@ -260,6 +260,33 @@ def _flag_degenerate_metric(
     return suite
 
 
+def _coherent_overrides(
+    base_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Shock each technology's capacity factor in proportion to a project capacity-factor shock.
+
+    A scenario with ``generation.technologies`` must keep those technologies reconciled with
+    ``project.capacity_mw * project.capacity_factor`` (1%), so shocking the project figure
+    alone fails the pipeline guard (#1787). The shock is carried to every technology that
+    declares a capacity factor, by the same ratio.
+    """
+    out = dict(overrides)
+    key = "project.capacity_factor"
+    base_cf = (base_cfg.get("project") or {}).get("capacity_factor")
+    techs = (base_cfg.get("generation") or {}).get("technologies")
+    if key not in out or not isinstance(techs, Mapping) or not base_cf:
+        return out
+    ratio = float(out[key]) / float(base_cf)
+    for name, block in techs.items():
+        if isinstance(block, Mapping) and isinstance(
+            block.get("capacity_factor"), (int, float)
+        ):
+            out[f"generation.technologies.{name}.capacity_factor"] = (
+                float(block["capacity_factor"]) * ratio
+            )
+    return out
+
+
 def build_one_way_sensitivity_suite(
     *,
     base_config: Mapping[str, Any],
@@ -305,7 +332,7 @@ def build_one_way_sensitivity_suite(
         out = evaluate_with_overrides(
             config_path=None,
             raw_config=base_cfg,
-            overrides=override_dict,
+            overrides=_coherent_overrides(base_cfg, override_dict),
         )
         kpis = _coerce_kpis(out)
         val = _read_sweep_metric(
