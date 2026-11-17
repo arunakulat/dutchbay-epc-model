@@ -174,6 +174,14 @@ ALLOWLIST: dict[str, str] = {
         "analytics.pipeline_v14_enhanced.run_v14_pipeline directly. Superseded "
         "by analytics.evaluation_v14; callers should migrate then delete this."
     ),
+    "analytics/wind/wind_bess_options_runner.py": (
+        "[PERMANENT] Imports finance.capex_price_basis (capex_escalation_factor, "
+        "automatic_escalation, apply_capex_price_basis): the engine's price-year factor, "
+        "so the battery's own pre-tax cash flow is priced at the same factor the engine "
+        "applies, and a scenario the engine would escalate automatically is refused. A "
+        "pure pricing helper, the one analytics.evaluation_v14 itself imports; every KPI "
+        "still comes from the gateway (#1578 U2 moved this import here from the script)."
+    ),
     "analytics/scenario_analytics.py": (
         "[TODO #36] Batch orchestrator importing finance.cashflow_v14 + "
         "finance.debt_v14 directly per scenario. Should batch over the gateway "
