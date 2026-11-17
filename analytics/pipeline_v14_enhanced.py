@@ -1547,6 +1547,21 @@ def run_v14_pipeline_enhanced(
             if bess_economics is not None:
                 result["bess_project_economics"] = bess_economics
 
+        # #1780: the EPC construction margin, for any scenario that declares an epc block.
+        # A one-off construction deal, reported beside the scenario's own figures; it moves
+        # no scenario KPI. Render-when-present, and the same failure rule as above: strict
+        # pre-flight refuses a bad block; with validation off it is listed with its reason.
+        from finance.epc_margin import epc_margin_failure, epc_margin_result
+
+        if "epc" in cfg:
+            try:
+                epc_margin = epc_margin_result(cfg)
+            except ValueError as exc:
+                logger.warning("EPC construction margin not run: %s", exc)
+                epc_margin = epc_margin_failure(str(exc))
+            if epc_margin is not None:
+                result["epc_margin"] = epc_margin
+
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",
             metrics.total_runtime_sec,
