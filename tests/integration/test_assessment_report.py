@@ -215,13 +215,14 @@ def test_the_dscr_target_section_flags_a_target_below_the_lockup_covenant(
         assert "edge of the" in caption
 
 
-def test_a_per_technology_scenario_lists_the_sensitivity_and_still_reports(
-    tmp_path: Path,
-) -> None:
+def test_a_per_technology_scenario_runs_the_sensitivity(tmp_path: Path) -> None:
+    """#1787: the capacity-factor shock scales the scenario's technology block with the
+    project figure, so the one-way sensitivity runs and moves the IRR."""
     R = sa.run_assessment(SOLAR, trials=5, work_dir=tmp_path)
-    assert [n["analysis"] for n in R["not_run"]] == ["One-way sensitivity"]
-    assert sa.SENSITIVITY_PER_TECHNOLOGY_ISSUE in R["not_run"][0]["reason"]
-    assert "reconcile" in R["not_run"][0]["reason"]
+    assert R["not_run"] == []
+    rows = {d["param"]: d for d in R["sensitivity"]}
+    cf = rows["Capacity Factor"]
+    assert cf["low"] < cf["base"] < cf["high"]
     assert R["base"]["min_dscr"] is not None
 
 

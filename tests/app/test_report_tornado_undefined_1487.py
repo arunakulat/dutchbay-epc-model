@@ -160,3 +160,66 @@ def test_note_count_shows_only_when_positive(points: int) -> None:
         else "a value left out. Drivers with an undefined point: Tariff."
     )
     assert note.endswith(expected_tail)
+
+
+# ------------------------------------------- the #1487 follow-ups (bundle A2)
+
+
+def _caption(section: str) -> str:
+    start = section.index('<p class="muted">')
+    text = section[start : section.index("</p>", start)]
+    return re.sub(r"\s+", " ", text)
+
+
+def test_heading_names_the_swept_metric() -> None:
+    """The heading said "Project IRR" whatever was swept."""
+    for metric, label in (("project_irr", "Project IRR"), ("equity_irr", "Equity IRR")):
+        section = _tornado_section(TornadoBlock(metric=metric, rows=[_defined_row()]))
+        assert section.startswith(f"Sensitivity Tornado &mdash; {label}</h2>")
+        assert f"sensitivity of the {label} to each" in _caption(section)
+
+
+def test_caption_says_undefined_swings_are_listed_last_only_when_one_is() -> None:
+    undefined = TornadoRow(
+        label="OPEX", base=0.0116, low_case=None, high_case=0.02, impact_abs=None
+    )
+    rows = [_defined_row(), undefined]
+    with_undefined = _caption(
+        _tornado_section(TornadoBlock(metric="project_irr", rows=rows))
+    )
+    assert "widest first, and drivers whose swing is undefined last." in with_undefined
+    defined_only = _caption(
+        _tornado_section(TornadoBlock(metric="project_irr", rows=[_defined_row()]))
+    )
+    assert defined_only.endswith("widest first.")
+
+
+def test_an_undefined_swing_sorts_after_a_defined_zero_swing() -> None:
+    """Treating an undefined swing as 0.0 left its place among the zero swings to chance."""
+    from analytics.contracts_v14 import SensitivitySuite, ShockResult, TornadoResult
+    from app.services.report_tornado import compute_report_tornado
+
+    def result(label: str, low: float, high: float, swing: float) -> TornadoResult:
+        return TornadoResult(
+            metric_name="project_irr",
+            base_metric=0.01,
+            impact_abs=swing,
+            shock_results=[
+                ShockResult(label=label, low_case=low, high_case=high, base_case=0.01)
+            ],
+        )
+
+    nan = float("nan")
+    suite = SensitivitySuite(
+        tornado_results=[
+            result("Undefined", nan, 0.02, nan),
+            result("Flat", 0.01, 0.01, 0.0),
+            result("Wide", 0.0, 0.03, 0.03),
+            result("Narrow", 0.009, 0.011, 0.002),
+        ]
+    )
+    block = compute_report_tornado(
+        {"project": {"name": "t"}}, runner=lambda _path, *, metric: suite
+    )
+    assert block is not None
+    assert [r.label for r in block.rows] == ["Wide", "Narrow", "Flat", "Undefined"]

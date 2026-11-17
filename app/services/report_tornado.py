@@ -44,14 +44,32 @@ class TornadoRow(BaseModel):
     impact_abs: Optional[float] = None  # |swing| = how far the metric moves
 
 
+#: Display names for the metrics a report tornado sweeps (#1487: the heading named the
+#: project IRR whatever was swept). The report formats the values as percentages, so only
+#: rate metrics are listed; any other key is shown as written.
+METRIC_LABELS: Mapping[str, str] = {
+    "project_irr": "Project IRR",
+    "equity_irr": "Equity IRR",
+}
+
+
 class TornadoBlock(BaseModel):
-    """The report tornado: the target metric and its drivers, widest swing first."""
+    """The report tornado: the target metric and its drivers, widest swing first.
+
+    A driver whose swing is undefined has no magnitude to rank, so it is listed after
+    every driver whose swing is defined (#1487).
+    """
 
     metric: str
     rows: List[TornadoRow]
     undefined_base: bool = False
     undefined_points: int = 0
     undefined_drivers: List[str] = Field(default_factory=list)
+
+    @property
+    def metric_label(self) -> str:
+        """The swept metric's display name, for the heading and caption (#1487)."""
+        return METRIC_LABELS.get(self.metric, self.metric)
 
     @property
     def has_undefined(self) -> bool:
@@ -135,8 +153,10 @@ def compute_report_tornado(
             os.unlink(path)
 
     rows = [r for r in (_to_row(tr) for tr in suite.tornado_results) if r is not None]
+    # Widest defined swing first; an undefined swing has no magnitude, so it goes after
+    # every defined one, including a defined zero swing (#1487).
     rows.sort(
-        key=lambda r: r.impact_abs if r.impact_abs is not None else 0.0, reverse=True
+        key=lambda r: (r.impact_abs is None, -(r.impact_abs or 0.0)),
     )
     if not rows:
         return None
