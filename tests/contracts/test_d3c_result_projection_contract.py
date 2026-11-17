@@ -607,6 +607,27 @@ def test_opt_in_battery_economics_is_a_declared_artifact(
     assert entry.observed_present is True
 
 
+def test_an_epc_margin_entry_is_a_declared_artifact(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    """#1780: a scenario's ``epc_margin`` entry is declared, not unknown."""
+
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["epc_margin"] = {"status": "run", "gross_margin": 1.0}
+
+    projection = project_d3b_result(_replace_result(accepted_result, mutate))
+    assert not any(
+        item.key_identity == "epc_margin" for item in projection.unrecognized_keys
+    )
+    entry = next(
+        item
+        for item in projection.excluded_fields
+        if item.source_path == ("full_result", "epc_margin")
+    )
+    assert entry.state is ResultObservationState.ARTIFACT_ONLY
+    assert entry.observed_present is True
+
+
 def test_all_route_paths_have_closed_container_catalogues() -> None:
     for route in D3C_RESULT_FIELD_ROUTES:
         for path in (route.source_path, *route.mirror_paths):
