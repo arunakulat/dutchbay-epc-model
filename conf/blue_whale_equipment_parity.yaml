@@ -37,6 +37,10 @@ sensitivity_premium_pct:
   - 10.0
   - 20.0
 
+# The common operating life the Ashuri per-MWh figures below assume (the result key
+# names it: authors_common_20y_equipment_usd_per_mwh).
+ashuri_2016_common_life_years: 20
+
 # Table 2, Ashuri et al. (2016), p. 60: 5 MW, 10 MW, 20 MW offshore reference scaling
 # counterexample showing that $/MWh does not necessarily fall with turbine rating.
 ashuri_2016_counterexample:

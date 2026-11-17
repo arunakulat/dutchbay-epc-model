@@ -334,9 +334,16 @@ def test_pricing_config_and_scenarios_carry_the_blend() -> None:
         assert techs["wind"]["capex_usd"] == round(
             per_kw * 1000.0 * techs["wind"]["capacity_mw"]
         )
-    for path in (HYBRID, SOLAR_BESS):
-        b = _yaml(path)["generation"]["technologies"]["bess_1"]
-        assert b["capex_usd"] == round(per_kwh * 1000.0 * b["energy_mwh"])
+    b = _yaml(HYBRID)["generation"]["technologies"]["bess_1"]
+    assert b["capex_usd"] == round(per_kwh * 1000.0 * b["energy_mwh"])
+    # #1578 L-11 (solar + BESS v0.10): the explicit augmentation replaces the reserve the
+    # all-in holds (the reserve before land and auxiliaries, grossed up by their share).
+    reserve = pricing["bess"]["augmentation_reserve_usd_per_kwh_base"] / (
+        1.0 - pricing["bess"]["land_and_auxiliaries_share_base"]
+    )
+    b = _yaml(SOLAR_BESS)["generation"]["technologies"]["bess_1"]
+    assert b["capex_usd"] == round((per_kwh - reserve) * 1000.0 * b["energy_mwh"])
+    assert b["revenue"]["augmentation_schedule"]
     for path in (WIND, HYBRID, SOLAR_BESS):
         scen = _yaml(path)
         techs = scen["generation"]["technologies"]
@@ -483,7 +490,8 @@ def test_committed_solar_outputs_match_a_rerun(solar: Dict[str, Any]) -> None:
     assert header.startswith("month,ghi_kwh_m2,dni_kwh_m2,dhi_kwh_m2,poa_kwh_m2")
     assert len(SOLAR_CSV.read_text(encoding="utf-8").splitlines()) == 13
     site = doc["site"]
-    assert site["distance_to_turbine_m"] < 200.0
+    # The value itself is pinned by the re-run comparison above and by the closed-form
+    # distance test below; a loose upper bound here added nothing (#1686 domain D-2).
     assert site["tmy_database"].startswith("PVGIS-ERA5")
 
 
@@ -536,7 +544,31 @@ def test_turbine_point_follows_the_siting_rule(
     # The local-frame round trip carries about 1e-8 deg (1 mm) of projection noise.
     assert lat == pytest.approx(siting["site"]["reference_lat_deg"], abs=1e-7)
     assert lon < siting["site"]["reference_lon_deg"] - 1e-3
-    assert lon == pytest.approx(79.752666, abs=1e-4)
+    # #1530's spot is 79.752666 to six places; the placed tower is 3.4e-8 deg (4 mm) from
+    # it, so 1e-6 deg (about 0.1 m) refuses a setback even 1 m off (#1686 assurance AS-1).
+    assert lon == pytest.approx(79.752666, abs=1e-6)
+
+
+def test_run_solar_measures_to_the_turbine_the_siting_rule_places(
+    cfg: Dict[str, Any], tmp_path: Path
+) -> None:
+    # End to end (#1686 assurance AS-2): run_solar itself, not only the helper, follows the
+    # siting rule, so a runner that read the reference point directly would fail here.
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    siting = _yaml(SITING)
+    siting["site"]["turbine_placement"] = "coastal_setback"
+    moved = tmp_path / "siting.yaml"
+    moved.write_text(yaml.safe_dump(siting), encoding="utf-8")
+    conf = copy.deepcopy(cfg)
+    conf["solar_resource"]["site"]["turbine_siting_config"] = str(moved)
+    site = conf["solar_resource"]["site"]
+    lat, lon = _cli().siting_turbine_point(site)
+    out = _cli().run_solar(conf)
+    want = _haversine_closed_form(site["latitude"], site["longitude"], lat, lon)
+    assert out["site"]["distance_to_turbine_m"] == pytest.approx(want, rel=1e-12)
+    # About 123 m to the setback spot, against about 197 m to DutchBay T2.
+    assert out["site"]["distance_to_turbine_m"] == pytest.approx(123.43, abs=0.01)
 
 
 @pytest.mark.parametrize(

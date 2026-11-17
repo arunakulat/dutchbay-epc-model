@@ -590,9 +590,12 @@ def run(config: ERA5RequestConfig) -> Dict[str, Any]:
 
 def main() -> None:
     """Config-driven entry point (no argparse; honours ``ERA5_REQUEST_CONFIG``)."""
-    cfg_path = os.environ.get(
-        "ERA5_REQUEST_CONFIG", "wind_resource/config/era5_request_kalpitiya.yaml"
-    )
+    # #1759: no site default; the run names its ERA5 request config.
+    cfg_path = os.environ.get("ERA5_REQUEST_CONFIG")
+    if not cfg_path:
+        raise SystemExit(
+            "ERA5_REQUEST_CONFIG must name the ERA5 request config; there is no default site"
+        )
     result = run(ERA5RequestConfig.from_yaml(cfg_path))
     print(json.dumps(result, indent=2))
 

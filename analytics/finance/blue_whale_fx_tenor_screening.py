@@ -9,8 +9,9 @@ Governance & Scope Boundaries:
 - HOLD (F-5, #1110, v15.6.1): Produces screening indicators only, NOT a lender
   verdict, bankability determination, or credit commitment. Lender interest rates
   and DSCR thresholds are illustrative screening assumptions, not terms (#1629).
-- Core v14 engine path is PENDING: FX feeding the USD OPEX share is BW-5
-  (L-12 D-2) work.
+- Core v14 engine path delivered (BW-5, L-12 D-2): an FX drift override at the
+  Python override gateways replaces the USD OPEX share's own path. This
+  screening does not call the engine.
 - Basecase capex, tariff, O&M, and FX-at-close are read from
   ``scenarios/dutchbay_basecase_2025Q4.yaml``; divergent cases are explicitly
   labeled as sensitivities.
@@ -35,9 +36,11 @@ DEFAULT_F5_HOLD_CAVEAT = (
     "verdict, bankability determination, or credit commitment. Lender interest rates and "
     "DSCR thresholds are illustrative screening assumptions, not executed term-sheet terms (#1629)."
 )
+DEFAULT_ENGINE_PATH_STATUS = "delivered_bw5_l12_d2"
 DEFAULT_ENGINE_PATH_NOTE = (
-    "Core v14 engine path is pending: FX feeding the USD OPEX share is BW-5 (L-12 D-2) work; "
-    "this module is a standalone screening utility."
+    "The core v14 engine carries an FX override to the USD OPEX share: a drift stress or a "
+    "Monte Carlo drift draw replaces its own FX path (BW-5, L-12 D-2); this module is a "
+    "standalone screening utility and does not call the engine."
 )
 
 
@@ -701,7 +704,9 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
         "governed_scenario_source": str(scenario_path),
         "governed_inputs_applied": governed_inputs,
         "f5_hold_caveat": raw_cfg.get("f5_hold_caveat", DEFAULT_F5_HOLD_CAVEAT),
-        "engine_path_status": raw_cfg.get("engine_path_status", "pending_bw5_l12_d2"),
+        "engine_path_status": raw_cfg.get(
+            "engine_path_status", DEFAULT_ENGINE_PATH_STATUS
+        ),
         "engine_path_note": raw_cfg.get("engine_path_note", DEFAULT_ENGINE_PATH_NOTE),
         "fx_metrics": fx_metrics,
         "governed_basecase_14turbine_15year_screening": _format_screening_block(
@@ -719,6 +724,7 @@ def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
         "disclaimer": (
             "HOLD (F-5, #1110, v15.6.1): Standalone screening indicator only; not a "
             "governed v14 lender commitment, lender verdict, or legal tax advice. "
-            "Core v14 engine path is pending (BW-5 / L-12 D-2)."
+            "The core v14 engine carries FX to the USD OPEX share (BW-5 / L-12 D-2); "
+            "this screening does not call it."
         ),
     }

@@ -382,8 +382,15 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
     base_basis = cfg["revenue_bases"]["base"]
     bases = [base_basis, *cfg["revenue_bases"]["sensitivities"]]
     base_peak = peak_rates[base_basis]
+    supplier = cfg["down_ramp"]["supplier"]
     out_opts: Dict[str, Any] = {}
     for opt in options:
+        bottom_up = wbo.bottom_up_price(
+            supplier,
+            power_mw=float(opt["power_mw"]),
+            energy_mwh=float(opt["energy_mwh"]),
+            all_in_usd_per_kwh_mode=float(price["mode"]),
+        )
         row: Dict[str, Any] = {
             "power_mw": opt["power_mw"],
             "energy_mwh": opt["energy_mwh"],
@@ -393,6 +400,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
             * float(price["mode"]),
             "fits_reading_A_turbine_plus_battery_le_limit": float(opt["power_mw"])
             <= a_limit + 1e-9,
+            "bottom_up_price": bottom_up,
             "readings": {},
         }
         for reading in readings:
@@ -431,6 +439,20 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
                 )
                 rr["bases"][basis] = k
             rr["battery_pretax_base_basis"] = pretax(opt, d, c, peak_rates[base_basis])
+            kb = _kpis(
+                scen(
+                    opt,
+                    delivered=d,
+                    charged=c,
+                    basis=base_basis,
+                    usd_per_kwh=bottom_up["all_in_usd_per_kwh"],
+                )
+            )
+            rr["bottom_up_price_base_basis"] = {
+                "delta_project_npv_vs_wind_only": kb["project_npv"]
+                - wind_only["project_npv"],
+                "equity_irr": kb["equity_irr"],
+            }
             adj_k = _kpis(
                 scen(opt, delivered=d, charged=c, basis=base_basis, peak=adjusted_whole)
             )
@@ -628,7 +650,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
         dr["supplier"],
         power_mw=float(worst["power_mw"]),
         energy_mwh=float(worst["energy_mwh"]),
-        all_in_usd_per_contracted_kwh=float(price["mode"]),
+        all_in_usd_per_kwh_mode=float(price["mode"]),
     )
 
     # A cycled firming unit keeps both the ramp energy and the black-start reserve in hand.
@@ -740,6 +762,30 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear re
     }
 
 
+def _refuse_overrides(raw: Mapping[str, Any]) -> None:
+    """Refuse to write a summary from a config that differs from the committed file.
+
+    The summary pins ``config_sha256``, the file's bytes. A command-line override other than
+    ``output.*`` would change the figures under the same digest, so it is refused when a
+    summary is written; printing to stdout stays open for exploration.
+
+    Raises:
+        ValueError: If any setting outside ``output`` differs from the config file.
+    """
+    committed: Any = OmegaConf.to_container(OmegaConf.load(CONFIG), resolve=True)
+    if not isinstance(committed, dict):
+        raise TypeError("expected the config file to resolve to a mapping")
+    # Hydra consumes ``defaults`` and ``hydra``; neither reaches the composed config.
+    skip = {"output", "defaults", "hydra"}
+    ran = {k: v for k, v in raw.items() if k not in skip}
+    pinned = {k: v for k, v in committed.items() if k not in skip}
+    if ran != pinned:
+        raise ValueError(
+            "a summary is written only from the committed config; drop the overrides "
+            "outside output.* or leave output.summary_json empty"
+        )
+
+
 @hydra.main(
     version_base="1.3",
     config_path="../conf",
@@ -753,6 +799,8 @@ def main(cfg: DictConfig) -> None:
     if not isinstance(raw, dict):
         raise TypeError("expected the Hydra config to resolve to a mapping")
     summary_path = raw["output"]["summary_json"]
+    if summary_path:
+        _refuse_overrides(raw)
     out = json_clean(run(copy.deepcopy(raw)))
     text = json.dumps(out, sort_keys=True, allow_nan=False)
     if summary_path:

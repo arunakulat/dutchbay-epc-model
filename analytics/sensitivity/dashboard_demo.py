@@ -6,7 +6,7 @@ from analytics.sensitivity import (
 )
 
 req = SensitivityRequest(
-    "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenarios/example.yaml",  # the scenario to analyse
     parameters=[...],  # Project-specific ParameterRangeConfig
     metric="project_irr",
 )

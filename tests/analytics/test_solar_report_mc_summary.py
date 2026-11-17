@@ -8,28 +8,17 @@ are built through ``aggregate_trials`` so they carry the engine's real nullable 
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
 import numpy as np
 
 from analytics.contracts_v14 import MonteCarloResult
 from analytics.mc.aggregate import aggregate_trials
 from analytics.mc.exports import _trial_coverage as exports_trial_coverage
 
-_SCRIPT = (
-    Path(__file__).resolve().parents[2]
-    / "scripts"
-    / "generate_solar_assessment_report.py"
-)
-
 
 def _load_module():
-    spec = importlib.util.spec_from_file_location("gen_solar_report_mc", _SCRIPT)
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    from app.reports import solar_assessment
+
+    return solar_assessment
 
 
 def _result(rows: list[dict[str, float | None]]) -> MonteCarloResult:

@@ -339,12 +339,13 @@ Financing_Terms:
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
   # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
   # maturity. balloon_treatment governs how the equity waterfall resolves it
-  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
-  # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~55%
-  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
-  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
-  balloon_treatment: cash_sweep
+  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). This variant shares
+  # the lender case's debt stack, so it follows the lender case to refinance (#1493,
+  # owner ruling 2026-11-14, after #1396): the balloon (12.6% of debt, USD 8.55m at
+  # bff81b83, breaching constraints.max_balloon_pct 10%) is refinanced at maturity on
+  # the lender case's assumed constraints.refinancing terms below. Those terms have no
+  # term-sheet basis; the engine has no default for either.
+  balloon_treatment: refinance
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
@@ -406,7 +407,12 @@ constraints:
   warn_balloon_pct: 0.05
   refinancing:
     enabled: true
-    max_refinance_pct: 0.1
+    # The lender case's assumed terms (#1396), carried over with the refinance
+    # treatment (#1493). An ASSUMPTION, no term-sheet basis. max_refinance_pct is
+    # NOT ENFORCED: no engine code reads this key yet.
+    max_refinance_pct: 0.5
+    # REQUIRED when balloon_treatment is refinance (#1396). Assumed terms, no
+    # term-sheet basis: premium over the average debt rate (decimal) and tenor.
     refinance_rate_premium: 0.02
     refinance_tenor_years: 3
     requires_documentation: true
@@ -427,6 +433,10 @@ monte_carlo:
   n_scenarios: 100000
   sampler: lhs  # Latin Hypercube Sampling
   seed: 42
+  # Lender runs never substitute toy KPIs for a failed trial (#962 item 1; owner ruling
+  # 2026-11-16 extended to this lender-case cost variant): a trial whose full v14
+  # evaluation raises stops the run instead.
+  allow_toy_fallback: false
   
   # Wind resource uncertainty (dominant risk driver)
   weibull_uncertainty_pct: 10.0  # ±10% on A and k

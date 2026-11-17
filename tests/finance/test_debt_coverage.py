@@ -243,7 +243,7 @@ def test_financing_terms_financing_section() -> None:
 def test_financing_terms_debt_section_leverage_over_one() -> None:
     # ``debt`` section with leverage_pct > 1 -> normalized to a fraction.
     out = _extract_financing_terms(
-        {"debt": {"leverage_pct": 60.0, "interest_rate_pct": 8.0}}
+        {"debt": {"leverage_pct": 60.0, "interest_rate_pct": 8.0, "target_dscr": 1.30}}
     )
     assert out["debt_ratio"] == pytest.approx(0.60)
     assert out["rates"]["usd_nominal"] == pytest.approx(0.08)
@@ -281,7 +281,9 @@ def test_compact_debt_schema_placeholder_substitution_warns(
     Financing_Terms path warned — the two schemas must be equally loud.
     """
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
-        terms = _extract_financing_terms({"debt": {"debt_ratio": 0.6}})
+        terms = _extract_financing_terms(
+            {"debt": {"debt_ratio": 0.6, "target_dscr": 1.30}}
+        )
     assert terms["debt_drawdown_pct"] == [0.5, 0.5]
     assert terms["construction_schedule"] == [40.0, 60.0]
     msgs = [r.message for r in caplog.records]
@@ -298,6 +300,7 @@ def test_compact_debt_schema_explicit_schedules_do_not_warn(
             {
                 "debt": {
                     "debt_ratio": 0.6,
+                    "target_dscr": 1.30,
                     "construction_schedule": [30.0, 70.0],
                     "debt_drawdown_pct": [0.4, 0.6],
                 }
@@ -336,6 +339,7 @@ def test_apply_debt_layer_zero_debt_ratio_avg_rate_zero() -> None:
     params = {
         "Financing_Terms": {
             "debt_ratio": 0.0,
+            "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 5,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -362,6 +366,7 @@ def test_apply_debt_layer_fx_bad_value_skipped() -> None:
     params = {
         "Financing_Terms": {
             "debt_ratio": 0.6,
+            "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 5,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -551,6 +556,7 @@ def test_autosolve_dual_dscr_detail_none_on_value_error() -> None:
             "debt_sizing": "dual_dscr",
             "debt_ratio": 0.0,
             "target_dscr": 1.30,
+            "dscr_p99_downside_factor": 0.80,  # no code default since #1429
             "tenor_years": 5,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -568,6 +574,7 @@ def test_autosolve_dual_dscr_detail_present_when_active() -> None:
             "debt_sizing": "dual_dscr",
             "debt_ratio": 0.7,
             "target_dscr": 1.30,
+            "dscr_p99_downside_factor": 0.80,  # no code default since #1429
             "tenor_years": 8,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -779,6 +786,7 @@ def test_placeholder_warn_dedup_is_kind_scoped(
             params={
                 "debt": {
                     "debt_ratio": 0.6,
+                    "target_dscr": 1.30,
                     "tenor_years": 5,
                     "interest_rate_pct": 8.0,
                 },

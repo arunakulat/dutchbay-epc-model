@@ -612,6 +612,41 @@ def _channel_key(
     raise ValueError(f"no {what} channel at {height_m:g} m; channels: {sorted(cols)}")
 
 
+def _check_speed_heights(cols: Mapping[str, str]) -> None:
+    """Refuse a ``mast.speed_avg`` map whose keys are not distinct, finite, positive heights.
+
+    A height spelled twice ("110" and "110.0") would enter every log-law fit and the basis
+    count twice, and a zero, negative or non-finite height would reach the fits' logarithm
+    and fail inside numpy rather than with a named error (#1633 domain R-1 and R-2,
+    assurance AS-1 and AS-4).
+
+    Args:
+        cols: The ``mast.speed_avg`` map, height key to column name.
+
+    Raises:
+        ValueError: If a key is not a number, is not finite and positive, or names a height
+            that another key also names.
+    """
+    seen: Dict[float, str] = {}
+    for key in cols:
+        try:
+            height = float(key)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"mast.speed_avg key {key!r} is not a height in metres"
+            ) from None
+        if not (math.isfinite(height) and height > 0):
+            raise ValueError(
+                f"mast.speed_avg height {key!r} must be finite and above 0 m"
+            )
+        if height in seen:
+            raise ValueError(
+                f"mast.speed_avg names the {height:g} m height twice "
+                f"({seen[height]!r} and {key!r}); give each height one channel"
+            )
+        seen[height] = str(key)
+
+
 _COUNT_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight")
 
 
@@ -645,6 +680,7 @@ def measured_profiles(
         JSON-serialisable aggregates.
     """
     cols = mcfg["speed_avg"]
+    _check_speed_heights(cols)
     lo = _channel_key(cols, float(shear_cfg["low_height_m"]))
     hi = _channel_key(cols, float(shear_cfg["high_height_m"]))
     lo_m, hi_m = float(lo), float(hi)
@@ -660,11 +696,10 @@ def measured_profiles(
     fit_all = f"alpha_log_fit_{min(cols, key=float)}_{top}"
     upper_from = _channel_key(cols, float(shear_cfg["log_fit_upper_from_height_m"]))
     upper = [k for k in cols if float(k) >= float(upper_from)]
-    # Count distinct heights, not map keys: "110" and "110.0" are one height (#1657 D-3).
+    # Count distinct heights, not map keys (#1657 D-3). _check_speed_heights has already
+    # refused a height spelled twice and any height that is not finite and positive.
     upper_heights = sorted({float(k) for k in upper})
-    if len(upper_heights) < 2 or not all(
-        math.isfinite(h) and h > 0 for h in upper_heights
-    ):
+    if len(upper_heights) < 2:
         raise ValueError(
             f"shear.log_fit_upper_from_height_m ({upper_from} m) leaves fewer than 2 "
             "distinct finite positive speed heights at or above it (found "
@@ -1559,8 +1594,16 @@ def check_turbine_reference_point(
     Raises:
         ValueError: If either coordinate differs by more than the tolerance.
     """
-    frame, placement, _ = place_siting_turbine(s_cfg)
-    lon, lat = frame.to_lon_lat(placement.turbine_east_m, placement.turbine_north_m)
+    from analytics.gis import shadow_flicker as sf
+
+    # The one reading of the turbine point for tools outside the siting run (#1686
+    # domain D-3); it places the tower exactly as place_siting_turbine does.
+    site = s_cfg["site"]
+    lat, lon = sf.placed_turbine_lat_lon(
+        site,
+        s_cfg["coastal_setback"],
+        json.loads(_repo_path(site["coastline_geojson"]).read_text()),
+    )
     point = cfg["reference"]["points"]["turbine"]
     tol = float(cfg["transfer"]["turbine_point_tolerance_deg"])
     if (

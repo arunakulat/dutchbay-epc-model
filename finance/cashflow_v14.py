@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -134,6 +135,48 @@ def _resolve_tariff_om_indexation(
                     "tariff.om_indexation block to index it on"
                 )
     return indexation
+
+
+def _tax_base_capex_usd(config: Dict[str, Any]) -> Optional[float]:
+    """Return the pre-levy project capex in USD that debt sizing and NPV resolve.
+
+    The tax base reads the debt engine's resolver
+    (``finance.debt.capex._extract_capex_base_usd``), the one ``analytics.core.metrics``
+    delegates to, so ``capex.usd_total``, its aliases (``capex.total_capex``,
+    ``finance.capex_usd`` and the rest) and a ``derive_from_breakdown`` sum all give
+    the same base. The levy uplift is added by the caller, as before.
+
+    The resolver's toy fallback is never taken here: a toy capex is a debt-sizing
+    convenience, not a cost to depreciate.
+
+    Args:
+        config: Scenario configuration, after native capex normalisation.
+
+    Returns:
+        The capex in USD, or ``None`` when the configuration states no project capex
+        (no depreciation, as before).
+
+    Raises:
+        ValueError: A project capex is stated but does not resolve to an amount, so
+            the run would otherwise book no tax depreciation without saying so.
+    """
+    from .cost_input_currency import has_usd_capex
+    from .debt_v14 import _FORBID_TOY_FALLBACK_KEY, _extract_capex_base_usd
+
+    if not has_usd_capex(config):
+        return None
+    # A malformed canonical amount still fails naming its key (#683); the resolver
+    # alone would skip it and report only that no capex was found.
+    as_float(get_nested(config, ["capex", "usd_total"], None), key="capex.usd_total")
+    try:
+        return _extract_capex_base_usd({**config, _FORBID_TOY_FALLBACK_KEY: True})
+    except ValueError as exc:
+        raise ValueError(
+            "tax depreciation base: a project capex is stated but does not resolve "
+            f"to an amount, so no capex would be depreciated ({exc}). State it under "
+            "capex.usd_total, or give the tax base explicitly as "
+            "tax.depreciable_capex_lkr."
+        ) from exc
 
 
 def _prepare_cashflow_context(
@@ -272,10 +315,57 @@ def _prepare_cashflow_context(
                     "fx.start_lkr_per_usd (the financial-close spot) to anchor the USD "
                     "share's FX path"
                 )
-            params_dict["opex_usd_fx_path"] = [
+            usd_path = [
                 financial_close_spot * (1.0 + float(depr)) ** (construction_periods + i)
                 for i in range(years)
             ]
+            # An override that moved the model FX curve (an FX stress or a Monte Carlo
+            # drift draw) REPLACES the USD share's own path: the share is then
+            # translated on the stressed model curve, so a drift of x runs it at x, not
+            # at x on top of the authored rate (owner ruling, 2026-11-15). The reference
+            # is the fx block the path was authored against. Each curve is compared
+            # relative to its own spot: a spot-only or curve-neutral change leaves the
+            # shape equal, and the own path (already anchored on the merged spot) is
+            # kept. An override that named a drift key is a stress whatever its value
+            # (owner ruling, 2026-11-16): the model curve replaces the own path even when
+            # the drift equals the authored one, so there is no jump at that boundary.
+            # No reference (every authored scenario) leaves the path as built.
+            reference = params_dict.get("opex_usd_fx_reference")
+            if reference is not None and params_dict.get("opex_usd_fx_drift_override"):
+                usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
+            elif reference is not None:
+                ref_config = {"fx": reference}
+                ref_spot = _financial_close_spot(ref_config)
+                if ref_spot is None:
+                    raise ValueError(
+                        "opex.currency_split.usd_fx_reference needs a scalar "
+                        "financial-close spot (start_lkr_per_usd)"
+                    )
+                ref_curve = _fx_curve(
+                    ref_config, years, period_offset=construction_periods
+                )
+                model_shape = [
+                    fx_curve_resolved[i] / financial_close_spot for i in range(years)
+                ]
+                ref_shape = [ref_curve[i] / ref_spot for i in range(years)]
+                # An explicit curve does not scale with the spot, so a spot-only
+                # override changes its spot-relative shape while the curve itself has
+                # not moved. A curve that has not moved is no drift stress, so the own
+                # path (anchored on the merged spot) is kept (#1578, #1730 review).
+                curve_moved = any(
+                    not math.isclose(
+                        float(fx_curve_resolved[i]), r, rel_tol=1e-12, abs_tol=0.0
+                    )
+                    for i, r in enumerate(ref_curve[:years])
+                )
+                # Compared to a relative tolerance: the same curve anchored on two
+                # different spots can differ in the last bit once divided back out.
+                if curve_moved and any(
+                    not math.isclose(m, r, rel_tol=1e-12, abs_tol=0.0)
+                    for m, r in zip(model_shape, ref_shape, strict=True)
+                ):
+                    usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
+            params_dict["opex_usd_fx_path"] = usd_path
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr
@@ -305,11 +395,10 @@ def _prepare_cashflow_context(
             if capex_lkr is not None:
                 capex_dep_resolved = capex_lkr
             else:
-                # 3) USD capex translated at financial-close FX
-                capex_usd = as_float(
-                    get_nested(config, ["capex", "usd_total"], None),
-                    key="capex.usd_total",
-                )
+                # 3) USD capex translated at financial-close FX, read through the
+                # same resolver debt sizing and NPV use, so a capex stated under an
+                # alias is depreciated too (#1578 next-20 item 3).
+                capex_usd = _tax_base_capex_usd(config)
 
                 if capex_usd is not None:
                     capex_dep_resolved = capex_usd * tax_basis_fx
@@ -320,8 +409,8 @@ def _prepare_cashflow_context(
     # sizing / IDC / equity with — translated at the SAME financial-close FX the USD capex
     # rung above and the IDC augment below use, so tax base, debt and NPV carry
     # the identical uplift on a consistent basis. No double count: the ladder
-    # above reads the RAW config keys (pre-levy base), never the levy-inclusive
-    # resolver. Applied additively regardless of which rung resolved (the
+    # above reads the explicit tax keys or the PRE-LEVY capex resolver, never the
+    # levy-inclusive one. Applied additively regardless of which rung resolved (the
     # documented extra_depreciable_usd precedent below); 0.0 when the
     # taxes_indirect block is absent -> byte-identical.
     levies_uplift_usd = capex_uplift_from_config(config)

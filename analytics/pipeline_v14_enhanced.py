@@ -250,6 +250,10 @@ def _enrich_annual_rows_with_debt(
     # touches cf_after_debt.
     balloon_interest_accrued = list(debt_result.get("balloon_interest") or [])
     balloon_interest_paid = list(debt_result.get("balloon_interest_paid") or [])
+    # Senior fee a cash sweep could not pay, carried at the end of each balloon period
+    # (#1539). Same PERIOD index; None where the balloon path does not govern. Surfaced
+    # on each row so the equity waterfall settles the arrears ahead of any distribution.
+    senior_fee_deferred = list(debt_result.get("senior_fee_deferred_usd") or [])
     # debt_service_total is PERIOD-indexed (offset by the construction + bridge
     # lead-in). Align each annual row to its debt period via the canonical map;
     # positional indexing attributed each year an earlier (higher-CFADS) year's
@@ -401,6 +405,16 @@ def _enrich_annual_rows_with_debt(
         )
         out["balloon_interest_paid_usd"] = _period_value(
             balloon_interest_paid, period_idx
+        )
+        # None (not 0.0) where the balloon path does not govern this period: the
+        # waterfall then carries the last governed balance forward (#1539).
+        deferred_value = (
+            senior_fee_deferred[period_idx]
+            if 0 <= period_idx < len(senior_fee_deferred)
+            else None
+        )
+        out["senior_fee_deferred_usd"] = (
+            None if deferred_value is None else float(deferred_value)
         )
         out["cf_after_debt"] = (
             cf_pre_debt - debt_service_value - balloon_resolution_value
@@ -1054,6 +1068,9 @@ def _update_kpis_with_equity_distribution(
         # P2-F3-01 (#1398): a DSCR<1 year's shortfall and the sponsor cure that funded it.
         ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
         ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
+        # #1539: the deferred senior fee still unpaid after the waterfall settled what
+        # its cash could. Overwrites the engine-level figure metrics.py published.
+        ("senior_fee_unpaid_at_horizon_usd", "senior_fee_deferred_residual"),
     ):
         value = summary_raw.get(source_key)
         if value is not None:
@@ -1503,6 +1520,32 @@ def run_v14_pipeline_enhanced(
         if capex_price_basis_auto is not None:
             # Render-when-present: a run with no automatic escalation keeps its keys.
             result["capex_price_basis"] = capex_price_basis_auto
+
+        # #1774: the standalone battery-project economics, for any scenario that declares
+        # bess_economics.enabled: true. A separate cashflow for the battery as its own
+        # project, at the scenario's own discount rate and life; it moves no scenario KPI.
+        # Render-when-present: a scenario without the opt-in keeps its keys. Strict
+        # pre-flight refuses a bad block before this point; on a run with validation off,
+        # a bad block is listed with its reason and the scenario's own figures still return
+        # (owner ruling 2026-11-16: write the figures, list the failure).
+        from finance.bess_project_economics import (
+            bess_economics_failure,
+            bess_economics_result,
+        )
+        from finance.cashflow_v14_params import _extract_project_life_years
+
+        if isinstance(cfg.get("bess_economics"), Mapping):
+            try:
+                bess_economics = bess_economics_result(
+                    cfg,
+                    discount_rate=float(project_discount),
+                    project_years=_extract_project_life_years(cfg, log=False),
+                )
+            except ValueError as exc:
+                logger.warning("Battery-project economics not run: %s", exc)
+                bess_economics = bess_economics_failure(str(exc))
+            if bess_economics is not None:
+                result["bess_project_economics"] = bess_economics
 
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",

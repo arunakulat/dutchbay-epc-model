@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from finance.debt_v14 import DSRA_TARGET_BASIS
 from finance.equity_v14 import (
     calculate_cash_on_cash,
     calculate_equity_irr,
@@ -68,6 +69,10 @@ class EquityDistributionConfig(BaseModel):
 
     min_dscr_threshold: float = Field(default=1.25, ge=0.0, le=5.0)
     min_reserve_months: int = Field(default=6, ge=0, le=24)
+    # #920 DOM-1: the scenario key that set min_reserve_months, or "code_default" when no
+    # equity section authors a numeric value and the 6-month default applies. None when
+    # the config object is built directly rather than from a scenario.
+    min_reserve_months_source: Optional[str] = Field(default=None)
 
     distribution_sweep_pct: float = Field(default=100.0, ge=0.0, le=100.0)
     holdback_pct: float = Field(default=0.0, ge=0.0, le=100.0)
@@ -228,13 +233,32 @@ def _extract_scenario_name(config: Mapping[str, Any]) -> str:
     return "default"
 
 
+_EQUITY_SECTION_NAMES = ("equity_distribution", "Equity_Distribution", "equity")
+
+
 def _extract_equity_section(config: Mapping[str, Any]) -> Dict[str, Any]:
     """Extract equity distribution configuration from supported sections."""
-    for section_name in ("equity_distribution", "Equity_Distribution", "equity"):
+    return _named_equity_section(config)[1]
+
+
+def _named_equity_section(config: Mapping[str, Any]) -> tuple[str, Dict[str, Any]]:
+    """Return the equity section ``_extract_equity_section`` reads, with its name."""
+    for section_name in _EQUITY_SECTION_NAMES:
         section = _section_case_insensitive(config, section_name)
         if section:
-            return dict(section)
-    return {}
+            return section_name, dict(section)
+    return "", {}
+
+
+def _min_reserve_months_source(section_name: str, section: Mapping[str, Any]) -> str:
+    """Name the key that set ``min_reserve_months``, or ``code_default`` (#920 DOM-1).
+
+    Mirrors ``_as_int(section.get("min_reserve_months"), 6)``: a missing, null or
+    non-numeric value falls back to 6 months and is reported as ``code_default``.
+    """
+    if _as_float(section.get("min_reserve_months"), None) is None:
+        return "code_default"
+    return f"{section_name}.min_reserve_months"
 
 
 def _normalise_percent(value: Any, default: float) -> float:
@@ -247,7 +271,7 @@ def _normalise_percent(value: Any, default: float) -> float:
 
 def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionConfig:
     """Build a validated EquityDistributionConfig from a scenario mapping."""
-    equity_section = _extract_equity_section(config)
+    equity_section_name, equity_section = _named_equity_section(config)
     scenario_name = str(
         equity_section.get("scenario_name")
         or equity_section.get("name")
@@ -354,6 +378,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         project_life_years=_as_int(project_life, 25),
         min_dscr_threshold=float(_as_float(lockup_threshold, 1.25) or 0.0),
         min_reserve_months=_as_int(equity_section.get("min_reserve_months"), 6),
+        min_reserve_months_source=_min_reserve_months_source(
+            equity_section_name, equity_section
+        ),
         distribution_sweep_pct=_normalise_percent(
             equity_section.get("distribution_sweep_pct"), 100.0
         ),
@@ -511,6 +538,18 @@ def build_equity_distribution_schedule(
     #  * retained_balance: per-year holdback + un-swept cash, released at project end.
     locked_cash_balance = 0.0
     retained_balance = 0.0
+    # Senior-fee arrears (#1539, owner ruling 2026-11-15). On a cash sweep the debt engine
+    # defers the part of the senior fee its sizing-basis cash cannot pay and publishes the
+    # balance carried at the end of each period (row `senior_fee_deferred_usd`). This
+    # waterfall holds its own cash, so it settles that balance, as a senior claim, before
+    # any cash reaches equity: no distribution, lockup trap or retention while arrears are
+    # owed and cash is held. `engine_arrears` is the engine's carried balance (carried
+    # forward on rows the balloon path does not govern); `arrears_settled` is what this
+    # waterfall has paid against it so far. The engine still pays arrears first from its
+    # own later cash; if it pays arrears this waterfall already settled, the difference is
+    # handed back to equity cash, so no fee is ever paid twice.
+    engine_arrears = 0.0
+    arrears_settled = 0.0
 
     for index, row in enumerate(annual_rows):
         year_value = row.get("year", index + 1)
@@ -609,6 +648,37 @@ def build_equity_distribution_schedule(
         balloon_resolution = _as_float(row.get("balloon_resolution"), 0.0) or 0.0
         cash_for_equity = cash_after_reserve - balloon_resolution
 
+        # #1539: settle senior-fee arrears ahead of equity. They rank behind scheduled
+        # service, the reserve top-up and the engine's balloon sweep (each already sized),
+        # and ahead of every distribution, lockup trap and retention. They are paid from
+        # this year's cash left for equity, then from cash the SPV already holds for the
+        # sponsor (lockup-trapped, then retained). They never cause a cash call: what this
+        # cash cannot pay stays owed.
+        row_arrears = _as_float(row.get("senior_fee_deferred_usd"))
+        if row_arrears is not None:
+            engine_arrears = max(0.0, row_arrears)
+        arrears_settled_now = 0.0
+        if arrears_settled > engine_arrears:
+            # The engine has since paid arrears this waterfall already settled: return
+            # the double-counted amount to this year's cash.
+            arrears_settled_now = engine_arrears - arrears_settled
+            cash_for_equity -= arrears_settled_now
+            arrears_settled = engine_arrears
+        owed = engine_arrears - arrears_settled
+        if owed > 0.0:
+            from_cash = min(owed, max(0.0, cash_for_equity))
+            cash_for_equity -= from_cash
+            owed -= from_cash
+            from_locked = min(owed, locked_cash_balance)
+            locked_cash_balance -= from_locked
+            owed -= from_locked
+            from_retained = min(owed, retained_balance)
+            retained_balance -= from_retained
+            paid_now = from_cash + from_locked + from_retained
+            arrears_settled += paid_now
+            arrears_settled_now += paid_now
+        arrears_owed = engine_arrears - arrears_settled
+
         # FP-tolerant lockup: a DSCR that MEETS the covenant to machine precision is not a
         # breach. The dual-DSCR sculpt lands the floor year at the covenant target but in
         # floating point that is ~1.2999999999999998, so a strict `dscr < 1.30` would lock
@@ -684,6 +754,8 @@ def build_equity_distribution_schedule(
                 "spv_cash_applied_usd": spv_cash_applied,
                 "sponsor_cure_usd": sponsor_cure,
                 "balloon_resolution_usd": balloon_resolution,
+                "senior_fee_arrears_settled_usd": arrears_settled_now,
+                "senior_fee_arrears_usd": arrears_owed,
                 "dscr": dscr,
                 "covenant_locked": covenant_locked,
                 "reserve_required_usd": reserve_required,
@@ -703,6 +775,27 @@ def build_equity_distribution_schedule(
     # per-row retained_cash_usd remains the within-year flow and is left untouched.
     if schedule:
         residual = reserve_balance + retained_balance + locked_cash_balance
+        # #1539: arrears still owed at the horizon are paid from the cash released here
+        # before any of it reaches the sponsor; what it cannot pay is reported unpaid.
+        last = schedule[-1]
+        owed = engine_arrears - arrears_settled
+        terminal_settled = min(max(0.0, owed), max(0.0, residual))
+        if terminal_settled > 0.0:
+            residual -= terminal_settled
+            arrears_settled += terminal_settled
+            last["senior_fee_arrears_settled_usd"] = (
+                _as_float(last.get("senior_fee_arrears_settled_usd"), 0.0) or 0.0
+            ) + terminal_settled
+            last["senior_fee_arrears_usd"] = engine_arrears - arrears_settled
+            last["reserve_balance_usd"] = 0.0
+        unpaid = engine_arrears - arrears_settled
+        if unpaid > 1e-9:
+            logger.warning(
+                "Equity distribution: senior fee of USD %.2f deferred by the cash sweep "
+                "is still unpaid at the horizon. It is charged to no one, so it raises "
+                "project NPV, equity NPV and PLCR against paying it (#1539).",
+                unpaid,
+            )
         if residual > 1e-9:
             last = schedule[-1]
             prior_dist = _as_float(last.get("equity_distribution_usd"), 0.0) or 0.0
@@ -898,8 +991,27 @@ def calculate_equity_distribution_from_pipeline(
             "total_sponsor_cure_usd": float(
                 sum(row["sponsor_cure_usd"] for row in annual_distributions)
             ),
+            # #1539: senior-fee arrears this waterfall settled ahead of equity, and any
+            # still unpaid at the horizon (charged to no one).
+            "total_senior_fee_arrears_settled_usd": float(
+                sum(
+                    row["senior_fee_arrears_settled_usd"]
+                    for row in annual_distributions
+                )
+            ),
+            "senior_fee_unpaid_at_horizon_usd": float(
+                annual_distributions[-1]["senior_fee_arrears_usd"]
+                if annual_distributions
+                else 0.0
+            ),
             "min_dscr_threshold": distribution_config.min_dscr_threshold,
             "min_reserve_months": distribution_config.min_reserve_months,
+            # #920 DOM-1: these months size the reserve this waterfall builds from
+            # operating cash, so their provenance is published here, beside them.
+            "min_reserve_months_source": (
+                distribution_config.min_reserve_months_source or "set_on_config_object"
+            ),
+            "min_reserve_months_basis": DSRA_TARGET_BASIS,
         },
         "metadata": {
             "computed_from": "canonical_v14_pipeline",

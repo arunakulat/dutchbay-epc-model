@@ -984,6 +984,10 @@ class ReportContext(BaseModel):
     #: byte-identical).
     refinance_coverage: Optional[RefinanceCoverageBlock] = None
     manifest: Dict[str, Any]
+    #: F-5 non-reliance notice shown on the cover (#1760). Set by the capital-risk emitter, whose
+    #: report a run that writes its figures now writes by default and the release asset
+    #: ships; None (the default) omits it, so every other report stays byte-identical.
+    f5_notice: Optional[str] = None
 
 
 def _build_kpi_rows(

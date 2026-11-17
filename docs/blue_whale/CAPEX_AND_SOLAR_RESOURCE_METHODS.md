@@ -148,8 +148,8 @@ CIF (89.19) is 10% below the generic battery supplier's restatement.
 8.291526 N, 79.753204 E. It is 197 m from the turbine (DutchBay T2, 8.2925 N, 79.7547 E, read
 from `conf/blue_whale_wind_siting.yaml` since #1578 L-16; until then a stale copy, 79.752666 E,
 gave 123 m) and 2.42 km from the TMY's grid point (8.27 N, 79.75 E). Over 197 m the resource is
-the same as at the turbine;
-the geometry changes the annual POA by 0.002%.
+the same as at the turbine. The sun geometry at the centroid, rather than at the TMY's grid point,
+changes the annual POA by 0.002%.
 
 **Irradiance record.** `inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv` (SHA-256
 `c71c9c8b...`). Its README says PVGIS-SARAH3. That is not correct: PVGIS-SARAH3 does not cover
@@ -243,6 +243,14 @@ loses value at the margin, so the run returns its grid floor, not an optimum: 10
 "Battery floor 0.1 MW, PV unchanged"). The blended BESS price is applied per kWh at that size,
 which a small battery is unlikely to achieve (L-10). The battery curve, sensitivities and
 break-even values are in `STATUS.md`.
+
+From scenario v0.10 (#1578 L-11) the solar + BESS sizing models the battery's fade and its
+augmentation explicitly, so it takes the NSO 250 augmentation reserve (USD 8.00/kWh before land
+and auxiliaries, 8.89 in the all-in) out of every BESS price: the mode it applies is USD
+131.85/kWh. The blend itself, and the all-in the pricing config states, are unchanged; the
+hybrid and PR 3's sizing still carry the reserve. Each augmentation is priced at the equipment
+line (USD 103.55/kWh added, an assumption). Method and figures: `STATUS.md`, "Battery fade and
+augmentation".
 
 ## 7. References
 

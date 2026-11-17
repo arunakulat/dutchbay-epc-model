@@ -567,6 +567,10 @@ for _path, _disposition in (
     (("full_result", "kpis"), ResultPathDisposition.ORIGIN_INVARIANT),
     (("full_result", "annual_rows"), ResultPathDisposition.ORIGIN_INVARIANT),
     (("full_result", "debt_result"), ResultPathDisposition.ORIGIN_INVARIANT),
+    # #1774: the opt-in standalone battery-project economics. Present only when a scenario
+    # declares bess_economics.enabled: true; held as an opaque artifact (section 20), since
+    # no scenario KPI or report observation reads it.
+    (("full_result", "bess_project_economics"), ResultPathDisposition.OPAQUE_ARTIFACT),
     (
         ("full_result", "equity_distribution"),
         ResultPathDisposition.STRUCTURED_CONTAINER,
@@ -674,6 +678,9 @@ for _path, _disposition in (
             "wacc_is_real",
             "balloon_pct",
             "balloon_residual",
+            # #1539: senior fee deferred by a cash sweep and still unpaid at the
+            # horizon, beside the unpaid balloon.
+            "senior_fee_deferred_residual",
             "balloon_covenant_breach",
             "equity_distribution_status",
             "equity_npv",
@@ -756,6 +763,10 @@ for _path, _disposition in (
             "balloon_interest",
             # #1505: the part of it settled in cash in each period.
             "balloon_interest_paid",
+            # #1539: senior fee a cash sweep could not pay, carried forward per period,
+            # and any still unpaid at the horizon. Opaque with the other balloon series.
+            "senior_fee_deferred_usd",
+            "senior_fee_deferred_residual",
         )
     ),
     (
@@ -880,6 +891,9 @@ for _path, _disposition in (
             # bases `tax.balloon_interest_tax_basis` chooses between.
             "balloon_interest_accrued_usd",
             "balloon_interest_paid_usd",
+            # #1539: the senior fee a cash sweep deferred, carried on the row so the
+            # equity waterfall settles it ahead of any distribution.
+            "senior_fee_deferred_usd",
             "cf_after_debt",
             # #1397: the levered-tax basis the facility was sized and covenanted
             # on. ``cfads_usd`` stays the carried predicate operand because it is
@@ -918,6 +932,7 @@ D3C_ARTIFACT_ONLY_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
             ("full_result", "debt_result", "dscr_by_year"): (_S12,),
             ("full_result", "debt_result", "debt_schedules"): (_S12,),
             ("full_result", "debt_result", "funding"): (_S12,),
+            ("full_result", "bess_project_economics"): (_S20,),
         }
     )
 )

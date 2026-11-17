@@ -596,7 +596,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    equity_debt_service_shortfall_years equity_irr equity_moic equity_multiple equity_npv final_cfads_usd irr llcr max_debt_usd
    mean_operational_cfads_usd min_dscr min_dscr_period npv plcr project_irr project_npv
    project_npv_prudential prudential_rate_used total_cfads_usd total_equity_distributed_usd
-   equity_sponsor_cure_usd total_idc_usd
+   equity_sponsor_cure_usd senior_fee_deferred_residual total_idc_usd
    """.split())
    labels = {"scenario_name", "wacc_label", "equity_distribution_status", "project_irr_status"}
    expected = numeric | labels | {"dscr_series", "wacc_is_real", "equity_covenant_locked_years"}
@@ -630,14 +630,14 @@ train that carries a car it wrote. A pull request may always land alone instead.
    )
    want=$(measure "$REFERENCE_SHA")
    got=$(measure "$TRAIN_SHA")
-   receipt='^42 [0-9a-f]{64}$'
+   receipt='^43 [0-9a-f]{64}$'
    [[ $want =~ $receipt && $got =~ $receipt ]] || exit 1
    printf 'reference: %s\ntrain: %s\n' "$want" "$got"
    test "$got" = "$want"
    echo "TRAIN-01 KPI check: OK"
    ```
 
-   It prints the count and SHA-256 of the 42-KPI lender vector at each revision, and passes only
+   It prints the count and SHA-256 of the 43-KPI lender vector at each revision, and passes only
    when they are equal. The schema describes the current lender vector. A changed schema needs a
    reviewed contract update, and `tests/lint/test_train_policy.py` runs this schema check on the
    real lender case so that a new or removed KPI fails a test before it fails a train. Scratch worktrees are retained on success and failure: Git status
