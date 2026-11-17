@@ -35,6 +35,8 @@ SITE_CONF = REPO_ROOT / "conf" / "blue_whale_fx_tenor_screening.yaml"
 METHOD_CONF = REPO_ROOT / "conf" / "fx_tenor_screening.yaml"
 BASECASE = REPO_ROOT / "scenarios" / "dutchbay_basecase_2025Q4.yaml"
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+#: A scenario whose tariff has a fixed part and an indexed O&M part (L-9).
+TWO_PART_SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
 MODULE = REPO_ROOT / "analytics" / "finance" / "fx_tenor_screening.py"
 SHIM = REPO_ROOT / "analytics" / "finance" / "blue_whale_fx_tenor_screening.py"
 RUNNER = REPO_ROOT / "scripts" / "run_fx_tenor_screening_v14.py"
@@ -160,6 +162,84 @@ def test_a_missing_scenario_input_is_named() -> None:
     scenario = _basecase()
     del scenario["fx"]["annual_depr"]
     with pytest.raises(KeyError, match="fx.annual_depr"):
+        scenario_screening_inputs(scenario)
+
+
+# --------------------------------------------- two-part tariff (#1796 domain R1)
+
+
+def _two_part_with_block() -> Dict[str, Any]:
+    """The two-part-tariff scenario with the base case's block, less its O&M rate."""
+    scenario = _yaml(TWO_PART_SCENARIO)
+    assert "financing_screening" not in scenario
+    block = copy.deepcopy(_basecase()["financing_screening"])
+    del block["tariff_om_escalation_decimal"]
+    scenario["financing_screening"] = block
+    return scenario
+
+
+def test_an_indexed_om_part_is_split_and_escalated_as_the_engine_does() -> None:
+    """The screening tariff equals the engine's in every year, on a two-part tariff."""
+    from finance.tariff_indexation import (
+        resolve_om_indexation,
+        tariff_lkr_per_kwh_for_year,
+    )
+
+    scenario = _two_part_with_block()
+    tariff = float(scenario["tariff"]["lkr_per_kwh"])
+    indexation = resolve_om_indexation(scenario, base_tariff_lkr_per_kwh=tariff)
+    assert indexation is not None
+    escalable = indexation.escalable_om_lkr_per_kwh
+    assert 0.0 < escalable < tariff and indexation.annual_rate > 0.0
+    assert indexation.pre_operation_years > 0  # the year-1 index is not 1
+
+    inputs = scenario_screening_inputs(scenario)
+    assert inputs["tariff_fixed_lkr_per_kwh"] == pytest.approx(tariff - escalable)
+    assert inputs["tariff_om_escalation_decimal"] == indexation.annual_rate
+    cfg = fx.screening_config_from_block(inputs, scenario["financing_screening"])
+    assert cfg["tariff_om_escalation_decimal"] == indexation.annual_rate
+    rows = fx.evaluate_dual_currency_screening(cfg, 0.0)
+    assert len(rows) == int(scenario["tariff"]["ppa_term_years"])
+    for row in rows:
+        engine = tariff_lkr_per_kwh_for_year(tariff, indexation, row["year"] - 1)
+        assert row["tariff_lkr_per_kwh"] == pytest.approx(engine, rel=1e-12), row[
+            "year"
+        ]
+    # Non-vacuous: the last year's tariff is above the flat contracted tariff.
+    assert rows[-1]["tariff_lkr_per_kwh"] > tariff * 1.01
+
+
+def test_the_indexed_om_part_moves_the_screening_result() -> None:
+    scenario = _two_part_with_block()
+    indexed = compute_fx_tenor_screening_from_block(
+        scenario, scenario["financing_screening"]
+    )
+    flat = copy.deepcopy(scenario)
+    del flat["tariff"]["om_indexation"]
+    flat["financing_screening"]["tariff_om_escalation_decimal"] = 0.0
+    held = compute_fx_tenor_screening_from_block(flat, flat["financing_screening"])
+    assert "tariff_om_escalation_decimal" not in held["scenario_inputs_applied"]
+    assert (
+        indexed["base_case"]["p50"]["min_dscr"] > held["base_case"]["p50"]["min_dscr"]
+    )
+
+
+def test_the_om_escalation_is_stated_once() -> None:
+    """Scenario and block may not both state the O&M rate, and one of them must."""
+    scenario = _two_part_with_block()
+    scenario["financing_screening"]["tariff_om_escalation_decimal"] = 0.0
+    with pytest.raises(ValueError, match="tariff.om_indexation already sets"):
+        _run(scenario)
+    flat = _basecase()
+    del flat["financing_screening"]["tariff_om_escalation_decimal"]
+    with pytest.raises(ValueError, match="required when the scenario declares no"):
+        _run(flat)
+
+
+def test_a_malformed_om_indexation_fails_loud() -> None:
+    scenario = _two_part_with_block()
+    scenario["tariff"]["om_indexation"]["escalable_om_lkr_per_kwh"] = 1.0e6
+    with pytest.raises(ValueError, match="exceeds"):
         scenario_screening_inputs(scenario)
 
 

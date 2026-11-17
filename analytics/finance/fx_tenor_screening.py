@@ -592,16 +592,26 @@ def _required(scenario: Mapping[str, Any], dotted: str) -> Any:
 def scenario_screening_inputs(scenario: Mapping[str, Any]) -> Dict[str, Any]:
     """Return the screening inputs a scenario itself carries.
 
-    The whole contracted tariff (``tariff.lkr_per_kwh``) is taken as the fixed part, so the
-    escalable O&M part is zero unless a named sensitivity sets it.
+    A scenario without ``tariff.om_indexation`` has a flat tariff: the whole contracted
+    tariff (``tariff.lkr_per_kwh``) is the fixed part, so the escalable O&M part is zero
+    unless a named sensitivity sets it. A scenario that declares ``tariff.om_indexation``
+    (L-9) is read the way the engine reads it (``finance.tariff_indexation``): the fixed part
+    is ``lkr_per_kwh`` less ``escalable_om_lkr_per_kwh``, and the O&M part is that component
+    at operating year 1, after the block's ``pre_operation_years`` steps, escalating at the
+    scenario's own yearly rate (returned as ``tariff_om_escalation_decimal``). Year by year
+    the screening tariff then equals the engine's (#1796 domain R1).
 
     Raises:
         KeyError: A scenario key the screening reads is missing; the message names it.
+        ValueError: ``tariff.om_indexation`` is malformed (``resolve_om_indexation``).
     """
-    return {
+    from finance.tariff_indexation import resolve_om_indexation
+
+    tariff_lkr = float(_required(scenario, "tariff.lkr_per_kwh"))
+    inputs: Dict[str, Any] = {
         "capex_usd": float(_required(scenario, "capex.usd_total")),
         "opex_usd_equivalent_year1": float(_required(scenario, "opex.usd_per_year")),
-        "tariff_fixed_lkr_per_kwh": float(_required(scenario, "tariff.lkr_per_kwh")),
+        "tariff_fixed_lkr_per_kwh": tariff_lkr,
         "tariff_om_lkr_per_kwh": 0.0,
         "fx_close_lkr_per_usd": float(_required(scenario, "fx.start_lkr_per_usd")),
         "fx_depreciation_decimal": float(_required(scenario, "fx.annual_depr")),
@@ -619,12 +629,51 @@ def scenario_screening_inputs(scenario: Mapping[str, Any]) -> Dict[str, Any]:
         )
         / 100.0,
     }
+    indexation = resolve_om_indexation(scenario, base_tariff_lkr_per_kwh=tariff_lkr)
+    if indexation is not None:
+        escalable = indexation.escalable_om_lkr_per_kwh
+        inputs["tariff_fixed_lkr_per_kwh"] = tariff_lkr - escalable
+        inputs["tariff_om_lkr_per_kwh"] = escalable * indexation.index(0)
+        inputs["tariff_om_escalation_decimal"] = indexation.annual_rate
+    return inputs
+
+
+def _tariff_om_escalation(inputs: Mapping[str, Any], block: Mapping[str, Any]) -> float:
+    """The O&M tariff part's yearly escalation: the scenario's own rate, or the block's.
+
+    A scenario that indexes its O&M part (``tariff.om_indexation``) sets the rate, and the
+    block must then leave ``tariff_om_escalation_decimal`` out; a scenario with a flat tariff
+    takes it from the block, which must then state it. Either way exactly one source names
+    the rate, so neither can silently override the other.
+
+    Raises:
+        ValueError: Both the scenario and the block state the rate, or neither does.
+    """
+    in_scenario = "tariff_om_escalation_decimal" in inputs
+    in_block = "tariff_om_escalation_decimal" in block
+    if in_scenario and in_block:
+        raise ValueError(
+            f"{BLOCK}.tariff_om_escalation_decimal: the scenario's tariff.om_indexation "
+            "already sets the O&M part's escalation; leave the block's key out"
+        )
+    if not in_scenario and not in_block:
+        raise ValueError(
+            f"{BLOCK}.tariff_om_escalation_decimal: required when the scenario declares "
+            "no tariff.om_indexation"
+        )
+    source = inputs if in_scenario else block
+    return float(source["tariff_om_escalation_decimal"])
 
 
 def screening_config_from_block(
     inputs: Mapping[str, Any], block: Mapping[str, Any]
 ) -> Dict[str, Any]:
-    """Merge a scenario's own inputs with its block into the flat screening config."""
+    """Merge a scenario's own inputs with its block into the flat screening config.
+
+    Raises:
+        ValueError: The O&M tariff escalation is stated twice or not at all
+            (:func:`_tariff_om_escalation`).
+    """
     debt = block["debt"]
     opex = block["opex"]
     shock = block["fx_shock"]
@@ -641,7 +690,7 @@ def screening_config_from_block(
         "min_p50_dscr": float(block["min_p50_dscr"]),
         "min_downside_dscr": float(block["min_downside_dscr"]),
         "average_p50_dscr": float(block["average_p50_dscr"]),
-        "tariff_om_escalation_decimal": float(block["tariff_om_escalation_decimal"]),
+        "tariff_om_escalation_decimal": _tariff_om_escalation(inputs, block),
         "opex_usd_share": float(opex["usd_share"]),
         "usd_opex_escalation_decimal": float(opex["usd_escalation_decimal"]),
         "lkr_opex_escalation_decimal": float(opex["local_escalation_decimal"]),
