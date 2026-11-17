@@ -118,9 +118,11 @@ The Monte Carlo summary and the lender risk table apply it to `project_irr` and
   `coverage_note` gives the ranked note.
 
 With no trial excluded the ranking is `np.percentile` exactly, so a run whose trials all
-have a defined IRR is unchanged. The capital-risk report keeps the step 1 behaviour: its
-IRR VaR/CVaR, percentiles and hurdle probability are over the defined trials, with the
-coverage note. Ranking there would make VaR/CVaR undefined and needs its own ruling.
+have a defined IRR is unchanged. The capital-risk report keeps the step 1 behaviour, per
+the owner's 2026-11-16 ruling on #1763 ("Report with coverage"): its IRR VaR/CVaR,
+percentiles and hurdle probability are over the trials that define each IRR, with the
+excluded count stated. It does not rank undefined trials and gives them no hurdle
+treatment.
 
 ## Independent oracle and impact
 
