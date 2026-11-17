@@ -361,3 +361,27 @@ def test_balloon_bisection_reads_a_financing_terms_gearing_alias() -> None:
     out_cfg, out_core = _resize_for_amortization(config, rows, core)
     assert 0.0 < out_cfg["Financing_Terms"]["debt_ratio"] < 0.90
     assert out_core["balloon_remaining"] <= _BALLOON_TOL
+
+
+def test_capacity_detail_reads_term_years_as_the_tenor() -> None:
+    """The dual-DSCR capacity detail spans the tenor the debt layer uses.
+
+    With only ``Financing_Terms.term_years`` declared, the detail must equal the one for
+    the same figure declared as ``tenor_years``, and differ from a 15-year tenor (the
+    old fallback), so the autosolve cannot read a different tenor from the layer.
+    """
+    rows = [{"year": y, "cfads_usd": 30e6} for y in range(1, 21)]
+
+    def detail(**tenor: int) -> Dict[str, Any]:
+        config = _lender()
+        fin = config["Financing_Terms"]
+        fin["bind_downside"] = False
+        fin.pop("tenor_years")
+        fin.update(tenor)
+        _, out = _maybe_autosolve_dscr(config, rows)
+        assert out is not None
+        return out
+
+    by_term = detail(term_years=12)
+    assert by_term == detail(tenor_years=12)
+    assert by_term != detail(tenor_years=15)
