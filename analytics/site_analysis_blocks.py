@@ -126,6 +126,11 @@ def _positive_int(value: Any, path: str, errors: List[str]) -> None:
         errors.append(f"{path}: must be a positive integer (got {value!r})")
 
 
+def _nonnegative_int(value: Any, path: str, errors: List[str]) -> None:
+    if not (isinstance(value, int) and not isinstance(value, bool) and value >= 0):
+        errors.append(f"{path}: must be a non-negative integer (got {value!r})")
+
+
 def _nonempty_str(value: Any, path: str, errors: List[str]) -> None:
     if not (isinstance(value, str) and value.strip()):
         errors.append(f"{path}: must be a non-empty string (got {value!r})")
@@ -414,6 +419,83 @@ _SOLAR_STORAGE_SIZING = _block(
     }
 )
 
+
+def _bool(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, bool):
+        errors.append(f"{path}: must be true or false (got {value!r})")
+
+
+def _unique_ids(key: str) -> Callable[[Mapping[str, Any], str, List[str]], None]:
+    def rule(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+        entries = block.get(key)
+        if not isinstance(entries, list):
+            return
+        ids = [str(e.get("id")) for e in entries if isinstance(e, Mapping)]
+        if len(ids) != len(set(ids)):
+            errors.append(f"{path}.{key}: ids must be unique")
+
+    return rule
+
+
+def _downside_not_above_p50(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    p50: Any = block.get("p50_gwh")
+    downside: Any = block.get("assumed_downside_gwh")
+    if _is_number(p50) and _is_number(downside) and downside > p50:
+        errors.append(f"{path}: assumed_downside_gwh must not exceed p50_gwh")
+
+
+def _fx_window_dates_in_order(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    start: Any = block.get("start_date")
+    end: Any = block.get("end_date")
+    try:
+        if str(start) >= str(end):
+            errors.append(f"{path}: start_date must be before end_date")
+    except TypeError:
+        pass
+
+
+#: Scenario inputs a named financing sensitivity may override (the screening reads the
+#: rest from the scenario itself).
+_FINANCING_SENSITIVITY = _Mapping(
+    {
+        "id": _req(_nonempty_str),
+        "description": _req(_nonempty_str),
+        "capex_usd": _opt(_number(gt=0.0)),
+        "opex_usd_equivalent_year1": _opt(_number(ge=0.0)),
+        "tariff_fixed_lkr_per_kwh": _opt(_number(ge=0.0)),
+        "tariff_om_lkr_per_kwh": _opt(_number(ge=0.0)),
+        "fx_close_lkr_per_usd": _opt(_number(gt=0.0)),
+        "fx_depreciation_decimal": _opt(_number(gt=-1.0, lt=1.0)),
+    }
+)
+
+_FX_OBSERVATION = _Mapping(
+    {
+        "date": _req(_iso_date),
+        "lkr_per_usd": _req(_number(gt=0.0)),
+        "type": _req(_nonempty_str),
+        "is_assumption": _req(_bool),
+        "evidence_status": _req(_nonempty_str),
+    }
+)
+
+_FX_WINDOW = _Mapping(
+    {
+        "label": _req(_nonempty_str),
+        "start": _req(_number(gt=0.0)),
+        "end": _req(_number(gt=0.0)),
+        "start_date": _req(_iso_date),
+        "end_date": _req(_iso_date),
+        "is_assumption": _req(_bool),
+        "evidence_status": _req(_nonempty_str),
+    },
+    rules=(_fx_window_dates_in_order,),
+)
+
 _FINANCING_SCREENING = _block(
     {
         "label": _req(_literal(SCREENING_LABEL)),
@@ -425,6 +507,7 @@ _FINANCING_SCREENING = _block(
                     "local_rate_decimal": _req(_number(ge=0.0, lt=1.0)),
                     "dfi_tenor_years": _req(_positive_int),
                     "local_tenor_years": _req(_positive_int),
+                    "lender_tail_years": _req(_nonnegative_int),
                     "annual_credit_fee_decimal": _opt(_number(ge=0.0, lt=1.0)),
                 }
             )
@@ -438,9 +521,12 @@ _FINANCING_SCREENING = _block(
                 }
             )
         ),
+        "tariff_om_escalation_decimal": _req(_number(gt=-1.0, lt=1.0)),
+        "min_p50_dscr": _req(_number(gt=0.0)),
         "min_downside_dscr": _req(_number(gt=0.0)),
+        "average_p50_dscr": _req(_number(gt=0.0)),
         "allowance_years": _req(_positive_int),
-        "fx_shock": _opt(
+        "fx_shock": _req(
             _Mapping(
                 {
                     "shock_decimal": _req(_number(ge=0.0, lt=1.0)),
@@ -448,7 +534,54 @@ _FINANCING_SCREENING = _block(
                 }
             )
         ),
-    }
+        "generation": _req(
+            _Mapping(
+                {
+                    "p50_gwh": _req(_number(gt=0.0)),
+                    "assumed_downside_gwh": _req(_number(gt=0.0)),
+                    "basis_note": _req(_nonempty_str),
+                },
+                rules=(_downside_not_above_p50,),
+            )
+        ),
+        "tenor_variants": _opt(
+            _list_of(
+                _Mapping(
+                    {
+                        "id": _req(_nonempty_str),
+                        "dfi_tenor_years": _req(_positive_int),
+                        "ppa_years": _req(_positive_int),
+                        "lender_tail_years": _req(_nonnegative_int),
+                    }
+                )
+            )
+        ),
+        "sensitivities": _opt(_list_of(_FINANCING_SENSITIVITY)),
+        "fixed_debt_stress": _opt(
+            _Mapping(
+                {
+                    "held_debt_usd": _req(_number(gt=0.0)),
+                    "operating_year": _req(_positive_int),
+                    "depreciation_rates": _req(
+                        _list_of(_number(gt=-1.0, lt=1.0), unique=True)
+                    ),
+                    "shock_decimals": _req(
+                        _list_of(_number(ge=0.0, lt=1.0), unique=True)
+                    ),
+                }
+            )
+        ),
+        "fx_history": _opt(
+            _Mapping(
+                {
+                    "observations": _req(_list_of(_FX_OBSERVATION)),
+                    "cagr_windows": _opt(_list_of(_FX_WINDOW)),
+                }
+            )
+        ),
+    },
+    _unique_ids("tenor_variants"),
+    _unique_ids("sensitivities"),
 )
 
 _PACKAGE = _Mapping(
