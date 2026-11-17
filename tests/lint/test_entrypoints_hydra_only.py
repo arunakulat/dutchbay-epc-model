@@ -11,7 +11,7 @@ POLICY (the deliberate, principled split — read this before "making everything
     argparse is PERMITTED — by design, not as a gap — for the thin ``scripts/`` utilities
     that wrap a SINGLE library call ("read one --config YAML, call one function, print
     CSV/JSON": e.g. run_global_sensitivity, run_multi_tech_tornado, run_tornado_from_cli,
-    run_epc_margin, run_fx_calibration). For those, Hydra is pure ceremony AND imposes
+    run_fx_calibration). For those, Hydra is pure ceremony AND imposes
     intrusive runtime side-effects (``@hydra.main`` changes the working directory and writes
     ``outputs/`` + ``.hydra/`` dirs by default) that are actively wrong for a tool whose job
     is to emit a CSV. A blanket "ban argparse everywhere / convert all entrypoints to Hydra"
