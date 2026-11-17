@@ -82,10 +82,47 @@ shows one says how many trials it leaves out:
   (contract 2.3). An IRR metric with fewer than 20 defined trials is still refused,
   because the VaR/CVaR tail needs at least 20 observations.
 
-The note says the excluded trials may be the worst outcomes, because a lower-tail
-percentile over the defined trials can then read better than the full distribution.
-How an undefined trial is ranked is #1746 step 2, a separate R3 change. This disclosure
-moves no figure for a run in which every trial has a defined IRR.
+The capital-risk note says the excluded trials may be the worst outcomes, because a
+lower-tail figure over the defined trials can then read better than the full
+distribution. This disclosure moves no figure for a run in which every trial has a
+defined IRR.
+
+## Undefined IRR trials ranked worst (#1746 step 2)
+
+Owner ruling on #1746 (2026-11-15): a Monte Carlo trial whose IRR is undefined ranks
+below every defined trial. When a lower-tail percentile falls on those trials, it is
+reported as undefined, at or below the lowest defined IRR, rather than as a number taken
+from the defined trials only.
+
+The Monte Carlo summary and the lender risk table apply it to `project_irr` and
+`equity_irr` when any trial is excluded and at least one is defined
+(`ranked_worst_percentiles` in `analytics/mc/aggregate.py`):
+
+- **Percentiles.** The excluded trials take the lowest ranks of all trials, and each
+  percentile is read at its position in that full ranking with `np.percentile`'s linear
+  interpolation. A percentile whose position touches an excluded rank, including one that
+  would interpolate between the last excluded and the lowest defined trial, is `None`.
+  `percentile_bound` gives the lowest defined IRR that it lies at or below, and
+  `percentile_basis` is `excluded_trials_ranked_worst`. Such a percentile is left out of
+  `MonteCarloResult.percentiles`, and the flat `project_irr_p10` / `_p50` / `_p90` follow
+  the ranking.
+- **Upper tail.** An upper percentile is read from the same ranking, so it stays a number
+  and moves down a little, because the excluded trials count in its denominator.
+- **Mean and standard deviation.** A trial ranked worst has no value to average, so the
+  mean and standard deviation stay over the defined trials; `mean_basis` is
+  `defined_trials` and the note says so.
+- **Minimum and maximum.** `min` is `None`, because the worst trial has no defined IRR;
+  `min_defined` keeps the lowest defined value. `max` is unchanged.
+- **Lender risk table.** P50, P90 (10th percentile) and P95 (5th percentile) of an IRR
+  row are read from the ranking; an undefined one is a missing cell. The row's
+  `coverage_note` gives the ranked note.
+
+With no trial excluded the ranking is `np.percentile` exactly, so a run whose trials all
+have a defined IRR is unchanged. The capital-risk report keeps the step 1 behaviour, per
+the owner's 2026-11-16 ruling on #1763 ("Report with coverage"): its IRR VaR/CVaR,
+percentiles and hurdle probability are over the trials that define each IRR, with the
+excluded count stated. It does not rank undefined trials and gives them no hurdle
+treatment.
 
 ## Independent oracle and impact
 
