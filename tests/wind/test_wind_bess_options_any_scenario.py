@@ -161,6 +161,63 @@ def test_block_built_config_follows_the_block() -> None:
     assert cfg["tariff"]["wind_lkr_per_kwh"] == float(scenario["tariff"]["lkr_per_kwh"])
 
 
+#: Envelope keys: the block's provenance, not inputs of the options.
+_ENVELOPE_KEYS = {"site", "retrieved", "sources", "method_config", "notes"}
+#: Block leaves the run reads itself rather than through the built config.
+_READ_BY_THE_RUN = {("hourly_profile", "high_output_check_mw")}
+
+
+def test_every_block_number_reaches_the_built_config() -> None:
+    """#1797 assurance A-1: move every numeric leaf of the block; each must arrive.
+
+    A value hard-coded in ``config_from_block`` that equals today's block value passes the
+    equality oracle; here each leaf takes a distinct sentinel, so a hard-coded value drops
+    its sentinel and the test names the leaf.
+    """
+    scenario = _scenario()
+    block = copy.deepcopy(scenario["storage_options"])
+    sentinels: Dict[float, tuple] = {}
+
+    def move(node: Any, path: tuple) -> Any:
+        if isinstance(node, dict):
+            return {
+                k: v if not path and k in _ENVELOPE_KEYS else move(v, (*path, k))
+                for k, v in node.items()
+            }
+        if isinstance(node, list):
+            return [move(v, (*path, i)) for i, v in enumerate(node)]
+        if isinstance(node, (int, float)) and not isinstance(node, bool):
+            value = 10_000.0 + len(sentinels) + 0.125
+            sentinels[value] = path
+            return value
+        return node
+
+    moved = move(block, ())
+    assert len(sentinels) > 50
+    cfg = runner.config_from_block(
+        scenario, moved, _method(), scenario_label=SCENARIO_REL
+    )
+    arrived: List[float] = []
+
+    def collect(node: Any) -> None:
+        if isinstance(node, dict):
+            for v in node.values():
+                collect(v)
+        elif isinstance(node, list):
+            for v in node:
+                collect(v)
+        elif isinstance(node, float):
+            arrived.append(node)
+
+    collect(cfg)
+    missing = {sentinels[v] for v in sentinels if v not in arrived}
+    assert missing == _READ_BY_THE_RUN
+    # Each arrives once: no block value is copied into two config keys.
+    assert sorted(v for v in arrived if v in sentinels) == sorted(
+        v for v in sentinels if sentinels[v] not in _READ_BY_THE_RUN
+    )
+
+
 def test_scenario_without_the_block_is_not_applicable() -> None:
     lender = _yaml(REPO / LENDER_REL)
     out = runner.run_wind_bess_options_for_scenario(

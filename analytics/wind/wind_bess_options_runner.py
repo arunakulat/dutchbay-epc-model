@@ -33,13 +33,8 @@ import numpy as np
 import yaml
 from scipy.stats import norm, qmc
 
-from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.evaluation_v14 import evaluate_with_overrides, evaluated_scenario_config
 from analytics.wind import wind_bess_options as wbo
-from finance.capex_price_basis import (
-    apply_capex_price_basis,
-    automatic_escalation,
-    capex_escalation_factor,
-)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 KPIS = ("project_npv", "equity_npv", "min_dscr", "project_irr", "equity_irr")
@@ -82,11 +77,24 @@ def nasa_dir(env: str) -> Path:
     return path
 
 
+def price_basis_applied(scenario: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The capex price-year escalation the engine applies to ``scenario``, or ``None``.
+
+    Read through :func:`analytics.evaluation_v14.evaluated_scenario_config`, the gateway's
+    view of the scenario as the engine prices it (native capex normalised first, then the
+    ``capex.price_basis`` block applied), so this module imports no finance code
+    (FRAMEWORK-03). ``None`` when the scenario declares no price basis.
+    """
+    capex = evaluated_scenario_config(dict(scenario)).get("capex")
+    applied = capex.get("price_basis_applied") if isinstance(capex, Mapping) else None
+    return dict(applied) if isinstance(applied, Mapping) else None
+
+
 def kpis(scenario: Mapping[str, Any]) -> Dict[str, float]:
     # Every capex amount here is priced through capex.usd_total. Refuse a scenario in which
     # the engine would escalate some other capex key automatically (#1704), so the summary
     # can never absorb that escalation unrecorded.
-    if automatic_escalation(apply_capex_price_basis(dict(scenario))) is not None:
+    if (price_basis_applied(scenario) or {}).get("automatically_escalated"):
         raise ValueError("a capex amount would be escalated automatically (#1704)")
     k = evaluate_with_overrides(raw_config=dict(scenario), overrides={})
     out = {m: float(k[m]) if k.get(m) is not None else math.nan for m in KPIS}
@@ -358,7 +366,7 @@ def run_options(  # noqa: C901 - one linear report
     timeline = scenario["timeline"]
     # The engine's own capex price-year escalation (capex.price_basis), for the battery's
     # pre-tax view; 1.0 when the scenario declares no price basis.
-    basis = capex_escalation_factor(scenario)
+    basis = price_basis_applied(scenario)
     capex_factor = 1.0 if basis is None else float(basis["factor"])
 
     def pretax(
