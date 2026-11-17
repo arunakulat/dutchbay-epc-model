@@ -604,6 +604,21 @@ def _validate_bess_economics_block(
     validate_bess_economics_block(raw_config, errors)
 
 
+def _validate_epc_block(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate a declared ``epc`` block (#1780).
+
+    Present-only: a scenario without the block imports nothing and gets no error. A declared
+    block is checked by :func:`finance.epc_margin.validate_epc_block`, the contract the
+    computation itself reads, so pre-flight and the computation cannot drift.
+    """
+    if not isinstance(raw_config, Mapping) or "epc" not in raw_config:
+        return
+
+    from finance.epc_margin import validate_epc_block
+
+    validate_epc_block(raw_config, errors)
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -689,6 +704,9 @@ def validate_config_for_v14(
 
     # 1j. Validate a declared standalone battery-economics block (#1774). Present-only.
     _validate_bess_economics_block(raw_config, errors)
+
+    # 1k. Validate a declared EPC construction-margin block (#1780). Present-only.
+    _validate_epc_block(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
