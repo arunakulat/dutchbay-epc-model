@@ -99,15 +99,63 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
             "local_rate_decimal": 0.12,
             "dfi_tenor_years": 15,
             "local_tenor_years": 10,
+            "lender_tail_years": 0,
         },
         "opex": {
             "usd_share": 0.7,
             "usd_escalation_decimal": 0.025,
             "local_escalation_decimal": 0.05,
         },
+        "tariff_om_escalation_decimal": 0.0,
+        "min_p50_dscr": 1.3,
         "min_downside_dscr": 1.1,
+        "average_p50_dscr": 1.5,
         "allowance_years": 20,
         "fx_shock": {"shock_decimal": 0.1, "operating_year": 5},
+        "generation": {
+            "p50_gwh": 400.0,
+            "assumed_downside_gwh": 350.0,
+            "basis_note": "Example screening reference generation",
+        },
+        "tenor_variants": [
+            {
+                "id": "short",
+                "dfi_tenor_years": 10,
+                "ppa_years": 12,
+                "lender_tail_years": 2,
+            }
+        ],
+        "sensitivities": [
+            {"id": "dearer", "description": "Example", "capex_usd": 1.0e8}
+        ],
+        "fixed_debt_stress": {
+            "held_debt_usd": 5.0e7,
+            "operating_year": 5,
+            "depreciation_rates": [0.0, 0.05],
+            "shock_decimals": [0.0, 0.2],
+        },
+        "fx_history": {
+            "observations": [
+                {
+                    "date": "2024-12-31",
+                    "lkr_per_usd": 290.0,
+                    "type": "year_end",
+                    "is_assumption": False,
+                    "evidence_status": "Example central-bank release",
+                }
+            ],
+            "cagr_windows": [
+                {
+                    "label": "recent",
+                    "start": 290.0,
+                    "end": 330.0,
+                    "start_date": "2024-12-31",
+                    "end_date": "2026-11-13",
+                    "is_assumption": True,
+                    "evidence_status": "Example",
+                }
+            ],
+        },
     },
     "equipment_cost_parity": {
         **_ENVELOPE,
@@ -422,7 +470,15 @@ def _committed_scenarios() -> List[Path]:
     return sorted((REPO_ROOT / "scenarios").rglob("*.yaml"))
 
 
-def test_no_committed_scenario_declares_a_block_yet() -> None:
+#: The committed scenarios that declare a block, and which. Each entry is added by the work
+#: item that moves that scenario's site inputs into its block.
+DECLARED_BLOCKS = {
+    # #1578 U4: the FX and tenor screening's inputs.
+    "scenarios/dutchbay_basecase_2025Q4.yaml": ["financing_screening"],
+}
+
+
+def test_committed_scenarios_declare_exactly_the_listed_blocks() -> None:
     declared = {}
     for path in _committed_scenarios():
         try:
@@ -434,7 +490,13 @@ def test_no_committed_scenario_declares_a_block_yet() -> None:
                 declared[str(path.relative_to(REPO_ROOT))] = (
                     declared_site_analysis_blocks(doc)
                 )
-    assert declared == {}
+    assert declared == DECLARED_BLOCKS
+
+
+@pytest.mark.parametrize("path", sorted(DECLARED_BLOCKS))
+def test_committed_blocks_are_valid(path: str) -> None:
+    config = yaml.safe_load((REPO_ROOT / path).read_text(encoding="utf-8"))
+    assert _errors(config) == []
 
 
 def _lender_config() -> Dict[str, Any]:
@@ -462,3 +524,66 @@ def test_schema_guard_refuses_a_malformed_block(block: str) -> None:
     config[block] = {"site": {}}
     with pytest.raises(ConfigValidationError, match=rf"{block}\.retrieved"):
         validate_config_for_v14(config, "lender", ["cashflow", "debt"])
+
+
+@pytest.mark.parametrize(
+    ("mutate", "fragment"),
+    [
+        (
+            lambda b: b["debt"].update({"lender_tail_years": -1}),
+            "financing_screening.debt.lender_tail_years: must be a non-negative integer",
+        ),
+        (
+            lambda b: b["generation"].update({"assumed_downside_gwh": 500.0}),
+            "financing_screening.generation: assumed_downside_gwh must not exceed p50_gwh",
+        ),
+        (
+            lambda b: b["sensitivities"][0].update({"gearing": 0.8}),
+            "financing_screening.sensitivities[0].gearing: unknown key",
+        ),
+        (
+            lambda b: b["sensitivities"].append(copy.deepcopy(b["sensitivities"][0])),
+            "financing_screening.sensitivities: ids must be unique",
+        ),
+        (
+            lambda b: b["tenor_variants"].append(copy.deepcopy(b["tenor_variants"][0])),
+            "financing_screening.tenor_variants: ids must be unique",
+        ),
+        (
+            lambda b: b["fx_history"]["cagr_windows"][0].update(
+                {"start_date": "2027-01-01"}
+            ),
+            "financing_screening.fx_history.cagr_windows[0]: start_date must be before",
+        ),
+        (
+            lambda b: b["fx_history"]["observations"][0].update(
+                {"is_assumption": "no"}
+            ),
+            "financing_screening.fx_history.observations[0].is_assumption: must be true",
+        ),
+        (
+            lambda b: b["fixed_debt_stress"].update({"shock_decimals": [0.2, 0.2]}),
+            "financing_screening.fixed_debt_stress.shock_decimals: entries must be unique",
+        ),
+        (
+            lambda b: b.pop("generation"),
+            "financing_screening.generation: required key is missing",
+        ),
+    ],
+)
+def test_financing_screening_rules(mutate: Any, fragment: str) -> None:
+    errors = _errors(_with("financing_screening", mutate))
+    assert any(fragment in e for e in errors), errors
+
+
+def test_financing_screening_optional_parts_may_be_absent() -> None:
+    def drop(b: Dict[str, Any]) -> None:
+        for key in (
+            "tenor_variants",
+            "sensitivities",
+            "fixed_debt_stress",
+            "fx_history",
+        ):
+            b.pop(key)
+
+    assert _errors(_with("financing_screening", drop)) == []
