@@ -7,6 +7,12 @@ the export limit and every revenue basis, through
 :func:`analytics.evaluation_v14.evaluate_with_overrides` on the wind scenario (ARCH-04), and
 returns the figures. Each caller adds its own provenance and hold text.
 
+:func:`config_from_block` builds the options config from a scenario's ``storage_options``
+block (:mod:`analytics.site_analysis_blocks`) and the method config, and
+:func:`run_wind_bess_options_for_scenario` runs it for any scenario, or reports the analysis
+as not applicable when the scenario has no block. No site name, path or figure is held here
+(``ARCH-01``).
+
 One input comes from outside the repository: the public NASA POWER hourly reference at the
 turbine point named by the block's ``hourly_profile``, content-checked against the pins in
 the reference config it names. It shapes the hour-by-hour charge and export headroom only;
@@ -15,6 +21,7 @@ the engine keeps the scenario's own energy. Nothing private is read.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import math
@@ -752,4 +759,186 @@ def run_options(  # noqa: C901 - one linear report
         "rte_grid_delta_project_npv_base_basis": rte_grid,
         "monte_carlo_base_basis": {"n_trials": n, "seed": int(mc["seed"])} | mc_out,
         "down_ramp_illustrative": down_ramp,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Scenario-driven entry point (#1578 U2)
+# ---------------------------------------------------------------------------
+
+#: The block this analysis reads (:mod:`analytics.site_analysis_blocks`).
+BLOCK = "storage_options"
+#: The ``schema_version`` of the options config :func:`config_from_block` builds.
+CONFIG_SCHEMA = "dutchbay.wind_bess_options.config.v1"
+SUMMARY_SCHEMA = "dutchbay.wind_bess_options.v1"
+#: Keys the method config's ``method`` mapping must hold.
+METHOD_KEYS = ("hold", "revenue_bases", "monte_carlo")
+
+
+def config_from_block(
+    scenario: Mapping[str, Any],
+    block: Mapping[str, Any],
+    method: Mapping[str, Any],
+    *,
+    scenario_label: str,
+    summary_json: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build the options config :func:`run_options` reads from a scenario's block.
+
+    The site inputs come from the block, the wind tariff from the scenario itself, and the
+    revenue bases and Monte Carlo settings from the method config.
+
+    Raises:
+        ValueError: The method config lacks a key it must hold.
+    """
+    missing = [k for k in METHOD_KEYS if k not in method]
+    if missing:
+        raise ValueError(f"method config lacks {missing}")
+    tech = block["technology"]
+    turbine = tech["wind_turbine"]
+    battery = tech["battery"]
+    profile = block["hourly_profile"]
+    tariff = block["tariff"]
+    limits = block["grid_limits"]
+    mc = dict(method["monte_carlo"])
+    mc["wind_yield_sigma"] = block["uncertainty"]["wind_yield_sigma"]
+    return {
+        "schema_version": CONFIG_SCHEMA,
+        "scenario": scenario_label,
+        "retrieved": str(block["retrieved"]),
+        "sources": list(block["sources"]),
+        "tariff": {
+            "wind_lkr_per_kwh": float(scenario["tariff"]["lkr_per_kwh"]),
+            "wind_components": list(tariff["wind_components"]),
+            "solar_bess_priority_components": list(
+                tariff["storage_priority_components"]
+            ),
+            "solar_bess_other_components": list(tariff["storage_other_components"]),
+            "floating_priority_components": list(
+                tariff["cross_check_priority_components"]
+            ),
+            "floating_other_components": list(tariff["cross_check_other_components"]),
+            "pucsl_round_trip_efficiency": tariff["round_trip_efficiency_basis"],
+            "component_check_tolerance_lkr_per_kwh": tariff[
+                "component_check_tolerance"
+            ],
+            "contract_years": tariff["contract_years"],
+            "one_time_adjustment_weights": dict(tariff["one_time_adjustment_weights"]),
+        },
+        "revenue_bases": copy.deepcopy(dict(method["revenue_bases"])),
+        "window": {"utc_hours": list(tariff["priority_window_utc_hours"])},
+        "limits": {
+            "standardised_ppa_mw": limits["export_limit_mw"],
+            "readings": {
+                str(name): {"export_cap_mw": cap}
+                for name, cap in limits["export_cap_readings"].items()
+            },
+        },
+        "profile": {
+            "reference_config": profile["reference_config"],
+            "reference_point": profile["reference_point"],
+            "transfer_summary": profile["transfer_summary"],
+            "reference_height_m": profile["reference_height_m"],
+            "hub_height_m": turbine["hub_height_m"],
+            "rotor_diameter_m": turbine["rotor_diameter_m"],
+            "rated_mw": turbine["rated_mw"],
+            "air_density_kgm3": turbine["air_density_kgm3"],
+            "cut_in_ms": turbine["cut_in_ms"],
+            "cut_out_ms": turbine["cut_out_ms"],
+            "power_loss_fractions": list(turbine["power_loss_fractions"]),
+        },
+        "battery": {
+            "duration_h_for_tariff": battery["duration_h_for_tariff"],
+            "usd_per_kwh": dict(battery["usd_per_kwh"]),
+            "om_usd_per_dc_kwh_year": battery["om_usd_per_dc_kwh_year"],
+            "dc_per_nominal": battery["dc_per_nominal"],
+            "round_trip_efficiency": battery["round_trip_efficiency"],
+            "black_start_reserve_mwh": battery["black_start_reserve_mwh"],
+        },
+        "options": [
+            {
+                "name": str(o["id"]),
+                "power_mw": o["power_mw"],
+                "energy_mwh": o["energy_mwh"],
+                "operation": o["operation"],
+            }
+            for o in block["sizes"]["options"]
+        ],
+        "down_ramp": {
+            "substation_limit_mw_per_min": limits["ramp_limit_mw_per_min"],
+            "illustrative_other_wind_mw": list(limits["illustrative_other_wind_mw"]),
+            "supplier": copy.deepcopy(dict(block["firming_supplier"])),
+        },
+        "monte_carlo": mc,
+        "output": {"summary_json": summary_json},
+    }
+
+
+def _digest(value: Any) -> str:
+    text = json.dumps(value, sort_keys=True, default=str, allow_nan=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def run_wind_bess_options_for_scenario(
+    scenario: Mapping[str, Any],
+    method: Mapping[str, Any],
+    *,
+    scenario_label: str,
+    profile_builder: Optional[
+        Callable[[Mapping[str, Any], Mapping[str, Any]], Dict[str, Any]]
+    ] = None,
+) -> Dict[str, Any]:
+    """Run the wind battery options for one scenario, or report them as not applicable.
+
+    A scenario with a ``storage_options`` block gets ``"status": "completed"`` and every
+    figure :func:`run_options` returns; one without it gets ``"status": "not_applicable"``
+    and the reason, never an error. ``scenario_label`` must be the scenario's path (repository
+    relative or absolute): the evaluation re-reads the scenario from it.
+
+    Raises:
+        ValueError: The block is present but malformed (every problem is listed), or the
+            method config is incomplete.
+    """
+    from analytics.site_analysis_blocks import (
+        STATUS_NOT_APPLICABLE,
+        resolve_site_analysis_block,
+    )
+
+    common: Dict[str, Any] = {
+        "schema": SUMMARY_SCHEMA,
+        "analysis": "wind battery options",
+        "scenario": scenario_label,
+        "hold": str(method["hold"]),
+    }
+    block = resolve_site_analysis_block(scenario, BLOCK)
+    if block is None:
+        return {
+            **common,
+            "status": STATUS_NOT_APPLICABLE,
+            "reason": f"the scenario declares no {BLOCK} block",
+        }
+    cfg = config_from_block(scenario, block, method, scenario_label=scenario_label)
+    threshold = float(block["hourly_profile"]["high_output_check_mw"])
+
+    def default_profile(c: Mapping[str, Any], s: Mapping[str, Any]) -> Dict[str, Any]:
+        return build_profile(c, s, high_output_check_mw=threshold)
+
+    figures = run_options(
+        cfg,
+        schema_version=CONFIG_SCHEMA,
+        profile_builder=profile_builder or default_profile,
+    )
+    return {
+        **common,
+        "status": "completed",
+        "site": dict(block["site"]),
+        "notes": block.get("notes"),
+        "block_sha256": _digest(block),
+        "method_sha256": _digest(method),
+        "scenario_sha256": sha256_file(repo_path(scenario_label)),
+        "transfer_summary_sha256": sha256_file(
+            repo_path(cfg["profile"]["transfer_summary"])
+        ),
+        "model_version": (REPO_ROOT / "VERSION").read_text().strip(),
+        **figures,
     }

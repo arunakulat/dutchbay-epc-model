@@ -890,10 +890,8 @@ def test_committed_bottom_up_rows_recompute_through_the_engine() -> None:
             ]
             < 0.0
         )
-    swapped = [a for a, b in zip(flat, bottom_up, strict=True) if a != b]
-    assert sorted(swapped) == ["cycled_1_4", "held_1_1"]
-    assert flat.index("held_1_1") < flat.index("cycled_1_4")
-    assert bottom_up.index("cycled_1_4") < bottom_up.index("held_1_1")
+    # The order below the first place depends on where the all-in factor is
+    # calibrated (#1578 D-2), so only what holds under both calibrations is pinned.
 
 
 def test_cli_refuses_to_write_a_summary_from_an_overridden_config() -> None:
