@@ -397,6 +397,40 @@ def evaluate_scenario_from_dict(
     return normalize_kpi_dict(raw_kpis)
 
 
+def _coherent_capacity_factor(
+    base_config: Mapping[str, Any], expanded: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Carry a ``project.capacity_factor`` override to every technology, by the same ratio.
+
+    A scenario with ``generation.technologies`` must keep its technologies reconciled with
+    ``project.capacity_mw * project.capacity_factor`` (1%), so shocking the project figure
+    alone trips the pipeline guard (#1787). Applies only when the override leaves
+    ``generation`` alone.
+    """
+    out: Dict[str, Any] = dict(expanded)
+    new_cf = (out.get("project") or {}).get("capacity_factor")
+    base_cf = (base_config.get("project") or {}).get("capacity_factor")
+    techs = (base_config.get("generation") or {}).get("technologies")
+    if (
+        "generation" in out
+        or not isinstance(techs, Mapping)
+        or not isinstance(new_cf, (int, float))
+        or not isinstance(base_cf, (int, float))
+        or not base_cf
+    ):
+        return out
+    ratio = float(new_cf) / float(base_cf)
+    scaled = {
+        name: {"capacity_factor": float(block["capacity_factor"]) * ratio}
+        for name, block in techs.items()
+        if isinstance(block, Mapping)
+        and isinstance(block.get("capacity_factor"), (int, float))
+    }
+    if scaled:
+        out["generation"] = {"technologies": scaled}
+    return out
+
+
 def evaluate_with_overrides(
     config_path: Optional[str | Path] = None,
     overrides: Mapping[str, Any] | None = None,
@@ -463,6 +497,7 @@ def evaluate_with_overrides(
     # Merge overrides (dotted keys like "tax.corporate_tax_rate" are expanded to
     # nested form first so they actually apply — see expand_dotted_overrides).
     expanded = expand_dotted_overrides(overrides or {})
+    expanded = _coherent_capacity_factor(base_config, expanded)
     merged_config = _deep_merge_config(base_config, expanded)
     # An override of ``fx`` must also reach a USD opex share that has its own FX
     # path (opex.currency_split.usd_lkr_depreciation_pct; #1578 L-12).
