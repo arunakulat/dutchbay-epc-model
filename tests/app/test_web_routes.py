@@ -23,6 +23,7 @@ HTTP smoke is gated behind ``importorskip('httpx')`` (matching the sibling suite
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterator
 
 import pytest
@@ -399,6 +400,54 @@ def test_run_none_blocks_render_not_computed(
     resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
     assert resp.status_code == 200
     assert resp.text.count("Not computed for this run") == 4
+
+
+def test_run_marks_an_undefined_tornado_value(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1487: an undefined tornado value reads "undefined", with a note, never a bare dash."""
+    import app.api.main as api_main
+
+    tornado = TornadoChart(
+        metric="project_irr",
+        bars=[
+            TornadoBar(
+                label="PPA price",
+                base=0.0145,
+                low_case=0.01,
+                high_case=0.02,
+                impact_abs=0.01,
+            ),
+            TornadoBar(
+                label="Capex",
+                base=0.0145,
+                low_case=None,
+                high_case=0.017,
+                impact_abs=None,
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        api_main, "build_case_surface", lambda _inputs: _canned_surface(tornado=tornado)
+    )
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    start = resp.text.index("Sensitivity tornado")
+    section = resp.text[start : resp.text.index("</section>", start)]
+    # The bar's value, and the table's low-case and impact cells.
+    assert len(re.findall(r">\s*undefined\s*<", section)) == 3
+    assert "tornado-undefined-note" in section
+    assert "listed last" in section
+    assert "—" not in section
+
+
+def test_run_tornado_without_undefined_values_has_no_note(client: Any) -> None:
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    start = resp.text.index("Sensitivity tornado")
+    section = resp.text[start : resp.text.index("</section>", start)]
+    assert "tornado-undefined-note" not in section and "undefined" not in section
 
 
 def test_run_validation_error_fragment_422(client: Any) -> None:
