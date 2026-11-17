@@ -145,7 +145,7 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "scripts/run_blue_whale_equipment_parity_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_fx_tenor_screening_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_met_mast_transfer_v14.py": (14, _BLUE_WHALE_RUNNER),
-    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (4, _BLUE_WHALE_RUNNER),
+    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (3, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_solar_bess_v14.py": (7, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_bess_options_v14.py": (5, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_siting_v14.py": (5, _BLUE_WHALE_RUNNER),
