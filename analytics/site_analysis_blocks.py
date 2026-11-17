@@ -387,30 +387,203 @@ _STORAGE_OPTIONS = _block(
     }
 )
 
+
+def _sizing_flag(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, bool):
+        errors.append(f"{path}: must be true or false (got {value!r})")
+
+
+def _any_mapping(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
+
+
+def _list_of_mappings(value: Any, path: str, errors: List[str]) -> None:
+    """A list, possibly empty, of mappings (an empty list switches the cases off)."""
+    if not isinstance(value, list):
+        errors.append(f"{path}: must be a list (got {value!r})")
+        return
+    for i, entry in enumerate(value):
+        _any_mapping(entry, f"{path}[{i}]", errors)
+
+
+def _pv_tables_entry(value: Any, path: str, errors: List[str]) -> None:
+    if value == "land_max":
+        return
+    _positive_int(value, path, errors)
+
+
+def _optional_limit_mw(value: Any, path: str, errors: List[str]) -> None:
+    if value is None:
+        return
+    _number(gt=0.0)(value, path, errors)
+
+
+def _max_ratio_not_below_min(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    lo: Any = block.get("min_dc_ac_ratio")
+    hi: Any = block.get("max_dc_ac_ratio")
+    if _is_number(lo) and _is_number(hi) and hi < lo:
+        errors.append(f"{path}: max_dc_ac_ratio must not be below min_dc_ac_ratio")
+
+
+def _rte_range_in_order(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+    lo: Any = block.get("rte_low")
+    hi: Any = block.get("rte_high")
+    if _is_number(lo) and _is_number(hi) and hi < lo:
+        errors.append(f"{path}: rte_high must not be below rte_low")
+
+
+#: One reading of a capacity limit: each limit in MW, or null for no limit of that kind
+#: (the keys of :data:`solar_resource.pv_bess_sizing.READING_KEYS`).
+_SIZING_READING = _Mapping(
+    {
+        "max_pv_ac_plus_bess_mw": _req(_optional_limit_mw),
+        "max_export_mw": _req(_optional_limit_mw),
+        "max_pv_ac_mw": _req(_optional_limit_mw),
+        "max_bess_power_mw": _req(_optional_limit_mw),
+    }
+)
+
+
+def _sizing_readings(value: Any, path: str, errors: List[str]) -> None:
+    """Readings by name, plus ``committed`` naming one of them.
+
+    The names themselves must match the regulatory config's readings; the sizing checks
+    that when it runs, because the regulatory config is a separate file.
+    """
+    if not isinstance(value, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
+        return
+    names = [k for k in value if k != "committed"]
+    if not names:
+        errors.append(f"{path}: must name at least one reading")
+    for name in names:
+        if name == "by_reading":
+            errors.append(f"{path}.{name}: 'by_reading' is a reserved name")
+            continue
+        _SIZING_READING(value[name], f"{path}.{name}", errors)
+    if "committed" not in value:
+        errors.append(f"{path}.committed: required key is missing")
+    elif value["committed"] not in names:
+        errors.append(
+            f"{path}.committed: must name one of the readings {names} "
+            f"(got {value['committed']!r})"
+        )
+
+
+_SIZING_SIZE = _Mapping(
+    {
+        "reading": _req(_nonempty_str),
+        "pv_tables": _req(_positive_int),
+        "pv_ac_mw": _req(_number(gt=0.0)),
+        "bess_power_mw": _req(_number(gt=0.0)),
+    }
+)
+
+
+def _sizing_recommendation(value: Any, path: str, errors: List[str]) -> None:
+    """The recorded choices by role; ``committed`` is the size the scenario carries."""
+    if not isinstance(value, Mapping) or not value:
+        errors.append(f"{path}: must be a non-empty mapping of sizes by role")
+        return
+    if "committed" not in value:
+        errors.append(f"{path}.committed: required key is missing")
+    for role, size in value.items():
+        _SIZING_SIZE(size, f"{path}.{role}", errors)
+
+
 _SOLAR_STORAGE_SIZING = _block(
     {
-        "technology": _req(_Mapping({"unit_config": _req(_repo_file)})),
-        "sizes": _req(
+        # The unit, pricing and regulatory configs the sizing reads (file references).
+        "unit_config": _req(_repo_file),
+        "pricing_config": _req(_repo_file),
+        "regulatory_config": _req(_repo_file),
+        # Dotted paths into the unit config, each of which must already exist there (the
+        # sizing checks the paths when it runs).
+        "unit_overrides": _req(_any_mapping),
+        "grid": _req(
             _Mapping(
                 {
-                    "dc_ac_ratios": _req(_list_of(_number(gt=0.0), unique=True)),
-                    "bess_energy_mwh": _req(_list_of(_number(gt=0.0), unique=True)),
-                    "bess_power_mw": _req(_number(gt=0.0)),
+                    "pv_tables": _req(_list_of(_pv_tables_entry, unique=True)),
+                    "pv_ac_mw": _req(_list_of(_number(gt=0.0), unique=True)),
+                    "min_dc_ac_ratio": _req(_number(gt=0.0)),
+                    "max_dc_ac_ratio": _req(_number(gt=0.0)),
+                    "bess_power_mw": _req(_list_of(_number(gt=0.0), unique=True)),
+                    "bess_duration_h": _req(_number(gt=0.0, le=24.0)),
+                },
+                rules=(_max_ratio_not_below_min,),
+            )
+        ),
+        "readings": _req(_sizing_readings),
+        "uncertainty": _req(
+            _Mapping(
+                {
+                    "yield_sigma_pct": _req(_number(ge=0.0)),
+                    "yield_clip_sigma": _req(_number(gt=0.0)),
+                    "rte_low": _req(_number(gt=0.0, le=1.0)),
+                    "rte_high": _req(_number(gt=0.0, le=1.0)),
+                    "residual_fade_pct_per_year": _req(
+                        _Mapping(
+                            {
+                                "low": _req(_number(ge=0.0)),
+                                "mode": _req(_number(ge=0.0)),
+                                "high": _req(_number(ge=0.0)),
+                            }
+                        )
+                    ),
+                },
+                rules=(_rte_range_in_order,),
+            )
+        ),
+        "battery_health": _req(
+            _Mapping(
+                {
+                    "fade_pct_per_year": _req(_number(ge=0.0)),
+                    "fade_basis": _req(_nonempty_str),
+                    "augment_below_soh": _req(_number(gt=0.0, le=1.0)),
+                    "restore_to_soh": _req(_number(gt=0.0, le=1.0)),
+                    "augmentation_usd_per_kwh": _req(_number(ge=0.0)),
+                    "augmentation_basis": _req(_nonempty_str),
+                    "replaces_price_reserve": _req(_sizing_flag),
                 }
             )
         ),
-        "tariff": _req(
+        "plant": _req(
             _Mapping(
                 {
-                    "currency": _req(_currency),
-                    "priority_components": _req(_COMPONENTS),
-                    "other_components": _req(_COMPONENTS),
-                    "min_priority_discharge_hours": _req(_number(gt=0.0, le=24.0)),
+                    "grid_civils_development_usd": _req(_number(ge=0.0)),
+                    "fixed_opex_usd_per_year": _req(_number(ge=0.0)),
+                    "bess_dc_per_nominal": _req(_number(ge=1.0)),
+                }
+            )
+        ),
+        "curtailment_scenario": _req(
+            _Mapping(
+                {
+                    "enabled": _req(_sizing_flag),
+                    "daytime_export_curtailment_fraction": _req(
+                        _number(ge=0.0, le=1.0)
+                    ),
                     "basis": _req(_nonempty_str),
                 }
             )
         ),
-        "pricing_config": _req(_repo_file),
+        # The one-at-a-time cases and break-even inputs are checked case by case when the
+        # sizing runs (solar_resource.pv_bess_sizing).
+        "sensitivities": _req(
+            _Mapping(
+                {
+                    "round_trip_efficiency": _req(_number(gt=0.0, le=1.0)),
+                    "one_at_a_time": _req(_list_of_mappings),
+                    "break_even": _req(_list_of_mappings),
+                }
+            )
+        ),
+        "recommendation": _req(_sizing_recommendation),
+        # The run's stated limitations, listed in its summary.
+        "limitations": _req(_list_of(_nonempty_str)),
     }
 )
 

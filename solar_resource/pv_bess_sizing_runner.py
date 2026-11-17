@@ -1,7 +1,7 @@
 """Seeded Monte Carlo sizing of a solar + BESS unit or project: the run and its summary.
 
-Moved from ``scripts/run_blue_whale_pv_bess_sizing_v14.py`` (#1578 U3) so that any scenario
-can run the sizing. The run reads the unit, pricing and (for a project) regulatory configs
+Moved from the single-site sizing script (#1578 U3) so that any scenario can run the
+sizing. The run reads the unit, pricing and (for a project) regulatory configs
 and the scenario the sizing config names, sizes through
 :mod:`solar_resource.pv_bess_sizing`, and returns one JSON-ready summary: the run spec with
 its seed and its requested and effective evaluation counts (``MRM-01``, ``TEST-03``), every
@@ -13,13 +13,14 @@ config label, the script and the stated limitations.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterable, Mapping, Sequence
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 import yaml
 
@@ -268,6 +269,22 @@ GRID_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("year1_priority_export_mwh_p50", ("year1_priority_export_mwh", "p50")),
     ("year1_unit_export_mwh_p50", ("year1_unit_export_mwh", "p50")),
 )
+
+
+def grid_columns(readings: Sequence[str]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """The grid table's columns for a run with these readings, in the readings' order.
+
+    :data:`GRID_COLUMNS` is this for readings ``A`` and ``B``: one ``eligible_<name>``
+    column per reading, where those two stand.
+    """
+    eligible = tuple(
+        (f"eligible_{name}", ("eligible_by_reading", name)) for name in readings
+    )
+    fixed = [c for c in GRID_COLUMNS if c[1][0] != "eligible_by_reading"]
+    at = next(i for i, c in enumerate(GRID_COLUMNS) if c[0] == "meets_4h_rule") + 1
+    return (*fixed[:at], *eligible, *fixed[at:])
+
+
 _SIZE_KEYS = ("pv_tables", "pv_ac_mw", "bess_power_mw")
 
 
@@ -307,17 +324,18 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
     if rec["revenue_max_any_reading"]["size"]:
         named.add(_size(rec["revenue_max_any_reading"]["size"]))
     named_points = [p for p in out["points"] if _size(p) in named and p["evaluated"]]
+    readings = list(rec["by_reading"])
+    columns = grid_columns(readings)
     grid = {
-        "columns": [c for c, _ in GRID_COLUMNS],
-        "rows": [[_dig(p, path) for _, path in GRID_COLUMNS] for p in out["points"]],
+        "columns": [c for c, _ in columns],
+        "rows": [[_dig(p, path) for _, path in columns] for p in out["points"]],
     }
     sens: Dict[str, Any] = {}
     sens_cols = (
         "pv_tables",
         "pv_ac_mw",
         "bess_power_mw",
-        "eligible_A",
-        "eligible_B",
+        *(f"eligible_{name}" for name in readings),
         "unit_pretax_npv_usd",
         "project_npv",
         "year1_unit_revenue_lkr",
@@ -334,8 +352,7 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
                 r["size"]["pv_tables"],
                 r["size"]["pv_ac_mw"],
                 r["size"]["bess_power_mw"],
-                r["eligible_by_reading"]["A"],
-                r["eligible_by_reading"]["B"],
+                *(r["eligible_by_reading"][name] for name in readings),
                 r["unit_pretax_npv_usd"],
                 r["project_npv"],
                 r["year1_unit_revenue_lkr"],
@@ -357,8 +374,135 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Scenario-driven entry point (#1578 U3)
+# ---------------------------------------------------------------------------
+
+#: The block this analysis reads (:mod:`analytics.site_analysis_blocks`).
+BLOCK = "solar_storage_sizing"
+SUMMARY_SCHEMA = "dutchbay.solar_bess_sizing.v1"
+#: Keys the method config's ``method`` mapping must hold: the Monte Carlo settings and the
+#: objective are the method's; every site input is the scenario block's.
+METHOD_KEYS = ("monte_carlo", "objective")
+#: Block keys that pass into the project sizing config unchanged.
+BLOCK_SIZING_KEYS = (
+    "unit_config",
+    "pricing_config",
+    "regulatory_config",
+    "unit_overrides",
+    "grid",
+    "readings",
+    "uncertainty",
+    "battery_health",
+    "plant",
+    "curtailment_scenario",
+    "sensitivities",
+    "recommendation",
+)
+
+
+def config_from_block(
+    block: Mapping[str, Any],
+    method: Mapping[str, Any],
+    *,
+    scenario_label: str,
+    summary_json: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build the project sizing config from a scenario's block and the method config.
+
+    The site inputs come from the block, the Monte Carlo settings and the objective from the
+    method config, and ``scenario`` is the scenario's own path, so the run evaluates the
+    scenario that declares the block.
+
+    Raises:
+        ValueError: The method config lacks a key it must hold.
+    """
+    missing = [k for k in METHOD_KEYS if k not in method]
+    if missing:
+        raise ValueError(f"method config lacks {missing}")
+    cfg: Dict[str, Any] = {
+        "schema_version": PROJECT_SIZING_SCHEMA,
+        "scenario": scenario_label,
+    }
+    for key in BLOCK_SIZING_KEYS:
+        cfg[key] = copy.deepcopy(block[key])
+    for key in METHOD_KEYS:
+        cfg[key] = copy.deepcopy(method[key])
+    cfg["output"] = {"summary_json": summary_json}
+    return cfg
+
+
+def _digest(value: Any) -> str:
+    text = json.dumps(value, sort_keys=True, default=str, allow_nan=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def run_solar_bess_sizing_for_scenario(
+    scenario: Mapping[str, Any],
+    method: Mapping[str, Any],
+    *,
+    scenario_label: str,
+    script: Path,
+    summary_json: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Size the solar + BESS project for one scenario, or report it as not applicable.
+
+    A scenario with a ``solar_storage_sizing`` block gets ``"status": "completed"`` and the
+    summary :func:`run` returns for the config :func:`config_from_block` builds; one without
+    it gets ``"status": "not_applicable"`` and the reason, never an error.
+    ``scenario_label`` must be the scenario's path (repository relative or absolute): the
+    sizing re-reads the scenario from it. ``summary_json`` writes the concise summary.
+
+    Raises:
+        ValueError: The block is present but malformed (every problem is listed), or the
+            method config is incomplete.
+    """
+    from analytics.site_analysis_blocks import (
+        SITE_ANALYSIS_NAMES,
+        STATUS_NOT_APPLICABLE,
+        resolve_site_analysis_block,
+    )
+
+    common: Dict[str, Any] = {
+        "schema": SUMMARY_SCHEMA,
+        "analysis": SITE_ANALYSIS_NAMES[BLOCK],
+        "scenario": scenario_label,
+    }
+    block = resolve_site_analysis_block(scenario, BLOCK)
+    if block is None:
+        return {
+            **common,
+            "status": STATUS_NOT_APPLICABLE,
+            "reason": f"the scenario declares no {BLOCK} block",
+        }
+    cfg = config_from_block(
+        block, method, scenario_label=scenario_label, summary_json=summary_json
+    )
+    out = run(
+        cfg,
+        config_label=f"{scenario_label}#{BLOCK}",
+        script=script,
+        limitations=list(block["limitations"]),
+    )
+    return {
+        **common,
+        "status": "completed",
+        "site": dict(block["site"]),
+        "notes": block.get("notes"),
+        "block_sha256": _digest(block),
+        "method_sha256": _digest(method),
+        **out,
+    }
+
+
 __all__ = [
+    "BLOCK",
     "GRID_COLUMNS",
+    "METHOD_KEYS",
+    "SUMMARY_SCHEMA",
+    "config_from_block",
+    "grid_columns",
+    "run_solar_bess_sizing_for_scenario",
     "REPO_ROOT",
     "code_sha256",
     "concise_project_summary",

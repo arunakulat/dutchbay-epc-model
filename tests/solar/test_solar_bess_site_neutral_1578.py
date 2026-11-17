@@ -41,6 +41,8 @@ GENERIC_MODULES = (
     "solar_resource/pv_bess_sizing.py",
     "solar_resource/pv_bess_dispatch.py",
     "analytics/gis/pv_array_layout.py",
+    # #1578 U3: the run and summary moved out of the single-site script.
+    "solar_resource/pv_bess_sizing_runner.py",
 )
 SITE_WORDING = re.compile(r"blue[ _-]?whale|\bPR \d|\bPR\d", re.IGNORECASE)
 
