@@ -1,5 +1,7 @@
 """#1787 (sandbox): a project capacity-factor shock reaches every technology coherently."""
 
+import pytest
+
 from analytics.evaluation_v14 import _coherent_capacity_factor
 
 
@@ -14,9 +16,7 @@ def test_shock_scales_each_technology_by_the_same_ratio() -> None:
         },
     }
     out = _coherent_capacity_factor(base, {"project": {"capacity_factor": 0.44}})
-    assert out["generation"]["technologies"]["wind"]["capacity_factor"] == 0.44 * (
-        0.4 / 0.4
-    )
+    assert out["generation"]["technologies"]["wind"]["capacity_factor"] == pytest.approx(0.44)
     assert "bess_1" not in out["generation"]["technologies"]
 
 
