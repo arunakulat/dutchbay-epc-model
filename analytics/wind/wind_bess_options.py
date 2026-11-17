@@ -459,6 +459,27 @@ def _set_dotted(scenario: Dict[str, Any], dotted: str, value: Any) -> None:
     node[parts[-1]] = value
 
 
+def _strip_declared_battery(s: Dict[str, Any], cap_mw: float) -> None:
+    """Remove a battery the scenario already declares (``bess_1`` and its ``bess_om`` line).
+
+    The options are evaluated as a delta on the wind-only case, so a scenario that carries its
+    chosen battery is first returned to wind only (capex and O&M taken back out).
+    """
+    techs = s["generation"]["technologies"]
+    bess = techs.pop("bess_1", None)
+    if bess is None:
+        return
+    s["capex"]["usd_total"] = float(s["capex"]["usd_total"]) - float(bess["capex_usd"])
+    s["capex"]["capex_per_kw_usd"] = s["capex"]["usd_total"] / (cap_mw * 1000.0)
+    comps = s["opex"]["currency_split"]["components"]
+    om = sum(float(c["usd_per_year"]) for c in comps if c.get("name") == "bess_om")
+    s["opex"]["currency_split"]["components"] = [
+        c for c in comps if c.get("name") != "bess_om"
+    ]
+    s["opex"]["usd_per_year"] = float(s["opex"]["usd_per_year"]) - om
+    s["opex"]["opex_per_kw_yr_usd"] = s["opex"]["usd_per_year"] / (cap_mw * 1000.0)
+
+
 def scenario_with_battery(
     scenario: Mapping[str, Any],
     *,
@@ -506,6 +527,7 @@ def scenario_with_battery(
         _set_dotted(s, key, value)
     wind = s["generation"]["technologies"]["wind"]
     cap_mw = float(wind["capacity_mw"])
+    _strip_declared_battery(s, cap_mw)
     wind["capacity_factor"] = float(wind["capacity_factor"]) * wind_yield_multiplier
     if power_mw <= 0.0:
         s["project"]["capacity_factor"] = wind["capacity_factor"]

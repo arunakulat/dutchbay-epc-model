@@ -109,7 +109,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "f35379297a11eba4a89a8ccaa3ca5fe9833f2c1a455fb1ced07c6ac6811fa03d"
+    "b47dec9d57c95b96065edcb18849ca121505ec72f48bc2d000fb81ab5003afdd"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
