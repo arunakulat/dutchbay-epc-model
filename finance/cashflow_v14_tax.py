@@ -538,11 +538,17 @@ def calculate_tax(
     tax_profile: TaxProfile,
     prior_year_losses: float = 0.0,
     prior_loss_vintages: Optional[Sequence[Tuple[int, float]]] = None,
+    interest_paid: Optional[float] = None,
 ) -> TaxResult:
     """Per-year tax. When ``prior_loss_vintages`` is supplied (the live path) losses are
     tracked per vintage so they EXPIRE after ``loss_carryforward_years`` and are PRESERVED
     through holiday years. When it is ``None`` the legacy scalar carry-forward applies
-    (no expiry) — kept byte-identical for direct scalar callers."""
+    (no expiry) — kept byte-identical for direct scalar callers.
+
+    ``interest_paid`` is the interest settled in cash in the year, the base of the
+    reported withholding tax (``wht_on_interest``): WHT arises on payment, whatever the
+    income-tax basis of ``interest_expense`` (#1539 DOM-4). ``None`` takes
+    ``interest_expense``, which is the same figure on the default ``paid`` basis."""
     is_holiday = tax_profile.tax_holidays_by_year.get(year, False)
     taxable = ebit
     if tax_profile.interest_deductibility:
@@ -577,7 +583,8 @@ def calculate_tax(
     # would report a misleadingly low rate). Reporting-only — CFADS uses tax_liability
     # directly — so this is KPI-neutral, but the lender-audit figure must be honest.
     effective_rate = tax_liability / taxable_income if taxable_income > 0.0 else 0.0
-    wht_on_interest = interest_expense * tax_profile.withholding_tax_rate
+    wht_base = interest_expense if interest_paid is None else interest_paid
+    wht_on_interest = wht_base * tax_profile.withholding_tax_rate
 
     return TaxResult(
         year=year,
