@@ -1022,6 +1022,11 @@ class ReportContext(BaseModel):
     #: because the numbers look plausible. None when no fallback fired (render-when-present;
     #: the committed scenarios take no fallback, so byte-identical).
     fx_fallback_note: Optional[str] = None
+    #: Automatic capex price-date escalation notice (#1591 D-1/A-1, #1578 next-20 item 5). Set
+    #: when the run's declared ``capex.price_basis`` escalated a capex amount stated beside or
+    #: instead of ``capex.usd_total`` (the result's ``capex_price_basis`` block). None otherwise
+    #: (render-when-present; no committed scenario does this, so byte-identical).
+    capex_price_basis_note: Optional[str] = None
     #: Refinanced-balloon coverage disclosure under assumed terms (#1491). Populated when
     #: ``debt_result['refinance']`` is present; ``None`` otherwise (non-refinance cases stay
     #: byte-identical).
@@ -2611,6 +2616,25 @@ def _build_fx_fallback_note(run_result: Optional[Mapping[str, Any]]) -> Optional
     )
 
 
+def _build_capex_price_basis_note(
+    run_result: Optional[Mapping[str, Any]],
+) -> Optional[str]:
+    """Surface the run's automatic capex price-date escalation into the report (#1578).
+
+    The pipeline records a ``capex_price_basis`` block, with its ``warning``, only when a
+    declared ``capex.price_basis`` escalated a capex amount other than ``capex.usd_total``
+    automatically (#1591 D-1/A-1). ``None`` when the caller supplies no run result or the
+    block is absent, so the notice is omitted.
+    """
+    if not run_result:
+        return None
+    block = run_result.get("capex_price_basis")
+    if not isinstance(block, Mapping):
+        return None
+    warning = block.get("warning")
+    return str(warning) if warning else None
+
+
 def _build_fx_warning(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
     """Surface the run's FX-integration failure warning into the report (#736).
 
@@ -2968,6 +2992,7 @@ def build_report_context(
         irr_bridge=_irr_bridge_block(run_result),
         fx_warning=_build_fx_warning(run_result),
         fx_fallback_note=_build_fx_fallback_note(run_result),
+        capex_price_basis_note=_build_capex_price_basis_note(run_result),
         refinance_coverage=_build_refinance_coverage(debt_result, run_result),
         manifest=dict(case_result.run_manifest or {}),
         yield_reconciliation=_build_yield_reconciliation(run_result),

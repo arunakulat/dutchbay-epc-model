@@ -51,7 +51,13 @@ from pydantic import BaseModel, Field
 #: metric with no defined trial), and the entry gains ``percentile_basis``,
 #: ``percentile_bound``, ``min_defined`` and ``mean_basis``. ``engine_result`` is an
 #: untyped mapping, so no response-model field is retyped or removed.
-API_CONTRACT_VERSION = "2.4"
+#: 2.5 (#1578): MINOR, additive; numbered after #1794's 2.3 and #1795's 2.4, which are
+#: queued ahead of it. ``POST /v1/run-pipeline`` gains the optional top-level
+#: ``capex_price_basis`` (the pipeline's automatic capex price-date escalation disclosure,
+#: ``null`` unless a capex amount beside or instead of ``capex.usd_total`` was escalated).
+#: No field is retyped. ``cost.capex_total_usd`` keeps its type; for a scenario with a
+#: declared ``capex.price_basis`` its value is now the escalated total the engine financed.
+API_CONTRACT_VERSION = "2.5"
 
 
 class WindAssessment(BaseModel):
