@@ -472,7 +472,10 @@ def _committed_scenarios() -> List[Path]:
 
 #: The committed scenarios that declare a block, and which. Each entry is added by the work
 #: item that moves that scenario's site inputs into its block.
-DECLARED_BLOCKS: Dict[str, List[str]] = {}
+DECLARED_BLOCKS = {
+    # #1578 U4: the FX and tenor screening's inputs.
+    "scenarios/dutchbay_basecase_2025Q4.yaml": ["financing_screening"],
+}
 
 
 def test_committed_scenarios_declare_exactly_the_listed_blocks() -> None:
