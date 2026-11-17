@@ -90,9 +90,10 @@ def _without_fixed_debt_stress(scenario: Mapping[str, Any]) -> Dict[str, Any]:
     """Return a copy of ``scenario`` with the fixed-debt stress turned off (#962).
 
     The lender case declares ``monte_carlo.fixed_debt_stress: true`` for lender runs
-    (#962 item 4). Web jobs are screening runs, and the stress's breach probability is on
-    an unfolded, non-covenant basis with no label in the metadata block that the job
-    returns to API clients, so web jobs never run it (owner decision 2026-11-15). Only the
+    (#962 item 4). Web jobs are screening runs, and the stress's breach probability is
+    internal model metadata under F-5 that the job would return to API clients, so web
+    jobs never run it (owner decision 2026-11-15). Its basis is the covenant's
+    ``dscr_by_year`` fold since #1728, labelled ``basis`` in the block. Only the
     top level and the ``monte_carlo`` block are copied; the caller's dict is not changed.
     """
     mc_block = scenario.get("monte_carlo")
