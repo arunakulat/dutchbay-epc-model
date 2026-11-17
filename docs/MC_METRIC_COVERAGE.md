@@ -45,15 +45,47 @@ for unavailable table cells, and its lean Monte Carlo block includes metric cove
 
 Convergence diagnostics and engine tail estimates use each metric's defined sample.
 Small-sample qualification remains in force; coverage is not evidence of convergence.
-The joint capital-risk report requires complete aligned observations and now refuses an
-incomplete cohort before writing artifacts. It directs callers to the metric-wise MC
-summary and coverage rather than selecting complete cases or imputing zero. This is an
-explicit limitation: partial-cohort joint reports are not delivered by this change.
+The joint capital-risk report requires complete aligned observations for NPV, DSCR, LLCR
+and PLCR, and refuses an incomplete cohort of those before writing artifacts. An IRR is
+the exception: see "IRR coverage" below.
 
 The public HTTP response model is unchanged: its existing extensible engine-result
 mapping carries these additive fields. Raw internal arrays gain nullable entries and
 consumers must preserve their positions. No release, lender, Board, evidence-grade or
 HOLD authority follows from this reporting correction.
+
+## IRR coverage (#1746 step 1, #1763)
+
+A trial whose cash flow changes sign more than once has no unique IRR, and one whose NPV
+never reaches zero has none (#1525). Its IRR is unavailable while every other metric of
+the trial is real. The evaluation gateway drops a KPI it cannot convert, so such a trial
+usually reaches the aggregate as a `missing` observation rather than an `undefined` one.
+
+Every IRR statistic is taken over that metric's defined trials, and every surface that
+shows one says how many trials it leaves out:
+
+- **Summary.** Each `summary[metric]` carries `defined_count` and `excluded_count`
+  (total minus defined). An IRR metric (`project_irr`, `equity_irr`) that excludes any
+  trial also carries `coverage_note`, the same text is listed under
+  `metadata.irr_coverage_notes`, and a warning is logged. `project_irr_excluded_count`
+  sits beside the flat `project_irr_*` fields. An MC job's API `engine_result` carries
+  all of these.
+- **Lender risk table.** An IRR row that excludes trials gains a `coverage_note` column
+  beside its existing `defined_trials`, `total_trials` and `unavailable_trials`.
+- **Capital-risk report** (owner ruling 2026-11-16, "Report with coverage"). The report is
+  built rather than refused. Each IRR metric's VaR/CVaR, mean, percentiles and the
+  probability below the equity hurdle are taken over its defined trials.
+  `CapitalRiskReport.irr_coverage` records the counts and the note, and the snapshot's
+  IRR rows carry them. The rendered report and the web results state each note before the
+  figures, show "defined of total" trials beside every return metric, and state the
+  trial count behind the hurdle probability. The API surface carries the same fields
+  (contract 2.3). An IRR metric with fewer than 20 defined trials is still refused,
+  because the VaR/CVaR tail needs at least 20 observations.
+
+The note says the excluded trials may be the worst outcomes, because a lower-tail
+percentile over the defined trials can then read better than the full distribution.
+How an undefined trial is ranked is #1746 step 2, a separate R3 change. This disclosure
+moves no figure for a run in which every trial has a defined IRR.
 
 ## Independent oracle and impact
 

@@ -224,9 +224,12 @@ def test_engine_gateway_keeps_independent_samples_through_tail_diagnostics(
     assert result.metadata["metric_coverage"]["equity_irr"]["defined_count"] == 2
 
 
-def test_joint_report_refuses_partial_cohorts_and_metadata_bridge_keeps_json_null(
+def test_joint_report_refuses_thin_irr_cohorts_and_metadata_bridge_keeps_json_null(
     tmp_path,
 ) -> None:
+    """#1763: a partial IRR is reported with its coverage, but not over fewer than 20
+    defined trials (the VaR/CVaR floor); NPV and covenant metrics stay complete-cohort.
+    """
     from analytics.capital_risk_layer_v14 import (
         build_capital_risk_report_from_trials,
         build_case_metadata_from_trials,
@@ -249,7 +252,7 @@ def test_joint_report_refuses_partial_cohorts_and_metadata_bridge_keeps_json_nul
     metadata = build_case_metadata_from_trials(trials)
     assert metadata["metadata"]["trials"]["equity_irr"][0] is None
     json.dumps(metadata, allow_nan=False)
-    with pytest.raises(ValueError, match="complete aligned metric observations"):
+    with pytest.raises(ValueError, match="defined IRR.*'equity_irr': 19"):
         build_capital_risk_report_from_trials(
             trials,
             tmp_path,

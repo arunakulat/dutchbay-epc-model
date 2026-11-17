@@ -38,7 +38,14 @@ from pydantic import BaseModel, Field
 #: provenance, schema 1.1 manifests only; the key is left out for a USD-authored run).
 #: The bump also covers the optional ``DebtScheduleRow`` fields ``debt_period``,
 #: ``operating_year`` and ``phase``, which #1640 added to the same response without one.
-API_CONTRACT_VERSION = "2.2"
+#: 2.3 (#1763, #1746 step 1): MINOR, additive. The capital-risk surface reports each IRR
+#: metric over its defined trials and says so: ``CapitalRiskMetric`` gains the optional
+#: ``defined_count``, ``total_count`` and ``coverage_note``, and ``CapitalRiskSurface``
+#: gains ``irr_coverage_notes`` and ``hurdle_defined_count``. An MC job's
+#: ``engine_result`` gains ``summary.<metric>.defined_count`` / ``excluded_count`` (and
+#: ``coverage_note`` on an IRR that leaves trials out), ``project_irr_excluded_count``
+#: and ``metadata.irr_coverage_notes``. No field is retyped or removed.
+API_CONTRACT_VERSION = "2.3"
 
 
 class WindAssessment(BaseModel):
