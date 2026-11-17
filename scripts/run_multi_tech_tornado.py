@@ -163,7 +163,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--config",
         required=True,
         help="Path to a multi-tech scenario YAML (with a generation.technologies block), "
-        "e.g. scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml",
+        "e.g. scenarios/example.yaml",
     )
     parser.add_argument(
         "--metric",

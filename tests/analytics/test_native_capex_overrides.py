@@ -258,9 +258,15 @@ def test_mc_refuses_sweeps_every_native_trial_would_reject(
         "capex.usd_total",
         "capex.contingency_pct",
     }:
-        # The guard is native-only: the USD twin's engine is not refused.
+        # The native guard does not apply to the USD twin. The exact key "CAPEX" is
+        # the exception: it merges a scalar over the capex section, which every trial
+        # rejects since #1767, so the #1629 dry run refuses it on the USD twin as well.
         usd["monte_carlo"] = {"parameters": [param]}
-        MonteCarloEngine(usd)
+        if param["name"].lower() == "capex":
+            with pytest.raises(MonteCarloConfigError, match="refused before sampling"):
+                MonteCarloEngine(usd)
+        else:
+            MonteCarloEngine(usd)
     native["monte_carlo"] = {
         "parameters": [{"name": "capex.input.amount", "low": 1.0, "high": 2.0}]
     }
