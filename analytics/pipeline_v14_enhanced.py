@@ -59,6 +59,8 @@ from finance.debt_v14 import (
     _clean_public_dscr_series,
     _extract_capex_usd,
     _finite_dscr,
+    _ft_tenor,
+    _required_number,
     plan_debt,
 )
 from finance.utils import get_nested
@@ -676,7 +678,18 @@ def _debt_fee_rate(config: Mapping[str, Any]) -> float:
     upfront = (
         float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
     )
-    tenor = float(fin.get("tenor_years") or 15.0) or 15.0
+    if not upfront:
+        return guarantee
+    # The upfront fee is amortised over the tenor the debt layer uses
+    # (``tenor_years``, else ``term_years``). Before #1429's second step an absent or
+    # zero tenor became 15 years here; the debt layer and pre-flight already require a
+    # declared, positive tenor, so this reads that figure and refuses otherwise.
+    tenor = _required_number(_ft_tenor(fin), "Financing_Terms.tenor_years")
+    if tenor <= 0.0:
+        raise ValueError(
+            f"Financing_Terms.tenor_years must be positive to amortise "
+            f"fees.upfront_pct (got {tenor!r}); there is no code default (#1429)."
+        )
     return guarantee + (upfront / tenor)
 
 

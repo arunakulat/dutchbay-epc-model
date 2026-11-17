@@ -38,6 +38,7 @@ def _toy_config_no_capex() -> Dict[str, Any]:
             "debt_ratio": 0.6,
             "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 10,
+            "construction_periods": 2,  # no code default since #1429
             "rates": {"usd_nominal": 0.06},
         },
     }
@@ -53,6 +54,7 @@ def _cost_free_debt_config() -> Dict[str, Any]:
             "debt_ratio": 0.6,
             "target_dscr": 1.30,  # no code default since #1429
             "tenor_years": 10,
+            "construction_periods": 2,  # no code default since #1429
             "rates": {"usd_nominal": 0.0},
         },
     }
