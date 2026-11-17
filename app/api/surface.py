@@ -116,6 +116,11 @@ class CapitalRiskMetric(BaseModel):
     cvar: float
     var_label: str
     cvar_label: str
+    #: Trials the statistics are taken over, of ``total_count`` (#1763); an IRR metric
+    #: with undefined trials says so in ``coverage_note``.
+    defined_count: Optional[int] = None
+    total_count: Optional[int] = None
+    coverage_note: Optional[str] = None
 
 
 class CapitalRiskSurface(BaseModel):
@@ -142,6 +147,10 @@ class CapitalRiskSurface(BaseModel):
     target_equity_irr: float
     metrics: List[CapitalRiskMetric]
     npv_distribution_filename: str
+    #: IRR coverage disclosures (#1763, #1746 step 1); empty when every trial has a
+    #: defined IRR. ``probability_below_hurdle`` is over ``hurdle_defined_count`` trials.
+    irr_coverage_notes: List[str] = Field(default_factory=list)
+    hurdle_defined_count: Optional[int] = None
 
 
 class ArtifactLinks(BaseModel):
@@ -269,6 +278,9 @@ def _project_capital_risk(
             cvar=row.cvar,
             var_label=row.var_label,
             cvar_label=row.cvar_label,
+            defined_count=row.defined_count,
+            total_count=row.total_count,
+            coverage_note=row.coverage_note,
         )
         for row in block.metrics
     ]
@@ -287,4 +299,6 @@ def _project_capital_risk(
         target_equity_irr=block.target_equity_irr,
         metrics=metrics,
         npv_distribution_filename=block.npv_distribution_filename,
+        irr_coverage_notes=list(block.irr_coverage_notes),
+        hurdle_defined_count=block.hurdle_defined_count,
     )

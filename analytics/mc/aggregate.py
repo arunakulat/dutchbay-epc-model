@@ -13,11 +13,32 @@ Sprint 18 Enhancement:
 - Supports worst-year DSCR P95 downside statistics
 """
 
+import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
 
 from analytics.contracts_v14 import MonteCarloResult
+
+logger = logging.getLogger(__name__)
+
+#: The Monte Carlo metrics that can be undefined on a trial whose metrics are otherwise
+#: real: an IRR has no unique value when a trial's cash flow changes sign more than once,
+#: or no value at all when its NPV never reaches zero (#1525, #1746).
+IRR_METRICS: tuple[str, ...] = ("project_irr", "equity_irr")
+
+
+def irr_exclusion_note(metric: str, excluded: int, total: int) -> str:
+    """The disclosure shown beside an IRR statistic that leaves out trials (#1746 step 1).
+
+    One wording for every surface (summary, reports, web and API), so the statement a
+    reader sees does not drift between them.
+    """
+    return (
+        f"{excluded} of {total} trials have no defined {metric} and are excluded from "
+        "its mean, range and percentiles. The excluded trials may be the worst outcomes, "
+        "so the lower percentiles may read better than the full distribution."
+    )
 
 
 def _percentiles(arr: np.ndarray, ps: Sequence[int]) -> Dict[int, float]:
@@ -207,6 +228,19 @@ def aggregate_trials(
         for p, val in pctl_dict.items():
             percentile_lookup[p][k] = val
 
+    # #1746 step 1: every statistic says how many trials it is taken over. An IRR
+    # statistic that leaves trials out carries the note beside it and is logged.
+    irr_notes: Dict[str, str] = {}
+    for k, facts in coverage.items():
+        excluded = facts["total_count"] - facts["defined_count"]
+        summary[k]["defined_count"] = facts["defined_count"]
+        summary[k]["excluded_count"] = excluded
+        if k in IRR_METRICS and excluded > 0:
+            note = irr_exclusion_note(k, excluded, facts["total_count"])
+            summary[k]["coverage_note"] = note
+            irr_notes[k] = note
+            logger.warning("Monte Carlo %s", note)
+
     # Build metadata
     metadata = dict(meta)
     metadata["n_metrics"] = len(arrays)
@@ -217,6 +251,7 @@ def aggregate_trials(
         key for key, facts in coverage.items() if facts["status"] == "undefined"
     ]
     metadata["trial_alignment"] = "input_order_null_placeholders"
+    metadata["irr_coverage_notes"] = irr_notes
     # Surface toy-fallback usage so a degenerate run (real evaluation failed on
     # every trial, fabricated KPIs substituted) is detectable rather than silent.
     # toy_fallback_count == n_trials means NO real evaluation succeeded.
@@ -274,6 +309,11 @@ def aggregate_trials(
         project_irr_p10=_pct("project_irr", 10),
         project_irr_p50=_pct("project_irr", 50),
         project_irr_p90=_pct("project_irr", 90),
+        project_irr_excluded_count=(
+            int(summary["project_irr"]["excluded_count"])
+            if "project_irr" in summary
+            else None
+        ),
         project_npv_mean=_stat("project_npv", "mean"),
         project_npv_p10=_pct("project_npv", 10),
         project_npv_p50=_pct("project_npv", 50),
