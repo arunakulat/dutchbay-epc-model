@@ -69,6 +69,22 @@ def test_five_us_cent_capex_sweep_declares_the_breakdown_reconciliation() -> Non
     assert _capex_param(cfg)["reconcile_breakdown"] == "pro_rata"
 
 
+def test_five_us_cent_tariff_band_is_centred_on_its_own_tariff() -> None:
+    """The variant's tariff sweep spans its own base, not the canonical case's.
+
+    It once carried the canonical lender case's band, centred about 22% above this
+    variant's tariff, so its trials sampled almost only upside.
+    """
+    cfg = _load(_FIVE_US_CENT)
+    (param,) = [
+        p for p in cfg["monte_carlo"]["parameters"] if p["name"] == "tariff.lkr_per_kwh"
+    ]
+    base = float(cfg["tariff"]["lkr_per_kwh"])
+    low, high = float(param["low"]), float(param["high"])
+    assert (low + high) / 2 == pytest.approx(base, rel=1e-9)
+    assert low < base < high
+
+
 def test_without_the_reconciliation_the_sweep_is_refused_before_sampling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
