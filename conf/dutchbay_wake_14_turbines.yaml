@@ -42,6 +42,7 @@ defaults:
 wake_rebaseline:
   frozen_wake_15_pct: 7.28          # resource.losses.wake_loss_pct before #1577 (15 turbines)
   output_decimals: 2                # the scenarios carry the wake loss to 2 dp
+  per_turbine_rose_png: null        # a path draws the per-turbine waked roses (#1589 sensitivity)
 
   turbine:
     curve_key: iea_reference_10mw   # wind_resource/config/power_curves.yaml (carries Ct)
@@ -58,26 +59,27 @@ wake_rebaseline:
     wind_rose_freq: [3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4]
 
   layout:
-    # Turbine positions, WGS84, from ENVISION_ROAD-DATA.pdf as committed in
-    # scripts/process_era5_wind_data.py (TURBINE_LOCATIONS). Projected to a local transverse
+    # Turbine positions, WGS84, from ENVISION_ROAD-DATA.pdf (not in this repository). This
+    # list is their home since #1775; scripts/process_era5_wind_data.py held them before and
+    # now reads them from here. Projected to a local transverse
     # Mercator frame at the centroid (analytics.gis.shadow_flicker.LocalFrame).
-    # role: dutchbay = counted DutchBay energy; external_waker = stands in the flow, not counted.
+    # role: counted = DutchBay energy, counted; external_waker = stands in the flow, not counted.
     turbines:
-      - {id: T1,  lat_deg: 8.297753, lon_deg: 79.756695, role: dutchbay}
+      - {id: T1,  lat_deg: 8.297753, lon_deg: 79.756695, role: counted}
       - {id: T2,  lat_deg: 8.292500, lon_deg: 79.754700, role: external_waker}  # Blue Whale (#1568)
-      - {id: T3,  lat_deg: 8.288099, lon_deg: 79.752885, role: dutchbay}
-      - {id: T4,  lat_deg: 8.282523, lon_deg: 79.750837, role: dutchbay}
-      - {id: T5,  lat_deg: 8.278638, lon_deg: 79.747152, role: dutchbay}
-      - {id: T6,  lat_deg: 8.279222, lon_deg: 79.753385, role: dutchbay}
-      - {id: T7,  lat_deg: 8.274800, lon_deg: 79.745500, role: dutchbay}
-      - {id: T8,  lat_deg: 8.275226, lon_deg: 79.754207, role: dutchbay}
-      - {id: T9,  lat_deg: 8.270700, lon_deg: 79.744700, role: dutchbay}
-      - {id: T10, lat_deg: 8.270049, lon_deg: 79.752069, role: dutchbay}
-      - {id: T11, lat_deg: 8.268449, lon_deg: 79.748162, role: dutchbay}
-      - {id: T12, lat_deg: 8.263538, lon_deg: 79.743361, role: dutchbay}
-      - {id: T13, lat_deg: 8.259128, lon_deg: 79.742588, role: dutchbay}
-      - {id: T14, lat_deg: 8.254646, lon_deg: 79.746097, role: dutchbay}
-      - {id: T15, lat_deg: 8.252500, lon_deg: 79.741500, role: dutchbay}
+      - {id: T3,  lat_deg: 8.288099, lon_deg: 79.752885, role: counted}
+      - {id: T4,  lat_deg: 8.282523, lon_deg: 79.750837, role: counted}
+      - {id: T5,  lat_deg: 8.278638, lon_deg: 79.747152, role: counted}
+      - {id: T6,  lat_deg: 8.279222, lon_deg: 79.753385, role: counted}
+      - {id: T7,  lat_deg: 8.274800, lon_deg: 79.745500, role: counted}
+      - {id: T8,  lat_deg: 8.275226, lon_deg: 79.754207, role: counted}
+      - {id: T9,  lat_deg: 8.270700, lon_deg: 79.744700, role: counted}
+      - {id: T10, lat_deg: 8.270049, lon_deg: 79.752069, role: counted}
+      - {id: T11, lat_deg: 8.268449, lon_deg: 79.748162, role: counted}
+      - {id: T12, lat_deg: 8.263538, lon_deg: 79.743361, role: counted}
+      - {id: T13, lat_deg: 8.259128, lon_deg: 79.742588, role: counted}
+      - {id: T14, lat_deg: 8.254646, lon_deg: 79.746097, role: counted}
+      - {id: T15, lat_deg: 8.252500, lon_deg: 79.741500, role: counted}
 
   synthetic_row:                    # the cross-check layout the frozen value cites
     n_turbines: 15

@@ -560,6 +560,50 @@ def _validate_grid_conditionals(
     validate_grid_block(raw_config, errors)
 
 
+def _validate_site_analysis_blocks(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Validate the optional site-analysis blocks a scenario declares (#1754).
+
+    Present-only: a scenario with none of ``storage_options``, ``solar_storage_sizing``,
+    ``financing_screening`` or ``equipment_cost_parity`` imports nothing and gets no error,
+    so it stays byte-identical. A declared block is checked by
+    :func:`analytics.site_analysis_blocks.validate_site_analysis_blocks`, the contract the
+    analyses themselves resolve through, so pre-flight and the analyses cannot drift.
+    """
+    if not isinstance(raw_config, Mapping) or not any(
+        name in raw_config
+        for name in (
+            "storage_options",
+            "solar_storage_sizing",
+            "financing_screening",
+            "equipment_cost_parity",
+        )
+    ):
+        return
+
+    from analytics.site_analysis_blocks import validate_site_analysis_blocks
+
+    validate_site_analysis_blocks(raw_config, errors)
+
+
+def _validate_bess_economics_block(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Validate a declared ``bess_economics`` block (#1774).
+
+    Present-only: a scenario without the block imports nothing and gets no error. A declared
+    block is checked by :func:`finance.bess_project_economics.validate_bess_economics_block`,
+    the contract the analysis itself reads, so pre-flight and the analysis cannot drift.
+    """
+    if not isinstance(raw_config, Mapping) or "bess_economics" not in raw_config:
+        return
+
+    from finance.bess_project_economics import validate_bess_economics_block
+
+    validate_bess_economics_block(raw_config, errors)
+
+
 def validate_config_for_v14(
     raw_config: Mapping[str, Any],
     config_path: str | None,
@@ -637,6 +681,14 @@ def validate_config_for_v14(
     # 1h. Validate any declared Financing_Terms.bridge_period_treatment (#1564).
     # Opt-in: absent defaults to "historical_fold" (byte-identical baseline).
     _validate_bridge_period_treatment(raw_config, errors)
+
+    # 1i. Validate any declared site-analysis block (#1754): storage options, solar
+    # storage sizing, financing screening and equipment cost parity. Present-only, so a
+    # scenario without them is byte-identical; a present block is strict.
+    _validate_site_analysis_blocks(raw_config, errors)
+
+    # 1j. Validate a declared standalone battery-economics block (#1774). Present-only.
+    _validate_bess_economics_block(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []

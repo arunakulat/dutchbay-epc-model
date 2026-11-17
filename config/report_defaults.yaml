@@ -136,8 +136,8 @@ model_limitations:
   - topic: "Deterministic base case"
     detail: >
       Headline KPIs are a deterministic P50 case; distributional and tail risk (VaR/CVaR,
-      covenant-breach probabilities) are a separate, opt-in Monte-Carlo surface, not the
-      base figures.
+      covenant-breach probabilities) are a separate Monte-Carlo surface, not the base
+      figures.
   - topic: "Construction draw and capex phasing"
     detail: >
       Where a scenario does not supply Financing_Terms.debt_drawdown_pct or

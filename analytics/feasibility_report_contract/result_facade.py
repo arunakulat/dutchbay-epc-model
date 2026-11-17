@@ -567,6 +567,10 @@ for _path, _disposition in (
     (("full_result", "kpis"), ResultPathDisposition.ORIGIN_INVARIANT),
     (("full_result", "annual_rows"), ResultPathDisposition.ORIGIN_INVARIANT),
     (("full_result", "debt_result"), ResultPathDisposition.ORIGIN_INVARIANT),
+    # #1774: the opt-in standalone battery-project economics. Present only when a scenario
+    # declares bess_economics.enabled: true; held as an opaque artifact (section 20), since
+    # no scenario KPI or report observation reads it.
+    (("full_result", "bess_project_economics"), ResultPathDisposition.OPAQUE_ARTIFACT),
     (
         ("full_result", "equity_distribution"),
         ResultPathDisposition.STRUCTURED_CONTAINER,
@@ -928,6 +932,7 @@ D3C_ARTIFACT_ONLY_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
             ("full_result", "debt_result", "dscr_by_year"): (_S12,),
             ("full_result", "debt_result", "debt_schedules"): (_S12,),
             ("full_result", "debt_result", "funding"): (_S12,),
+            ("full_result", "bess_project_economics"): (_S20,),
         }
     )
 )

@@ -40,6 +40,13 @@ updates:
         patterns:
           - "starlette"
           - "websockets"
+      # numba pins its llvmlite release exactly (numba 0.68.0 requires llvmlite>=0.50.0,<0.51),
+      # so a bump of one without the other is an unresolvable lock. #1326 proposed
+      # llvmlite alone. Keep the pair in ONE group so they are proposed together (#1406).
+      numba-llvmlite:
+        patterns:
+          - "numba"
+          - "llvmlite"
     # MAJOR-version updates on the load-bearing set are POLICY DECISIONS, not bot
     # chores (#756 post-mortem: the weekly group bumped pandas 2->3 and rewrote our
     # own pyproject `<3.0` cap to make it fit, desynced mypy/isort/ruff from the

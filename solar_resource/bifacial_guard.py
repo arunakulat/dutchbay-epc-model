@@ -8,12 +8,10 @@ ENFORCED validation. The rule (from the deep-research audit #485 disposition, re
     (typ. +5-10%) is NOT validated for the committed pack and must never silently inflate the
     billed capacity factor.
 
-The ONLY place bifacial is legitimately applied is the standalone *illustrative*
-``scripts/generate_solar_assessment_report.py``, which discloses ``cf_mono`` vs ``cf_bifacial``
-side by side and is explicit that its headline carries the (un-validated) uplift. That report
-sets ``project.capacity_factor`` directly and calls ``run_v14_pipeline`` — it deliberately does
-NOT route through the frozen-export / cashflow-adapter finance bridge — so this guard, which
-fires only on that bridge, never touches the report's legitimate disclosure.
+No code applies a bifacial uplift. The solar assessment report
+(``app/reports/solar_assessment.py``, run by ``scripts/generate_solar_assessment_report.py``)
+used to finance an illustrative uplift for one site; since #1784 it finances the capacity
+factor the scenario declares and shows the pvlib producer's figure beside it.
 
 Where the guard fires
 ---------------------
@@ -66,8 +64,7 @@ class BifacialInFinancedChainError(ValueError):
             f"Bifacial uplift {key!r}={value!r} found in {where}, but the FINANCED solar CF "
             "chain is monofacial by design (SOLAR-9): the committed lender pack finances the "
             "frozen monofacial pvlib yield. Remove the bifacial marker from the financed "
-            "path. For a disclosed monofacial-vs-bifacial side-by-side, use the illustrative "
-            "scripts/generate_solar_assessment_report.py (which does not bill off the uplift)."
+            "path; a rear-side gain needs its own validated yield before it is financed."
         )
 
 
