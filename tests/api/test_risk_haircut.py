@@ -10,6 +10,7 @@ from finance.cashflow_v14 import (
 
 # Minimal but realistic v14-style config for DutchBay
 BASE_CONFIG: dict = {
+    "timeline": {"construction_years": 2},  # required since #1429 (no code default)
     "project": {
         "project_life_years": 5,
         "capacity_mw": 150.0,

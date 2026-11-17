@@ -166,6 +166,7 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,
             "term_years": 18,
+            "construction_periods": 2,  # no code default since #1429
         },
     }
 
@@ -243,6 +244,7 @@ def test_evaluation_can_apply_parameter_overrides():
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,
             "term_years": 18,
+            "construction_periods": 2,  # no code default since #1429
         },
     }
 
