@@ -38,7 +38,13 @@ from pydantic import BaseModel, Field
 #: provenance, schema 1.1 manifests only; the key is left out for a USD-authored run).
 #: The bump also covers the optional ``DebtScheduleRow`` fields ``debt_period``,
 #: ``operating_year`` and ``phase``, which #1640 added to the same response without one.
-API_CONTRACT_VERSION = "2.2"
+#: 2.5 (#1578): MINOR, additive; numbered after #1794's 2.3 and #1795's 2.4, which are
+#: queued ahead of it. ``POST /v1/run-pipeline`` gains the optional top-level
+#: ``capex_price_basis`` (the pipeline's automatic capex price-date escalation disclosure,
+#: ``null`` unless a capex amount beside or instead of ``capex.usd_total`` was escalated).
+#: No field is retyped. ``cost.capex_total_usd`` keeps its type; for a scenario with a
+#: declared ``capex.price_basis`` its value is now the escalated total the engine financed.
+API_CONTRACT_VERSION = "2.5"
 
 
 class WindAssessment(BaseModel):

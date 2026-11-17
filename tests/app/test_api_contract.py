@@ -143,6 +143,7 @@ def test_run_pipeline_response_top_level_field_set_is_frozen() -> None:
         "cost",
         "funding",
         "manifest",
+        "capex_price_basis",
     }
 
 
@@ -171,7 +172,7 @@ def test_contract_version_value_is_pinned() -> None:
     """Pin the literal so a reverted/fat-fingered constant is caught — the stamping
     tests above are self-referential (== API_CONTRACT_VERSION) and would stay green.
     Bump this together with API_CONTRACT_VERSION on any deliberate contract change."""
-    assert API_CONTRACT_VERSION == "2.2"
+    assert API_CONTRACT_VERSION == "2.5"
 
 
 # --------------------------------------------------------------------------- #
