@@ -71,7 +71,7 @@ project:
   name: "Blue Whale Wind (Lot 5B)"
   location: "Lot 5B Plan 3641, Mutuwal, GN Dutch Bay 633, Kalpitiya DS, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 9.5              # one turbine de-rated to 9.5 MW (owner, 2026-11-01)
-  capacity_factor: 0.487560     # = the wind block's CF (the only technology)
+  capacity_factor: 0.454696     # = the wind block's CF (the only technology). SANDBOX: wake-adjusted, see the wind block
   curtailment_pct: 0.0
   degradation: 0.5              # PLACEHOLDER (input B12)
   life_years: 20                # PLACEHOLDER (input F01): SPPA term
@@ -88,7 +88,12 @@ generation:
       # 206 m rotor, tip height 233 m. De-rate modelled as the power curve clipped at
       # 9,500 kW (an assumption; an OEM de-rate mode may differ).
       capacity_mw: 9.5
-      capacity_factor: 0.487560   # Net P50 CF on 9.5 MW, DERIVED (v0.2, PR 5) by
+      capacity_factor: 0.454696   # SANDBOX (draft, screening): wake-adjusted. 0.487560 x (1 - 6.74%): the turbine at
+                                  # DutchBay T2 with T1/T3 and the farm upwind; PyWake (Bastankhah-Porte-Agel, IEA 10 MW
+                                  # proxy, scripts/run_dutchbay_wake_rebaseline_v14.py) live loss at T2 17.89%, scaled
+                                  # to the lender wake basis (x 0.376634, #1589) = 6.74%. The live 17.89% is an upper
+                                  # bound sensitivity. Proxy machine, not Blue Whale's; NOT a measured or P90 figure.
+                                  # Before the wake adjustment: 0.487560. Net P50 CF on 9.5 MW, DERIVED (v0.2, PR 5) by
                                   # scripts/run_blue_whale_met_mast_transfer_v14.py: met mast 617725 long-term
                                   # corrected (MCP, NASA POWER / MERRA-2 2015-2025) and transferred to the turbine,
                                   # 16 sector Weibulls at 130 m (mean 8.24 m/s); gross 43.99 GWh (CF 0.5287);
@@ -98,7 +103,7 @@ generation:
                                   # NOT LENDER-GRADE (HOLD above).
                                   # Was 0.374256 (#1530: DutchBay ERA5-fitted Weibull, 7.14 m/s at 130 m)
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
-      aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15
+      aep_gwh: 37.84              # SANDBOX wake-adjusted (was 40.57): net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15
       capex_usd: 8899980          # BLENDED (v0.3, PR 6, input B09): USD 936.84/kW x 9.5 MW, the single-turbine
                                   # all-in mode of conf/blue_whale_capex_solar_resource.yaml (range 728.16-1,341.16
                                   # USD/kW; docs/blue_whale/capex_blend_summary.json): China export FOB blended
@@ -109,6 +114,25 @@ generation:
                                   # #1353 comment 6702419885). Published on the owner's decision of
                                   # 2026-11-01 (#1353 comment 6556975196). Was 12,350,000 ($1,300/kW placeholder)
       availability_pct: 97.0
+    bess_1:
+      # SANDBOX (draft, screening): the held 0.5 MW / 0.5 MWh black-start / ramping battery of
+      # storage_options.sizes held_0_5_0_5 (the recommended option). Held = capex and O&M only,
+      # no revenue, no cycling (tariff 0). A generic battery supplier's flat price USD 140.74/kWh.
+      type: bess
+      power_mw: 0.5
+      energy_mwh: 0.5
+      duration_h: 1.0
+      capex_usd: 70370
+      availability_pct: 97.0
+      revenue:
+        model: energy_tariff
+        tariff_lkr_per_kwh: 0.0
+        escalable_om_lkr_per_kwh: 0.0
+        cycles_per_year: 1.0
+        round_trip_efficiency: 0.85
+        availability_factor: 1.0
+        contract_years: 15
+        mdsc_fade_pct_annual: 0.0
 
 tariff:
   # Input F03: PUCSL feed-in tariff effective 25 Aug 2026 for plants < 10 MW (Annex 2), wind
@@ -162,16 +186,16 @@ capex:
                                 # usd_total from 2026 to each construction draw (close = cod_year - 1)
     source: "capex quotes and blends of 2026 (conf/blue_whale_capex_solar_resource.yaml); #1569"
   estimate_class: 5             # AACE Class 5 (concept screening)
-  usd_total: 10899980           # wind 8,899,980 (blended, v0.3) + grid/civils/development 2.0M (PLACEHOLDER B26, the
+  usd_total: 10970350           # wind 8,899,980 (blended, v0.3) + grid/civils/development 2.0M (PLACEHOLDER B26, the
                                 # hybrid's whole line carried to each project: separate SPPAs, separate connections).
                                 # Was 14,350,000
-  capex_per_kw_usd: 1147        # 10,899,980 / 9.5 MW (was 1511)
+  capex_per_kw_usd: 1154.77     # 10,970,350 / 9.5 MW (was 1511). SANDBOX: + held battery USD 70,370 (0.5 MWh x USD 140.74/kWh)
 
 opex:
-  usd_per_year: 500000          # PLACEHOLDER (inputs B10, B28): wind O&M 0.35M + insurance, land lease and
+  usd_per_year: 500990          # SANDBOX: + held battery O&M 990 (0.5 MWh x 1.1 x 1.8). PLACEHOLDER (inputs B10, B28): wind O&M 0.35M + insurance, land lease and
                                 # SPV overhead 0.15M (the hybrid's lines). Stated in USD at fx.start_lkr_per_usd;
                                 # the components below must add up to it (a test checks)
-  opex_per_kw_yr_usd: 52.6      # 500k / 9.5 MW; high because a single turbine carries full O&M overheads
+  opex_per_kw_yr_usd: 52.74     # 500k / 9.5 MW; high because a single turbine carries full O&M overheads
   price_year: 2026              # PLACEHOLDER (input B36): the opex amounts are priced in 2026 (the LTSA and O&M
                                 # benchmarks of 2026, at the 2026-Q2 FX); every line escalates from 2026, so
                                 # operating year 1 carries cod_year - 2026 years of escalation (#1569)
@@ -201,6 +225,9 @@ opex:
       - name: insurance_land_spv
         usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
         usd_share: 0.0          # LKR (the owner has not said otherwise)
+      - name: bess_om
+        usd_per_year: 990       # SANDBOX: held 0.5 MW / 0.5 MWh battery O&M (wind_bess_options.scenario_with_battery)
+        usd_share: 0.0
 
 tax:
   corporate_tax_rate: 0.30      # input F31
@@ -449,3 +476,33 @@ equipment_cost_parity:
     - {id: R03, package: "Road/utility alterations, temporary rights and reinstatement", route: road, quoted_amount_usd: null}
     - {id: C01, package: "One turbine foundation, crane pad and site works", route: common, quoted_amount_usd: null}
     - {id: C02, package: "Main erection and assist cranes; installation and demobilization", route: common, quoted_amount_usd: null}
+
+# SANDBOX (draft, screening): Monte Carlo block for the Blue Whale wind + BESS case. Placeholder
+# ranges. The yield range is the committed 1-sigma wind-yield uncertainty (storage_options.uncertainty,
+# 13.2%) taken as +/-20% on the net P50 capacity factor (about 1.5 sigma, uniform), NOT a measured or
+# P90 distribution. Lender reports run this through the capital-risk guards (toy fallback forced off,
+# at least 1,000 trials).
+monte_carlo:
+  enabled: true
+  n_scenarios: 2000
+  sampler: lhs
+  seed: 42
+  allow_toy_fallback: false
+  parameters:
+    - name: project.capacity_factor   # base 0.454696 (wake-adjusted), -/+20%
+      low: 0.363757
+      high: 0.545635
+      distribution: uniform
+    - name: opex.usd_per_year         # base 500,990, -/+30%
+      low: 350693.0
+      high: 651287.0
+      distribution: uniform
+    - name: capex.usd_total           # base 10,970,350, -/+16%
+      low: 9215094.0
+      high: 12725606.0
+      distribution: uniform
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles: [10, 25, 50, 75, 90]
+  min_dscr_covenant: 1.3
+  min_llcr_covenant: 1.25
