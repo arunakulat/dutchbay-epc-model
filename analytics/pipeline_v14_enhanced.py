@@ -1521,6 +1521,32 @@ def run_v14_pipeline_enhanced(
             # Render-when-present: a run with no automatic escalation keeps its keys.
             result["capex_price_basis"] = capex_price_basis_auto
 
+        # #1774: the standalone battery-project economics, for any scenario that declares
+        # bess_economics.enabled: true. A separate cashflow for the battery as its own
+        # project, at the scenario's own discount rate and life; it moves no scenario KPI.
+        # Render-when-present: a scenario without the opt-in keeps its keys. Strict
+        # pre-flight refuses a bad block before this point; on a run with validation off,
+        # a bad block is listed with its reason and the scenario's own figures still return
+        # (owner ruling 2026-11-16: write the figures, list the failure).
+        from finance.bess_project_economics import (
+            bess_economics_failure,
+            bess_economics_result,
+        )
+        from finance.cashflow_v14_params import _extract_project_life_years
+
+        if isinstance(cfg.get("bess_economics"), Mapping):
+            try:
+                bess_economics = bess_economics_result(
+                    cfg,
+                    discount_rate=float(project_discount),
+                    project_years=_extract_project_life_years(cfg, log=False),
+                )
+            except ValueError as exc:
+                logger.warning("Battery-project economics not run: %s", exc)
+                bess_economics = bess_economics_failure(str(exc))
+            if bess_economics is not None:
+                result["bess_project_economics"] = bess_economics
+
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",
             metrics.total_runtime_sec,

@@ -46,6 +46,7 @@ from analytics.capital_risk_layer_v14 import (
     CapitalRiskReport,
     build_capital_risk_report_from_mc_result,
 )
+from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.mc.engine import run_monte_carlo_analysis
 from analytics.scenario_loader import load_scenario_config
 from app.api.responses import CaseResult
@@ -218,6 +219,11 @@ def emit_capital_risk_report_from_pipeline(
         capital_risk=report,
         run_result=result,
     )
+    # #1760: every capital-risk report carries the F-5 non-reliance notice on its cover, the same
+    # text as the executive workbook's first sheet (owner ruling 2026-11-16 07:19Z; domain review
+    # F-3). A run that writes its figures writes this report by default, and the release asset
+    # ships it.
+    context = context.model_copy(update={"f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT})
     html = render_report_html(context)
 
     out_path = Path(output_html_path)

@@ -277,6 +277,7 @@ def test_negative_or_absurd_fee_rates_fail_loud() -> None:
             "construction_periods": 1,
             "tenor_years": 2,
             "debt_ratio": 0.5,
+            "target_dscr": 1.30,  # no code default since #1429
             "rates": {"usd_nominal": 0.08},
             "mix": {"usd_commercial_min": 1.0},
             "fees": {"guarantee_fee_pct_per_year": -0.0075},
