@@ -22,10 +22,83 @@ from analytics.contracts_v14 import MonteCarloResult
 
 logger = logging.getLogger(__name__)
 
+
+def ranked_worst_percentiles(
+    defined: "Sequence[float] | np.ndarray", n_excluded: int, ps: Sequence[int]
+) -> Dict[int, Optional[float]]:
+    """Percentiles with every excluded trial ranked below every defined one (#1746 step 2).
+
+    Owner ruling 2026-11-15 22:36Z: a Monte Carlo trial whose IRR is undefined ranks
+    below every defined trial. The ``n_excluded`` trials take the lowest ranks of all
+    ``len(defined) + n_excluded`` trials, and each percentile is read at its position in
+    that full ranking, with the same linear interpolation as ``np.percentile``. A
+    percentile whose position touches an excluded trial is undefined (``None``): it lies
+    at or below the lowest defined value, and no number is taken from the defined trials
+    in its place. With ``n_excluded == 0`` this equals ``np.percentile`` exactly.
+    """
+    ordered = np.sort(np.asarray(defined, dtype=float))
+    total = ordered.size + int(n_excluded)
+    out: Dict[int, Optional[float]] = {}
+    for p in ps:
+        if total == 0:
+            out[int(p)] = None
+            continue
+        position = (float(p) / 100.0) * (total - 1)
+        lo = int(np.floor(position))
+        hi = int(np.ceil(position))
+        if lo < n_excluded:
+            out[int(p)] = None
+            continue
+        a = ordered[lo - n_excluded]
+        b = ordered[hi - n_excluded]
+        out[int(p)] = float(a + (position - lo) * (b - a))
+    return out
+
+
 #: The Monte Carlo metrics that can be undefined on a trial whose metrics are otherwise
 #: real: an IRR has no unique value when a trial's cash flow changes sign more than once,
 #: or no value at all when its NPV never reaches zero (#1525, #1746).
 IRR_METRICS: tuple[str, ...] = ("project_irr", "equity_irr")
+
+
+def _rank_excluded_worst(
+    entry: Dict[str, Any],
+    defined: np.ndarray,
+    n_excluded: int,
+    percentiles: Sequence[int],
+) -> None:
+    """Apply the #1746 step 2 ranking to one IRR summary entry, in place.
+
+    - Percentiles, lower and upper tail alike, are read from the full ranking with the
+      excluded trials lowest (:func:`ranked_worst_percentiles`). A lower percentile that
+      falls on them is ``None``, and ``percentile_bound`` gives the lowest defined IRR it
+      lies at or below. An upper percentile stays a number, but moves down a little,
+      because the excluded trials now count in its denominator.
+    - ``min`` is ``None``: the worst trial has no defined IRR. ``min_defined`` keeps the
+      lowest defined value.
+    - ``mean`` and ``std`` cannot carry a trial ranked worst without a value, so they stay
+      over the defined trials and ``mean_basis`` says so. ``max`` is unchanged.
+    """
+    entry["percentiles"] = ranked_worst_percentiles(defined, n_excluded, percentiles)
+    entry["percentile_basis"] = "excluded_trials_ranked_worst"
+    entry["percentile_bound"] = float(defined.min())
+    entry["min_defined"] = float(defined.min())
+    entry["min"] = None
+    entry["mean_basis"] = "defined_trials"
+
+
+def irr_ranked_note(metric: str, excluded: int, total: int) -> str:
+    """The disclosure beside IRR percentiles read with excluded trials ranked worst.
+
+    #1746 step 2: the companion to :func:`irr_exclusion_note` for the surfaces that rank
+    the excluded trials (the Monte Carlo summary and the lender risk table).
+    """
+    return (
+        f"{excluded} of {total} trials have no defined {metric}. They are ranked below "
+        "every defined trial, so a percentile that falls on them is reported as "
+        "undefined (at or below the lowest defined value); the mean and standard "
+        "deviation are over the defined trials only."
+    )
 
 
 def irr_exclusion_note(metric: str, excluded: int, total: int) -> str:
@@ -236,10 +309,22 @@ def aggregate_trials(
         summary[k]["defined_count"] = facts["defined_count"]
         summary[k]["excluded_count"] = excluded
         if k in IRR_METRICS and excluded > 0:
-            note = irr_exclusion_note(k, excluded, facts["total_count"])
+            note = (
+                irr_ranked_note(k, excluded, facts["total_count"])
+                if arrays[k].size
+                else irr_exclusion_note(k, excluded, facts["total_count"])
+            )
             summary[k]["coverage_note"] = note
             irr_notes[k] = note
             logger.warning("Monte Carlo %s", note)
+            if arrays[k].size:
+                _rank_excluded_worst(summary[k], arrays[k], excluded, percentiles)
+                for p in percentiles:
+                    value = summary[k]["percentiles"][p]
+                    if value is None:
+                        percentile_lookup[p].pop(k, None)
+                    else:
+                        percentile_lookup[p][k] = value
 
     # Build metadata
     metadata = dict(meta)
