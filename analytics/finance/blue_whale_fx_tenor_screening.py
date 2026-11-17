@@ -11,7 +11,8 @@ so ``scripts/run_blue_whale_fx_tenor_screening_v14.py`` prints the same bytes as
 config must now name its scenario (``governed_scenario_path``): no scenario is assumed in code
 (#1759 U9). It holds no arithmetic of its own, and it goes once its inputs are read from the
 scenario block alone (the block-driven run reproduces it exactly; see
-``tests/finance/test_fx_tenor_screening.py``).
+``tests/finance/test_fx_tenor_screening.py``). #1799 owns that retirement, with this module's
+config, script and single-site defaults.
 
 HOLD (F-5, #1110, v15.6.1): screening indicators only, NOT a lender verdict, bankability
 determination or credit commitment (#1629).

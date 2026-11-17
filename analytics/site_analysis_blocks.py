@@ -521,7 +521,9 @@ _FINANCING_SCREENING = _block(
                 }
             )
         ),
-        "tariff_om_escalation_decimal": _req(_number(gt=-1.0, lt=1.0)),
+        # Stated only for a flat-tariff scenario: a scenario with tariff.om_indexation sets
+        # the O&M part's escalation itself, and the screening refuses both or neither.
+        "tariff_om_escalation_decimal": _opt(_number(gt=-1.0, lt=1.0)),
         "min_p50_dscr": _req(_number(gt=0.0)),
         "min_downside_dscr": _req(_number(gt=0.0)),
         "average_p50_dscr": _req(_number(gt=0.0)),
