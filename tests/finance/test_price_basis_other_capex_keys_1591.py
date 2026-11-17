@@ -30,6 +30,7 @@ from finance.capex_price_basis import (
     APPLIED_KEY,
     AUTO_KEY,
     apply_capex_price_basis,
+    automatic_escalation,
     capex_escalation_factor,
 )
 from finance.debt_v14 import _extract_capex_usd
@@ -89,6 +90,10 @@ OTHER_KEYS = [
     "tax.depreciable_capex_lkr",
     "tax.dep_base_lkr",
     "Finance.CAPEX_USD",
+    # The equity distribution's flat lookup reads the project section too (#1704 review).
+    "project.capex_usd",
+    "project.capex_total_usd",
+    "Project.total_capex_usd",
 ]
 TOP_LEVEL_KEYS = ["capex_usd_total", "capex_total_usd", "total_capex_usd"]
 
@@ -113,6 +118,33 @@ def test_each_other_capex_amount_takes_the_factor_and_is_disclosed(
     assert len(warnings) == 1 and warnings[0].levelno == logging.WARNING
     assert path in warnings[0].getMessage()
     assert "AUTOMATICALLY" in warnings[0].getMessage()
+
+
+@pytest.mark.parametrize(
+    "path", ["finance.capex_usd", "tax.dep_base_lkr", "Project.capex_usd"]
+)
+@pytest.mark.parametrize("stated", ["400000", " 4e5 ", "400000.0"])
+def test_a_numeric_string_amount_takes_the_factor(path: str, stated: str) -> None:
+    """The capex readers parse a numeric string, so it is an amount (#1704 review)."""
+    cfg = _cfg()
+    _set(cfg, path, stated)
+    factor = _factor(cfg)
+    out = apply_capex_price_basis(cfg)
+    assert _get(out, path) == pytest.approx(400_000 * factor)
+    assert out["capex"][APPLIED_KEY][AUTO_KEY] == {path: 400_000.0}
+
+
+def test_project_capex_alias_reaches_the_equity_capex_reader() -> None:
+    """Oracle: the equity distribution's own capex lookup reads factor x the alias."""
+    from finance.equity_distribution_v14_hydra import _extract_capex_usd as equity_capex
+
+    cfg = _cfg()
+    cfg["capex"].pop("usd_total")
+    _set(cfg, "Project.capex_usd", 2_500_000)
+    plain = copy.deepcopy(cfg)
+    plain["capex"].pop("price_basis")
+    out = apply_capex_price_basis(cfg)
+    assert equity_capex(out) == pytest.approx(_factor(cfg) * equity_capex(plain))
 
 
 def test_breakdown_line_items_take_the_factor_with_and_without_qra() -> None:
@@ -225,3 +257,21 @@ def test_wind_with_capex_under_other_keys_matches_the_dated_case() -> None:
         assert disclosure["factor"] == pytest.approx(1.05)
         assert path in disclosure["warning"]
         assert disclosure["warning"] in result["metrics"]["validation_warnings"]
+
+
+def test_the_warning_says_what_was_escalated_and_how() -> None:
+    """The #1704 review wording: beside or instead of usd_total, and the LKR caveat."""
+    cfg = _cfg()
+    cfg["finance"] = {"capex_usd": 400_000}
+    cfg["tax"] = {"dep_base_lkr": 120_000_000}
+    out = apply_capex_price_basis(cfg)
+    disclosure = automatic_escalation(out)
+    assert disclosure is not None
+    assert disclosure["warning"] == (
+        "capex.price_basis: the price-year factor 1.050000 (from 2026) was applied "
+        "AUTOMATICALLY to finance.capex_usd, tax.dep_base_lkr: capex amounts stated "
+        "beside or instead of capex.usd_total (a capex.breakdown is escalated to stay "
+        "consistent with it). Each is taken as stated at the price year; LKR amounts "
+        "keep the FX they were stated at; the stated amounts are kept in "
+        "capex.price_basis_applied.automatically_escalated."
+    )
