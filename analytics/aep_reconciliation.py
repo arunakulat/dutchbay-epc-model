@@ -348,7 +348,248 @@ def reconcile_capacity_factor_with_bankable_aep(
     )
 
 
+#: Schema identifier of the record :func:`build_yield_reconciliation_record` returns.
+YIELD_RECONCILIATION_SCHEMA_VERSION = "yield_reconciliation_v1"
+
+#: Record statuses. ``reconciled``: every comparison made is within tolerance.
+#: ``outside_tolerance``: at least one is not (possible only where the load-time gate did
+#: not run, because the gate refuses such a scenario). ``not_applicable``: the scenario
+#: declares nothing to compare. ``not_checked``: a declared input could not be read.
+YIELD_STATUS_RECONCILED = "reconciled"
+YIELD_STATUS_OUTSIDE_TOLERANCE = "outside_tolerance"
+YIELD_STATUS_NOT_APPLICABLE = "not_applicable"
+YIELD_STATUS_NOT_CHECKED = "not_checked"
+
+
+#: ``gate_site`` values: where the fail-loud gate ran on the configuration a record describes.
+YIELD_GATE_SITE_SCENARIO_LOAD = "scenario_load"
+YIELD_GATE_SITE_API_BOUNDARY = "api_boundary"
+YIELD_GATE_SITE_SERVICE_SEAM = "service_seam"
+
+
+def _p50_comparisons(
+    references: Mapping[str, float], implied_gwh: float, tolerance: float
+) -> list[dict[str, Any]]:
+    """Describe each P50 comparison exactly as the gate makes it (never raises)."""
+    rows: list[dict[str, Any]] = []
+    for label, reference_gwh in references.items():
+        if reference_gwh <= 0:
+            rows.append(
+                {
+                    "source": label,
+                    "net_aep_gwh": reference_gwh,
+                    "deviation_pct": None,
+                    "within_tolerance": False,
+                    "note": "non-positive reference",
+                }
+            )
+            continue
+        relative = abs(implied_gwh - reference_gwh) / reference_gwh
+        rows.append(
+            {
+                "source": label,
+                "net_aep_gwh": reference_gwh,
+                # Signed: positive when the billed generation is above the reference.
+                "deviation_pct": (implied_gwh - reference_gwh) / reference_gwh * 100.0,
+                # The gate fails on ``relative > tolerance``; this is its exact complement.
+                "within_tolerance": not relative > tolerance,
+            }
+        )
+    return rows
+
+
+def _p90_comparison(config: Mapping[str, Any], tolerance: float) -> dict[str, Any]:
+    """Describe the frozen-P90 comparison exactly as the gate makes it (never raises)."""
+    refs = collect_bankable_net_aep_p90_gwh(config)
+    frozen = refs.get("expected_results.net_aep_p90_gwh")
+    summary_key = next(
+        (k for k in refs if k.endswith(":exceedance.net_aep_p90_1yr_gwh")), None
+    )
+    if frozen is None or summary_key is None:
+        return {
+            "status": YIELD_STATUS_NOT_APPLICABLE,
+            "reason": (
+                "the scenario does not declare both expected_results.net_aep_p90_gwh and "
+                "an aep_summary_path export carrying a P90"
+            ),
+        }
+    summary = refs[summary_key]
+    row: dict[str, Any] = {
+        "frozen_source": "expected_results.net_aep_p90_gwh",
+        "frozen_net_aep_p90_gwh": frozen,
+        "summary_source": summary_key,
+        "summary_net_aep_p90_gwh": summary,
+    }
+    if frozen <= 0 or summary <= 0:
+        row.update(
+            status=YIELD_STATUS_OUTSIDE_TOLERANCE,
+            deviation_pct=None,
+            within_tolerance=False,
+            note="non-positive P90",
+        )
+        return row
+    relative = abs(frozen - summary) / summary
+    within = not relative > tolerance
+    row.update(
+        status=YIELD_STATUS_RECONCILED if within else YIELD_STATUS_OUTSIDE_TOLERANCE,
+        # Signed: positive when the frozen P90 is above the exported P90.
+        deviation_pct=(frozen - summary) / summary * 100.0,
+        within_tolerance=within,
+    )
+    return row
+
+
+def build_yield_reconciliation_record(
+    config: Mapping[str, Any], *, gate_applied: bool
+) -> dict[str, Any]:
+    """Describe the AEP <-> capacity-factor reconciliation for one configuration.
+
+    The fail-loud gate (:func:`reconcile_capacity_factor_with_bankable_aep`) leaves no
+    trace when it passes. This builds the record a reader needs instead: which bankable
+    references were compared with ``capacity_mw x capacity_factor x 8.760``, how far apart
+    they were, which tolerance applied and whether it was an audited override, and the
+    frozen-P90 comparison. It applies the gate's own resolvers and comparison, so its
+    ``within_tolerance`` flags match the gate's verdict on the same configuration.
+
+    It never raises and changes nothing: it is a disclosure, not a second gate. A declared
+    input that cannot be read (an unreadable ``aep_summary_path``, a non-numeric tolerance)
+    is recorded as ``not_checked`` with the reason.
+
+    Args:
+        config: The configuration to describe.
+        gate_applied: Whether the fail-loud gate ran on this exact configuration (the
+            engine loaded it from a scenario file). ``False`` for an inline configuration,
+            such as a Monte Carlo or sensitivity trial that perturbs the capacity factor on
+            purpose, where an ``outside_tolerance`` status is expected.
+
+    Returns:
+        A JSON-serialisable mapping with schema ``yield_reconciliation_v1``.
+    """
+    record: dict[str, Any] = {
+        "schema_version": YIELD_RECONCILIATION_SCHEMA_VERSION,
+        "gate_applied": bool(gate_applied),
+        # Where the gate ran: ``scenario_load`` for a scenario file the engine loaded. A
+        # seam that gates an inline configuration itself and then hands it to the engine
+        # records its own name with :func:`record_gate_applied_at_seam`.
+        "gate_site": YIELD_GATE_SITE_SCENARIO_LOAD if gate_applied else None,
+    }
+    try:
+        tolerance_pct = resolve_tolerance_pct(config)
+        default_pct = default_tolerance_pct()
+        block = config.get("aep_reconciliation")
+        overridden_in_scenario = (
+            isinstance(block, Mapping) and block.get("tolerance_pct") is not None
+        )
+        tolerance = tolerance_pct / 100.0
+        p90 = _p90_comparison(config, tolerance)
+        capacity_mw, capacity_factor = resolve_billed_capacity_and_factor(dict(config))
+        # As in the gate, the P50 references are read only when there is a billed basis to
+        # compare them with, so an unreadable summary is "not checked" exactly when the
+        # gate itself would have refused it.
+        references = (
+            collect_bankable_net_aep_gwh(config)
+            if capacity_mw is not None and capacity_factor is not None
+            else {}
+        )
+    except (AepReconciliationError, ValueError, TypeError, OSError) as exc:
+        record.update(
+            status=YIELD_STATUS_NOT_CHECKED,
+            reason=f"{type(exc).__name__}: {exc}",
+        )
+        return record
+
+    record.update(
+        tolerance_pct=tolerance_pct,
+        default_tolerance_pct=default_pct,
+        tolerance_source="scenario" if overridden_in_scenario else "default",
+        # The gate logs a non-default tolerance as an audited override; record it too.
+        tolerance_overridden=tolerance_pct != default_pct,
+        capacity_mw=capacity_mw,
+        capacity_factor=capacity_factor,
+    )
+
+    if capacity_mw is None or capacity_factor is None:
+        p50: dict[str, Any] = {
+            "status": YIELD_STATUS_NOT_APPLICABLE,
+            "reason": "no resolvable capacity_mw and capacity_factor",
+            "references": [],
+        }
+        record["implied_net_aep_gwh"] = None
+    elif not references:
+        p50 = {
+            "status": YIELD_STATUS_NOT_APPLICABLE,
+            "reason": "no bankable net-AEP reference declared",
+            "references": [],
+        }
+        record["implied_net_aep_gwh"] = (
+            capacity_mw * capacity_factor * _GWH_PER_MW_AT_CF1
+        )
+    else:
+        implied_gwh = capacity_mw * capacity_factor * _GWH_PER_MW_AT_CF1
+        rows = _p50_comparisons(references, implied_gwh, tolerance)
+        all_within = all(row["within_tolerance"] for row in rows)
+        p50 = {
+            "status": (
+                YIELD_STATUS_RECONCILED
+                if all_within
+                else YIELD_STATUS_OUTSIDE_TOLERANCE
+            ),
+            "references": rows,
+        }
+        record["implied_net_aep_gwh"] = implied_gwh
+
+    record["p50"] = p50
+    record["p90"] = p90
+
+    statuses = {p50["status"], p90["status"]}
+    if YIELD_STATUS_OUTSIDE_TOLERANCE in statuses:
+        status = YIELD_STATUS_OUTSIDE_TOLERANCE
+    elif YIELD_STATUS_RECONCILED in statuses:
+        status = YIELD_STATUS_RECONCILED
+    else:
+        status = YIELD_STATUS_NOT_APPLICABLE
+    record["status"] = status
+    record["reason"] = (
+        "neither a P50 nor a P90 comparison applies to this scenario"
+        if status == YIELD_STATUS_NOT_APPLICABLE
+        else None
+    )
+    return record
+
+
+def record_gate_applied_at_seam(result: Any, gate_site: str) -> None:
+    """Record that a seam ran the fail-loud gate on the configuration it passed the engine.
+
+    The engine marks a record ``gate_applied`` only when it loaded a scenario file itself.
+    The web API's ``/run-pipeline`` boundary and the service seam behind the ``/cases``
+    routes run :func:`reconcile_capacity_factor_with_bankable_aep` on an inline
+    configuration and then pass that same configuration to the engine, so the gate did run
+    on it. Call this right after the engine returns, and only when the gate ran. It
+    changes nothing else in the record and does nothing to a result without one.
+
+    Args:
+        result: The pipeline result.
+        gate_site: Where the gate ran, one of the ``YIELD_GATE_SITE_*`` values.
+    """
+    if not isinstance(result, dict):
+        return
+    record = result.get("yield_reconciliation")
+    if isinstance(record, dict):
+        record["gate_applied"] = True
+        record["gate_site"] = gate_site
+
+
 __all__ = [
+    "YIELD_GATE_SITE_API_BOUNDARY",
+    "YIELD_GATE_SITE_SCENARIO_LOAD",
+    "YIELD_GATE_SITE_SERVICE_SEAM",
+    "record_gate_applied_at_seam",
+    "YIELD_RECONCILIATION_SCHEMA_VERSION",
+    "YIELD_STATUS_NOT_APPLICABLE",
+    "YIELD_STATUS_NOT_CHECKED",
+    "YIELD_STATUS_OUTSIDE_TOLERANCE",
+    "YIELD_STATUS_RECONCILED",
+    "build_yield_reconciliation_record",
     "AepReconciliationError",
     "default_tolerance_pct",
     "resolve_tolerance_pct",
