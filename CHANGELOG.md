@@ -674,6 +674,19 @@ its placement in the independence section, and its resistance to an exception ad
   by pinning the former rate as fixture input; their expected values are unchanged. The
   canonical lender case is unchanged.
 
+- **Capex price dates reach the per-technology capex (15.28.0, #1578).** A declared
+  `capex.price_basis` now escalates each `generation.technologies.<name>.capex_usd` by the
+  factor `capex.usd_total` takes (ruling of 2026-11-15), and records the stated amounts under
+  `capex.price_basis_applied.technology_capex_at_price_year`. One committed figure moves: the
+  batch LCOS of Blue Whale solar + BESS goes from USD 45.03 to 49.46 per MWh. The
+  per-technology work-breakdown of both dated Blue Whale scenarios now reconciles to the
+  escalated total, and the CASPER gateway's work-breakdown reads the financed configuration.
+  No project or equity KPI, annual row or debt figure of any committed scenario moves. The
+  `project` section's capex totals join the automatically escalated aliases, the warning
+  wording follows the #1704 review, and batch results carry the `capex_price_basis`
+  disclosure. HOLDs that survive: #1110's Board and lender circulation hold; the F-5 covenant
+  bar (no quarterly CFADS or intra-year DSCR figure supports a lender representation); and
+  the `v15.6.1` release hold. Detail in the compiled fragment.
 - **The project discount rate is a required scenario input (15.27.0, #1429).**
   `returns.project_discount_rate` must be declared and is validated as a fraction in `[0, 1)`;
   the hard-coded `DEFAULT_DISCOUNT_RATE = 0.10` is gone. A scenario whose WACC does not drive
