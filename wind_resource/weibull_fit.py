@@ -2,7 +2,7 @@
 
 The ARCO single-point ERA5 path (:mod:`wind_resource.era5_retrieval`) produces an
 hourly hub-height wind-speed *timeseries*; the canonical lender AEP engine
-(:func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config`) instead
+(:func:`wind_resource.aep_summary.build_aep_summary_from_config`) instead
 consumes a *declared* Weibull ``(A, k)``. This module bridges the two: it fits an
 ``(A_fit, k_fit)`` on the ARCO series (same MLE as
 :meth:`wind_resource.wind_analyzer.WindAnalyzer.fit_weibull` — ``scipy weibull_min``
