@@ -685,6 +685,86 @@ def _write_annual_rows_csv(path: Path, annual_rows: Any) -> None:
 # ============================================================================
 
 
+def _run_epc_only_scenario(cfg: DictConfig, config: str) -> bool:
+    """Run an EPC-only scenario through the construction-margin model (#1780).
+
+    The run follows the main path's rules (#1760): the emit switches are checked first, so
+    a bad one exits 1 as it does for any scenario; each emitter is listed under
+    ``result['emitters']`` with the reason it does not run; an earlier ``summary.json`` is
+    removed before anything is computed, so a failed run leaves none behind; and the
+    written summary carries a run manifest and lands in the resolved export directory.
+
+    Args:
+        cfg: The Hydra config.
+        config: The scenario path.
+
+    Returns:
+        ``False`` when the scenario is not EPC-only (or cannot be read here), so the
+        caller runs the full pipeline. ``True`` after printing the EPC-only result.
+
+    Raises:
+        SystemExit: Exit code 1 when the ``epc`` block does not compute.
+        ValueError: An emit switch is not true, false or null.
+    """
+    from finance.epc_margin import epc_only_result, is_epc_only_scenario
+
+    try:
+        raw = _load_yaml_scenario(config)
+    except (OSError, ValueError, yaml.YAMLError):
+        return False
+    if not is_epc_only_scenario(raw):
+        return False
+
+    write_artifacts = bool(cfg.get("write_artifacts", False))
+    emit_all = emit_all_requested(cfg)
+    plan = plan_emitters(cfg, {} if emit_all else None, write_artifacts=write_artifacts)
+    export_dir = resolve_output_dir(
+        cfg.get("export_dir", DEFAULT_PIPELINE_OUTPUT_ROOT),
+        run_scoped=bool(cfg.get("run_scoped", False)),
+        run_id=cfg.get("run_id", None),
+    )
+    if write_artifacts:
+        stale = export_dir / "summary.json"
+        if stale.is_file():
+            stale.unlink()
+            logger.info("Removed the earlier run's summary.json from %s", export_dir)
+
+    result = epc_only_result(raw, config)
+    result["run_manifest"] = build_run_manifest(
+        raw, validation_mode=str(cfg.get("validation_mode", "strict"))
+    ).as_dict()
+    if emit_all or any(d.run for d in plan.values()):
+        emitters: dict[str, dict[str, Any]] = {}
+        for flag, decision in plan.items():
+            keep = decision.status == STATUS_OFF or (
+                decision.source == "emit_all" and not write_artifacts
+            )
+            emitters[flag] = (
+                decision.as_dict()
+                if keep
+                else {
+                    "status": STATUS_NOT_RUN,
+                    "source": decision.source,
+                    "reason": EPC_ONLY_EMITTER_REASON,
+                }
+            )
+        result["emitters"] = emitters
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if result["status"] != "success":
+        raise SystemExit(1)
+    if write_artifacts:
+        _safe_mkdir(export_dir)
+        _write_json(export_dir / "summary.json", result)
+    return True
+
+
+#: Why no report or workbook emitter runs on an EPC-only scenario.
+EPC_ONLY_EMITTER_REASON = (
+    "an EPC-only scenario has no operating cashflow, which every report and workbook "
+    "emitter reads"
+)
+
+
 @hydra.main(
     version_base="1.3",
     config_path="conf",
@@ -905,6 +985,13 @@ def cli(cfg: DictConfig) -> None:
         }
         print(json.dumps(error_result, indent=2))
         raise SystemExit(1)
+
+    # #1780: an EPC-only scenario (an epc block and no operating project) is a
+    # construction-margin deal with no operating cashflow, so it runs the margin model
+    # alone and prints its result; it exits 1 when the block does not compute. A file
+    # that cannot be read here falls through, so the pipeline reports it as before.
+    if _run_epc_only_scenario(cfg, str(config)):
+        return
 
     # ------------------------------------------------------------------
     # Sprint 19 W.6: optional wind-resource ingestion.

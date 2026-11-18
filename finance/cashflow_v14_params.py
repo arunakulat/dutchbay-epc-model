@@ -311,13 +311,14 @@ class OpexCurrencySplit:
             against, or ``None``. Set by the evaluation gateway when an override (an FX
             stress or a Monte Carlo draw) changed ``fx``: when the model curve's shape
             changed, the engine translates the USD share on the stressed model curve
-            in place of its own path (:func:`with_usd_opex_fx_reference`). ``None``
-            for an authored scenario.
+            in place of its own path, from the first operating year whose shape
+            differs, carrying on from the own path's level there
+            (:func:`with_usd_opex_fx_reference`). ``None`` for an authored scenario.
         usd_fx_drift_override: ``True`` when the override explicitly set an FX drift
             key (see :data:`FX_DRIFT_KEYS`), even to the authored value: the engine
-            then translates the USD share on the model curve whatever its shape, so
-            any drift override is a stress (owner ruling, 2026-11-16). ``False`` for an
-            authored scenario.
+            then translates the USD share on the model curve even when its shape is
+            the authored one (from year 1), so any drift override is a stress (owner
+            ruling, 2026-11-16). ``False`` for an authored scenario.
     """
 
     usd_share: float
@@ -700,6 +701,38 @@ def _usd_fx_reference(
     return out
 
 
+def refuse_authored_usd_fx_reference(cfg: Mapping[str, Any], where: str) -> None:
+    """Refuse a scenario that authors the gateway-only currency-split keys (#1578 N-4).
+
+    ``opex.currency_split.usd_fx_reference`` and ``usd_fx_drift_override`` are set by
+    :func:`with_usd_opex_fx_reference` when an override moves ``fx``. Written by hand in
+    a scenario, a reference would shift that scenario's base case against a curve
+    nobody stressed. The scenario loader and the web API's inline configs refuse them.
+
+    Args:
+        cfg: Authored scenario configuration (before any override gateway runs).
+        where: The scenario's path or ``<inline>``, for the error message.
+
+    Raises:
+        ValueError: Either key is present.
+    """
+    opex = cfg.get("opex")
+    split = opex.get("currency_split") if isinstance(opex, Mapping) else None
+    if not isinstance(split, Mapping):
+        return
+    authored = [
+        f"opex.currency_split.{key}"
+        for key in (USD_FX_REFERENCE, USD_FX_DRIFT_OVERRIDE)
+        if split.get(key) is not None
+    ]
+    if authored:
+        raise ValueError(
+            f"{where}: {', '.join(authored)} is set by the override gateways when an "
+            "override moves fx, and cannot be authored in a scenario. To stress the "
+            "USD opex share's FX path, override fx (for example fx.annual_depr) instead."
+        )
+
+
 def with_usd_opex_fx_reference(
     base: Mapping[str, Any],
     merged: Dict[str, Any],
@@ -712,8 +745,8 @@ def with_usd_opex_fx_reference(
     so an override of ``fx`` (an FX stress, or a Monte Carlo drift draw) would not reach
     that share. The Python override gateways (``evaluate_with_overrides``,
     ``evaluate_scenario_from_dict`` and ``analytics.evaluate_scenario``) call this after
-    merging, passing the expanded (nested) overrides; the web API's ``/run-pipeline``
-    overrides do not yet.
+    merging, passing the expanded (nested) overrides, and so does the web API's
+    ``POST /run-pipeline`` route (``api.pipeline_api.run_pipeline``).
 
     When ``overrides`` names an FX drift key (:data:`FX_DRIFT_KEYS`) under ``fx``, the
     override is a drift stress whatever its value, even the authored one (owner ruling,
@@ -722,18 +755,38 @@ def with_usd_opex_fx_reference(
     the engine translates the USD share on the model curve in place of its own path, so
     a drift of x runs the share at x, not at x on top of the authored rate (owner ruling,
     2026-11-15), and an override at the model curve's own drift does not jump back to
-    the own path. When ``fx`` changed without a drift key (a spot or curve-neutral
-    override), only the reference is recorded: the engine compares the two curves'
-    shapes, each relative to its own spot, and keeps the own path while they match.
+    the own path. A drift that departs from the authored curve only in a later year
+    replaces the own path from that first drifted year onward, and the years before it
+    keep the own path (owner ruling, 2026-11-16 14:28Z). From that year the stressed
+    curve's year-on-year moves carry on from the level the own path had reached, so the
+    path does not step onto the model curve (owner ruling, 2026-11-16 14:47Z). A drift
+    from year 1 starts at the financial-close spot, where both paths begin, so it runs
+    on the model curve itself. When ``fx`` changed without a
+    drift key (a spot or curve-neutral override), only the reference is recorded: the
+    engine compares the two curves' shapes, each relative to its own spot, and keeps the
+    own path while they match.
 
-    The merged config is returned unchanged (the same object) when there is no USD
-    path, when a reference is already set, or when the overrides name no drift key and
-    ``fx`` did not change. An override of a drift key that the merged ``fx`` block
-    shadows (a percent form beside ``annual_depr``, or a parametric key beside an
-    explicit curve) is refused, because it would not move the curve the USD share is
-    then put on. Otherwise a copy is returned with fresh ``opex`` and
+    An override of a drift key that the merged ``fx`` block shadows (a percent form
+    beside ``annual_depr``, or a parametric key beside an explicit curve) is refused
+    for every scenario, with or without a USD path, because it would move neither the
+    model curve nor the USD share: the stress would run as the unstressed case. The
+    merged config is otherwise returned unchanged (the same object) when there is no
+    USD path, when a reference is already set, or when the overrides name no drift key
+    and ``fx`` did not change. Otherwise a copy is returned with fresh ``opex`` and
     ``currency_split`` mappings, so no input is mutated.
     """
+    fx_overrides = (overrides or {}).get("fx")
+    named = (
+        frozenset(k for k in fx_overrides if k in FX_DRIFT_KEYS)
+        if isinstance(fx_overrides, Mapping)
+        else frozenset()
+    )
+    drift_override = bool(named)
+    merged_fx = merged.get("fx")
+    # Checked for every scenario, with or without a USD path: a stress on a key the
+    # curve does not read would otherwise run as the unstressed case (#1578).
+    if drift_override and isinstance(merged_fx, Mapping):
+        _refuse_shadowed_drift_override(named, merged_fx)
     opex = merged.get("opex")
     if not isinstance(opex, Mapping):
         return merged
@@ -747,16 +800,6 @@ def with_usd_opex_fx_reference(
     base_fx = base.get("fx")
     if not isinstance(base_fx, Mapping):
         return merged
-    fx_overrides = (overrides or {}).get("fx")
-    named = (
-        frozenset(k for k in fx_overrides if k in FX_DRIFT_KEYS)
-        if isinstance(fx_overrides, Mapping)
-        else frozenset()
-    )
-    drift_override = bool(named)
-    merged_fx = merged.get("fx")
-    if drift_override and isinstance(merged_fx, Mapping):
-        _refuse_shadowed_drift_override(named, merged_fx)
     if not drift_override and merged_fx == base_fx:
         return merged
     new_split: Dict[str, Any] = {
@@ -1301,6 +1344,7 @@ __all__ = [
     "_build_cashflow_params",
     "_extract_parameters",
     "validate_parameters",
+    "refuse_authored_usd_fx_reference",
     "with_usd_opex_fx_reference",
     "FX_DRIFT_KEYS",
 ]

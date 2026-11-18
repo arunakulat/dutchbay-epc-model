@@ -276,6 +276,11 @@ def load_scenario_config(
             "Invalid FX configuration: scalar 'fx' not supported; "
             "expected mapping with 'start_lkr_per_usd' and 'annual_depr'"
         )
+    # The USD opex FX reference belongs to the override gateways (#1578 N-4). A call-time
+    # import keeps the loader off finance at module level (the #36 boundary guard).
+    from finance.cashflow_v14_params import refuse_authored_usd_fx_reference
+
+    refuse_authored_usd_fx_reference(cfg, str(config_path))
 
     # An AUTHORED scenario's capacity_mw × capacity_factor (the engine's revenue basis)
     # must reconcile with any bankable net AEP it also declares — caught here at load
