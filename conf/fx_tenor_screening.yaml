@@ -1,0 +1,50 @@
+# FX and tenor screening: method configuration (#1578 U4).
+#
+# Read by scripts/run_fx_tenor_screening_v14.py (Hydra; one JSON object on stdout, CLI-01,
+# CLI-03) through analytics.finance.fx_tenor_screening. Every site input (the screening
+# assumptions, reference generation, named sensitivities, fixed-debt stress grid and dated FX
+# history) comes from the scenario's `financing_screening` block
+# (analytics/site_analysis_blocks.py, #1754); capex, tariff, O&M, FX at close, timeline, tax
+# and the gearing cap come from the scenario itself. A scenario without the block reports
+# "not applicable". Only method text lives here.
+#
+# Usage:
+#   .venv/bin/python scripts/run_fx_tenor_screening_v14.py scenario=scenarios/<file>.yaml
+
+schema_version: fx_tenor_screening_method_v1
+
+# Required on the command line: the scenario whose block is screened.
+scenario: null
+
+method:
+  hold_caveat: >-
+    HOLD (F-5, #1110, v15.6.1): Standalone screening indicator only — not a lender verdict,
+    bankability determination, or credit commitment. Lender interest rates and DSCR thresholds
+    are illustrative screening assumptions, not executed term-sheet terms (#1629).
+  engine_path_status: delivered_bw5_l12_d2
+  engine_path_note: >-
+    The core v14 engine carries an FX override to the USD OPEX share: a drift stress or a Monte
+    Carlo drift draw replaces its own FX path (BW-5, L-12 D-2); this module is a standalone
+    screening utility and does not call the engine.
+  limitations:
+    - "HOLD (F-5, #1110, v15.6.1): Screening indicators only; lender rates and DSCR thresholds are assumptions, not terms (#1629)"
+    - "Standalone: the core v14 engine carries FX to the USD OPEX share (BW-5, L-12 D-2), but this screening does not call it"
+    - "The assumed downside generation is a sensitivity, never a measured P90"
+    - "Annual end-period payments; no construction draw profile or IDC capitalisation"
+    - "The straight-line tax allowance is a screening assumption, not legal tax advice"
+    - "No sponsor IRR, discount-rate selection, LLCR, hedge premium, DSRA, working capital, BESS funding or reserve movement"
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
