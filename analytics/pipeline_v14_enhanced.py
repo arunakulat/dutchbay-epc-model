@@ -59,6 +59,8 @@ from finance.debt_v14 import (
     _clean_public_dscr_series,
     _extract_capex_usd,
     _finite_dscr,
+    _ft_tenor,
+    _required_number,
     plan_debt,
 )
 from finance.utils import get_nested
@@ -676,7 +678,18 @@ def _debt_fee_rate(config: Mapping[str, Any]) -> float:
     upfront = (
         float(fees.get("upfront_pct") or 0.0) if isinstance(fees, Mapping) else 0.0
     )
-    tenor = float(fin.get("tenor_years") or 15.0) or 15.0
+    if not upfront:
+        return guarantee
+    # The upfront fee is amortised over the tenor the debt layer uses
+    # (``tenor_years``, else ``term_years``). Before #1429's second step an absent or
+    # zero tenor became 15 years here; the debt layer and pre-flight already require a
+    # declared, positive tenor, so this reads that figure and refuses otherwise.
+    tenor = _required_number(_ft_tenor(fin), "Financing_Terms.tenor_years")
+    if tenor <= 0.0:
+        raise ValueError(
+            f"Financing_Terms.tenor_years must be positive to amortise "
+            f"fees.upfront_pct (got {tenor!r}); there is no code default (#1429)."
+        )
     return guarantee + (upfront / tenor)
 
 
@@ -1520,6 +1533,47 @@ def run_v14_pipeline_enhanced(
         if capex_price_basis_auto is not None:
             # Render-when-present: a run with no automatic escalation keeps its keys.
             result["capex_price_basis"] = capex_price_basis_auto
+
+        # #1774: the standalone battery-project economics, for any scenario that declares
+        # bess_economics.enabled: true. A separate cashflow for the battery as its own
+        # project, at the scenario's own discount rate and life; it moves no scenario KPI.
+        # Render-when-present: a scenario without the opt-in keeps its keys. Strict
+        # pre-flight refuses a bad block before this point; on a run with validation off,
+        # a bad block is listed with its reason and the scenario's own figures still return
+        # (owner ruling 2026-11-16: write the figures, list the failure).
+        from finance.bess_project_economics import (
+            bess_economics_failure,
+            bess_economics_result,
+        )
+        from finance.cashflow_v14_params import _extract_project_life_years
+
+        if isinstance(cfg.get("bess_economics"), Mapping):
+            try:
+                bess_economics = bess_economics_result(
+                    cfg,
+                    discount_rate=float(project_discount),
+                    project_years=_extract_project_life_years(cfg, log=False),
+                )
+            except ValueError as exc:
+                logger.warning("Battery-project economics not run: %s", exc)
+                bess_economics = bess_economics_failure(str(exc))
+            if bess_economics is not None:
+                result["bess_project_economics"] = bess_economics
+
+        # #1780: the EPC construction margin, for any scenario that declares an epc block.
+        # A one-off construction deal, reported beside the scenario's own figures; it moves
+        # no scenario KPI. Render-when-present, and the same failure rule as above: strict
+        # pre-flight refuses a bad block; with validation off it is listed with its reason.
+        from finance.epc_margin import epc_margin_failure, epc_margin_result
+
+        if "epc" in cfg:
+            try:
+                epc_margin = epc_margin_result(cfg)
+            except ValueError as exc:
+                logger.warning("EPC construction margin not run: %s", exc)
+                epc_margin = epc_margin_failure(str(exc))
+            if epc_margin is not None:
+                result["epc_margin"] = epc_margin
 
         logger.info(
             "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",

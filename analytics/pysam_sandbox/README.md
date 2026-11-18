@@ -58,7 +58,7 @@ degradation: 0.006 # 0.6% per year (decimal)
 
 
 REQUIRED before integration
-python scripts/validate_pysam_offline.py
+python scripts/validate_pysam_offline.py inputs/<site>_synthetic.srw
 
 Expected output:
 

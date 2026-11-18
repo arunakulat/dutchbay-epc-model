@@ -34,6 +34,7 @@ from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.development_readiness import validate_development_readiness
+from analytics.evaluation_v14 import expand_dotted_overrides
 from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -41,6 +42,10 @@ from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import _assert_fx_spot_consistency, load_scenario_config
 from analytics.schema_guard import ConfigValidationError
 from api.path_safety import UnsafePathError, confined_path
+from finance.cashflow_v14_params import (
+    refuse_authored_usd_fx_reference,
+    with_usd_opex_fx_reference,
+)
 from finance.debt_v14 import _extract_capex_usd
 from finance.native_cost_inputs import normalize_native_capex
 
@@ -619,6 +624,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     else:
         cfg = dict(payload.config or {})
 
+    authored = cfg
     if payload.overrides:
         cfg = _apply_overrides(cfg, payload.overrides)
         cfg = _sync_fx_spot_override(cfg, payload.overrides)
@@ -629,6 +635,16 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
     # disagrees with a declared bankable AEP fails loud over the API too (a client
     # override is a stale-value injection, NOT a deliberate sensitivity perturbation).
     try:
+        # The two currency-split keys below belong to the override gateways: refuse
+        # them when a client authors them inline or names them in an override.
+        refuse_authored_usd_fx_reference(cfg, payload.config_path or "<inline>")
+        # As in the Python override gateways: an override of ``fx`` must also reach a
+        # USD opex share that has its own FX path (#1578 L-12). Without this step the
+        # route ran an FX drift stress on the authored USD path (#1578 next-20 item 4).
+        if payload.overrides:
+            cfg = with_usd_opex_fx_reference(
+                authored, cfg, expand_dotted_overrides(payload.overrides)
+            )
         reconcile_capacity_factor_with_bankable_aep(
             cfg, payload.config_path or "<inline>"
         )

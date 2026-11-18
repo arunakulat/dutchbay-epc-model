@@ -63,6 +63,10 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
             if debt_pct is not None:
                 ratio = _required_number(debt_pct, f"Financing_Terms.{debt_pct_key}")
                 adapted["debt_ratio"] = ratio / 100.0 if ratio > 1.0 else ratio
+        if adapted.get("tenor_years") is None and adapted.get("term_years") is not None:
+            # Pre-flight accepts Financing_Terms.term_years as the tenor
+            # (finance.debt.schema); the engine reads it too, so the two cannot differ.
+            adapted["tenor_years"] = adapted["term_years"]
         if adapted.get("construction_periods") is None:
             # The resolved count, so this mapping can never publish a count the engine
             # does not use (#1570).
@@ -160,7 +164,7 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
             if debt_ratio_value > 1.0:
                 debt_ratio_value /= 100.0
 
-        tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years", 15))
+        tenor_value = debt_cfg.get("tenor_years", debt_cfg.get("term_years"))
         rate_value = debt_cfg.get(
             "interest_rate_pct",
             debt_cfg.get("interest_rate", debt_cfg.get("usd_nominal", 0.0)),
@@ -208,7 +212,16 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
             "construction_schedule": construction_schedule,
             "debt_drawdown_pct": debt_drawdown_pct,
             "debt_ratio": debt_ratio_value,
-            "tenor_years": int(_as_float(tenor_value, 15)),
+            # None when absent; the debt layer refuses it there (#1429).
+            "tenor_years": (
+                None
+                if tenor_value is None
+                else int(
+                    _required_number(
+                        tenor_value, "debt.tenor_years (or debt.term_years)"
+                    )
+                )
+            ),
             "interest_only_years": int(
                 _as_float(debt_cfg.get("interest_only_years"), 0)
             ),
@@ -226,18 +239,14 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
-#: The count used when neither the financing section nor ``timeline`` declares one.
-#: Kept for configurations that declare no build time at all (#1570 keeps it so that
-#: those configurations do not move).
-_DEFAULT_CONSTRUCTION_PERIODS = 2
+def _coerce_period_count(value: Any, path: str) -> int:
+    """Coerce a declared construction-period count, refusing a value that is not a number.
 
-
-def _coerce_period_count(value: Any) -> int:
-    """Coerce a declared construction-period value the way the engine always has."""
-    return max(
-        0,
-        int(_as_float(value, _DEFAULT_CONSTRUCTION_PERIODS)),
-    )
+    Before #1429 a non-numeric value became two periods, the Dutch Bay build time. A
+    declared count must now be a finite number; it is truncated to an integer and
+    clamped to zero, as before.
+    """
+    return max(0, int(_required_number(value, path)))
 
 
 def _declared_timeline_construction_years(
@@ -250,7 +259,7 @@ def _declared_timeline_construction_years(
     raw = timeline.get("construction_years")
     if raw is None:
         return None
-    return raw, _coerce_period_count(raw)
+    return raw, _coerce_period_count(raw, "timeline.construction_years")
 
 
 def _validate_explicit_drawdowns(drawdowns: Any, periods: int, *, source: str) -> None:
@@ -292,7 +301,8 @@ def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
       ``construction_years`` and they differ: refused, naming both values;
     * only ``timeline`` declares a count: that count is used. Before #1570 the
       engine ignored ``timeline`` and fell back to two periods;
-    * neither declares one: the historical default of two periods.
+    * neither declares one: refused. Before #1429 the engine used two periods, the
+      Dutch Bay build time.
 
     Args:
         params: Complete scenario configuration or a compact debt test mapping.
@@ -301,7 +311,8 @@ def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
         The construction-period count, coerced to an integer and clamped to zero.
 
     Raises:
-        ValueError: If two declared counts disagree.
+        ValueError: If two declared counts disagree, a declared count is not a number,
+            or no count is declared.
     """
     declared: Any = None
     source = "construction_periods"
@@ -309,12 +320,16 @@ def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
     financing = _section_case_insensitive(params, "financing")
     debt_cfg = _section_case_insensitive(params, "debt")
     if financing_terms:
+        source = "Financing_Terms.construction_periods"
         periods_raw = financing_terms.get("construction_periods")
         years_raw = financing_terms.get("construction_years")
         if (
             periods_raw is not None
             and years_raw is not None
-            and _coerce_period_count(periods_raw) != _coerce_period_count(years_raw)
+            and _coerce_period_count(
+                periods_raw, "Financing_Terms.construction_periods"
+            )
+            != _coerce_period_count(years_raw, "Financing_Terms.construction_years")
         ):
             raise ValueError(
                 f"Financing_Terms.construction_periods = {periods_raw!r} and "
@@ -338,9 +353,14 @@ def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
     if declared is None:
         if timeline is not None:
             return timeline[1]
-        return _DEFAULT_CONSTRUCTION_PERIODS
+        raise ValueError(
+            f"{source} (or timeline.construction_years) is required; there is no code "
+            "default (#1429). The count drives the debt draw, IDC, the CFADS timeline, "
+            "the FX start and the project NPV/IRR lag, so declare the scenario's build "
+            "time in its YAML."
+        )
 
-    count = _coerce_period_count(declared)
+    count = _coerce_period_count(declared, source)
     if timeline is not None and timeline[1] != count:
         raise ValueError(
             f"{source} = {declared!r} gives {count} construction period(s), but "

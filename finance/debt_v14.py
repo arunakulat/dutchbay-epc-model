@@ -39,6 +39,7 @@ from finance.debt.constants import (  # noqa: F401
     BRIDGE_TREATMENT_CONSTRUCTION_CAPITALIZED,
     BRIDGE_TREATMENT_EQUITY_CFADS_MATCH,
     BRIDGE_TREATMENT_HISTORICAL_FOLD,
+    DSRA_TARGET_BASIS,
     REFINANCE_TERMS_BASIS,
 )
 from finance.debt.construction import (  # noqa: F401
@@ -66,6 +67,7 @@ from finance.debt.helpers import (  # noqa: F401
     _npv,
     _pmt,
     _rate_decimal,
+    _required_number,
     _section_case_insensitive,
     _truthy_flag,
 )
@@ -93,6 +95,7 @@ from finance.debt.schema import (  # noqa: F401
     _register_debt_schema,
 )
 from finance.debt.sizing import (  # noqa: F401
+    _ft_tenor,
     _gearing_hint,
     _maybe_autosolve_dscr,
     _resolve_downside_ratio,

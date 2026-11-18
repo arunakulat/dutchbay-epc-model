@@ -211,27 +211,95 @@ def _tail_risk(
     return out
 
 
+def _finite(value: Any) -> Optional[float]:
+    """``value`` as a finite float, else ``None`` (bools are not numbers here)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    out = float(value)
+    return out if math.isfinite(out) else None
+
+
 def _trial_fixed_debt_min_dscr(
-    base_debt_service: Sequence[float], trial_debt_result: Mapping[str, Any]
+    base_debt_result: Mapping[str, Any], trial_debt_result: Mapping[str, Any]
 ) -> Optional[float]:
-    """Min DSCR of a trial's CFADS against the FIXED (financial-close) debt service.
+    """Min covenant DSCR of a trial's CFADS against the FIXED (financial-close) debt.
 
     A committed loan cannot retroactively shrink when a production year disappoints, yet the
     per-trial pipeline RE-SIZES debt (DSCR sculpting), pinning every trial's min_dscr at the
-    covenant target and reporting ZERO breach probability. The trial's actual CFADS per
-    period is recovered exactly from its own outputs as ``raw_dscr_series[i] * debt_service
-    _total[i]`` (independent of how that trial sized debt), then divided by the BASE committed
-    debt service to give the honest fixed-debt DSCR. Returns the min over operating periods.
+    covenant target and reporting ZERO breach probability. This tests each trial's CFADS
+    against the BASE case's committed debt instead, on the basis the covenant is tested on
+    (#1728): the per-year ``dscr_by_year`` table that ``plan_debt`` publishes.
+
+    For each operating row of the base ``annual_row_debt_period_map`` (operating periods
+    only; construction, the bridge and post-tenor padding map to no row), the coverage is
+
+        (trial row CFADS - base senior fee of that period) / base debt service of that period
+
+    and operating year 1 also carries the base bridge period's service, exactly as
+    ``finance.debt.layer`` folds it into ``dscr_by_year``. A row whose base period carries
+    no service is not a covenant observation (``dscr_by_year`` holds ``None`` there). With
+    trial = base the result is the minimum of the base ``dscr_by_year``.
+
+    The senior fee is the BASE (committed-debt) fee, not the fee the trial charged on its
+    own re-sized debt, so a committed loan's fee does not shrink with the trial (#1728 L-1).
+    Stated limits: the trial's CFADS is its own pipeline's figure, so any CFADS term that
+    depends on the trial's own debt is not re-based; and the base debt service is zero
+    after the balloon period, so a refinanced balloon falls outside the stress (#1728 L-2;
+    its coverage is disclosed separately under ``debt_result.refinance``).
+
+    Reads ``annual_row_debt_period_map``, ``debt_service_total``, ``senior_fee_usd`` and
+    ``bridge_debt_period``; never the deprecated ``raw_dscr_series`` alias (REFACTOR-04).
+    Returns ``None`` when no operating row carries base service or the trial publishes no
+    CFADS for those rows.
     """
-    rd = trial_debt_result.get("raw_dscr_series") or []
-    ds = trial_debt_result.get("debt_service_total") or []
+    base_map = base_debt_result.get("annual_row_debt_period_map") or []
+    base_svc = list(base_debt_result.get("debt_service_total") or [])
+    base_fee = list(base_debt_result.get("senior_fee_usd") or [])
+
+    mapped_periods = set()
+    for entry in base_map:
+        if isinstance(entry, Mapping) and _finite(entry.get("debt_period")) is not None:
+            mapped_periods.add(int(entry["debt_period"]))
+    bridge = _finite(base_debt_result.get("bridge_debt_period"))
+    bridge_extra = 0.0
+    if (
+        bridge is not None
+        and int(bridge) not in mapped_periods
+        and 0 <= int(bridge) < len(base_svc)
+    ):
+        bridge_extra = _finite(base_svc[int(bridge)]) or 0.0
+
+    trial_cfads: Dict[int, float] = {}
+    for entry in trial_debt_result.get("annual_row_debt_period_map") or []:
+        if not isinstance(entry, Mapping):
+            continue
+        row = _finite(entry.get("annual_row_index"))
+        cfads = _finite(entry.get("cfads_usd"))
+        if row is not None and cfads is not None:
+            trial_cfads[int(row)] = cfads
+
     vals: List[float] = []
-    for i, bds in enumerate(base_debt_service):
-        if bds and bds > 0 and i < len(rd) and i < len(ds):
-            try:
-                vals.append((float(rd[i]) * float(ds[i])) / float(bds))
-            except (TypeError, ValueError, ZeroDivisionError):
-                continue
+    for row_i, entry in enumerate(base_map):
+        if not isinstance(entry, Mapping):
+            continue
+        period = _finite(entry.get("debt_period"))
+        row = _finite(entry.get("annual_row_index"))
+        if period is None or row is None or not 0 <= int(period) < len(base_svc):
+            continue
+        svc = _finite(base_svc[int(period)]) or 0.0
+        if svc <= 0.0:
+            continue  # no base service: not a covenant observation
+        if row_i == 0 and bridge_extra > 0.0:
+            svc += bridge_extra
+        cfads = trial_cfads.get(int(row))
+        if cfads is None:
+            continue
+        fee = (
+            _finite(base_fee[int(period)]) or 0.0
+            if int(period) < len(base_fee)
+            else 0.0
+        )
+        vals.append((cfads - fee) / svc)
     return min(vals) if vals else None
 
 
@@ -344,6 +412,15 @@ class MonteCarloEngine:
         self._refuse_native_capex_conflicts(
             self._base_config, self._param_names, self._param_kinds
         )
+        # Opt-in per parameter (#1762): a swept capex.usd_total on a derive_from_breakdown
+        # scenario scales the breakdown line items pro rata so the two stay reconciled.
+        self._breakdown_reconciliation: Dict[str, str] = (
+            self._extract_breakdown_reconciliation(self._base_config)
+        )
+        # #1629: dry-run the trial path's CAPEX resolution at each parameter's bounds and
+        # refuse, before sampling, a sweep the trials would refuse. Runs while the bounds
+        # are still the authored ones (_init_distribution_shapes rewrites shaped bounds).
+        self._dry_run_capex_resolution()
 
         # MC-7 (#487): re-index the correlation matrix onto the ACTIVE parameter set. A
         # scenario authors its matrix against the parameters it declares; a consumer that
@@ -643,6 +720,177 @@ class MonteCarloEngine:
                 )
 
     @staticmethod
+    def _extract_breakdown_reconciliation(cfg: Mapping[str, Any]) -> Dict[str, str]:
+        """Read and validate each parameter's opt-in ``reconcile_breakdown`` (#1762).
+
+        On a ``capex.derive_from_breakdown`` scenario the trial path cross-checks
+        ``capex.usd_total`` against the sum of ``capex.breakdown`` and refuses a >0.5%
+        mismatch, so a plain ``capex.usd_total`` sweep fails its trials. Declaring
+        ``reconcile_breakdown: pro_rata`` on that parameter scales every numeric breakdown
+        line by the same factor as the sampled total: a uniform overrun or underrun across
+        the line items. It is explicit (CCCDIR): nothing is reconciled unless the scenario
+        asks, and the key is refused anywhere it would not mean exactly that.
+        """
+        mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
+        params = (mc.get("parameters", []) or mc.get("params", [])) if mc else []
+        out: Dict[str, str] = {}
+        for idx, p in enumerate(params if isinstance(params, list) else []):
+            if not isinstance(p, Mapping) or "reconcile_breakdown" not in p:
+                continue
+            name = str(p.get("name"))
+            mode = str(p["reconcile_breakdown"]).strip().lower()
+            where = f"monte_carlo.parameters[{idx}].name {name!r}"
+            if mode != "pro_rata":
+                raise MonteCarloConfigError(
+                    f"{where}: reconcile_breakdown must be 'pro_rata', got "
+                    f"{p['reconcile_breakdown']!r}."
+                )
+            if name != "capex.usd_total":
+                raise MonteCarloConfigError(
+                    f"{where}: reconcile_breakdown applies to capex.usd_total only."
+                )
+            capex = cfg.get("capex")
+            breakdown = capex.get("breakdown") if isinstance(capex, Mapping) else None
+            if not (
+                isinstance(capex, Mapping)
+                and capex.get("derive_from_breakdown")
+                and isinstance(breakdown, Mapping)
+            ):
+                raise MonteCarloConfigError(
+                    f"{where}: reconcile_breakdown needs capex.derive_from_breakdown and "
+                    "a capex.breakdown mapping in the scenario."
+                )
+            from analytics.cost.contingency import contingency_is_qra
+
+            if contingency_is_qra(capex):
+                raise MonteCarloConfigError(
+                    f"{where}: reconcile_breakdown is not defined for a QRA contingency "
+                    "(the QRA recomputes the total and ignores capex.usd_total)."
+                )
+            line_total = sum(
+                float(v)
+                for v in breakdown.values()
+                if isinstance(v, (int, float)) and not isinstance(v, bool)
+            )
+            if not line_total > 0.0:
+                raise MonteCarloConfigError(
+                    f"{where}: capex.breakdown must sum to a positive total to be "
+                    "scaled pro rata."
+                )
+            out[name] = mode
+        return out
+
+    def _apply_breakdown_reconciliation(
+        self, overrides: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Scale ``capex.breakdown`` pro rata to a sampled ``capex.usd_total`` (#1762).
+
+        Only for a parameter that declared ``reconcile_breakdown: pro_rata``. Each numeric
+        breakdown line is multiplied by ``sampled total / base breakdown sum``, so the
+        lines sum to the sampled total and the trial path's cross-check holds.
+        """
+        if "capex.usd_total" not in self._breakdown_reconciliation:
+            return overrides
+        capex_ov = overrides.get("capex")
+        sampled = (
+            _finite(capex_ov.get("usd_total"))
+            if isinstance(capex_ov, Mapping)
+            else None
+        )
+        if sampled is None:
+            return overrides
+        breakdown = self._base_config["capex"]["breakdown"]
+        lines = {
+            k: float(v)
+            for k, v in breakdown.items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+        factor = sampled / sum(lines.values())
+        for key, value in lines.items():
+            self._set_dotted(overrides, f"capex.breakdown.{key}", value * factor)
+        return overrides
+
+    def _dry_run_capex_resolution(self) -> None:
+        """Refuse, before sampling, a sweep whose trials the CAPEX resolution would refuse.
+
+        #1629: a hand-kept list of refused names drifts out of step with the code that
+        refuses. Instead, merge the base config with each parameter's low and then its
+        high bound, exactly as a trial builds its overrides, and run the trial path's own
+        config checks: the strict pre-flight ``run_v14_pipeline`` runs on every trial
+        (native CAPEX normalisation, then ``validate_config_for_v14`` for the cashflow and
+        debt modules) and the CAPEX resolution (``finance.debt.capex._extract_capex_usd``:
+        cost-currency checks, the breakdown reconciliation and the import levies). A bound
+        that fails there fails the trials near it, so the run is refused with the
+        parameter, the bound and the reason named. It runs no cashflow, so it costs a
+        small fraction of one trial.
+
+        When the base config itself does not resolve (a minimal smoke config), there is
+        nothing to attribute to a parameter and the dry run stands aside; the trials then
+        behave exactly as before. The FX-calibrated driver samples a unit draw, not a
+        config value, so it is not dry-run.
+        """
+        from analytics.evaluation_v14 import _deep_merge_config
+        from analytics.schema_guard import validate_config_for_v14
+        from finance.debt_v14 import _extract_capex_usd
+        from finance.native_cost_inputs import normalize_native_capex
+
+        def _check(overrides: Mapping[str, Any]) -> None:
+            cfg = normalize_native_capex(
+                _deep_merge_config(self._base_config, overrides)
+            )
+            validate_config_for_v14(
+                raw_config=cfg,
+                config_path="<monte_carlo dry run>",
+                modules=["cashflow", "debt"],
+            )
+            _extract_capex_usd(cfg)
+
+        try:
+            _check({})
+        except Exception:  # noqa: BLE001 - the base's own failure is reported elsewhere
+            return
+
+        for idx, (name, kind) in enumerate(
+            zip(self._param_names, self._param_kinds, strict=True)
+        ):
+            if kind == "fx_calibrated":
+                continue
+            low, high = self._param_bounds[idx]
+            failures: List[str] = []
+            for label, value in (("low", low), ("high", high)):
+                overrides = self._build_overrides_from_sample(
+                    np.array([value], dtype=float), [name]
+                )
+                overrides = self._apply_breakdown_reconciliation(overrides)
+                try:
+                    _check(overrides)
+                except Exception as exc:  # noqa: BLE001 - every refusal is reported
+                    failures.append(f"{label} {value:.6g}: {exc}")
+            if not failures:
+                continue
+            hint = ""
+            capex = self._base_config.get("capex")
+            if isinstance(capex, Mapping):
+                if "native_input_applied" in capex and name.startswith("capex.input"):
+                    hint = (
+                        " This config is already resolved (capex.native_input_applied); "
+                        "start the Monte Carlo from the authored config (capex.input)."
+                    )
+                elif capex.get("derive_from_breakdown") and name == "capex.usd_total":
+                    hint = (
+                        " The scenario derives CAPEX from capex.breakdown; declare "
+                        "reconcile_breakdown: pro_rata on this parameter to scale the "
+                        "breakdown with the sampled total."
+                    )
+            raise MonteCarloConfigError(
+                f"monte_carlo.parameters[{idx}].name {name!r}: the trial path refuses "
+                f"this sweep, so it is refused before sampling (#1629). "
+                + "; ".join(failures)
+                + "."
+                + hint
+            )
+
+    @staticmethod
     def _extract_param_definitions(
         cfg: Mapping[str, Any],
     ) -> Tuple[List[str], List[Tuple[float, float]], List[str], List[str], List[str]]:
@@ -886,10 +1134,11 @@ class MonteCarloEngine:
 
         # Fixed-debt covenant-stress: size debt ONCE on the base (financial-close) schedule,
         # then test each trial's CFADS against that committed service (a committed loan cannot
-        # shrink when production disappoints). Off by default -> no base eval, full results not
-        # requested, byte-identical.
-        base_debt_service: List[float] = []
+        # shrink when production disappoints), on the covenant's dscr_by_year basis (#1728).
+        # Off by default -> no base eval, full results not requested, byte-identical.
+        base_debt_result: Mapping[str, Any] = {}
         fixed_dscr_vals: List[float] = []
+        stress_unavailable: Optional[str] = None
         if self._fixed_debt_stress:
             base_full = evaluate_with_overrides(
                 config_path=None,
@@ -900,13 +1149,18 @@ class MonteCarloEngine:
             if isinstance(base_full, Mapping):
                 _bdr: Any = base_full.get("debt_result", {})
                 if isinstance(_bdr, Mapping):
-                    base_debt_service = [
-                        float(x) for x in (_bdr.get("debt_service_total") or [])
-                    ]
+                    base_debt_result = _bdr
+            if _trial_fixed_debt_min_dscr(base_debt_result, base_debt_result) is None:
+                stress_unavailable = (
+                    "the base case has no operating period with committed debt service, "
+                    "so there is no covenant to stress"
+                )
+                self._fixed_debt_stress_unavailable(stress_unavailable)
 
         for i in range(n):
             overrides = self._build_overrides_from_sample(samples[i], self._param_names)
             overrides = self._apply_distribution_shapes(overrides, samples[i])
+            overrides = self._apply_breakdown_reconciliation(overrides)
             overrides = self._apply_cf_coupling(overrides)
             overrides = self._apply_fx_calibration(overrides, samples[i])
             overrides = apply_degradation_if_enabled(
@@ -923,13 +1177,6 @@ class MonteCarloEngine:
                 if isinstance(out, Mapping):
                     kpis = out.get("kpis", out)
                     trial_metrics.append(kpis if isinstance(kpis, Mapping) else out)
-                    if self._fixed_debt_stress and base_debt_service:
-                        _tdr: Any = out.get("debt_result", {})
-                        mfd = _trial_fixed_debt_min_dscr(
-                            base_debt_service, _tdr if isinstance(_tdr, Mapping) else {}
-                        )
-                        if mfd is not None:
-                            fixed_dscr_vals.append(mfd)
                 else:
                     trial_metrics.append({})
             except Exception as exc:
@@ -954,6 +1201,24 @@ class MonteCarloEngine:
                     exc,
                 )
                 trial_metrics.append(_toy_metric_fallback(overrides))
+                continue
+
+            # Outside the trial's fail-soft handler, so a missing stress result can never be
+            # mistaken for a failed evaluation and turned into a toy trial.
+            if self._fixed_debt_stress and stress_unavailable is None:
+                _tdr: Any = (
+                    out.get("debt_result", {}) if isinstance(out, Mapping) else {}
+                )
+                mfd = _trial_fixed_debt_min_dscr(
+                    base_debt_result, _tdr if isinstance(_tdr, Mapping) else {}
+                )
+                if mfd is not None:
+                    fixed_dscr_vals.append(mfd)
+                elif not self._allow_toy_fallback:
+                    self._fixed_debt_stress_unavailable(
+                        f"MC trial {i} published no CFADS for the base case's covenant "
+                        "periods"
+                    )
 
         # Honor the scenario's monte_carlo reporting config (previously ignored): the
         # requested percentiles drive the aggregator, and var_confidence / cvar_confidence
@@ -984,6 +1249,12 @@ class MonteCarloEngine:
             # consumer never silently mistakes the effective trial count for the requested one.
             meta["sobol_n_requested"] = n_requested
             meta["sobol_n_used"] = n
+        if self._fixed_debt_stress and not fixed_dscr_vals:
+            # Permissive runs only (a lender-posture run raised above): record why there is
+            # no stress result instead of leaving the key silently absent (#1728).
+            reason = stress_unavailable or "no trial produced a covenant observation"
+            logger.warning("monte_carlo.fixed_debt_stress is on but %s.", reason)
+            meta["fixed_debt_stress"] = {"status": "unavailable", "reason": reason}
         if self._fixed_debt_stress and fixed_dscr_vals:
             arr = sorted(fixed_dscr_vals)
             cov = float(self._fixed_debt_covenant)
@@ -995,6 +1266,10 @@ class MonteCarloEngine:
                 return arr[lo] if lo == hi else arr[lo] * (hi - k) + arr[hi] * (k - lo)
 
             meta["fixed_debt_stress"] = {
+                "status": "ok",
+                # dscr_by_year: the per-year covenant table, bridge service folded into
+                # operating year 1, against the committed debt service and senior fee.
+                "basis": "dscr_by_year",
                 "covenant": cov,
                 # Delegate probability classification to the noise-tolerant covenant SSOT.
                 "breach_probability": prob_breach(np.asarray(arr, dtype=float), cov),
@@ -1049,6 +1324,22 @@ class MonteCarloEngine:
         run_meta["param_names"] = list(self._meta.param_names)
         result.metadata["run_meta"] = run_meta
         return result
+
+    def _fixed_debt_stress_unavailable(self, reason: str) -> None:
+        """Fail loud when a lender-posture run cannot produce its fixed-debt stress (#1728).
+
+        The stress is ruled on for lender runs (#962 item 4). A lender-posture run is one
+        whose effective ``allow_toy_fallback`` is false: the lender scenarios declare it,
+        lender and IC run modes force it, and the capital-risk report forces it. Such a run
+        raises rather than report a Monte Carlo with the stress silently missing
+        (FRAMEWORK-02). A permissive run records the reason in the metadata instead.
+        """
+        if not self._allow_toy_fallback:
+            raise RuntimeError(
+                "monte_carlo.fixed_debt_stress is on for a run with the toy fallback off, "
+                f"but the stress cannot be computed: {reason}. Fix the scenario, or turn "
+                "the stress off explicitly."
+            )
 
     @staticmethod
     def _flag_degenerate_sweep(result: MonteCarloResult) -> None:
