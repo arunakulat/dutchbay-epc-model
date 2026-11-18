@@ -68,6 +68,8 @@ def _capacity_cfg(block: Dict[str, Any] | None) -> Dict[str, Any]:
             }
         },
         "fx": {"start_lkr_per_usd": 300.0, "annual_depr_pct": 0.0},
+        # Required since #1429: no code default for the build time (was 2 periods).
+        "timeline": {"construction_years": 2},
     }
     if block is not None:
         cfg["bess_economics"] = block
