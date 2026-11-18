@@ -75,20 +75,67 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
     },
     "solar_storage_sizing": {
         **_ENVELOPE,
-        "technology": {"unit_config": "conf/blue_whale_solar_bess.yaml"},
-        "sizes": {
-            "dc_ac_ratios": [1.0, 1.2],
-            "bess_energy_mwh": [10.0, 20.0],
-            "bess_power_mw": 5.0,
-        },
-        "tariff": {
-            "currency": "LKR",
-            "priority_components": [40.0, 3.0],
-            "other_components": [15.0, 2.0],
-            "min_priority_discharge_hours": 4.0,
-            "basis": "Example: four hours at the priority rate each evening",
-        },
+        "unit_config": "conf/blue_whale_solar_bess.yaml",
         "pricing_config": "conf/blue_whale_pv_bess_pricing.yaml",
+        "regulatory_config": "conf/blue_whale_pucsl_fit_2026.yaml",
+        "unit_overrides": {"dispatch.export_limit_mw": 10.0},
+        "grid": {
+            "pv_tables": [100, "land_max"],
+            "pv_ac_mw": [3.0, 4.0],
+            "min_dc_ac_ratio": 1.0,
+            "max_dc_ac_ratio": 1.5,
+            "bess_power_mw": [0.5, 1.0],
+            "bess_duration_h": 4.0,
+        },
+        "readings": {
+            "sum": {
+                "max_pv_ac_plus_bess_mw": 10.0,
+                "max_export_mw": None,
+                "max_pv_ac_mw": 10.0,
+                "max_bess_power_mw": 10.0,
+            },
+            "committed": "sum",
+        },
+        "uncertainty": {
+            "yield_sigma_pct": 4.0,
+            "yield_clip_sigma": 3.0,
+            "rte_low": 0.8,
+            "rte_high": 0.9,
+            "residual_fade_pct_per_year": {"low": 0.0, "mode": 0.0, "high": 0.5},
+        },
+        "battery_health": {
+            "fade_pct_per_year": 1.5,
+            "fade_basis": "Example: a linear rate",
+            "augment_below_soh": 0.8,
+            "restore_to_soh": 1.0,
+            "augmentation_usd_per_kwh": 100.0,
+            "augmentation_basis": "Example: an assumption",
+            "replaces_price_reserve": True,
+        },
+        "plant": {
+            "grid_civils_development_usd": 1000000.0,
+            "fixed_opex_usd_per_year": 100000.0,
+            "bess_dc_per_nominal": 1.1,
+        },
+        "curtailment_scenario": {
+            "enabled": True,
+            "daytime_export_curtailment_fraction": 0.1,
+            "basis": "Example: a scenario only",
+        },
+        "sensitivities": {
+            "round_trip_efficiency": 0.9,
+            "one_at_a_time": [{"name": "rte_low", "round_trip_efficiency": 0.8}],
+            "break_even": [],
+        },
+        "recommendation": {
+            "committed": {
+                "reading": "sum",
+                "pv_tables": 100,
+                "pv_ac_mw": 3.0,
+                "bess_power_mw": 0.5,
+            }
+        },
+        "limitations": ["Example: placeholder inputs"],
     },
     "financing_screening": {
         **_ENVELOPE,
@@ -316,13 +363,67 @@ def test_missing_envelope_key_fails(block: str) -> None:
         ),
         (
             "solar_storage_sizing",
-            lambda b: b["sizes"].update({"bess_power_mw": True}),
-            "solar_storage_sizing.sizes.bess_power_mw: must be a finite number",
+            lambda b: b["grid"].update({"bess_power_mw": [True]}),
+            "solar_storage_sizing.grid.bess_power_mw[0]: must be a finite number",
         ),
         (
             "solar_storage_sizing",
-            lambda b: b["tariff"].update({"min_priority_discharge_hours": 25}),
-            "solar_storage_sizing.tariff.min_priority_discharge_hours: must be <= 24.0",
+            lambda b: b["grid"].update({"pv_tables": [0, "most"]}),
+            "solar_storage_sizing.grid.pv_tables[0]: must be a positive integer",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["grid"].update({"max_dc_ac_ratio": 0.9}),
+            "solar_storage_sizing.grid: max_dc_ac_ratio must not be below "
+            "min_dc_ac_ratio",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["readings"].update({"committed": "export"}),
+            "solar_storage_sizing.readings.committed: must name one of the readings",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["readings"].update({"by_reading": b["readings"]["sum"]}),
+            "solar_storage_sizing.readings.by_reading: 'by_reading' is a reserved name",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["readings"]["sum"].update({"max_export_mw": 0.0}),
+            "solar_storage_sizing.readings.sum.max_export_mw: must be > 0.0",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["uncertainty"].update({"rte_high": 0.7}),
+            "solar_storage_sizing.uncertainty: rte_high must not be below rte_low",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["battery_health"].update({"replaces_price_reserve": "yes"}),
+            "solar_storage_sizing.battery_health.replaces_price_reserve: must be true "
+            "or false",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["plant"].update({"bess_dc_per_nominal": 0.9}),
+            "solar_storage_sizing.plant.bess_dc_per_nominal: must be >= 1.0",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b["sensitivities"].update({"break_even": "none"}),
+            "solar_storage_sizing.sensitivities.break_even: must be a list",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b.update(
+                {"recommendation": {"other": b["recommendation"]["committed"]}}
+            ),
+            "solar_storage_sizing.recommendation.committed: required key is missing",
+        ),
+        (
+            "solar_storage_sizing",
+            lambda b: b.update({"limitations": []}),
+            "solar_storage_sizing.limitations: must be a non-empty list",
         ),
         (
             "financing_screening",
@@ -473,6 +574,8 @@ def _committed_scenarios() -> List[Path]:
 #: The committed scenarios that declare a block, and which. Each entry is added by the work
 #: item that moves that scenario's site inputs into its block.
 DECLARED_BLOCKS = {
+    # #1578 U3: the PV + BESS sizing's inputs.
+    "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": ["solar_storage_sizing"],
     # #1578 U4: the FX and tenor screening's inputs.
     "scenarios/dutchbay_basecase_2025Q4.yaml": ["financing_screening"],
 }
