@@ -326,14 +326,17 @@ def _prepare_cashflow_context(
             # is the fx block the path was authored against. Each curve is compared
             # relative to its own spot: a spot-only or curve-neutral change leaves the
             # shape equal, and the own path (already anchored on the merged spot) is
-            # kept. An override that named a drift key is a stress whatever its value
-            # (owner ruling, 2026-11-16): the model curve replaces the own path even when
-            # the drift equals the authored one, so there is no jump at that boundary.
-            # No reference (every authored scenario) leaves the path as built.
+            # kept. A drift that departs from the authored curve only in a later year
+            # replaces the own path from that first drifted year onward; the years
+            # before it keep the own path (owner ruling, 2026-11-16 14:28Z), and the
+            # drift carries on from the level the own path had reached (14:47Z). An
+            # override that named a drift key is a stress whatever its value (owner
+            # ruling, 2026-11-16): when its curve never departs from the authored one
+            # (the authored drift itself), the model curve replaces the whole path, so
+            # there is no jump at that boundary. No reference (every authored scenario)
+            # leaves the path as built.
             reference = params_dict.get("opex_usd_fx_reference")
-            if reference is not None and params_dict.get("opex_usd_fx_drift_override"):
-                usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
-            elif reference is not None:
+            if reference is not None:
                 ref_config = {"fx": reference}
                 ref_spot = _financial_close_spot(ref_config)
                 if ref_spot is None:
@@ -348,23 +351,48 @@ def _prepare_cashflow_context(
                     fx_curve_resolved[i] / financial_close_spot for i in range(years)
                 ]
                 ref_shape = [ref_curve[i] / ref_spot for i in range(years)]
-                # An explicit curve does not scale with the spot, so a spot-only
-                # override changes its spot-relative shape while the curve itself has
-                # not moved. A curve that has not moved is no drift stress, so the own
-                # path (anchored on the merged spot) is kept (#1578, #1730 review).
-                curve_moved = any(
-                    not math.isclose(
-                        float(fx_curve_resolved[i]), r, rel_tol=1e-12, abs_tol=0.0
-                    )
-                    for i, r in enumerate(ref_curve[:years])
-                )
                 # Compared to a relative tolerance: the same curve anchored on two
                 # different spots can differ in the last bit once divided back out.
-                if curve_moved and any(
-                    not math.isclose(m, r, rel_tol=1e-12, abs_tol=0.0)
-                    for m, r in zip(model_shape, ref_shape, strict=True)
-                ):
+                first_drifted = next(
+                    (
+                        i
+                        for i, (m, r) in enumerate(
+                            zip(model_shape, ref_shape, strict=True)
+                        )
+                        if not math.isclose(m, r, rel_tol=1e-12, abs_tol=0.0)
+                    ),
+                    None,
+                )
+                replace_from: Optional[int]
+                if params_dict.get("opex_usd_fx_drift_override"):
+                    replace_from = 0 if first_drifted is None else first_drifted
+                else:
+                    # An explicit curve does not scale with the spot, so a spot-only
+                    # override changes its spot-relative shape while the curve itself
+                    # has not moved. A curve that has not moved is no drift stress, so
+                    # the own path (anchored on the merged spot) is kept (#1578, #1730
+                    # review).
+                    curve_moved = any(
+                        not math.isclose(
+                            float(fx_curve_resolved[i]), r, rel_tol=1e-12, abs_tol=0.0
+                        )
+                        for i, r in enumerate(ref_curve[:years])
+                    )
+                    replace_from = first_drifted if curve_moved else None
+                if replace_from == 0:
                     usd_path = [float(fx_curve_resolved[i]) for i in range(years)]
+                elif replace_from is not None:
+                    # From the first drifted year the stressed curve's year-on-year
+                    # moves carry on from the level the own path had reached, so the
+                    # path does not step onto the model curve there (owner ruling,
+                    # 2026-11-16 14:47Z). From year 1 both start at the
+                    # financial-close spot, so the branch above is the same rule.
+                    level = usd_path[replace_from - 1]
+                    anchor = float(fx_curve_resolved[replace_from - 1])
+                    usd_path = usd_path[:replace_from] + [
+                        level * float(fx_curve_resolved[i]) / anchor
+                        for i in range(replace_from, years)
+                    ]
             params_dict["opex_usd_fx_path"] = usd_path
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.

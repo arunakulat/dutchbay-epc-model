@@ -183,6 +183,30 @@ _GEARING_KEYS: Dict[str, Tuple[str, ...]] = {
     "": ("debt_ratio",),
 }
 
+#: Where each financing section may declare the senior-debt tenor, in the order the
+#: extractor reads them (``Financing_Terms.term_years`` and ``debt.term_years`` are the
+#: aliases the strict debt schema in :mod:`finance.debt.schema` also accepts).
+_TENOR_KEYS: Dict[str, Tuple[str, ...]] = {
+    "Financing_Terms.": ("tenor_years", "term_years"),
+    "financing.": ("tenor_years",),
+    "debt.": ("tenor_years", "term_years"),
+    "": ("tenor_years",),
+}
+
+
+def _ft_tenor(fin: Mapping[str, Any]) -> Any:
+    """``Financing_Terms``'s declared tenor, ``tenor_years`` first, then ``term_years``."""
+    tenor = fin.get("tenor_years")
+    return fin.get("term_years") if tenor is None else tenor
+
+
+def _first_declared(
+    section: Mapping[str, Any], keys: Tuple[str, ...]
+) -> Tuple[str, Any]:
+    """The first of ``keys`` that ``section`` declares, with its value (else the first key)."""
+    key = next((k for k in keys if section.get(k) is not None), keys[0])
+    return key, section.get(key)
+
 
 def resolve_debt_sizing_terms(config: Mapping[str, Any]) -> Dict[str, float]:
     """The required debt-sizing terms, refused at pre-flight when absent (#1429).
@@ -192,42 +216,53 @@ def resolve_debt_sizing_terms(config: Mapping[str, Any]) -> Dict[str, float]:
     refused where the engine uses it; this resolver makes the same reads up front so
     ``analytics.schema_guard`` can refuse before evaluation, naming the path:
 
-    * the gearing and the target DSCR, from the section the debt layer reads
-      (``Financing_Terms``, else ``financing``, else ``debt``, else the top level);
+    * the gearing, the target DSCR and the tenor, from the section the debt layer reads
+      (``Financing_Terms``, else ``financing``, else ``debt``, else the top level), with
+      a percentage gearing alias scaled to a fraction as the extractor scales it;
+    * the construction-period count, through the engine's own resolver (the financing
+      section, else ``timeline.construction_years``);
     * under a DSCR sizing mode, ``Financing_Terms.debt_ratio`` and
-      ``Financing_Terms.target_dscr`` themselves (the autosolve reads those keys), and
-      the flat ``Financing_Terms.dscr_p99_downside_factor`` whenever the autosolve would
-      read it: always without ``bind_downside``, and with it only when neither
+      ``Financing_Terms.target_dscr`` themselves (the autosolve reads those keys), the
+      capacity discount rate ``Financing_Terms.interest_rate_nominal``, and the flat
+      ``Financing_Terms.dscr_p99_downside_factor`` whenever the autosolve would read it:
+      always without ``bind_downside``, and with it only when neither
       ``downside_cfads_factor`` nor a P50/P90 AEP pair resolves.
+
+    The tenor, the construction-period count and the capacity rate used to fall back to
+    15 years, two periods and 8% (#1429, second step).
 
     Args:
         config: The scenario configuration.
 
     Returns:
-        The resolved terms, keyed ``debt_ratio`` and ``target_dscr`` (and
-        ``dscr_p99_downside_factor`` when it is read).
+        The resolved terms, keyed ``debt_ratio``, ``target_dscr``, ``tenor_years`` and
+        ``construction_periods`` (and ``interest_rate_nominal`` and
+        ``dscr_p99_downside_factor`` when they are read).
 
     Raises:
         ValueError: Naming the first required term that is absent or not a number.
     """
-    from finance.debt.terms import _financing_key_prefix
+    from finance.debt.terms import _financing_key_prefix, _resolve_construction_periods
 
     prefix = _financing_key_prefix(config)
     if prefix:
         section = _section_case_insensitive(config, prefix[:-1]) or {}
     else:
         section = config
-    gearing_keys = _GEARING_KEYS[prefix]
-    gearing_key = next(
-        (k for k in gearing_keys if section.get(k) is not None), gearing_keys[0]
-    )
+    gearing_key, gearing = _first_declared(section, _GEARING_KEYS[prefix])
+    debt_ratio = _required_number(gearing, f"{prefix}{gearing_key}")
+    if gearing_key != "debt_ratio" and debt_ratio > 1.0:
+        # A percentage alias, scaled as the extractor scales it, so the resolved
+        # gearing is the one the engine uses.
+        debt_ratio /= 100.0
+    tenor_key, tenor = _first_declared(section, _TENOR_KEYS[prefix])
     terms: Dict[str, float] = {
-        "debt_ratio": _required_number(
-            section.get(gearing_key), f"{prefix}{gearing_key}"
-        ),
+        "debt_ratio": debt_ratio,
         "target_dscr": _required_number(
             section.get("target_dscr"), f"{prefix}target_dscr"
         ),
+        "tenor_years": _required_number(tenor, f"{prefix}{tenor_key}"),
+        "construction_periods": float(_resolve_construction_periods(config)),
     }
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     if str(fin.get("debt_sizing", "")).lower() not in _DSCR_SIZING_MODES:
@@ -237,6 +272,9 @@ def resolve_debt_sizing_terms(config: Mapping[str, Any]) -> Dict[str, float]:
     )
     terms["target_dscr"] = _required_number(
         fin.get("target_dscr"), "Financing_Terms.target_dscr"
+    )
+    terms["interest_rate_nominal"] = _required_number(
+        fin.get("interest_rate_nominal"), "Financing_Terms.interest_rate_nominal"
     )
     if _truthy_flag(fin.get("bind_downside")):
         ratio, source = _resolve_downside_ratio(dict(config), fin)
@@ -345,13 +383,18 @@ def _maybe_autosolve_dscr(
         fin_resized["debt_ratio"] = binding_gearing
 
     cfads = [_as_float(r.get("cfads_usd"), 0.0) for r in annual_rows]
-    tenor = max(1, int(_as_float(fin.get("tenor_years"), 15)))
+    tenor = max(
+        1,
+        int(_required_number(_ft_tenor(fin), "Financing_Terms.tenor_years")),
+    )
     capex = _extract_capex_usd(config)
     # NOTE: interest_rate_nominal here only discounts the dual-DSCR *capacity*
     # detail (lender-pack metadata). The real amortization uses the per-tranche
     # rates, so overriding Financing_Terms.interest_rate_nominal does NOT change
     # the achieved schedule or equity_irr.
-    rate = _as_float(fin.get("interest_rate_nominal"), 0.08)
+    rate = _required_number(
+        fin.get("interest_rate_nominal"), "Financing_Terms.interest_rate_nominal"
+    )
     detail: Optional[Dict[str, Any]] = None
     if cfads and capex > 0:
         try:
