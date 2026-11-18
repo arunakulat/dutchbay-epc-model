@@ -88,6 +88,7 @@ def _valid_config() -> dict[str, Any]:
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,
             "term_years": 18,
+            "construction_periods": 2,  # no code default since #1429
         },
     }
 

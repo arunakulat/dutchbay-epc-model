@@ -39,8 +39,10 @@ def _api(overrides: Dict[str, Any]) -> Dict[str, Any]:
         {"fx.annual_depr": 0.0},  # the authored drift is a stress too (2026-11-16)
         {"fx.start_lkr_per_usd": 360.0},  # spot only: the own path stays
         {"fx.start_lkr_per_usd": 360.0, "fx.annual_depr": 0.05},
+        # a drift that starts in year 12: replaced from there only (2026-11-16 14:28Z)
+        {"fx.curve": [333.79] * 11 + [333.79 * 1.05**k for k in range(1, 40)]},
     ],
-    ids=["drift", "authored_drift", "spot_only", "spot_and_drift"],
+    ids=["drift", "authored_drift", "spot_only", "spot_and_drift", "late_curve"],
 )
 def test_route_matches_the_override_gateway(overrides: Dict[str, Any]) -> None:
     gateway = evaluate_with_overrides(WIND, overrides)
