@@ -1019,6 +1019,10 @@ class ReportContext(BaseModel):
     #: The run's yield reconciliation (#1768). None when the caller supplies no run result
     #: or the result carries no record; the audit section then omits the table.
     yield_reconciliation: Optional[YieldReconciliationBlock] = None
+    #: F-5 non-reliance notice shown on the cover (#1760). Set by the capital-risk emitter, whose
+    #: report a run that writes its figures now writes by default and the release asset
+    #: ships; None (the default) omits it, so every other report stays byte-identical.
+    f5_notice: Optional[str] = None
 
 
 def _build_kpi_rows(
