@@ -298,7 +298,11 @@ def main() -> int:
                     if direct_comment is not None
                     else None
                 )
-                tracker = _get_json(repository, f"issues/{TRACKER_NUMBER}", token)
+                tracker = (
+                    _get_json(repository, f"issues/{TRACKER_NUMBER}", token)
+                    if work_issue is not None
+                    else {"number": TRACKER_NUMBER, "body": "", "comments": 0}
+                )
                 open_prs: list[dict[str, Any]] = []
                 for page in range(1, 11):
                     batch = _get_json(
@@ -324,15 +328,19 @@ def main() -> int:
                         open_prs,
                     )
 
-                code, message = scan_tracker_comments(
-                    lambda page: _get_json(
-                        repository,
-                        f"issues/{TRACKER_NUMBER}/comments"
-                        f"?per_page={_PAGE_SIZE}&page={page}",
-                        token,
-                    ),
-                    tracker.get("comments"),
-                    _verdict,
+                code, message = (
+                    scan_tracker_comments(
+                        lambda page: _get_json(
+                            repository,
+                            f"issues/{TRACKER_NUMBER}/comments"
+                            f"?per_page={_PAGE_SIZE}&page={page}",
+                            token,
+                        ),
+                        tracker.get("comments"),
+                        _verdict,
+                    )
+                    if work_issue is not None
+                    else _verdict([])
                 )
             except (
                 HTTPError,
