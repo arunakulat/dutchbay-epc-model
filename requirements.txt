@@ -189,7 +189,7 @@ ndindex==1.10.1
 nest-asyncio2==1.7.2
 netCDF4==1.7.4
 networkx==3.6.1
-nodeenv==1.10.0
+nodeenv==1.12.0
 notebook_shim==0.2.4
 numba==0.68.1
 numexpr==2.14.2
