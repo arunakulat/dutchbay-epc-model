@@ -1434,6 +1434,37 @@ At 0.4 MWh the effect is small: the battery is 1% of the capex. Lower capex (the
 partly offsets the fade's lost premium and the year-14 event. Wind v0.6 and the hybrid do not
 move.
 
+## The sizing for any scenario (#1578 U3, 2026-11-17)
+
+The owner ruled on 2026-11-16 that every scenario includes the site analyses, with locations,
+sizes and technology taken from each scenario's YAML. The PV + BESS project sizing now runs for
+any scenario that declares a `solar_storage_sizing` block:
+
+```bash
+.venv/bin/python scripts/run_solar_bess_sizing_v14.py scenario=scenarios/<file>.yaml
+```
+
+- **Inputs.** The site inputs of the run above (the unit, pricing and regulatory configs, the
+  unit overrides, the search grid, the two readings of the 10 MW limit, the uncertainty ranges,
+  battery health, the plant lines, the curtailment scenario, the sensitivities, the recorded
+  choice and the stated limitations) are the `solar_storage_sizing` block of
+  `scenarios/blue_whale_solar_bess_lot5b_2026.yaml`. The Monte Carlo settings and the objective
+  are in `conf/solar_bess_sizing.yaml`. A scenario without the block reports "not applicable".
+- **Same figures.** The config built from the block equals
+  `conf/blue_whale_solar_bess_project_sizing.yaml` key for key (only the schema name loses its
+  site prefix), and a reduced run through the block reproduces the same reduced run through
+  that config point for point (`tests/solar/test_solar_bess_sizing_any_scenario.py`). The
+  committed summary above is not re-run (the full run takes about 2.5 hours). Its pinned
+  inputs (the unit, pricing and regulatory configs) are unchanged. The scenario digest it
+  records is the scenario before the block was added. The engine does not read the block:
+  the scenario's evaluated results are identical with and without it.
+- **Single-site script.** `scripts/run_blue_whale_pv_bess_sizing_v14.py` keeps its configs and
+  its output, through the moved run in `solar_resource/pv_bess_sizing_runner.py`. #1799 retires
+  it and its project config once the block path is the only one.
+- **Not in this step.** A bounded report profile with a stated runtime (U3's second profile)
+  goes with the report sections (B3). The superseded hybrid's sizing
+  (`conf/blue_whale_pv_bess_sizing.yaml`) stays single-site.
+
 ## Latest run (the battery floor, 2026-11-14)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on main's current

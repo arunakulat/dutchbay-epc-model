@@ -72,6 +72,7 @@ def _valid_config() -> dict:
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,
             "term_years": 18,
+            "construction_periods": 2,  # no code default since #1429
         },
     }
 
@@ -215,13 +216,20 @@ def test_strict_validation_rejects_malformed_present_debt_tenor() -> None:
 def test_strict_validation_accepts_config_with_no_debt_block() -> None:
     """A config with NO debt block passes once it declares the terms the engine reads.
 
-    The debt layer reads a block-less config's gearing and target DSCR from the top
-    level. Before #1429 it filled both in (0.70, 1.30) when absent; now pre-flight
-    refuses their absence, naming the key, and accepts them declared.
+    The debt layer reads a block-less config's gearing, target DSCR, tenor and build
+    time from the top level. Before #1429 it filled them in (0.70, 1.30, 15 years, two
+    periods) when absent; now pre-flight refuses their absence, naming the key, and
+    accepts them declared.
     """
     cfg = _valid_config()
     cfg.pop("debt")
     with pytest.raises(ConfigValidationError, match=r"debt_ratio is required"):
         validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
     cfg.update(debt_ratio=0.70, target_dscr=1.30)
+    with pytest.raises(ConfigValidationError, match=r"tenor_years is required"):
+        validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+    cfg.update(tenor_years=18)
+    with pytest.raises(ConfigValidationError, match=r"construction_periods \(or"):
+        validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])
+    cfg.update(construction_periods=2)
     validate_config_for_v14(cfg, "<test>", ["cashflow", "debt"])  # must not raise
