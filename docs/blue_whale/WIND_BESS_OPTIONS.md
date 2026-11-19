@@ -13,6 +13,20 @@ stand.
   scenario SHA-256; model 15.27.0; scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.6.
 - Every KPI comes from `analytics.evaluation_v14.evaluate_with_overrides` (ARCH-04).
 
+> **Addendum (`#1578` U2, 17 November 2026):** The options now run for any scenario that
+> declares a `storage_options` block (contract `#1754`):
+> `scripts/run_wind_bess_options_v14.py scenario=<path>`, with the method inputs (revenue
+> bases, Monte Carlo settings, hold text) in `conf/wind_bess_options.yaml` and the evaluation in
+> the site-neutral `analytics/wind/wind_bess_options_runner.py`. The turbine, battery, options,
+> tariff basis, grid limits, hourly-profile reference, firming supplier and wind-yield
+> uncertainty below now live in `scenarios/blue_whale_wind_lot5b_2026.yaml`'s block; the wind
+> tariff comes from the scenario itself. A scenario without the block is reported as not
+> applicable. The config and CLI named above remain as a single-site adapter: its output is
+> byte-identical, and the block-driven run reproduces every figure in the committed summary.
+> The summary was regenerated only because the scenario file gained the block; its
+> `scenario_sha256` is the one value that changed. The same scenario also carries the
+> `equipment_cost_parity` block (`#1755`), which reproduces the single-site parity result.
+
 ```bash
 DUTCHBAY_NASA_POWER_DIR=/path/to/power \
   .venv/bin/python scripts/run_blue_whale_wind_bess_options_v14.py \
@@ -97,15 +111,16 @@ is reported only to show what giving up the function would be worth.
 - **No option beats wind-only.** The cheapest black-start battery is **0.5 MW / 0.5 MWh,
   held**, with the soft (voltage-ramped) energisation the config assumes. It costs about USD 79k
   of project NPV and 0.13 points of equity IRR, and it fits every reading of the 10 MW limit.
-- **That cost is a floor.** Every option is priced at the all-in mode of USD 140.74 per kWh, the
-  price of a 4-hour product. Power-related and per-site costs (the inverter skid, the EMS) do not
-  shrink with the energy, so a 1-hour unit costs more per kWh. Priced bottom-up from the generic
+- **For the short units, that cost is a floor.** Every option is priced at the all-in mode of
+  USD 140.74 per kWh, the price of a 4-hour product. Power-related and per-site costs (the
+  inverter skid, the EMS) do not shrink with the energy, so a 1-hour unit costs more per kWh. Priced bottom-up from the generic
   supplier's own lines (the skid pro rata by power, the EMS once per site, the DC energy at the
   offer's DC rate, the same all-in factor; `bottom_up_price` in the summary), the held
   0.5 MW / 0.5 MWh unit costs about USD 141k all-in instead of 70k, and its project NPV change is
   about −147k instead of −79k. Cycled 0.5 / 2 becomes −162k, held 1 / 1 −233k and cycled 1 / 4
   −221k (reading B). Held 1 / 1 and cycled 1 / 4 swap places at that price (−233k against
-  −221k, where the flat price ranks held 1 / 1 ahead at −153k against −196k). The held
+  −221k, where the flat price ranks held 1 / 1 ahead at −153k against −196k), but that swap
+  depends on where the all-in factor is calibrated, so it is not a finding. The held
   0.5 / 0.5 unit stays the cheapest option and the recommendation, and no option beats
   wind-only. A small grid-forming inverter may carry a further premium.
 - **It does not firm a grid down-ramp.** If a wind lull counts against the ramp limit, firming
