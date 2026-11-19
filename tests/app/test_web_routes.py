@@ -23,6 +23,7 @@ HTTP smoke is gated behind ``importorskip('httpx')`` (matching the sibling suite
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterator
 
 import pytest
@@ -401,6 +402,54 @@ def test_run_none_blocks_render_not_computed(
     assert resp.text.count("Not computed for this run") == 4
 
 
+def test_run_marks_an_undefined_tornado_value(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1487: an undefined tornado value reads "undefined", with a note, never a bare dash."""
+    import app.api.main as api_main
+
+    tornado = TornadoChart(
+        metric="project_irr",
+        bars=[
+            TornadoBar(
+                label="PPA price",
+                base=0.0145,
+                low_case=0.01,
+                high_case=0.02,
+                impact_abs=0.01,
+            ),
+            TornadoBar(
+                label="Capex",
+                base=0.0145,
+                low_case=None,
+                high_case=0.017,
+                impact_abs=None,
+            ),
+        ],
+    )
+    monkeypatch.setattr(
+        api_main, "build_case_surface", lambda _inputs: _canned_surface(tornado=tornado)
+    )
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    start = resp.text.index("Sensitivity tornado")
+    section = resp.text[start : resp.text.index("</section>", start)]
+    # The bar's value, and the table's low-case and impact cells.
+    assert len(re.findall(r">\s*undefined\s*<", section)) == 3
+    assert "tornado-undefined-note" in section
+    assert "listed last" in section
+    assert "—" not in section
+
+
+def test_run_tornado_without_undefined_values_has_no_note(client: Any) -> None:
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    start = resp.text.index("Sensitivity tornado")
+    section = resp.text[start : resp.text.index("</section>", start)]
+    assert "tornado-undefined-note" not in section and "undefined" not in section
+
+
 def test_run_validation_error_fragment_422(client: Any) -> None:
     _login(client)
     resp = client.post(
@@ -531,3 +580,50 @@ def test_v1_surface_still_requires_bearer(client: Any) -> None:
     """The wizard's cookie gate must not have loosened the /v1 bearer requirement."""
     resp = client.post("/v1/cases/surface", json={"site_name": "x"})
     assert resp.status_code == 401
+
+
+def test_run_states_irr_coverage_beside_the_capital_risk_figures(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1763 / #1746 step 1: an IRR taken over fewer than every trial says so."""
+    import app.api.main as api_main
+
+    note = (
+        "50 of 1000 trials have no defined equity_irr and are excluded from its mean, "
+        "range and percentiles."
+    )
+    base = _canned_surface().capital_risk
+    assert base is not None
+    partial = base.model_copy(
+        update={
+            "irr_coverage_notes": [note],
+            "hurdle_defined_count": 950,
+            "metrics": [
+                m.model_copy(
+                    update={
+                        "defined_count": 950,
+                        "total_count": 1000,
+                        "coverage_note": note,
+                    }
+                )
+                for m in base.metrics
+            ],
+        }
+    )
+    monkeypatch.setattr(
+        api_main,
+        "build_case_surface",
+        lambda _inputs: _canned_surface(capital_risk=partial),
+    )
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert f"IRR coverage:</strong> {note}" in resp.text
+    assert resp.text.count("950 of 1000") == 2  # the hurdle row and the IRR metric row
+
+
+def test_run_without_undefined_irr_shows_no_coverage_note(client: Any) -> None:
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "IRR coverage:" not in resp.text

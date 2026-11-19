@@ -264,19 +264,49 @@ def _get_json(repository: str, path: str, token: str) -> Any:
         return json.load(response)
 
 
-def main() -> int:
-    """Read event metadata from the environment and verify the live issue/PR index."""
-    body = os.environ.get("PR_BODY", "")
+def _validate_body_static(body: str) -> tuple[int, str] | None:
+    """Fail fast on malformed static PR body fields before making GitHub API calls."""
     work_issue = _ISSUE.search(body)
     direct_comment = _TRACKER_COMMENT.search(body)
     if len(_ISSUE.findall(body)) + len(_TRACKER_COMMENT.findall(body)) != 1 or (
         work_issue is not None and int(work_issue.group(1)) == TRACKER_NUMBER
     ):
-        code, message = (
+        return (
             1,
             "INTAKE-01: name one focused issue or scoped #1353 comment URL.",
         )
+    if _BASE.search(body) is None:
+        return 1, "INTAKE-01: supply the 40-character observed origin/main 'Base SHA'."
+    sweep = _SWEEP.search(body)
+    if sweep is None or sweep.group(1).strip().lower() in {"", "...", "tbd", "todo"}:
+        return 1, "INTAKE-01: describe the open-PR sweep and overlap dispositions."
+    recorded = _RECORDED.search(body)
+    if recorded is None:
+        return 1, "INTAKE-01: 'Recorded before edits' must cite the work record."
+    if work_issue is not None:
+        citation_ok = _references(recorded.group(1), int(work_issue.group(1)))
     else:
+        assert direct_comment is not None
+        citation_ok = bool(
+            re.search(
+                rf"issuecomment-{int(direct_comment.group(1))}(?![0-9])",
+                recorded.group(1),
+            )
+        )
+    if not citation_ok:
+        return 1, "INTAKE-01: 'Recorded before edits' must cite the work record."
+    return None
+
+
+def main() -> int:
+    """Read event metadata from the environment and verify the live issue/PR index."""
+    body = os.environ.get("PR_BODY", "")
+    static_error = _validate_body_static(body)
+    if static_error is not None:
+        code, message = static_error
+    else:
+        work_issue = _ISSUE.search(body)
+        direct_comment = _TRACKER_COMMENT.search(body)
         repository = os.environ.get("GITHUB_REPOSITORY", "")
         token = os.environ.get("GITHUB_TOKEN", "")
         if not _REPOSITORY.fullmatch(repository) or not token:
@@ -298,42 +328,84 @@ def main() -> int:
                     if direct_comment is not None
                     else None
                 )
-                tracker = _get_json(repository, f"issues/{TRACKER_NUMBER}", token)
-                open_prs: list[dict[str, Any]] = []
-                for page in range(1, 11):
-                    batch = _get_json(
-                        repository, f"pulls?state=open&per_page=100&page={page}", token
-                    )
-                    open_prs.extend(batch)
-                    if len(batch) < 100:
-                        break
-                else:
-                    raise ValueError("open PR list exceeds bounded ten-page sweep")
+                tracker = (
+                    _get_json(repository, f"issues/{TRACKER_NUMBER}", token)
+                    if work_issue is not None
+                    else {"number": TRACKER_NUMBER, "body": "", "comments": 0}
+                )
+                pr_number = int(os.environ.get("PR_NUMBER", "0"))
+                author = os.environ.get("PR_AUTHOR", "")
+                author_type = os.environ.get("PR_AUTHOR_TYPE", "")
+                created_at = os.environ.get("PR_CREATED_AT", "")
+                pr_self_only = [{"number": pr_number}]
 
-                def _verdict(comments: list[dict[str, Any]]) -> tuple[int, str]:
+                def _verdict_issue_only(
+                    comments: list[dict[str, Any]],
+                ) -> tuple[int, str]:
                     return evaluate(
                         body,
-                        os.environ.get("PR_AUTHOR", ""),
-                        os.environ.get("PR_AUTHOR_TYPE", ""),
-                        os.environ.get("PR_CREATED_AT", ""),
-                        int(os.environ.get("PR_NUMBER", "0")),
+                        author,
+                        author_type,
+                        created_at,
+                        pr_number,
                         issue,
                         tracker,
                         comments,
                         work_comment,
-                        open_prs,
+                        pr_self_only,
                     )
 
-                code, message = scan_tracker_comments(
-                    lambda page: _get_json(
-                        repository,
-                        f"issues/{TRACKER_NUMBER}/comments"
-                        f"?per_page={_PAGE_SIZE}&page={page}",
-                        token,
-                    ),
-                    tracker.get("comments"),
-                    _verdict,
+                code, message = (
+                    scan_tracker_comments(
+                        lambda page: _get_json(
+                            repository,
+                            f"issues/{TRACKER_NUMBER}/comments"
+                            f"?per_page={_PAGE_SIZE}&page={page}",
+                            token,
+                        ),
+                        tracker.get("comments"),
+                        _verdict_issue_only,
+                    )
+                    if work_issue is not None
+                    else _verdict_issue_only([])
                 )
+                if code == 0:
+                    open_prs: list[dict[str, Any]] = []
+                    for page in range(1, 11):
+                        batch = _get_json(
+                            repository,
+                            f"pulls?state=open&per_page=100&page={page}",
+                            token,
+                        )
+                        open_prs.extend(batch)
+                        if len(batch) < 100:
+                            break
+                    else:
+                        raise ValueError("open PR list exceeds bounded ten-page sweep")
+                    sweep = _SWEEP.search(body)
+                    assert sweep is not None
+                    missing = sorted(
+                        int(pr["number"])
+                        for pr in open_prs
+                        if int(pr["number"]) != pr_number
+                        and not _references(sweep.group(1), int(pr["number"]))
+                    )
+                    if missing:
+                        code = 1
+                        message = "INTAKE-01: open-PR sweep omits " + ", ".join(
+                            f"#{n}" for n in missing
+                        )
+                    else:
+                        item_name = (
+                            f"issue #{int(work_issue.group(1))}"
+                            if work_issue is not None
+                            else f"tracker comment {int(direct_comment.group(1))}"  # type: ignore[union-attr]
+                        )
+                        message = (
+                            f"INTAKE-01: scoped {item_name}, base SHA, work-record citation and "
+                            f"{len(open_prs) - int(any(pr['number'] == pr_number for pr in open_prs))} "
+                            "other open PR(s) recorded. Semantic overlap and pre-edit timing require review."
+                        )
             except (
                 HTTPError,
                 URLError,

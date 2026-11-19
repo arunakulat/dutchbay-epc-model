@@ -120,6 +120,8 @@ def test_capital_risk_field_sets_are_frozen() -> None:
         "target_equity_irr",
         "metrics",
         "npv_distribution_filename",
+        "irr_coverage_notes",
+        "hurdle_defined_count",
     }
     assert set(CapitalRiskMetric.model_fields) == {
         "metric",
@@ -129,6 +131,9 @@ def test_capital_risk_field_sets_are_frozen() -> None:
         "cvar",
         "var_label",
         "cvar_label",
+        "defined_count",
+        "total_count",
+        "coverage_note",
     }
 
 

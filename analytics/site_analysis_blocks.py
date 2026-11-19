@@ -126,6 +126,11 @@ def _positive_int(value: Any, path: str, errors: List[str]) -> None:
         errors.append(f"{path}: must be a positive integer (got {value!r})")
 
 
+def _nonnegative_int(value: Any, path: str, errors: List[str]) -> None:
+    if not (isinstance(value, int) and not isinstance(value, bool) and value >= 0):
+        errors.append(f"{path}: must be a non-negative integer (got {value!r})")
+
+
 def _nonempty_str(value: Any, path: str, errors: List[str]) -> None:
     if not (isinstance(value, str) and value.strip()):
         errors.append(f"{path}: must be a non-empty string (got {value!r})")
@@ -315,6 +320,62 @@ def _block(keys: Mapping[str, _Key], *rules: Any) -> _Mapping:
     return _Mapping(merged, rules=tuple(rules))
 
 
+def _bool(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, bool):
+        errors.append(f"{path}: must be true or false (got {value!r})")
+
+
+def _unique_ids(key: str) -> Callable[[Mapping[str, Any], str, List[str]], None]:
+    def rule(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+        entries = block.get(key)
+        if not isinstance(entries, list):
+            return
+        ids = [str(e.get("id")) for e in entries if isinstance(e, Mapping)]
+        if len(ids) != len(set(ids)):
+            errors.append(f"{path}.{key}: ids must be unique")
+
+    return rule
+
+
+def _low_mode_high(value: Any, path: str, errors: List[str]) -> None:
+    _Mapping(
+        {
+            "low": _req(_number(gt=0.0)),
+            "mode": _req(_number(gt=0.0)),
+            "high": _req(_number(gt=0.0)),
+        }
+    )(value, path, errors)
+    if isinstance(value, Mapping) and all(
+        _is_number(value.get(k)) for k in ("low", "mode", "high")
+    ):
+        if not value["low"] <= value["mode"] <= value["high"]:
+            errors.append(f"{path}: must satisfy low <= mode <= high")
+
+
+def _weights_sum_to_one(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+    values = list(block.values())
+    if values and all(_is_number(v) for v in values):
+        if not math.isclose(sum(float(v) for v in values), 1.0, abs_tol=1e-9):
+            errors.append(f"{path}: weights must sum to 1")
+
+
+def _export_caps(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, Mapping) or not value:
+        errors.append(
+            f"{path}: must be a non-empty mapping of reading to cap (MW or null)"
+        )
+        return
+    for name, cap in value.items():
+        if not (isinstance(name, str) and name.strip()):
+            errors.append(f"{path}: reading names must be non-empty strings")
+        if cap is not None:
+            _number(gt=0.0)(cap, f"{path}.{name}", errors)
+
+
+#: Battery operating modes for a wind battery option: ``cycled`` daily for revenue, or
+#: ``held`` for the black-start function only.
+STORAGE_OPERATIONS: Tuple[str, ...] = ("cycled", "held")
+
 _STORAGE_OPTIONS = _block(
     {
         "technology": _req(
@@ -328,6 +389,10 @@ _STORAGE_OPTIONS = _block(
                                 "rotor_diameter_m": _req(_number(gt=0.0)),
                                 "cut_in_ms": _req(_number(gt=0.0)),
                                 "cut_out_ms": _req(_number(gt=0.0)),
+                                "air_density_kgm3": _req(_number(gt=0.0)),
+                                "power_loss_fractions": _req(
+                                    _list_of(_number(ge=0.0, lt=1.0))
+                                ),
                             },
                             rules=(_cut_out_above_cut_in,),
                         )
@@ -337,10 +402,24 @@ _STORAGE_OPTIONS = _block(
                             {
                                 "round_trip_efficiency": _req(_number(gt=0.0, le=1.0)),
                                 "dc_per_nominal": _req(_number(ge=1.0)),
-                                "black_start_reserve_mwh": _opt(_number(ge=0.0)),
+                                "black_start_reserve_mwh": _req(_number(ge=0.0)),
+                                "duration_h_for_tariff": _req(_number(gt=0.0)),
+                                "usd_per_kwh": _req(_low_mode_high),
+                                "om_usd_per_dc_kwh_year": _req(_number(ge=0.0)),
                             }
                         )
                     ),
+                }
+            )
+        ),
+        "hourly_profile": _req(
+            _Mapping(
+                {
+                    "reference_config": _req(_repo_file),
+                    "reference_point": _req(_nonempty_str),
+                    "transfer_summary": _req(_repo_file),
+                    "reference_height_m": _req(_number(gt=0.0)),
+                    "high_output_check_mw": _req(_number(gt=0.0)),
                 }
             )
         ),
@@ -354,11 +433,13 @@ _STORAGE_OPTIONS = _block(
                                     "id": _req(_nonempty_str),
                                     "power_mw": _req(_number(gt=0.0)),
                                     "energy_mwh": _req(_number(gt=0.0)),
+                                    "operation": _req(_enum(STORAGE_OPERATIONS)),
                                 }
                             )
                         )
                     )
-                }
+                },
+                rules=(_unique_ids("options"),),
             )
         ),
         "tariff": _req(
@@ -368,50 +449,315 @@ _STORAGE_OPTIONS = _block(
                     "wind_components": _req(_COMPONENTS),
                     "storage_priority_components": _req(_COMPONENTS),
                     "storage_other_components": _req(_COMPONENTS),
+                    "cross_check_priority_components": _req(_COMPONENTS),
+                    "cross_check_other_components": _req(_COMPONENTS),
                     "round_trip_efficiency_basis": _req(_number(gt=0.0, le=1.0)),
                     "contract_years": _req(_positive_int),
                     "priority_window_utc_hours": _req(_UTC_HOURS),
-                    "component_check_tolerance": _opt(_number(ge=0.0)),
+                    "component_check_tolerance": _req(_number(ge=0.0)),
+                    "one_time_adjustment_weights": _req(
+                        _Mapping(
+                            {
+                                "lkr_usd": _req(_number(ge=0.0, le=1.0)),
+                                "ccpi": _req(_number(ge=0.0, le=1.0)),
+                            },
+                            rules=(_weights_sum_to_one,),
+                        )
+                    ),
                 }
             )
         ),
-        "grid_limits": _opt(
+        "grid_limits": _req(
             _Mapping(
                 {
                     "export_limit_mw": _req(_number(gt=0.0)),
-                    "ramp_limit_mw_per_min": _opt(_number(gt=0.0)),
+                    "export_cap_readings": _req(_export_caps),
+                    "ramp_limit_mw_per_min": _req(_number(gt=0.0)),
+                    "illustrative_other_wind_mw": _req(_list_of(_number(ge=0.0))),
                 }
             )
+        ),
+        "firming_supplier": _req(
+            _Mapping(
+                {
+                    "offer_usd_per_dc_kwh": _req(_number(gt=0.0)),
+                    "dc_block_usd_per_dc_kwh": _req(_number(gt=0.0)),
+                    "ac_skid_usd": _req(_number(gt=0.0)),
+                    "ac_skid_mw": _req(_number(gt=0.0)),
+                    "ems_usd": _req(_number(ge=0.0)),
+                    "install_transport_share": _req(_number(ge=0.0, lt=1.0)),
+                    "service_share_of_cif_per_year": _req(_number(ge=0.0, lt=1.0)),
+                    "usable_per_dc": _req(_number(gt=0.0, le=1.0)),
+                    "smallest_block_dc_mwh": _req(_number(gt=0.0)),
+                    "power_cell_premium": _req(_list_of(_number(ge=1.0))),
+                }
+            )
+        ),
+        "uncertainty": _req(
+            _Mapping({"wind_yield_sigma": _req(_number(ge=0.0, lt=1.0))})
         ),
         "pricing_config": _opt(_repo_file),
     }
 )
 
+
+def _sizing_flag(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, bool):
+        errors.append(f"{path}: must be true or false (got {value!r})")
+
+
+def _any_mapping(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
+
+
+def _list_of_mappings(value: Any, path: str, errors: List[str]) -> None:
+    """A list, possibly empty, of mappings (an empty list switches the cases off)."""
+    if not isinstance(value, list):
+        errors.append(f"{path}: must be a list (got {value!r})")
+        return
+    for i, entry in enumerate(value):
+        _any_mapping(entry, f"{path}[{i}]", errors)
+
+
+def _pv_tables_entry(value: Any, path: str, errors: List[str]) -> None:
+    if value == "land_max":
+        return
+    _positive_int(value, path, errors)
+
+
+def _optional_limit_mw(value: Any, path: str, errors: List[str]) -> None:
+    if value is None:
+        return
+    _number(gt=0.0)(value, path, errors)
+
+
+def _max_ratio_not_below_min(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    lo: Any = block.get("min_dc_ac_ratio")
+    hi: Any = block.get("max_dc_ac_ratio")
+    if _is_number(lo) and _is_number(hi) and hi < lo:
+        errors.append(f"{path}: max_dc_ac_ratio must not be below min_dc_ac_ratio")
+
+
+def _rte_range_in_order(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+    lo: Any = block.get("rte_low")
+    hi: Any = block.get("rte_high")
+    if _is_number(lo) and _is_number(hi) and hi < lo:
+        errors.append(f"{path}: rte_high must not be below rte_low")
+
+
+#: One reading of a capacity limit: each limit in MW, or null for no limit of that kind
+#: (the keys of :data:`solar_resource.pv_bess_sizing.READING_KEYS`).
+_SIZING_READING = _Mapping(
+    {
+        "max_pv_ac_plus_bess_mw": _req(_optional_limit_mw),
+        "max_export_mw": _req(_optional_limit_mw),
+        "max_pv_ac_mw": _req(_optional_limit_mw),
+        "max_bess_power_mw": _req(_optional_limit_mw),
+    }
+)
+
+
+def _sizing_readings(value: Any, path: str, errors: List[str]) -> None:
+    """Readings by name, plus ``committed`` naming one of them.
+
+    The names themselves must match the regulatory config's readings; the sizing checks
+    that when it runs, because the regulatory config is a separate file.
+    """
+    if not isinstance(value, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
+        return
+    names = [k for k in value if k != "committed"]
+    if not names:
+        errors.append(f"{path}: must name at least one reading")
+    for name in names:
+        if name == "by_reading":
+            errors.append(f"{path}.{name}: 'by_reading' is a reserved name")
+            continue
+        _SIZING_READING(value[name], f"{path}.{name}", errors)
+    if "committed" not in value:
+        errors.append(f"{path}.committed: required key is missing")
+    elif value["committed"] not in names:
+        errors.append(
+            f"{path}.committed: must name one of the readings {names} "
+            f"(got {value['committed']!r})"
+        )
+
+
+_SIZING_SIZE = _Mapping(
+    {
+        "reading": _req(_nonempty_str),
+        "pv_tables": _req(_positive_int),
+        "pv_ac_mw": _req(_number(gt=0.0)),
+        "bess_power_mw": _req(_number(gt=0.0)),
+    }
+)
+
+
+def _sizing_recommendation(value: Any, path: str, errors: List[str]) -> None:
+    """The recorded choices by role; ``committed`` is the size the scenario carries."""
+    if not isinstance(value, Mapping) or not value:
+        errors.append(f"{path}: must be a non-empty mapping of sizes by role")
+        return
+    if "committed" not in value:
+        errors.append(f"{path}.committed: required key is missing")
+    for role, size in value.items():
+        _SIZING_SIZE(size, f"{path}.{role}", errors)
+
+
 _SOLAR_STORAGE_SIZING = _block(
     {
-        "technology": _req(_Mapping({"unit_config": _req(_repo_file)})),
-        "sizes": _req(
+        # The unit, pricing and regulatory configs the sizing reads (file references).
+        "unit_config": _req(_repo_file),
+        "pricing_config": _req(_repo_file),
+        "regulatory_config": _req(_repo_file),
+        # Dotted paths into the unit config, each of which must already exist there (the
+        # sizing checks the paths when it runs).
+        "unit_overrides": _req(_any_mapping),
+        "grid": _req(
             _Mapping(
                 {
-                    "dc_ac_ratios": _req(_list_of(_number(gt=0.0), unique=True)),
-                    "bess_energy_mwh": _req(_list_of(_number(gt=0.0), unique=True)),
-                    "bess_power_mw": _req(_number(gt=0.0)),
+                    "pv_tables": _req(_list_of(_pv_tables_entry, unique=True)),
+                    "pv_ac_mw": _req(_list_of(_number(gt=0.0), unique=True)),
+                    "min_dc_ac_ratio": _req(_number(gt=0.0)),
+                    "max_dc_ac_ratio": _req(_number(gt=0.0)),
+                    "bess_power_mw": _req(_list_of(_number(gt=0.0), unique=True)),
+                    "bess_duration_h": _req(_number(gt=0.0, le=24.0)),
+                },
+                rules=(_max_ratio_not_below_min,),
+            )
+        ),
+        "readings": _req(_sizing_readings),
+        "uncertainty": _req(
+            _Mapping(
+                {
+                    "yield_sigma_pct": _req(_number(ge=0.0)),
+                    "yield_clip_sigma": _req(_number(gt=0.0)),
+                    "rte_low": _req(_number(gt=0.0, le=1.0)),
+                    "rte_high": _req(_number(gt=0.0, le=1.0)),
+                    "residual_fade_pct_per_year": _req(
+                        _Mapping(
+                            {
+                                "low": _req(_number(ge=0.0)),
+                                "mode": _req(_number(ge=0.0)),
+                                "high": _req(_number(ge=0.0)),
+                            }
+                        )
+                    ),
+                },
+                rules=(_rte_range_in_order,),
+            )
+        ),
+        "battery_health": _req(
+            _Mapping(
+                {
+                    "fade_pct_per_year": _req(_number(ge=0.0)),
+                    "fade_basis": _req(_nonempty_str),
+                    "augment_below_soh": _req(_number(gt=0.0, le=1.0)),
+                    "restore_to_soh": _req(_number(gt=0.0, le=1.0)),
+                    "augmentation_usd_per_kwh": _req(_number(ge=0.0)),
+                    "augmentation_basis": _req(_nonempty_str),
+                    "replaces_price_reserve": _req(_sizing_flag),
                 }
             )
         ),
-        "tariff": _req(
+        "plant": _req(
             _Mapping(
                 {
-                    "currency": _req(_currency),
-                    "priority_components": _req(_COMPONENTS),
-                    "other_components": _req(_COMPONENTS),
-                    "min_priority_discharge_hours": _req(_number(gt=0.0, le=24.0)),
+                    "grid_civils_development_usd": _req(_number(ge=0.0)),
+                    "fixed_opex_usd_per_year": _req(_number(ge=0.0)),
+                    "bess_dc_per_nominal": _req(_number(ge=1.0)),
+                }
+            )
+        ),
+        "curtailment_scenario": _req(
+            _Mapping(
+                {
+                    "enabled": _req(_sizing_flag),
+                    "daytime_export_curtailment_fraction": _req(
+                        _number(ge=0.0, le=1.0)
+                    ),
                     "basis": _req(_nonempty_str),
                 }
             )
         ),
-        "pricing_config": _req(_repo_file),
+        # The one-at-a-time cases and break-even inputs are checked case by case when the
+        # sizing runs (solar_resource.pv_bess_sizing).
+        "sensitivities": _req(
+            _Mapping(
+                {
+                    "round_trip_efficiency": _req(_number(gt=0.0, le=1.0)),
+                    "one_at_a_time": _req(_list_of_mappings),
+                    "break_even": _req(_list_of_mappings),
+                }
+            )
+        ),
+        "recommendation": _req(_sizing_recommendation),
+        # The run's stated limitations, listed in its summary.
+        "limitations": _req(_list_of(_nonempty_str)),
     }
+)
+
+
+def _downside_not_above_p50(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    p50: Any = block.get("p50_gwh")
+    downside: Any = block.get("assumed_downside_gwh")
+    if _is_number(p50) and _is_number(downside) and downside > p50:
+        errors.append(f"{path}: assumed_downside_gwh must not exceed p50_gwh")
+
+
+def _fx_window_dates_in_order(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    start: Any = block.get("start_date")
+    end: Any = block.get("end_date")
+    try:
+        if str(start) >= str(end):
+            errors.append(f"{path}: start_date must be before end_date")
+    except TypeError:
+        pass
+
+
+#: Scenario inputs a named financing sensitivity may override (the screening reads the
+#: rest from the scenario itself).
+_FINANCING_SENSITIVITY = _Mapping(
+    {
+        "id": _req(_nonempty_str),
+        "description": _req(_nonempty_str),
+        "capex_usd": _opt(_number(gt=0.0)),
+        "opex_usd_equivalent_year1": _opt(_number(ge=0.0)),
+        "tariff_fixed_lkr_per_kwh": _opt(_number(ge=0.0)),
+        "tariff_om_lkr_per_kwh": _opt(_number(ge=0.0)),
+        "fx_close_lkr_per_usd": _opt(_number(gt=0.0)),
+        "fx_depreciation_decimal": _opt(_number(gt=-1.0, lt=1.0)),
+    }
+)
+
+_FX_OBSERVATION = _Mapping(
+    {
+        "date": _req(_iso_date),
+        "lkr_per_usd": _req(_number(gt=0.0)),
+        "type": _req(_nonempty_str),
+        "is_assumption": _req(_bool),
+        "evidence_status": _req(_nonempty_str),
+    }
+)
+
+_FX_WINDOW = _Mapping(
+    {
+        "label": _req(_nonempty_str),
+        "start": _req(_number(gt=0.0)),
+        "end": _req(_number(gt=0.0)),
+        "start_date": _req(_iso_date),
+        "end_date": _req(_iso_date),
+        "is_assumption": _req(_bool),
+        "evidence_status": _req(_nonempty_str),
+    },
+    rules=(_fx_window_dates_in_order,),
 )
 
 _FINANCING_SCREENING = _block(
@@ -425,6 +771,7 @@ _FINANCING_SCREENING = _block(
                     "local_rate_decimal": _req(_number(ge=0.0, lt=1.0)),
                     "dfi_tenor_years": _req(_positive_int),
                     "local_tenor_years": _req(_positive_int),
+                    "lender_tail_years": _req(_nonnegative_int),
                     "annual_credit_fee_decimal": _opt(_number(ge=0.0, lt=1.0)),
                 }
             )
@@ -438,9 +785,14 @@ _FINANCING_SCREENING = _block(
                 }
             )
         ),
+        # Stated only for a flat-tariff scenario: a scenario with tariff.om_indexation sets
+        # the O&M part's escalation itself, and the screening refuses both or neither.
+        "tariff_om_escalation_decimal": _opt(_number(gt=-1.0, lt=1.0)),
+        "min_p50_dscr": _req(_number(gt=0.0)),
         "min_downside_dscr": _req(_number(gt=0.0)),
+        "average_p50_dscr": _req(_number(gt=0.0)),
         "allowance_years": _req(_positive_int),
-        "fx_shock": _opt(
+        "fx_shock": _req(
             _Mapping(
                 {
                     "shock_decimal": _req(_number(ge=0.0, lt=1.0)),
@@ -448,7 +800,54 @@ _FINANCING_SCREENING = _block(
                 }
             )
         ),
-    }
+        "generation": _req(
+            _Mapping(
+                {
+                    "p50_gwh": _req(_number(gt=0.0)),
+                    "assumed_downside_gwh": _req(_number(gt=0.0)),
+                    "basis_note": _req(_nonempty_str),
+                },
+                rules=(_downside_not_above_p50,),
+            )
+        ),
+        "tenor_variants": _opt(
+            _list_of(
+                _Mapping(
+                    {
+                        "id": _req(_nonempty_str),
+                        "dfi_tenor_years": _req(_positive_int),
+                        "ppa_years": _req(_positive_int),
+                        "lender_tail_years": _req(_nonnegative_int),
+                    }
+                )
+            )
+        ),
+        "sensitivities": _opt(_list_of(_FINANCING_SENSITIVITY)),
+        "fixed_debt_stress": _opt(
+            _Mapping(
+                {
+                    "held_debt_usd": _req(_number(gt=0.0)),
+                    "operating_year": _req(_positive_int),
+                    "depreciation_rates": _req(
+                        _list_of(_number(gt=-1.0, lt=1.0), unique=True)
+                    ),
+                    "shock_decimals": _req(
+                        _list_of(_number(ge=0.0, lt=1.0), unique=True)
+                    ),
+                }
+            )
+        ),
+        "fx_history": _opt(
+            _Mapping(
+                {
+                    "observations": _req(_list_of(_FX_OBSERVATION)),
+                    "cagr_windows": _opt(_list_of(_FX_WINDOW)),
+                }
+            )
+        ),
+    },
+    _unique_ids("tenor_variants"),
+    _unique_ids("sensitivities"),
 )
 
 _PACKAGE = _Mapping(
@@ -569,6 +968,7 @@ __all__ = [
     "plan_site_analyses",
     "COST_BUILDUP_ROUTES",
     "SCREENING_LABEL",
+    "STORAGE_OPERATIONS",
     "SITE_ANALYSIS_BLOCKS",
     "allowed_keys",
     "declared_site_analysis_blocks",
