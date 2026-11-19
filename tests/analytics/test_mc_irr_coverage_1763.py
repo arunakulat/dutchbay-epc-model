@@ -20,7 +20,11 @@ from analytics.capital_risk_layer_v14 import (
     _risk_config_from_scenario,
     build_capital_risk_report_from_trials,
 )
-from analytics.mc.aggregate import aggregate_trials, irr_exclusion_note
+from analytics.mc.aggregate import (
+    aggregate_trials,
+    irr_exclusion_note,
+    irr_ranked_note,
+)
 from analytics.mc.exports import build_lender_risk_table
 from app.api.responses import CaseResult
 from app.api.surface import _project_capital_risk
@@ -95,8 +99,9 @@ def test_summary_states_the_excluded_trials_beside_each_irr(caplog) -> None:
         result = _aggregate(undefined=True)
     equity = result.summary["equity_irr"]
     assert equity["defined_count"] == N - 5 and equity["excluded_count"] == 5
-    assert equity["coverage_note"] == irr_exclusion_note("equity_irr", 5, N)
-    assert "may be the worst outcomes" in equity["coverage_note"]
+    # #1746 step 2: the summary ranks the excluded trials worst and says so.
+    assert equity["coverage_note"] == irr_ranked_note("equity_irr", 5, N)
+    assert "ranked below every defined trial" in equity["coverage_note"]
     assert result.summary["project_irr"]["excluded_count"] == 2
     assert result.project_irr_excluded_count == 2
     assert set(result.metadata["irr_coverage_notes"]) == {"equity_irr", "project_irr"}
@@ -104,9 +109,10 @@ def test_summary_states_the_excluded_trials_beside_each_irr(caplog) -> None:
     assert result.summary["equity_npv"]["excluded_count"] == 0
     assert "coverage_note" not in result.summary["equity_npv"]
     assert sum("no defined equity_irr" in r.message for r in caplog.records) == 1
-    # The statistics themselves are unchanged: still over the defined trials.
+    # The mean stays over the defined trials, and says so (#1746 step 2).
     defined = [v for v in _trials(undefined=True)["equity_irr"] if v is not None]
     assert equity["mean"] == pytest.approx(float(np.mean(defined)))
+    assert equity["mean_basis"] == "defined_trials"
 
 
 def test_a_run_with_every_irr_defined_carries_no_note(caplog) -> None:
@@ -124,7 +130,7 @@ def test_lender_risk_table_notes_only_an_irr_that_leaves_trials_out() -> None:
     frame = build_lender_risk_table(_aggregate(undefined=True))
     irr = frame[frame["metric"] == "Project IRR"].iloc[0]
     assert irr["unavailable_trials"] == 2
-    assert irr["coverage_note"] == irr_exclusion_note("project_irr", 2, N)
+    assert irr["coverage_note"] == irr_ranked_note("project_irr", 2, N)
     npv = frame[frame["metric"] == "Project NPV"].iloc[0]
     assert not isinstance(npv["coverage_note"], str)
     clean = build_lender_risk_table(_aggregate(undefined=False))
