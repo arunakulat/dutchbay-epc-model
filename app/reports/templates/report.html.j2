@@ -144,6 +144,11 @@
     {%- if ctx.fx_fallback_note %}
     <p class="fx-warning"><strong>FX fallback notice:</strong> {{ ctx.fx_fallback_note }}</p>
     {%- endif %}
+    {#- Automatic capex price-date escalation (#1578): render-when-present, whitespace-trimmed
+        so a report without it is byte-identical. -#}
+    {%- if ctx.capex_price_basis_note %}
+    <p class="fx-warning"><strong>Capex price-date notice:</strong> {{ ctx.capex_price_basis_note }}</p>
+    {%- endif %}
   </section>
 
   {# 3. Executive summary #}

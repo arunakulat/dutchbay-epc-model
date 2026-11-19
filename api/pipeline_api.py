@@ -36,7 +36,7 @@ from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.development_readiness import validate_development_readiness
-from analytics.evaluation_v14 import expand_dotted_overrides
+from analytics.evaluation_v14 import evaluated_scenario_config, expand_dotted_overrides
 from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -181,6 +181,21 @@ class CostBlock(BaseModel):
     accuracy_high_pct: Optional[float] = None  # AACE expected-accuracy band (high side)
 
 
+class CapexPriceBasisBlock(BaseModel):
+    """The automatic capex price-date escalation disclosure (#1591 D-1/A-1, #1578).
+
+    The pipeline result's ``capex_price_basis`` block, passed through unchanged: present
+    only when a declared ``capex.price_basis`` escalated a capex amount stated beside or
+    instead of ``capex.usd_total``.
+    """
+
+    automatically_applied: bool
+    factor: float
+    price_year: int
+    keys_at_price_year: Dict[str, float]
+    warning: str
+
+
 class ManifestBlock(BaseModel):
     """Auditable reproducibility stamp: ties the output to inputs + engine + commit."""
 
@@ -229,6 +244,8 @@ class RunPipelineResponse(BaseModel):
     cost: CostBlock
     funding: FundingBlock  # sources-and-uses + DSRA-at-close
     manifest: ManifestBlock  # reproducibility stamp over the RESOLVED config
+    # Present only when the engine escalated a capex amount automatically (#1578).
+    capex_price_basis: Optional[CapexPriceBasisBlock] = None
 
 
 # ---------------------------------------------------------------------------
@@ -529,6 +546,16 @@ def _extract_cost(cfg: Mapping[str, Any]) -> CostBlock:
     )
 
 
+def _extract_capex_price_basis(
+    result: Mapping[str, Any],
+) -> Optional[CapexPriceBasisBlock]:
+    """The pipeline's automatic capex escalation disclosure, or ``None`` (#1578)."""
+    block = result.get("capex_price_basis")
+    if not isinstance(block, Mapping):
+        return None
+    return CapexPriceBasisBlock(**dict(block))
+
+
 def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
     return KpiBlock(
         project_irr=_f(kpis.get("project_irr")),
@@ -711,7 +738,12 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         kpis=_extract_kpis(kpis),
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
-        cost=_extract_cost(cfg),
+        # The capex the engine financed: a declared capex.price_basis escalates the
+        # stated price-year amounts to the construction draws (#1569, #1578), and the
+        # pipeline resolves that on its own copy, so the authored cfg here still holds
+        # the price-year figure.
+        cost=_extract_cost(evaluated_scenario_config(cfg)),
         funding=_extract_funding(debt),
         manifest=ManifestBlock(**manifest_dict),
+        capex_price_basis=_extract_capex_price_basis(result),
     )
