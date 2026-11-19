@@ -674,6 +674,11 @@ class CapitalRiskMetricRow(BaseModel):
     cvar: float
     var_label: str  # e.g. "VaR(95%)"
     cvar_label: str  # e.g. "CVaR/ES(95%)"
+    #: Trials this row's statistics are taken over, of ``total_count`` (#1763). Below the
+    #: total only for an IRR metric with undefined trials, which ``coverage_note`` states.
+    defined_count: Optional[int] = None
+    total_count: Optional[int] = None
+    coverage_note: Optional[str] = None
 
 
 class CapitalRiskBlock(BaseModel):
@@ -706,6 +711,12 @@ class CapitalRiskBlock(BaseModel):
     probability_below_hurdle: float
     target_equity_irr: float
     metrics: List[CapitalRiskMetricRow]
+    #: The IRR coverage disclosures (#1763, #1746 step 1), one per IRR metric with
+    #: undefined trials; empty when every trial has a defined IRR. The template states them
+    #: before the figures, and ``probability_below_hurdle`` is over the trials with a
+    #: defined equity IRR (``hurdle_defined_count`` of ``n_trials``).
+    irr_coverage_notes: List[str] = Field(default_factory=list)
+    hurdle_defined_count: Optional[int] = None
     #: The NPV-distribution chart's basename (no absolute path — avoids leaking the server
     #: filesystem layout into a lender document) and, when the PNG exists, an embedded
     #: base64 data-URI so the chart renders self-contained. None when matplotlib degraded.
@@ -1876,6 +1887,8 @@ def _build_capital_risk(
         return None
     cb = capital_risk.tail_report.covenant_breaches
     thresholds = cb.thresholds
+    # Per-IRR-metric trial coverage (#1763); every other metric covers every trial.
+    coverage = capital_risk.irr_coverage
     metrics = [
         CapitalRiskMetricRow(
             metric=summary.metric_name,
@@ -1887,6 +1900,13 @@ def _build_capital_risk(
             cvar=summary.var_cvar.cvar,
             var_label=summary.var_cvar.var_label,
             cvar_label=summary.var_cvar.cvar_label,
+            defined_count=int(
+                coverage.get(summary.metric_name, {}).get(
+                    "defined_count", capital_risk.n_trials
+                )
+            ),
+            total_count=capital_risk.n_trials,
+            coverage_note=coverage.get(summary.metric_name, {}).get("note"),
         )
         for summary in (
             capital_risk.tail_report.equity_irr,
@@ -1911,6 +1931,14 @@ def _build_capital_risk(
         probability_below_hurdle=capital_risk.tail_report.probability_below_hurdle,
         target_equity_irr=capital_risk.tail_report.target_equity_irr,
         metrics=metrics,
+        irr_coverage_notes=[
+            str(facts["note"]) for facts in coverage.values() if facts.get("note")
+        ],
+        hurdle_defined_count=(
+            int(coverage["equity_irr"]["defined_count"])
+            if "equity_irr" in coverage
+            else capital_risk.n_trials
+        ),
         npv_distribution_filename=png_path.name,
         npv_distribution_img=img,
     )
