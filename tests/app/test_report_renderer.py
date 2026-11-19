@@ -199,7 +199,8 @@ def test_html_contains_tornado_when_supplied() -> None:
         build_report_context(case, generated_at=GENERATED_AT, tornado=tornado)
     )
     assert "Sensitivity Tornado" in html
-    assert "Downside IRR" in html  # table header
+    assert "Sensitivity Tornado &mdash; Project IRR" in html  # the swept metric
+    assert "Downside case" in html  # table header
     assert "Tariff" in html and "CAPEX" in html  # drivers rendered (widest first)
     assert "2.80%" in html  # swing rendered via fmt_ratio_pct(0.0280)
 

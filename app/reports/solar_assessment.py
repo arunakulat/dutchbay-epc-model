@@ -348,24 +348,12 @@ def _monte_carlo(cfg: Mapping[str, Any], trials: int) -> Dict[str, Any]:
     return summary
 
 
-#: The open issue for the one-way sensitivity on a scenario with per-technology generation.
-SENSITIVITY_PER_TECHNOLOGY_ISSUE = "#1787"
-
-
 def _sensitivity(scenario_path: str, cfg: Mapping[str, Any]) -> List[Dict[str, Any]]:
     from analytics.core.sensitivity_runner import run_sensitivity_analysis
 
-    try:
-        suite = run_sensitivity_analysis(scenario_path, metric="project_irr")
-    except Exception as exc:
-        generation = cfg.get("generation")
-        if isinstance(generation, Mapping) and generation.get("technologies"):
-            raise RuntimeError(
-                f"{type(exc).__name__}: {exc} The runner shocks project.capacity_factor, "
-                "which a per-technology generation block refuses to reconcile; tracked in "
-                f"{SENSITIVITY_PER_TECHNOLOGY_ISSUE}."
-            ) from exc
-        raise
+    # A per-technology scenario now runs too: the capacity-factor shock scales each
+    # technology with the project figure (#1787).
+    suite = run_sensitivity_analysis(scenario_path, metric="project_irr")
     rows: List[Dict[str, Any]] = []
     for tr in suite.tornado_results:
         shock = tr.shock_results[0]
