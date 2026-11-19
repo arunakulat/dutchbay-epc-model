@@ -98,14 +98,19 @@ class CashflowParams:
       path as above. Set by the evaluation gateway when an override moved ``fx``
       (finance.cashflow_v14_params.with_usd_opex_fx_reference). When the model curve's
       shape (each curve relative to its own financial-close spot) differs from the
-      reference's, the stressed model curve replaces the own path, so an FX drift stress
-      or a Monte Carlo drift draw runs the USD share at the drawn rate. A spot-only or
-      curve-neutral change keeps the own path.
+      reference's, the stressed model curve replaces the own path from the first
+      operating year whose shape differs, so an FX drift stress or a Monte Carlo drift
+      draw runs the USD share at the drawn rate; the years before it keep the own path,
+      and from that year the stressed curve's year-on-year moves carry on from the
+      level the own path had reached, with no step onto the model curve (owner rulings,
+      2026-11-16 14:28Z and 14:47Z). A spot-only or curve-neutral change keeps the own
+      path.
     - opex_usd_fx_drift_override: bool (default False). Set with the reference when the
-      override explicitly named an FX drift key, even with the authored value. The
-      stressed model curve then replaces the own path whatever its shape, so any drift
-      override is a stress and there is no jump at the authored drift (owner ruling,
-      2026-11-16).
+      override explicitly named an FX drift key, even with the authored value. A drift
+      that departs from the reference in a later year replaces the own path from that
+      year, as above; one whose curve never departs (the authored drift) replaces the
+      whole path, so any drift override is a stress and there is no jump at the
+      authored drift (owner ruling, 2026-11-16).
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams

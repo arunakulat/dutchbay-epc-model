@@ -1,14 +1,13 @@
 """Tests for ``finance.epc_margin`` — EPC construction-margin economics.
 
-Pins the Kolonnawa-style EPC supply model: a construction margin (price − cost) over a
-construction period, with the contractor's working-capital need and (when defined) an
-annualised construction IRR — a SEPARATE model from the operational v14 cashflow engine.
+Pins the EPC supply model: a construction margin (price − cost) over a construction
+period, with the contractor's working-capital need and (when defined) an annualised
+construction IRR, a separate model from the operating cashflow engine. How a scenario
+reaches it (pipeline, pre-flight, main CLI) is pinned in ``test_epc_any_scenario_1780.py``.
 """
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -119,29 +118,12 @@ def test_payment_month_out_of_range_raises():
 # ── scenario + CLI ─────────────────────────────────────────────────────────────
 
 
-def test_kolonnawa_scenario():
+def test_committed_epc_only_scenario():
     import yaml
 
-    assert _SCENARIO.exists(), f"committed Kolonnawa EPC scenario missing: {_SCENARIO}"
+    assert _SCENARIO.exists(), f"committed EPC-only scenario missing: {_SCENARIO}"
     config = yaml.safe_load(_SCENARIO.read_text())
     r = compute_epc_margin(config)
     assert r.total_cost == pytest.approx(48_000_000)
     assert r.gross_margin == pytest.approx(6_000_000)
     assert r.peak_working_capital > 0  # the contractor funds working capital mid-build
-
-
-def test_cli_runs(capsys):
-    assert _SCENARIO.exists(), f"committed Kolonnawa EPC scenario missing: {_SCENARIO}"
-    spec = importlib.util.spec_from_file_location(
-        "run_epc_margin", _REPO / "scripts" / "run_epc_margin.py"
-    )
-    assert spec and spec.loader
-    cli = importlib.util.module_from_spec(spec)
-    if str(_REPO) not in sys.path:
-        sys.path.insert(0, str(_REPO))
-    spec.loader.exec_module(cli)
-    rc = cli.main(["--config", str(_SCENARIO)])
-    assert rc == 0
-    out = capsys.readouterr().out
-    assert "Gross margin" in out
-    assert "Peak working capital" in out

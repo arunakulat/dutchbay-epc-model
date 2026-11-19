@@ -7,9 +7,13 @@
 # developer's economics are therefore a CONSTRUCTION MARGIN (EPC price - build cost)
 # realised over the construction period — NOT a 15/20-year operational CFADS stream.
 #
-# This scenario is consumed by finance.epc_margin.compute_epc_margin (run via
-# scripts/run_epc_margin.py), a SEPARATE module from the operational v14 cashflow engine
-# (finance.cashflow_v14) — an EPC supply deal does not belong on the operational path.
+# An EPC-only scenario: it carries an epc block and no operating project, so the main CLI
+# runs the construction-margin model (finance.epc_margin) alone (#1780):
+#
+#   python run_full_pipeline_v14.py config=scenarios/kolonnawa_epc_100mw.yaml
+#
+# Any other scenario may declare the same epc block and gets result["epc_margin"] beside
+# its own figures. An EPC supply deal is never folded into the operating cashflow.
 #
 # ⚠️ ALL FIGURES ILLUSTRATIVE — the EPC contract price and the cost breakdown are the
 # bid/commercial variables; replace with the actual tender numbers.

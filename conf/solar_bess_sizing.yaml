@@ -1,0 +1,82 @@
+# PV + BESS sizing: method configuration (#1578 U3).
+#
+# Read by scripts/run_solar_bess_sizing_v14.py (Hydra; one JSON object on stdout, CLI-01,
+# CLI-03) through solar_resource.pv_bess_sizing_runner. Every site input (the unit, pricing and
+# regulatory configs, the unit overrides, the search grid, the readings of the capacity limit,
+# the uncertainty ranges, battery health, the plant lines, the curtailment scenario, the
+# sensitivities, the recorded choice and the stated limitations) comes from the scenario's
+# `solar_storage_sizing` block (analytics/site_analysis_blocks.py, #1754). A scenario without
+# the block reports "not applicable". Only the Monte Carlo settings and the objective live here.
+#
+# TEST-03: a production run is n_trials x evaluated points + evaluated points (base cases)
+# + 2 x evaluated points (curtailment and RTE sensitivities) model evaluations, far above the
+# ordinary suite's 200, so it runs only through the CLI. The ordinary tests use reduced grids
+# and trial counts.
+#
+# Usage:
+#   .venv/bin/python scripts/run_solar_bess_sizing_v14.py scenario=scenarios/<file>.yaml
+#   ... output.summary_json=<path>   # writes the concise summary as well
+
+schema_version: solar_bess_sizing_method_v1
+
+# Required on the command line: the scenario whose block is sized.
+scenario: null
+
+method:
+  monte_carlo:
+    seed: 20261101            # MRM-01: PR 3's seed, recorded in the output
+    n_trials: 256             # PR 3's count, per grid point; the same LHS draws at every point
+    sampler: lhs
+    include_base_case: true
+
+  objective:
+    # PRIMARY (PR 7; owner decision 2 of 2026-11-01, #1353 comment 6563070978, verbatim:
+    # "After-tax project NPV (Recommended)"): the P50 of the engine's after-tax project NPV of
+    # the solar + BESS project scenario. Each trial is evaluated through
+    # analytics.evaluation_v14.evaluate_with_overrides (ARCH-04, FRAMEWORK-03): CFADS after the
+    # 30% corporate tax and the 10% CFADS risk haircut, less the capex at t=0, discounted at the
+    # engine's own rate by finance.irr (ARCH-02). P90 is reported beside it (objective_statistics
+    # in the summary), and so is the unit's pre-tax NPV (report_beside).
+    # PR 4's objective, the P50 of the unit-only pre-tax NPV (the solar + BESS capex, its
+    # dispatched revenue and its O&M; no tax or debt), stays selectable and is OFF by default:
+    # set metric: unit_pretax_npv_usd to restore it. It is also listed under alternatives.
+    metric: project_npv
+    statistic: p50
+    # Reported at each reading's choice beside the objective (P50, P90, mean and n of each).
+    report_beside: [unit_pretax_npv_usd, unit_pretax_irr, project_irr, equity_irr]
+    # PV rule: "any" lets the objective choose the PV over the whole grid (up to the lot's
+    # maximum); the best size with the PV held at the lot's maximum is reported beside it with a
+    # paired comparison. A base-case screen on 2026-11-01 (one trial per point, 1,300
+    # evaluations) suggested that value kept rising as the PV shrank, so one production run (at
+    # 2270a402) held the PV at land_max. Its P50 (seed 20261101, 256 trials) has an interior PV
+    # optimum under reading A, so the rule is "any" and the objective decides the PV too.
+    pv_rule: any
+    alternatives:
+      - [unit_pretax_npv_usd, p50]
+      - [unit_pretax_npv_usd, p90]
+      - [unit_pretax_npv_usd, mean]
+      - [unit_pretax_irr, p50]
+      - [project_npv, p90]
+      - [project_irr, p50]
+      - [equity_irr, p50]
+      - [equity_npv, p50]
+      - [min_dscr, p50]
+
+output:
+  # Optional, relative to the repository root; null writes nothing.
+  summary_json: null
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
