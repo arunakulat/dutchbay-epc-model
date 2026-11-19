@@ -3,16 +3,17 @@
 Pure contract and configuration loader surface (``CCCDIR`` / ``CESSPIT`` / ``CASPER``):
 
 * Defines canonical pipeline stages (:class:`PipelineStage`), execution dispositions
-  (:class:`ModuleExecutionStatus`), and workbook representation modes
-  (:class:`ExcelRepresentationKind`).
+  (:class:`ModuleExecutionStatus`), optional extra modes (:class:`OptionalExtraMode`),
+  and workbook representation modes (:class:`ExcelRepresentationKind`).
 * Loads and strictly validates ``config/module_roles.yaml`` via
-  :func:`load_module_role_registry` (``extra="forbid"``, no silent defaults).
+  :func:`load_module_role_registry` (``extra="forbid"``, no silent defaults, duplicate
+  YAML mapping keys rejected).
 * Captures per-module runtime execution records in :class:`ModuleExecutionRecord` and
-  validates ledger uniqueness, registry membership, and status summary counts via
-  :func:`build_module_execution_ledger`.
+  validates ledger uniqueness, registry membership/metadata agreement, and status summary
+  counts via :func:`build_module_execution_ledger`.
 
 Architectural boundary: imports only standard library, ``pyyaml``, and ``pydantic`` —
-never ``finance`` or ``analytics.pipeline_v14_enhanced``.
+never ``finance`` or ``analytics``.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from collections.abc import Iterable, Mapping
 from enum import Enum
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 import yaml
 from pydantic import (
@@ -93,6 +94,7 @@ class ModuleExecutionStatus(str, Enum):
     """Disposition of a registered module for a concrete run profile."""
 
     EXECUTED = "executed"
+    DEGRADED = "degraded"
     GUARD_PASSED = "guard_passed"
     GUARD_REFUSED = "guard_refused"
     NOT_APPLICABLE = "not_applicable"
@@ -100,6 +102,14 @@ class ModuleExecutionStatus(str, Enum):
     SKIPPED_OPTIONAL_EXTRA = "skipped_optional_extra"
     SKIPPED_SYNC_PROFILE = "skipped_sync_profile"
     FAILED = "failed"
+
+
+class OptionalExtraMode(str, Enum):
+    """How declared optional extras govern execution for a registered module."""
+
+    NONE = "none"
+    REQUIRED = "required"
+    CASPER_FALLBACK = "casper_fallback"
 
 
 class ExcelRepresentationKind(str, Enum):
@@ -113,6 +123,7 @@ class ExcelRepresentationKind(str, Enum):
 
 _REASON_REQUIRED_STATUSES: frozenset[ModuleExecutionStatus] = frozenset(
     {
+        ModuleExecutionStatus.DEGRADED,
         ModuleExecutionStatus.FAILED,
         ModuleExecutionStatus.GUARD_REFUSED,
         ModuleExecutionStatus.NOT_APPLICABLE,
@@ -120,6 +131,39 @@ _REASON_REQUIRED_STATUSES: frozenset[ModuleExecutionStatus] = frozenset(
         ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA,
         ModuleExecutionStatus.SKIPPED_SYNC_PROFILE,
     }
+)
+
+
+class _StrictSafeLoader(yaml.SafeLoader):
+    """PyYAML SafeLoader that rejects duplicate or unhashable mapping keys."""
+
+
+def _construct_mapping_no_duplicates(
+    loader: yaml.SafeLoader,
+    node: yaml.nodes.MappingNode,
+    deep: bool = False,
+) -> dict[Any, Any]:
+    loader.flatten_mapping(node)
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            already_present = key in mapping
+        except TypeError as exc:
+            raise ValueError(
+                f"Unhashable YAML mapping key {key!r} in module role registry"
+            ) from exc
+        if already_present:
+            raise ValueError(
+                f"Duplicate YAML mapping key {key!r} in module role registry"
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_duplicates,
 )
 
 
@@ -132,20 +176,40 @@ class ModuleRoleSpec(BaseModel):
     pipeline_stage: PipelineStage
     role_description: RoleDescription
     excel_representation: ExcelRepresentationKind
-    optional_extra: Optional[str] = None
-    notes: Optional[str] = None
+    optional_extras: tuple[str, ...] = ()
+    extra_mode: OptionalExtraMode = OptionalExtraMode.NONE
+    notes: Optional[NonEmptyText] = None
 
-    @field_validator("optional_extra")
+    @field_validator("optional_extras")
     @classmethod
-    def _validate_optional_extra(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        if value not in KNOWN_OPTIONAL_EXTRAS:
+    def _validate_optional_extras(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        unknown = [entry for entry in value if entry not in KNOWN_OPTIONAL_EXTRAS]
+        if unknown:
             known = ", ".join(sorted(KNOWN_OPTIONAL_EXTRAS))
+            bad = ", ".join(repr(entry) for entry in unknown)
             raise ValueError(
-                f"Unknown optional_extra {value!r}; expected one of: {known}"
+                f"Unknown optional_extras entry {bad}; expected one of: {known}"
+            )
+        counts = Counter(value)
+        duplicates = sorted(entry for entry, count in counts.items() if count > 1)
+        if duplicates:
+            raise ValueError(
+                f"Duplicate entries in optional_extras: {', '.join(duplicates)}"
             )
         return value
+
+    @model_validator(mode="after")
+    def _validate_extra_mode_consistency(self) -> ModuleRoleSpec:
+        has_extras = len(self.optional_extras) > 0
+        if not has_extras and self.extra_mode is not OptionalExtraMode.NONE:
+            raise ValueError(
+                "ModuleRoleSpec with empty optional_extras must use extra_mode='none'"
+            )
+        if has_extras and self.extra_mode is OptionalExtraMode.NONE:
+            raise ValueError(
+                "ModuleRoleSpec with non-empty optional_extras cannot use extra_mode='none'"
+            )
+        return self
 
 
 class ModuleRoleRegistry(BaseModel):
@@ -156,7 +220,9 @@ class ModuleRoleRegistry(BaseModel):
     schema_version: Literal["1.0"]
     stages: tuple[PipelineStage, ...]
     modules: tuple[ModuleRoleSpec, ...]
-    _by_path: dict[str, ModuleRoleSpec] = PrivateAttr(default_factory=dict)
+    _by_path: Mapping[str, ModuleRoleSpec] = PrivateAttr(
+        default_factory=lambda: MappingProxyType({})
+    )
 
     @model_validator(mode="after")
     def _validate_registry_integrity(self) -> ModuleRoleRegistry:
@@ -178,6 +244,17 @@ class ModuleRoleRegistry(BaseModel):
                 f"Missing pipeline stage(s) in registry: {', '.join(missing_stages)}"
             )
 
+        canonical_stages = tuple(PipelineStage)
+        if self.stages != canonical_stages:
+            expected_order = ", ".join(stage.value for stage in canonical_stages)
+            raise ValueError(
+                "Pipeline stages in registry must follow canonical order: "
+                f"{expected_order}"
+            )
+
+        if not self.modules:
+            raise ValueError("ModuleRoleRegistry must define at least one module")
+
         path_counts = Counter(spec.module_path for spec in self.modules)
         duplicate_paths = sorted(
             path for path, count in path_counts.items() if count > 1
@@ -187,8 +264,27 @@ class ModuleRoleRegistry(BaseModel):
                 f"Duplicate module_path entries in registry: {', '.join(duplicate_paths)}"
             )
 
-        self._by_path = {spec.module_path: spec for spec in self.modules}
+        populated_stages = {spec.pipeline_stage for spec in self.modules}
+        empty_stages = [
+            stage.value for stage in PipelineStage if stage not in populated_stages
+        ]
+        if empty_stages:
+            raise ValueError(
+                "Every PipelineStage must have at least one registered module; "
+                f"empty stage(s): {', '.join(empty_stages)}"
+            )
+
+        object.__setattr__(
+            self,
+            "_by_path",
+            MappingProxyType({spec.module_path: spec for spec in self.modules}),
+        )
         return self
+
+    @property
+    def by_path(self) -> Mapping[str, ModuleRoleSpec]:
+        """Read-only mapping from dotted module path to :class:`ModuleRoleSpec`."""
+        return self._by_path
 
     def __contains__(self, module_path: object) -> bool:
         return isinstance(module_path, str) and module_path in self._by_path
@@ -215,13 +311,13 @@ class ModuleExecutionRecord(BaseModel):
 
     module_path: ModulePath
     pipeline_stage: PipelineStage
-    role_description: NonEmptyText
+    role_description: RoleDescription
     status: ModuleExecutionStatus
     excel_representation: ExcelRepresentationKind
-    reason: Optional[str] = None
+    reason: Optional[NonEmptyText] = None
     key_outputs: tuple[NonEmptyText, ...] = ()
     provenance_refs: tuple[NonEmptyText, ...] = ()
-    caveat: Optional[str] = None
+    caveat: Optional[NonEmptyText] = None
 
     @model_validator(mode="after")
     def _validate_reason_required(self) -> ModuleExecutionRecord:
@@ -283,7 +379,8 @@ def build_module_execution_ledger(
     """Validate and assemble a :class:`ModuleExecutionLedger` for a run profile.
 
     Fails loudly on duplicate ``module_path`` entries and, when ``registry`` is
-    supplied, on any record whose ``module_path`` is absent from ``registry``.
+    supplied, on unregistered modules, metadata drift against ``registry``, or
+    ``skipped_optional_extra`` on a module declaring no ``optional_extras``.
     """
     records_tuple = tuple(records)
 
@@ -301,6 +398,34 @@ def build_module_execution_ledger(
                 f"{', '.join(unregistered)}"
             )
 
+        for record in records_tuple:
+            spec = registry.get(record.module_path)
+            if record.pipeline_stage != spec.pipeline_stage:
+                raise ValueError(
+                    f"ModuleExecutionRecord for {record.module_path!r} has "
+                    f"pipeline_stage={record.pipeline_stage.value!r}, expected "
+                    f"{spec.pipeline_stage.value!r} from registry"
+                )
+            if record.excel_representation != spec.excel_representation:
+                raise ValueError(
+                    f"ModuleExecutionRecord for {record.module_path!r} has "
+                    f"excel_representation={record.excel_representation.value!r}, expected "
+                    f"{spec.excel_representation.value!r} from registry"
+                )
+            if record.role_description != spec.role_description:
+                raise ValueError(
+                    f"ModuleExecutionRecord for {record.module_path!r} has "
+                    "role_description that does not match registry spec"
+                )
+            if (
+                record.status is ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA
+                and not spec.optional_extras
+            ):
+                raise ValueError(
+                    f"ModuleExecutionRecord for {record.module_path!r} cannot have "
+                    "status 'skipped_optional_extra' when registry optional_extras is empty"
+                )
+
     return ModuleExecutionLedger(profile=profile, records=records_tuple)
 
 
@@ -310,7 +435,7 @@ def load_module_role_registry(
     """Strictly load and validate the module role registry YAML without defaults."""
     resolved = Path(path)
     raw_text = resolved.read_text(encoding="utf-8")
-    loaded = yaml.safe_load(raw_text)
+    loaded = yaml.load(raw_text, Loader=_StrictSafeLoader)  # nosec B506
     if not isinstance(loaded, Mapping):
         raise ValueError(
             f"Expected YAML mapping at root of {resolved}, got {type(loaded).__name__}"
@@ -327,6 +452,7 @@ __all__ = [
     "ModuleExecutionStatus",
     "ModuleRoleRegistry",
     "ModuleRoleSpec",
+    "OptionalExtraMode",
     "PipelineStage",
     "build_module_execution_ledger",
     "load_module_role_registry",

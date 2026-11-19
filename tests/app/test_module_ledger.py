@@ -1,4 +1,4 @@
-"""Tests for config/module_roles.yaml and app.reports.module_ledger (W1-1)."""
+"""Tests for config/module_roles.yaml, lazy app.reports exports, and module_ledger (W1-1)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from typing import Any
 
 import pytest
@@ -25,6 +25,7 @@ from app.reports.module_ledger import (
     ModuleExecutionStatus,
     ModuleRoleRegistry,
     ModuleRoleSpec,
+    OptionalExtraMode,
     PipelineStage,
     build_module_execution_ledger,
     load_module_role_registry,
@@ -51,7 +52,8 @@ def _role_spec(
     pipeline_stage: PipelineStage = PipelineStage.RISK_SENSITIVITY_OPT,
     role_description: str = "Executes seeded Monte Carlo risk simulations.",
     excel_representation: ExcelRepresentationKind = ExcelRepresentationKind.ENGINE_TABLE_PLUS_ROLLUP,
-    optional_extra: str | None = None,
+    optional_extras: tuple[str, ...] = (),
+    extra_mode: OptionalExtraMode = OptionalExtraMode.NONE,
     notes: str | None = None,
 ) -> ModuleRoleSpec:
     return ModuleRoleSpec(
@@ -59,9 +61,30 @@ def _role_spec(
         pipeline_stage=pipeline_stage,
         role_description=role_description,
         excel_representation=excel_representation,
-        optional_extra=optional_extra,
+        optional_extras=optional_extras,
+        extra_mode=extra_mode,
         notes=notes,
     )
+
+
+def _complete_stage_specs(
+    *,
+    exclude_stage: PipelineStage | None = None,
+) -> tuple[ModuleRoleSpec, ...]:
+    """Build one minimal ModuleRoleSpec per PipelineStage for isolated registry tests."""
+    specs: list[ModuleRoleSpec] = []
+    for idx, stage in enumerate(PipelineStage):
+        if stage is exclude_stage:
+            continue
+        specs.append(
+            _role_spec(
+                module_path=f"test_pkg.stage_{idx}",
+                pipeline_stage=stage,
+                role_description=f"Synthetic module covering stage {stage.value}.",
+                excel_representation=ExcelRepresentationKind.GOVERNANCE_METADATA,
+            )
+        )
+    return tuple(specs)
 
 
 def _exec_record(
@@ -88,6 +111,28 @@ def _exec_record(
     )
 
 
+def _record_from_spec(
+    spec: ModuleRoleSpec,
+    *,
+    status: ModuleExecutionStatus = ModuleExecutionStatus.EXECUTED,
+    reason: str | None = None,
+    key_outputs: tuple[str, ...] = (),
+    provenance_refs: tuple[str, ...] = (),
+    caveat: str | None = None,
+) -> ModuleExecutionRecord:
+    return ModuleExecutionRecord(
+        module_path=spec.module_path,
+        pipeline_stage=spec.pipeline_stage,
+        role_description=spec.role_description,
+        status=status,
+        excel_representation=spec.excel_representation,
+        reason=reason,
+        key_outputs=key_outputs,
+        provenance_refs=provenance_refs,
+        caveat=caveat,
+    )
+
+
 def test_default_registry_loads_and_validates() -> None:
     assert DEFAULT_MODULE_ROLES_PATH.is_file()
     registry = load_module_role_registry()
@@ -95,6 +140,7 @@ def test_default_registry_loads_and_validates() -> None:
     assert registry.schema_version == "1.0"
     assert registry.stages == tuple(PipelineStage)
     assert len(registry.modules) > 0
+    assert isinstance(registry.by_path, MappingProxyType)
 
     for stage in PipelineStage:
         by_stage = registry.by_stage(stage)
@@ -113,6 +159,73 @@ def test_default_registry_loads_and_validates() -> None:
         is PipelineStage.CORE_FINANCE
     )
     assert "analytics.mc.engine" in registry
+
+    # Verify factual remediation fixes against source contracts.
+    solar_report = registry.get("app.reports.solar_assessment")
+    assert "bankable" not in solar_report.role_description.lower()
+    assert "not a lender representation" in solar_report.role_description.lower()
+    assert solar_report.optional_extras == ("solar", "report", "gis")
+    assert solar_report.extra_mode is OptionalExtraMode.CASPER_FALLBACK
+
+    assert (
+        registry.get("analytics.site_analysis_blocks").pipeline_stage
+        is PipelineStage.GOVERNANCE
+    )
+
+    crossval = registry.get("wind_resource.crossval")
+    assert crossval.optional_extras == ()
+    assert crossval.extra_mode is OptionalExtraMode.NONE
+
+    for mod in (
+        "solar_resource.pv_bess_sizing",
+        "solar_resource.pv_bess_sizing_runner",
+    ):
+        spec = registry.get(mod)
+        assert spec.optional_extras == ("solar", "gis")
+        assert spec.extra_mode is OptionalExtraMode.REQUIRED
+
+    wind_pipeline = registry.get("wind_resource.wind_pipeline")
+    assert wind_pipeline.optional_extras == ("wind",)
+    assert wind_pipeline.extra_mode is OptionalExtraMode.REQUIRED
+
+    arco = registry.get("wind_resource.arco_assessment")
+    assert arco.optional_extras == ("wind",)
+    assert arco.extra_mode is OptionalExtraMode.CASPER_FALLBACK
+
+    for mod in (
+        "analytics.grid.evaluate_grid",
+        "analytics.grid.short_circuit",
+        "analytics.grid.harmonics",
+        "analytics.grid.reactive_screen",
+    ):
+        spec = registry.get(mod)
+        assert spec.optional_extras == ("grid",)
+        assert spec.extra_mode is OptionalExtraMode.CASPER_FALLBACK
+
+    security = registry.get("app.api.security")
+    assert security.optional_extras == ("api",)
+    assert security.extra_mode is OptionalExtraMode.REQUIRED
+
+    assert registry.get("analytics.gis.gis_export").optional_extras == ("gis", "wind")
+    assert registry.get("analytics.gis.pv_array_layout").optional_extras == (
+        "gis",
+        "solar",
+    )
+    assert registry.get("analytics.gis.shadow_flicker").optional_extras == (
+        "gis",
+        "solar",
+    )
+    assert registry.get("app.api.jobs_router").optional_extras == ("api", "jobs")
+    assert registry.get(
+        "app.reports.synthetic_qsts_finance_report"
+    ).optional_extras == ("report", "ingestion")
+    assert registry.get("wind_resource.layout_optimizer").optional_extras == (
+        "micrositing",
+        "wind",
+    )
+    assert registry.get("analytics.sensitivity.global_sa").optional_extras == (
+        "feasibility",
+    )
 
     with pytest.raises(KeyError, match="not registered"):
         registry.get("nonexistent.module.path")
@@ -147,12 +260,8 @@ def test_registry_optional_extras_match_pyproject() -> None:
     pyproject_extras = set(declared_extras())
     assert KNOWN_OPTIONAL_EXTRAS <= pyproject_extras
     registry = load_module_role_registry()
-    used_extras = {
-        spec.optional_extra
-        for spec in registry.modules
-        if spec.optional_extra is not None
-    }
-    assert used_extras <= KNOWN_OPTIONAL_EXTRAS
+    used_extras = {extra for spec in registry.modules for extra in spec.optional_extras}
+    assert used_extras == KNOWN_OPTIONAL_EXTRAS
 
 
 def test_module_ledger_imports_remain_pure_and_cold_import_safe() -> None:
@@ -178,20 +287,24 @@ def test_module_ledger_imports_remain_pure_and_cold_import_safe() -> None:
     ]
     assert not forbidden, f"Forbidden imports in module_ledger.py: {forbidden}"
 
-    # Load module_ledger.py directly without triggering app/reports/__init__.py
-    # to prove the module itself pulls zero finance/analytics modules at import time.
-    probe = (
-        "import importlib.util, sys; "
-        f"spec = importlib.util.spec_from_file_location('module_ledger_probe', {str(source_path)!r}); "
-        "mod = importlib.util.module_from_spec(spec); "
-        "sys.modules[spec.name] = mod; "
-        "spec.loader.exec_module(mod); "
-        "leaked = [m for m in sys.modules if m == 'finance' or m.startswith('finance.') "
-        "or m == 'analytics' or m.startswith('analytics.')]; "
-        "assert not leaked, f'Unexpected runtime imports: {leaked}'"
+    # Real cold-import probe of `import app.reports.module_ledger`: app/reports/__init__.py
+    # uses PEP 562 lazy loading, so importing module_ledger loads ONLY app, app.reports,
+    # and app.reports.module_ledger (zero report_model, analytics.*, finance.*, or api.*).
+    cold_probe = (
+        "import sys; "
+        "import app.reports.module_ledger as ml; "
+        "assert 'app.reports' in sys.modules; "
+        "assert 'app.reports.module_ledger' in sys.modules; "
+        "leaked = sorted(m for m in sys.modules if "
+        "m in ('analytics', 'finance', 'api', 'app.reports.report_model', "
+        "'app.reports.renderer', 'app.reports.report_config') "
+        "or m.startswith(('analytics.', 'finance.', 'api.'))); "
+        "assert not leaked, f'Unexpected cold-import leak: {leaked}'; "
+        "reg = ml.load_module_role_registry(); "
+        "assert len(reg.modules) > 0"
     )
     proc = subprocess.run(
-        [sys.executable, "-c", probe],
+        [sys.executable, "-c", cold_probe],
         cwd=REPO_ROOT,
         env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
         capture_output=True,
@@ -199,11 +312,66 @@ def test_module_ledger_imports_remain_pure_and_cold_import_safe() -> None:
     )
     assert proc.returncode == 0, proc.stderr
 
+    # Verify PEP 562 lazy package exports on app.reports still work identically.
+    lazy_export_probe = textwrap.dedent("""
+        import app.reports as reports
+        from app.reports import (
+            ReportConfig,
+            load_report_config,
+            ReportContext,
+            build_report_context,
+            ReportDependencyError,
+            render_report_html,
+            render_report_pdf,
+        )
+        assert set(reports.__all__) <= set(dir(reports))
+        assert ReportConfig is not None and callable(load_report_config)
+        assert ReportContext is not None and callable(build_report_context)
+        assert issubclass(ReportDependencyError, RuntimeError)
+        assert callable(render_report_html) and callable(render_report_pdf)
+        try:
+            _ = reports.does_not_exist_attr
+        except AttributeError:
+            pass
+        else:
+            raise AssertionError("Expected AttributeError for unknown attr")
+        """)
+    lazy_proc = subprocess.run(
+        [sys.executable, "-c", lazy_export_probe],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        capture_output=True,
+        text=True,
+    )
+    assert lazy_proc.returncode == 0, lazy_proc.stderr
+
 
 def test_models_are_frozen_and_forbid_extra_fields() -> None:
     spec = _role_spec()
     with pytest.raises(ValidationError):
         spec.notes = "mutated"  # type: ignore[misc]
+
+    registry = ModuleRoleRegistry(
+        schema_version="1.0",
+        stages=tuple(PipelineStage),
+        modules=_complete_stage_specs(),
+    )
+    with pytest.raises(ValidationError):
+        registry.schema_version = "2.0"  # type: ignore[misc,assignment]
+    with pytest.raises(TypeError):
+        registry.by_path["fake.mod"] = spec  # type: ignore[index]
+    with pytest.raises(TypeError):
+        registry._by_path["fake.mod"] = spec  # type: ignore[index]
+
+    record = _exec_record()
+    with pytest.raises(ValidationError):
+        record.reason = "mutated"  # type: ignore[misc]
+
+    ledger = build_module_execution_ledger("lender", [record])
+    with pytest.raises(ValidationError):
+        ledger.profile = "mutated"  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        ledger.summary_counts["executed"] = 99  # type: ignore[index]
 
     with pytest.raises(ValidationError):
         ModuleRoleSpec(
@@ -218,7 +386,7 @@ def test_models_are_frozen_and_forbid_extra_fields() -> None:
         ModuleRoleRegistry(
             schema_version="1.0",
             stages=tuple(PipelineStage),
-            modules=(spec,),
+            modules=_complete_stage_specs(),
             unexpected="bad",  # type: ignore[call-arg]
         )
 
@@ -235,12 +403,13 @@ def test_models_are_frozen_and_forbid_extra_fields() -> None:
     with pytest.raises(ValidationError):
         ModuleExecutionLedger(
             profile="lender",
-            records=(_exec_record(),),
+            records=(record,),
             bogus=True,  # type: ignore[call-arg]
         )
 
 
 def test_registry_negative_controls_cesspit() -> None:
+    base_specs = _complete_stage_specs()
     spec_a = _role_spec("analytics.mc.engine")
     spec_dup = _role_spec("analytics.mc.engine")
 
@@ -248,34 +417,105 @@ def test_registry_negative_controls_cesspit() -> None:
         ModuleRoleRegistry(
             schema_version="1.0",
             stages=tuple(PipelineStage),
-            modules=(spec_a, spec_dup),
+            modules=(*base_specs, spec_a, spec_dup),
         )
 
     with pytest.raises(ValidationError, match="Missing pipeline stage"):
         ModuleRoleRegistry(
             schema_version="1.0",
             stages=tuple(PipelineStage)[:-1],
-            modules=(spec_a,),
+            modules=base_specs,
         )
 
     with pytest.raises(ValidationError, match="Duplicate pipeline stage"):
         ModuleRoleRegistry(
             schema_version="1.0",
             stages=(*tuple(PipelineStage), PipelineStage.GOVERNANCE),
-            modules=(spec_a,),
+            modules=base_specs,
+        )
+
+    swapped_stages = (
+        PipelineStage.SITE_GIS,
+        PipelineStage.GOVERNANCE,
+        *tuple(PipelineStage)[2:],
+    )
+    with pytest.raises(ValidationError, match="canonical order"):
+        ModuleRoleRegistry(
+            schema_version="1.0",
+            stages=swapped_stages,
+            modules=base_specs,
+        )
+
+    with pytest.raises(ValidationError, match="at least one module"):
+        ModuleRoleRegistry(
+            schema_version="1.0",
+            stages=tuple(PipelineStage),
+            modules=(),
+        )
+
+    with pytest.raises(ValidationError, match="empty stage"):
+        ModuleRoleRegistry(
+            schema_version="1.0",
+            stages=tuple(PipelineStage),
+            modules=_complete_stage_specs(exclude_stage=PipelineStage.GRID_QSTS),
         )
 
     for bad_extra in ("unknown_extra", "", "dev", "wind "):
-        with pytest.raises(ValidationError, match="optional_extra"):
-            _role_spec(optional_extra=bad_extra)
+        with pytest.raises(ValidationError, match="optional_extras"):
+            _role_spec(
+                optional_extras=(bad_extra,),
+                extra_mode=OptionalExtraMode.REQUIRED,
+            )
 
-    with pytest.raises(ValidationError):
-        _role_spec(role_description="   short   ")
+    with pytest.raises(ValidationError, match="Duplicate entries in optional_extras"):
+        _role_spec(
+            optional_extras=("wind", "wind"),
+            extra_mode=OptionalExtraMode.REQUIRED,
+        )
+
+    with pytest.raises(ValidationError, match="cannot use extra_mode='none'"):
+        _role_spec(
+            optional_extras=("wind",),
+            extra_mode=OptionalExtraMode.NONE,
+        )
+
+    for bad_mode in (OptionalExtraMode.REQUIRED, OptionalExtraMode.CASPER_FALLBACK):
+        with pytest.raises(ValidationError, match="must use extra_mode='none'"):
+            _role_spec(optional_extras=(), extra_mode=bad_mode)
+
+    for short_desc in ("   short   ", "", "   "):
+        with pytest.raises(ValidationError):
+            _role_spec(role_description=short_desc)
+        with pytest.raises(ValidationError):
+            _exec_record(role_description=short_desc)
+
+    for blank in ("", "   ", "\t\n"):
+        with pytest.raises(ValidationError):
+            _role_spec(notes=blank)
+        with pytest.raises(ValidationError):
+            _exec_record(caveat=blank)
+        with pytest.raises(ValidationError):
+            _exec_record(status=ModuleExecutionStatus.EXECUTED, reason=blank)
+        with pytest.raises(ValidationError):
+            _exec_record(status=ModuleExecutionStatus.GUARD_PASSED, reason=blank)
+        with pytest.raises(ValidationError):
+            ModuleExecutionLedger(profile=blank, records=())
+
+    trimmed_spec = _role_spec(notes="  Useful provenance note.  ")
+    assert trimmed_spec.notes == "Useful provenance note."
+    trimmed_rec = _exec_record(
+        status=ModuleExecutionStatus.EXECUTED,
+        reason="  Explicit note.  ",
+        caveat="  Screening only.  ",
+    )
+    assert trimmed_rec.reason == "Explicit note."
+    assert trimmed_rec.caveat == "Screening only."
 
 
 @pytest.mark.parametrize(
     "status",
     [
+        ModuleExecutionStatus.DEGRADED,
         ModuleExecutionStatus.FAILED,
         ModuleExecutionStatus.GUARD_REFUSED,
         ModuleExecutionStatus.NOT_APPLICABLE,
@@ -289,10 +529,14 @@ def test_execution_record_requires_non_empty_reason_for_non_run_statuses(
     status: ModuleExecutionStatus,
     bad_reason: str | None,
 ) -> None:
-    with pytest.raises(ValidationError, match="requires a non-empty reason"):
-        _exec_record(status=status, reason=bad_reason)
+    if bad_reason is None:
+        with pytest.raises(ValidationError, match="requires a non-empty reason"):
+            _exec_record(status=status, reason=bad_reason)
+    else:
+        with pytest.raises(ValidationError):
+            _exec_record(status=status, reason=bad_reason)
 
-    valid = _exec_record(status=status, reason="Explicitly skipped by guard policy.")
+    valid = _exec_record(status=status, reason="Explicitly skipped or degraded.")
     assert valid.status is status
 
 
@@ -300,12 +544,15 @@ def test_execution_record_requires_non_empty_reason_for_non_run_statuses(
     "status",
     [ModuleExecutionStatus.EXECUTED, ModuleExecutionStatus.GUARD_PASSED],
 )
-def test_execution_record_allows_omitted_reason_when_executed_or_passed(
+def test_execution_record_allows_omitted_or_non_empty_reason_when_executed_or_passed(
     status: ModuleExecutionStatus,
 ) -> None:
     record = _exec_record(status=status, reason=None)
     assert record.status is status
     assert record.reason is None
+
+    noted = _exec_record(status=status, reason="Completed with full inputs.")
+    assert noted.reason == "Completed with full inputs."
 
 
 def test_load_module_role_registry_fails_loud_on_malformed_yaml(tmp_path: Path) -> None:
@@ -313,10 +560,80 @@ def test_load_module_role_registry_fails_loud_on_malformed_yaml(tmp_path: Path) 
     with pytest.raises(FileNotFoundError):
         load_module_role_registry(missing_path)
 
+    empty_yaml = tmp_path / "empty.yaml"
+    empty_yaml.write_text("# comment only\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expected YAML mapping.*NoneType"):
+        load_module_role_registry(empty_yaml)
+
+    null_yaml = tmp_path / "null.yaml"
+    null_yaml.write_text("null\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Expected YAML mapping.*NoneType"):
+        load_module_role_registry(null_yaml)
+
     non_mapping = tmp_path / "list.yaml"
     non_mapping.write_text("- item1\n- item2\n", encoding="utf-8")
     with pytest.raises(ValueError, match="Expected YAML mapping"):
         load_module_role_registry(non_mapping)
+
+    dup_top_key = tmp_path / "dup_top_key.yaml"
+    dup_top_key.write_text(
+        textwrap.dedent("""
+            schema_version: "1.0"
+            schema_version: "1.0"
+            stages: []
+            modules: []
+            """),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Duplicate YAML mapping key"):
+        load_module_role_registry(dup_top_key)
+
+    dup_entry_key = tmp_path / "dup_entry_key.yaml"
+    dup_entry_key.write_text(
+        textwrap.dedent("""
+            schema_version: "1.0"
+            stages:
+              - governance
+              - site_gis
+              - resource_yield
+              - tech_hybrid_bess
+              - grid_qsts
+              - cost_levies_epc
+              - core_finance
+              - risk_sensitivity_opt
+              - reporting_delivery
+            modules:
+              - module_path: analytics.aep_provenance
+                pipeline_stage: governance
+                pipeline_stage: core_finance
+                role_description: Enforces AEP source-provenance verification for runs.
+                excel_representation: governance_metadata
+            """),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="Duplicate YAML mapping key"):
+        load_module_role_registry(dup_entry_key)
+
+    empty_modules = tmp_path / "empty_modules.yaml"
+    empty_modules.write_text(
+        textwrap.dedent("""
+            schema_version: "1.0"
+            stages:
+              - governance
+              - site_gis
+              - resource_yield
+              - tech_hybrid_bess
+              - grid_qsts
+              - cost_levies_epc
+              - core_finance
+              - risk_sensitivity_opt
+              - reporting_delivery
+            modules: []
+            """),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="at least one module"):
+        load_module_role_registry(empty_modules)
 
     bad_version = tmp_path / "bad_version.yaml"
     bad_yaml = textwrap.dedent("""
@@ -347,40 +664,47 @@ def test_build_module_execution_ledger_validates_uniqueness_membership_and_count
     None
 ):
     registry = load_module_role_registry()
-    rec1 = _exec_record(
-        module_path="analytics.mc.engine",
+    mc_spec = registry.get("analytics.mc.engine")
+    pp_spec = registry.get("analytics.grid.pandapower_screening")
+    aep_spec = registry.get("analytics.aep_provenance")
+    sc_spec = registry.get("analytics.grid.short_circuit")
+
+    rec1 = _record_from_spec(
+        mc_spec,
         status=ModuleExecutionStatus.EXECUTED,
         key_outputs=("mc_p50_irr", "mc_p95_dscr"),
         provenance_refs=("run_manifest:sha256",),
     )
-    rec2 = _exec_record(
-        module_path="analytics.grid.pandapower_screening",
-        pipeline_stage=PipelineStage.GRID_QSTS,
-        role_description="Runs pandapower grid screen.",
+    rec2 = _record_from_spec(
+        pp_spec,
         status=ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA,
         reason="Optional extra [grid] is not installed.",
         caveat="Closed-form fallback used.",
     )
-    rec3 = _exec_record(
-        module_path="analytics.aep_provenance",
-        pipeline_stage=PipelineStage.GOVERNANCE,
-        role_description="AEP provenance guard.",
+    rec3 = _record_from_spec(
+        aep_spec,
         status=ModuleExecutionStatus.GUARD_PASSED,
-        excel_representation=ExcelRepresentationKind.GOVERNANCE_METADATA,
+    )
+    rec4 = _record_from_spec(
+        sc_spec,
+        status=ModuleExecutionStatus.DEGRADED,
+        reason="Closed-form Thevenin fallback executed because [grid] is absent.",
+        caveat="method=closed_form",
     )
 
     ledger = build_module_execution_ledger(
         "sync_lender",
-        [rec1, rec2, rec3],
+        [rec1, rec2, rec3, rec4],
         registry=registry,
     )
     assert ledger.profile == "sync_lender"
-    assert len(ledger.records) == 3
+    assert len(ledger.records) == 4
     assert ledger.summary_counts["executed"] == 1
+    assert ledger.summary_counts["degraded"] == 1
     assert ledger.summary_counts["skipped_optional_extra"] == 1
     assert ledger.summary_counts["guard_passed"] == 1
     assert ledger.summary_counts["failed"] == 0
-    assert sum(ledger.summary_counts.values()) == 3
+    assert sum(ledger.summary_counts.values()) == 4
     assert set(ledger.summary_counts) == {s.value for s in ModuleExecutionStatus}
 
     with pytest.raises(TypeError):
@@ -391,6 +715,7 @@ def test_build_module_execution_ledger_validates_uniqueness_membership_and_count
 
     dumped: dict[str, Any] = ledger.model_dump()
     assert dumped["summary_counts"]["executed"] == 1
+    assert dumped["summary_counts"]["degraded"] == 1
 
     # Duplicate module_path fails loud
     with pytest.raises(ValueError, match="Duplicate module_path"):
@@ -404,6 +729,33 @@ def test_build_module_execution_ledger_validates_uniqueness_membership_and_count
     with pytest.raises(ValueError, match="Unregistered module_path"):
         build_module_execution_ledger(
             "sync_lender", [rec1, unregistered], registry=registry
+        )
+
+    # Registry metadata disagreement fails loud
+    bad_stage = rec1.model_copy(update={"pipeline_stage": PipelineStage.CORE_FINANCE})
+    with pytest.raises(ValueError, match="pipeline_stage"):
+        build_module_execution_ledger("sync_lender", [bad_stage], registry=registry)
+
+    bad_excel = rec1.model_copy(
+        update={"excel_representation": ExcelRepresentationKind.FORMULA}
+    )
+    with pytest.raises(ValueError, match="excel_representation"):
+        build_module_execution_ledger("sync_lender", [bad_excel], registry=registry)
+
+    bad_role = rec1.model_copy(
+        update={"role_description": "Drifted role description for MC engine."}
+    )
+    with pytest.raises(ValueError, match="role_description"):
+        build_module_execution_ledger("sync_lender", [bad_role], registry=registry)
+
+    bad_skip_extra = _record_from_spec(
+        aep_spec,
+        status=ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA,
+        reason="Claimed missing optional extra on core module.",
+    )
+    with pytest.raises(ValueError, match="optional_extras is empty"):
+        build_module_execution_ledger(
+            "sync_lender", [bad_skip_extra], registry=registry
         )
 
     # Without registry validation, synthetic module paths are permitted

@@ -3,7 +3,7 @@
 # Single source of truth mapping every mapped model, analytics, resource, finance,
 # and delivery module (plus app.reports.module_ledger and run_full_pipeline_v14)
 # to its pipeline stage, architectural role, Excel workbook representation kind,
-# and optional dependency extra (if any).
+# declared optional dependency extras, and extra availability mode.
 #
 # Validated strictly by app.reports.module_ledger.load_module_role_registry().
 
@@ -156,7 +156,9 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Interactive Streamlit sensitivity and scenario exploration dashboard interface.
     excel_representation: non_model_adapter
-    optional_extra: dashboard
+    optional_extras:
+      - dashboard
+    extra_mode: required
 
   - module_path: analytics.development_readiness
     pipeline_stage: governance
@@ -317,76 +319,107 @@ modules:
     pipeline_stage: site_gis
     role_description: Clips wind-speed and AEP GeoTIFF rasters to a project site boundary polygon.
     excel_representation: non_model_adapter
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
 
   - module_path: analytics.gis.dem_ingest
     pipeline_stage: site_gis
     role_description: Ingests digital elevation model rasters and derives slope and aspect terrain layers.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
+    notes: load_dem and run_dem_ingest require [gis] (rasterio); slope_aspect_hillshade and derive_terrain_layers run on base NumPy.
 
   - module_path: analytics.gis.exclusion_mask
     pipeline_stage: site_gis
     role_description: Buffers setback constraints and rasterizes buildable-area exclusion masks for siting.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
 
   - module_path: analytics.gis.geotiff_export
     pipeline_stage: site_gis
     role_description: Exports geospatial wind, capacity-factor, and AEP raster grids as GeoTIFFs with manifest.
     excel_representation: non_model_adapter
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
 
   - module_path: analytics.gis.gis_export
     pipeline_stage: site_gis
     role_description: Orchestrates coarse and fine geospatial wind and AEP GeoTIFF generation for QGIS export.
     excel_representation: non_model_adapter
-    optional_extra: gis
-    notes: Coordinates wind_resource.era5_grid ([wind]) and analytics.gis.geotiff_export ([gis]).
+    optional_extras:
+      - gis
+      - wind
+    extra_mode: required
+    notes: GeoTIFF export always requires [gis] (rasterio); default_era5_source requires [wind] unless an explicit CellSource is injected.
 
   - module_path: analytics.gis.gwa_ingest
     pipeline_stage: site_gis
     role_description: Ingests Global Wind Atlas 250 m GeoTIFF layers as an external wind reference surface.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
 
   - module_path: analytics.gis.landcover_roughness
     pipeline_stage: site_gis
     role_description: Maps ESA WorldCover land-cover rasters to aerodynamic roughness-length z0 grids.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: required
+    notes: export_roughness_raster requires [gis] (rasterio); reclass_landcover_to_z0 runs on base NumPy.
 
   - module_path: analytics.gis.mcdm_suitability
     pipeline_stage: site_gis
     role_description: Builds GIS multi-criteria wind-siting suitability surfaces using AHP weighted linear combination.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: casper_fallback
+    notes: Core AHP, normalisation, and WLC surface math runs on base NumPy; GeoTIFF export uses [gis] (rasterio).
 
   - module_path: analytics.gis.pv_array_layout
     pipeline_stage: site_gis
     role_description: Sizes fixed-tilt PV tables, row pitch, BESS pad, and site polygon packing geometry.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
-    notes: Also requires [solar] (pvlib) for solar-position row-pitch shading calculations.
+    optional_extras:
+      - gis
+      - solar
+    extra_mode: required
+    notes: Uses [gis] (shapely, pyproj) for site geometry/setbacks and [solar] (pvlib) for solar-position row-pitch calculations.
 
   - module_path: analytics.gis.rix
     pipeline_stage: site_gis
     role_description: Computes ruggedness index (RIX and delta-RIX) terrain complexity diagnostics from DEM grids.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
+    optional_extras:
+      - gis
+    extra_mode: casper_fallback
+    notes: Core point and array RIX diagnostics run on base NumPy; optional GeoTIFF export uses [gis] (rasterio).
 
   - module_path: analytics.gis.shadow_flicker
     pipeline_stage: site_gis
     role_description: Evaluates coastal turbine setback placement, tip-height setbacks, and receptor shadow-flicker hours.
     excel_representation: engine_table_plus_rollup
-    optional_extra: gis
-    notes: Also requires [solar] (pvlib) for sun-position calculations during shadow flicker modeling.
+    optional_extras:
+      - gis
+      - solar
+    extra_mode: required
+    notes: Uses [gis] (pyproj, shapely) for local TM projection/setbacks and [solar] (pvlib) for sun-position calculations.
 
   - module_path: analytics.grid._pandapower_worker
     pipeline_stage: grid_qsts
     role_description: Isolated subprocess worker running single-request pandapower short-circuit and load-flow screens.
     excel_representation: non_model_adapter
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: required
 
   - module_path: analytics.grid.capabilities.bess
     pipeline_stage: grid_qsts
@@ -402,24 +435,33 @@ modules:
     pipeline_stage: grid_qsts
     role_description: Design-stage solar PV inverter fault-current, reactive PQ, and ride-through capability screen.
     excel_representation: engine_table_plus_rollup
-    notes: Optional RMS dynamics mode uses [grid] (andes) via analytics.grid.ride_through.
+    optional_extras: []
+    extra_mode: none
 
   - module_path: analytics.grid.capabilities.wind
     pipeline_stage: grid_qsts
     role_description: Design-stage wind turbine converter fault-current, reactive PQ, and ride-through capability screen.
     excel_representation: engine_table_plus_rollup
-    notes: Optional RMS dynamics mode uses [grid] (andes) via analytics.grid.ride_through.
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Static PQ envelope and default run_dynamics=False run on base dependencies; run_dynamics=True uses [grid] (andes) via analytics.grid.ride_through.
 
   - module_path: analytics.grid.curtailment_qsts
     pipeline_stage: grid_qsts
     role_description: OpenDSSDirect QSTS annual feeder curtailment engine splitting deemed and self curtailment.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: required
 
   - module_path: analytics.grid.evaluate_grid
     pipeline_stage: grid_qsts
     role_description: Single evaluation gateway orchestrating design-stage grid SCR and reactive screening studies.
     excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
     notes: Invokes [grid] pandapower screens when available and falls back to closed-form screens under CASPER.
 
   - module_path: analytics.grid.frequency_response
@@ -436,12 +478,19 @@ modules:
     pipeline_stage: grid_qsts
     role_description: Performs SCR-coupled harmonic distortion and flicker power-quality screening at the POC.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) Zbus scan when available and falls back to closed-form inductive impedance under CASPER.
 
   - module_path: analytics.grid.hybrid.frequency_response
     pipeline_stage: grid_qsts
     role_description: Models combined multi-technology hybrid plant frequency-droop coordination at the POC.
     excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Closed-form group droop split and SOC accounting run on base dependencies; opt-in run_dynamics=True degrades gracefully when [grid] (andes) is absent.
 
   - module_path: analytics.grid.hybrid.poc_aggregation
     pipeline_stage: grid_qsts
@@ -452,7 +501,9 @@ modules:
     pipeline_stage: grid_qsts
     role_description: Process-isolated launcher managing pandapower grid screen execution and version policy checks.
     excel_representation: non_model_adapter
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: required
 
   - module_path: analytics.grid.qsts_evidence
     pipeline_stage: grid_qsts
@@ -463,25 +514,36 @@ modules:
     pipeline_stage: grid_qsts
     role_description: Evaluates steady-state reactive power capability and voltage compliance at the POC.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) AC load-flow when available and falls back to closed-form reactive gap screening under CASPER.
 
   - module_path: analytics.grid.ride_through
     pipeline_stage: grid_qsts
     role_description: Shared ANDES RMS dynamic LVRT/HVRT and frequency ride-through simulation core.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Envelope parsing and default run_dynamics=False run on base dependencies; dynamic RMS solve requires [grid] (andes).
 
   - module_path: analytics.grid.ride_through_poc
     pipeline_stage: grid_qsts
     role_description: Compatibility shim forwarding legacy LVRT ride-through calls to analytics.grid.ride_through.
     excel_representation: non_model_adapter
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: required
 
   - module_path: analytics.grid.short_circuit
     pipeline_stage: grid_qsts
     role_description: Evaluates short-circuit ratio (SCR) and fault levels at the point of connection.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) IEC 60909 when available and falls back to closed-form Thevenin screening under CASPER.
 
   - module_path: analytics.grid.synthetic_aep_qsts_output_records
     pipeline_stage: grid_qsts
@@ -492,12 +554,19 @@ modules:
     pipeline_stage: grid_qsts
     role_description: Deterministic synthetic OpenDSS feeder model package for counterfactual QSTS study testing.
     excel_representation: engine_table_plus_rollup
-    optional_extra: grid
+    optional_extras:
+      - grid
+    extra_mode: required
+    notes: Production compile verification requires [grid] (opendssdirect); test-only compile-disabled mode runs on base dependencies.
 
   - module_path: analytics.grid.synthetic_feeder_qsts_adapter
     pipeline_stage: grid_qsts
     role_description: Adapts a verified synthetic feeder QSTS package into a finance-safe curtailment overlay.
     excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: required
+    notes: Runtime verification requires a detached OpenDSS compile check via verify_synthetic_feeder_package ([grid]).
 
   - module_path: analytics.grid.synthetic_input_records
     pipeline_stage: grid_qsts
@@ -703,7 +772,10 @@ modules:
     pipeline_stage: risk_sensitivity_opt
     role_description: Runs Morris screening and Sobol variance-based global sensitivity analysis with SALib.
     excel_representation: engine_table_plus_rollup
-    notes: Uses SALib from [dev] or [feasibility]; fails loudly via _require_salib when absent.
+    optional_extras:
+      - feasibility
+    extra_mode: required
+    notes: Uses SALib from [feasibility] (also included in [dev]); build_problem runs on base deps while run_sobol/run_morris/run_pawn fail loudly via _require_salib when absent.
 
   - module_path: analytics.sensitivity.interaction
     pipeline_stage: risk_sensitivity_opt
@@ -714,8 +786,10 @@ modules:
     pipeline_stage: risk_sensitivity_opt
     role_description: Multi-objective Pareto frontier explorer supporting grid, LHS, and opt-in pymoo NSGA-II search.
     excel_representation: engine_table_plus_rollup
-    optional_extra: pareto
-    notes: Grid and LHS plans run without optional dependencies; plan_kind="pymoo" requires [pareto].
+    optional_extras:
+      - pareto
+    extra_mode: casper_fallback
+    notes: Grid and LHS plans run on base dependencies; plan_kind="pymoo" requires [pareto].
 
   - module_path: analytics.sensitivity.tail_risk
     pipeline_stage: risk_sensitivity_opt
@@ -748,7 +822,7 @@ modules:
     excel_representation: engine_table_plus_rollup
 
   - module_path: analytics.site_analysis_blocks
-    pipeline_stage: site_gis
+    pipeline_stage: governance
     role_description: Resolves and validates optional scenario-level site analysis configuration blocks.
     excel_representation: governance_metadata
 
@@ -871,7 +945,9 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Token and session authentication guards for the FastAPI wizard web surface.
     excel_representation: non_model_adapter
-    optional_extra: api
+    optional_extras:
+      - api
+    extra_mode: required
 
   - module_path: app.api.config
     pipeline_stage: reporting_delivery
@@ -882,14 +958,19 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: FastAPI HTTP router exposing asynchronous live-ERA5 and analysis job endpoints.
     excel_representation: non_model_adapter
-    optional_extra: api
-    notes: Optional Redis/arq worker path also uses [jobs].
+    optional_extras:
+      - api
+      - jobs
+    extra_mode: required
+    notes: Requires [api] (fastapi) at import time; default memory backend runs without [jobs], while JOBS_BACKEND=redis requires [jobs] (arq, redis).
 
   - module_path: app.api.main
     pipeline_stage: reporting_delivery
     role_description: Unified FastAPI application wiring API routes, HTMX wizard routes, and health endpoints.
     excel_representation: non_model_adapter
-    optional_extra: api
+    optional_extras:
+      - api
+    extra_mode: required
 
   - module_path: app.api.responses
     pipeline_stage: reporting_delivery
@@ -900,6 +981,9 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: HTTP security-header middleware and hardening utilities for the FastAPI web surface.
     excel_representation: non_model_adapter
+    optional_extras:
+      - api
+    extra_mode: required
 
   - module_path: app.api.surface
     pipeline_stage: reporting_delivery
@@ -910,6 +994,10 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Executes asynchronous bounded Monte Carlo, sensitivity, and global-SA analysis jobs.
     excel_representation: non_model_adapter
+    optional_extras:
+      - feasibility
+    extra_mode: casper_fallback
+    notes: mc and tornado modes run on base dependencies; morris mode invokes analytics.sensitivity.global_sa (SALib from [feasibility]/[dev]).
 
   - module_path: app.jobs.config
     pipeline_stage: reporting_delivery
@@ -925,12 +1013,19 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Cross-process Redis-backed JobStore implementation for durable worker job state.
     excel_representation: non_model_adapter
-    optional_extra: jobs
+    optional_extras:
+      - jobs
+    extra_mode: required
+    notes: Duck-typed RedisLike protocol allows fake clients in tests without importing redis; production Redis backend requires [jobs].
 
   - module_path: app.jobs.runner
     pipeline_stage: reporting_delivery
     role_description: Orchestrates asynchronous ERA5 wind assessment followed by v14 finance evaluation.
     excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: run_wind_job accepts an injectable assessment_fn on base dependencies; default_assessment requires [wind] via wind_pipeline and era5_retrieval.
 
   - module_path: app.jobs.sse
     pipeline_stage: reporting_delivery
@@ -946,7 +1041,9 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Optional arq plus Redis worker entrypoint for production-scale async job execution.
     excel_representation: non_model_adapter
-    optional_extra: jobs
+    optional_extras:
+      - jobs
+    extra_mode: required
 
   - module_path: app.models.inputs
     pipeline_stage: reporting_delivery
@@ -977,7 +1074,9 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Strict DBPL print contract enforcing complete [report] stack and un-suppressible furniture.
     excel_representation: non_model_adapter
-    optional_extra: report
+    optional_extras:
+      - report
+    extra_mode: required
 
   - module_path: app.reports.dbpl.style
     pipeline_stage: reporting_delivery
@@ -988,6 +1087,10 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Opt-in emitter rendering design-stage grid-screening diagnostics and dependency provenance.
     excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Falls back to closed-form or envelope screens and surfaces explicit degradation notes when [grid] packages are absent.
 
   - module_path: app.reports.interaction_grid_emit
     pipeline_stage: reporting_delivery
@@ -1003,8 +1106,10 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Renders ReportContext payloads to HTML via Jinja2 and best-effort PDF via WeasyPrint.
     excel_representation: non_model_adapter
-    optional_extra: report
-    notes: HTML rendering uses core Jinja2; PDF rendering requires [report] (weasyprint).
+    optional_extras:
+      - report
+    extra_mode: casper_fallback
+    notes: HTML rendering uses core Jinja2; PDF rendering requires [report] (weasyprint) and raises ReportDependencyError when absent.
 
   - module_path: app.reports.report_config
     pipeline_stage: reporting_delivery
@@ -1023,17 +1128,24 @@ modules:
 
   - module_path: app.reports.solar_assessment
     pipeline_stage: reporting_delivery
-    role_description: Builds and renders standalone bankable solar PV site assessment PDF reports.
+    role_description: Builds and renders model-derived screening solar PV site assessment PDF reports (not a lender representation).
     excel_representation: non_model_adapter
-    optional_extra: report
-    notes: Also exercises [solar] (pvlib) yield chain when computing solar assessment outputs.
+    optional_extras:
+      - solar
+      - report
+      - gis
+    extra_mode: casper_fallback
+    notes: Records failed/missing [solar], [gis], and contextily steps via CASPER fallback in run_assessment/make_maps; write_report requires [report] (DBPL PDF).
 
   - module_path: app.reports.synthetic_qsts_finance_report
     pipeline_stage: reporting_delivery
     role_description: Renders and verifies governed synthetic QSTS finance counterfactual provenance reports.
     excel_representation: non_model_adapter
-    optional_extra: report
-    notes: Uses [report] (weasyprint) for PDF generation and [ingestion] (pdfplumber) for verification.
+    optional_extras:
+      - report
+      - ingestion
+    extra_mode: required
+    notes: Uses [report] (weasyprint) for PDF generation and [ingestion] (pdfplumber) for warning-page verification.
 
   - module_path: app.reports.tech_comparison_emit
     pipeline_stage: reporting_delivery
@@ -1059,6 +1171,10 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Computes bounded Morris and PAWN global sensitivity blocks for lender report annexes.
     excel_representation: non_model_adapter
+    optional_extras:
+      - feasibility
+    extra_mode: casper_fallback
+    notes: Invokes SALib via analytics.sensitivity.global_sa ([feasibility]/[dev]) and returns None on missing dependency or flagged metrics.
 
   - module_path: app.services.report_tornado
     pipeline_stage: reporting_delivery
@@ -1069,13 +1185,17 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Signed cookie-based session gate for the HTMX web wizard routes.
     excel_representation: non_model_adapter
-    optional_extra: api
+    optional_extras:
+      - api
+    extra_mode: required
 
   - module_path: app.web.routes
     pipeline_stage: reporting_delivery
     role_description: HTMX backend-for-frontend web wizard routes mounted on the FastAPI application.
     excel_representation: non_model_adapter
-    optional_extra: api
+    optional_extras:
+      - api
+    extra_mode: required
 
   - module_path: finance.bess_lcos
     pipeline_stage: tech_hybrid_bess
@@ -1317,7 +1437,10 @@ modules:
     pipeline_stage: cost_levies_epc
     role_description: Pure land-cost blend calculations for wind/BESS equipment plus stepped solar pvlib yield inputs.
     excel_representation: engine_table_plus_rollup
-    optional_extra: solar
+    optional_extras:
+      - solar
+    extra_mode: casper_fallback
+    notes: Capex blend and isotropic_poa_w_m2 run on base dependencies; solar_resource_summary requires [solar] (pvlib).
 
   - module_path: solar_resource.cashflow_adapter
     pipeline_stage: resource_yield
@@ -1343,29 +1466,45 @@ modules:
     pipeline_stage: resource_yield
     role_description: Computes hourly wind-turbine tower and rotor shadow losses across a laid-out PV array.
     excel_representation: engine_table_plus_rollup
-    optional_extra: solar
+    optional_extras:
+      - solar
+    extra_mode: required
 
   - module_path: solar_resource.pv_bess_dispatch
     pipeline_stage: tech_hybrid_bess
     role_description: Simulates hourly pvlib solar generation and PV-charged battery dispatch schedules.
     excel_representation: engine_table_plus_rollup
-    optional_extra: solar
+    optional_extras:
+      - solar
+    extra_mode: required
 
   - module_path: solar_resource.pv_bess_sizing
     pipeline_stage: tech_hybrid_bess
     role_description: Performs seeded Monte Carlo sizing of co-located solar PV and BESS capacity combinations.
     excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+      - gis
+    extra_mode: required
+    notes: Uses [solar] (pvlib) via pv_bess_dispatch/pv_array_turbine_shading and [gis] (shapely, pyproj) via analytics.gis layout/siting helpers.
 
   - module_path: solar_resource.pv_bess_sizing_runner
     pipeline_stage: tech_hybrid_bess
     role_description: Orchestrates Monte Carlo solar-plus-BESS sizing runs and formats structured summaries.
     excel_representation: non_model_adapter
+    optional_extras:
+      - solar
+      - gis
+    extra_mode: required
+    notes: Drives solar_resource.pv_bess_sizing and site_context, requiring [solar] and [gis] for end-to-end sizing runs.
 
   - module_path: solar_resource.pv_producer
     pipeline_stage: resource_yield
     role_description: Executes pvlib irradiance-to-AC simulation producing frozen solar AEP exports.
     excel_representation: engine_table_plus_rollup
-    optional_extra: solar
+    optional_extras:
+      - solar
+    extra_mode: required
 
   - module_path: solar_resource.soiling_profile
     pipeline_stage: resource_yield
@@ -1381,7 +1520,9 @@ modules:
     pipeline_stage: resource_yield
     role_description: Estimates annual optical wind-turbine shadow losses on a co-located PV ground grid.
     excel_representation: engine_table_plus_rollup
-    optional_extra: solar
+    optional_extras:
+      - solar
+    extra_mode: required
 
   - module_path: wind_resource.aep_integral
     pipeline_stage: resource_yield
@@ -1397,13 +1538,19 @@ modules:
     pipeline_stage: resource_yield
     role_description: Validates declared wind Weibull baselines against single-point ARCO ERA5 reanalysis series.
     excel_representation: engine_table_plus_rollup
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: build_arco_assessment and era5_config_from_scenario run on base dependencies; assess() requires [wind] (cdsapi, xarray).
 
   - module_path: wind_resource.bankable_aep
     pipeline_stage: resource_yield
     role_description: Lender-grade bankable wind AEP engine using PyWake wake models and exceedance build-up.
     excel_representation: engine_table_plus_rollup
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Air-density correction, Weibull gross AEP, and exceedance build-up run on base NumPy; model_wake_loss requires [wind] (py-wake).
 
   - module_path: wind_resource.cashflow_adapter
     pipeline_stage: resource_yield
@@ -1414,7 +1561,9 @@ modules:
     pipeline_stage: resource_yield
     role_description: Cross-validates declared ERA5 wind baselines against independent MERRA-2 reference series.
     excel_representation: engine_table_plus_rollup
-    optional_extra: wind
+    optional_extras: []
+    extra_mode: none
+    notes: Uses base dependencies and lazy requests import for optional NASA POWER HTTP fetch.
 
   - module_path: wind_resource.energy_calculator
     pipeline_stage: resource_yield
@@ -1425,26 +1574,36 @@ modules:
     pipeline_stage: resource_yield
     role_description: Fetches historical ERA5 wind reanalysis datasets through the Copernicus CDS API.
     excel_representation: non_model_adapter
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: required
 
   - module_path: wind_resource.era5_grid
     pipeline_stage: resource_yield
     role_description: Computes gridded ERA5 wind-speed, capacity-factor, and AEP surfaces for GIS export.
     excel_representation: engine_table_plus_rollup
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Grid assembly, bilinear downscaling, and representativeness diagnostics run on base NumPy/SciPy; fetch_cell_results requires [wind] (cdsapi, xarray).
 
   - module_path: wind_resource.era5_retrieval
     pipeline_stage: resource_yield
     role_description: Config-driven ERA5 retrieval, hub-height extrapolation, and site AEP estimation workflow.
     excel_representation: engine_table_plus_rollup
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: required
 
   - module_path: wind_resource.layout_optimizer
     pipeline_stage: site_gis
     role_description: Proposes boundary- and spacing-constrained wind turbine layouts using TopFarm over PyWake.
     excel_representation: engine_table_plus_rollup
-    optional_extra: micrositing
-    notes: Also requires [wind] (py-wake) to evaluate wake interactions during layout optimization.
+    optional_extras:
+      - micrositing
+      - wind
+    extra_mode: required
+    notes: Requires [micrositing] (topfarm) and [wind] (py-wake) together to build and optimize wake-coupled wind turbine layouts.
 
   - module_path: wind_resource.long_term_trend
     pipeline_stage: resource_yield
@@ -1460,7 +1619,10 @@ modules:
     pipeline_stage: resource_yield
     role_description: Sources open turbine power curves from windpowerlib and NREL reference libraries.
     excel_representation: non_model_adapter
-    optional_extra: wind
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Manual/OEM .wtg/.csv curve parsing and store persistence run on base dependencies; OEDB/NREL fetch paths require [wind] (windpowerlib, turbine-models).
 
   - module_path: wind_resource.resource_assurance
     pipeline_stage: governance
@@ -1486,3 +1648,7 @@ modules:
     pipeline_stage: resource_yield
     role_description: Orchestrates end-to-end wind resource retrieval, Weibull analysis, and AEP summary export.
     excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: required
+    notes: Instantiates ERA5Fetcher on initialization, requiring [wind] (cdsapi, xarray).
