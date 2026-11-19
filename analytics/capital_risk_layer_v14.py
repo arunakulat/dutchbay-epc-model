@@ -36,7 +36,7 @@ Context:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os import PathLike
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
@@ -50,6 +50,7 @@ from analytics.core.risk_metrics import (
     TailRiskReport,
     VaRCVaRResult,
 )
+from analytics.mc.aggregate import IRR_METRICS, irr_exclusion_note
 from analytics.sensitivity.tail_risk import TailRiskConfig, _build_case_tail_snapshot
 
 #: Canonical per-trial metric keys for the distributional tail-risk surfaces.
@@ -394,6 +395,12 @@ class CapitalRiskReport:
     #: canonical engine — carried so a lender-facing renderer states the ACTUAL method
     #: rather than assuming one (source-agnostic report).
     method: str = "monte_carlo"
+    #: Per-IRR-metric trial coverage (#1763, #1746 step 1): ``{metric: {"total_count",
+    #: "defined_count", "excluded_count", "note"}}`` for each IRR metric. Each IRR
+    #: statistic in ``tail_report`` and ``snapshot`` is taken over that metric's defined
+    #: trials only; ``note`` is None when every trial is defined, else the disclosure a
+    #: renderer shows beside the IRR figures. Empty when built by an older caller.
+    irr_coverage: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
 
 def build_capital_risk_report_from_trials(
@@ -444,22 +451,30 @@ def build_capital_risk_report_from_trials(
             "capital-risk report needs the canonical per-trial keys; missing: "
             f"{', '.join(missing)}"
         )
-    # This joint report has a complete-cohort contract. Do not silently select
-    # complete cases (the O-5 bias), impute zero or emit NaN-based tail claims.
-    # Metric-wise MC summaries and the lender risk table remain available with
-    # their explicit coverage; extending the joint report needs separate review.
-    incomplete = {
-        key: int((~np.isfinite(np.asarray(trials[key], dtype=float))).sum())
+    # NPV, DSCR, LLCR and PLCR keep the complete-cohort contract: never silently select
+    # complete cases (the O-5 bias), impute zero or emit NaN-based tail claims. An IRR is
+    # the exception (#1763, owner ruling 2026-11-16 "Report with coverage"): a trial whose
+    # cash flow changes sign more than once has no unique IRR, so each IRR metric is
+    # reported over its own defined trials with that coverage stated beside it. No trial
+    # is dropped from any other metric and no IRR is imputed.
+    arrays = {
+        key: np.asarray(trials[key], dtype=float).reshape(-1)
         for key in _REQUIRED_TRIAL_KEYS
+    }
+    incomplete = {
+        key: int((~np.isfinite(arr)).sum())
+        for key, arr in arrays.items()
+        if key not in IRR_METRICS
     }
     if any(incomplete.values()):
         raise ValueError(
-            "capital-risk joint report requires complete aligned metric observations; "
+            "capital-risk joint report requires complete aligned metric observations "
+            "for NPV, DSCR, LLCR and PLCR; "
             f"undefined/non-finite counts={incomplete}. Use metric-wise MC summaries "
             "and their metric_coverage; do not drop whole trials or impute zero."
         )
     version = model_version if model_version is not None else engine_version()
-    n_trials = int(len(np.asarray(trials["equity_npv"], dtype=float).reshape(-1)))
+    n_trials = int(arrays["equity_npv"].size)
     if n_trials < _MIN_TRIALS:
         # Fail loud rather than crash deep inside VaR/CVaR (an n=1 tail indexes past the
         # array end) or fabricate a lender number from a coin-flip tail.
@@ -467,8 +482,34 @@ def build_capital_risk_report_from_trials(
             f"capital-risk report needs >= {_MIN_TRIALS} trials for a stable VaR/CVaR "
             f"tail; got {n_trials}"
         )
+    irr_coverage: Dict[str, Dict[str, Any]] = {}
+    for key in IRR_METRICS:
+        defined = int(np.isfinite(arrays[key]).sum())
+        excluded = n_trials - defined
+        irr_coverage[key] = {
+            "total_count": n_trials,
+            "defined_count": defined,
+            "excluded_count": excluded,
+            "note": irr_exclusion_note(key, excluded, n_trials) if excluded else None,
+        }
+    thin = {k: v["defined_count"] for k, v in irr_coverage.items()}
+    if any(count < _MIN_TRIALS for count in thin.values()):
+        raise ValueError(
+            f"capital-risk report needs >= {_MIN_TRIALS} trials with a defined IRR for "
+            f"a stable IRR VaR/CVaR tail; defined counts={thin} of {n_trials} trials. "
+            "The excluded trials have no defined IRR; read NPV and DSCR from the "
+            "metric-wise MC summaries."
+        )
+    # Each IRR metric over its own defined trials; every other metric is complete.
+    report_trials: Dict[str, Any] = {
+        key: (
+            arrays[key][np.isfinite(arrays[key])] if key in IRR_METRICS else arrays[key]
+        )
+        for key in _REQUIRED_TRIAL_KEYS
+    }
+    report_trials.update({k: v for k, v in trials.items() if k not in report_trials})
 
-    case = build_case_metadata_from_trials(trials, label=scenario)
+    case = build_case_metadata_from_trials(report_trials, label=scenario)
     keys = (
         list(metric_keys) if metric_keys is not None else list(DRIVER_MC_TRIAL_METRICS)
     )
@@ -484,9 +525,13 @@ def build_capital_risk_report_from_trials(
         metric_keys=keys,
         run_cfg=snap_cfg,
     )
-    tail_report = _tail_report_from_trials(trials, risk_config)
+    for row in snapshot.get("rows", []):
+        facts = irr_coverage.get(str(row.get("metric")))
+        if facts is not None:
+            row.update(facts)
+    tail_report = _tail_report_from_trials(report_trials, risk_config)
     png = emit_npv_distribution_from_trials(
-        trials,
+        report_trials,
         Path(output_dir) / f"npv_distribution_{npv_metric}.png",
         npv_metric=npv_metric,
         title=f"NPV distribution ({npv_metric}) — {scenario} · v{version}",
@@ -501,6 +546,7 @@ def build_capital_risk_report_from_trials(
         scenario=scenario,
         model_version=version,
         method=method,
+        irr_coverage=irr_coverage,
     )
 
 

@@ -38,8 +38,13 @@ def test_independent_o5_oracle_keeps_the_worst_dscr_and_project_trial() -> None:
     assert result.summary["dscr_min"]["min"] == 1.05
     assert result.dscr_min_p10 == pytest.approx(1.102)
     assert result.project_irr_p10 == pytest.approx(0.034)
-    assert result.summary["equity_irr"]["min"] == 0.11
-    assert result.summary["equity_irr"]["percentiles"][10] == pytest.approx(0.111)
+    # #1746 step 2 (owner ruling 2026-11-15 22:36Z): the undefined equity IRR ranks
+    # below both defined ones, so the minimum and the P10 (rank position 0.2 of 3) fall
+    # on it and are undefined, at or below 0.11. Before the ruling: min 0.11, P10 0.111.
+    assert result.summary["equity_irr"]["min"] is None
+    assert result.summary["equity_irr"]["min_defined"] == 0.11
+    assert result.summary["equity_irr"]["percentiles"][10] is None
+    assert result.summary["equity_irr"]["percentile_bound"] == 0.11
     assert result.trials["equity_irr"] == [None, 0.11, 0.12]
     assert result.trials["dscr_min"] == [1.05, 1.31, 1.35]
     assert result.failed_iterations == 0
@@ -58,7 +63,8 @@ def test_responsiveness_worst_dscr_changes_its_percentile_despite_undefined_equi
     result = _aggregate(rows)
     assert result.summary["dscr_min"]["min"] == 0.5
     assert result.dscr_min_p10 == pytest.approx(0.662)
-    assert result.summary["equity_irr"]["percentiles"][10] == pytest.approx(0.111)
+    assert result.summary["equity_irr"]["percentiles"][10] is None  # #1746 step 2
+    assert result.summary["equity_irr"]["percentiles"][90] == pytest.approx(0.118)
 
 
 def test_all_undefined_metric_stays_visible_without_fabricating_zero() -> None:
@@ -84,7 +90,9 @@ def test_zero_is_defined_and_missing_is_distinguished_from_explicit_undefined() 
     del rows[1]["equity_irr"]
     result = _aggregate(rows)
     assert result.trials["equity_irr"] == [0.0, None, 0.12]
-    assert result.summary["equity_irr"]["min"] == 0.0
+    # The missing trial ranks worst (#1746 step 2); the defined zero is still a value.
+    assert result.summary["equity_irr"]["min"] is None
+    assert result.summary["equity_irr"]["min_defined"] == 0.0
     coverage = result.metadata["metric_coverage"]["equity_irr"]
     assert coverage["missing_count"] == 1
     assert coverage["undefined_count"] == 0
@@ -128,12 +136,17 @@ def test_equal_length_contract_retains_null_positions_and_refuses_ragged_data() 
 def test_lender_table_uses_metric_denominators_and_never_calls_unknown_a_nonbreach() -> (
     None
 ):
+    import pandas as pd
+
     from analytics.mc.exports import build_casper_risk_blocks, build_lender_risk_table
 
     result = _aggregate(_rows())
     frame = build_lender_risk_table(result, metric_map={"project_irr": "equity_irr"})
     irr = frame.loc[frame["metric"] == "Project IRR"].iloc[0]
-    assert irr["P90"] == pytest.approx(0.111)
+    # #1746 step 2: the downside P90 (10th percentile) falls on the undefined trial,
+    # so it is undefined (the frame holds it as a missing value).
+    assert pd.isna(irr["P90"])
+    assert irr["P50"] == pytest.approx(0.11)
     assert irr["defined_trials"] == 2
     assert irr["total_trials"] == 3
     assert irr["unavailable_trials"] == 1
@@ -224,9 +237,12 @@ def test_engine_gateway_keeps_independent_samples_through_tail_diagnostics(
     assert result.metadata["metric_coverage"]["equity_irr"]["defined_count"] == 2
 
 
-def test_joint_report_refuses_partial_cohorts_and_metadata_bridge_keeps_json_null(
+def test_joint_report_refuses_thin_irr_cohorts_and_metadata_bridge_keeps_json_null(
     tmp_path,
 ) -> None:
+    """#1763: a partial IRR is reported with its coverage, but not over fewer than 20
+    defined trials (the VaR/CVaR floor); NPV and covenant metrics stay complete-cohort.
+    """
     from analytics.capital_risk_layer_v14 import (
         build_capital_risk_report_from_trials,
         build_case_metadata_from_trials,
@@ -249,7 +265,7 @@ def test_joint_report_refuses_partial_cohorts_and_metadata_bridge_keeps_json_nul
     metadata = build_case_metadata_from_trials(trials)
     assert metadata["metadata"]["trials"]["equity_irr"][0] is None
     json.dumps(metadata, allow_nan=False)
-    with pytest.raises(ValueError, match="complete aligned metric observations"):
+    with pytest.raises(ValueError, match="defined IRR.*'equity_irr': 19"):
         build_capital_risk_report_from_trials(
             trials,
             tmp_path,

@@ -320,6 +320,62 @@ def _block(keys: Mapping[str, _Key], *rules: Any) -> _Mapping:
     return _Mapping(merged, rules=tuple(rules))
 
 
+def _bool(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, bool):
+        errors.append(f"{path}: must be true or false (got {value!r})")
+
+
+def _unique_ids(key: str) -> Callable[[Mapping[str, Any], str, List[str]], None]:
+    def rule(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+        entries = block.get(key)
+        if not isinstance(entries, list):
+            return
+        ids = [str(e.get("id")) for e in entries if isinstance(e, Mapping)]
+        if len(ids) != len(set(ids)):
+            errors.append(f"{path}.{key}: ids must be unique")
+
+    return rule
+
+
+def _low_mode_high(value: Any, path: str, errors: List[str]) -> None:
+    _Mapping(
+        {
+            "low": _req(_number(gt=0.0)),
+            "mode": _req(_number(gt=0.0)),
+            "high": _req(_number(gt=0.0)),
+        }
+    )(value, path, errors)
+    if isinstance(value, Mapping) and all(
+        _is_number(value.get(k)) for k in ("low", "mode", "high")
+    ):
+        if not value["low"] <= value["mode"] <= value["high"]:
+            errors.append(f"{path}: must satisfy low <= mode <= high")
+
+
+def _weights_sum_to_one(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
+    values = list(block.values())
+    if values and all(_is_number(v) for v in values):
+        if not math.isclose(sum(float(v) for v in values), 1.0, abs_tol=1e-9):
+            errors.append(f"{path}: weights must sum to 1")
+
+
+def _export_caps(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, Mapping) or not value:
+        errors.append(
+            f"{path}: must be a non-empty mapping of reading to cap (MW or null)"
+        )
+        return
+    for name, cap in value.items():
+        if not (isinstance(name, str) and name.strip()):
+            errors.append(f"{path}: reading names must be non-empty strings")
+        if cap is not None:
+            _number(gt=0.0)(cap, f"{path}.{name}", errors)
+
+
+#: Battery operating modes for a wind battery option: ``cycled`` daily for revenue, or
+#: ``held`` for the black-start function only.
+STORAGE_OPERATIONS: Tuple[str, ...] = ("cycled", "held")
+
 _STORAGE_OPTIONS = _block(
     {
         "technology": _req(
@@ -333,6 +389,10 @@ _STORAGE_OPTIONS = _block(
                                 "rotor_diameter_m": _req(_number(gt=0.0)),
                                 "cut_in_ms": _req(_number(gt=0.0)),
                                 "cut_out_ms": _req(_number(gt=0.0)),
+                                "air_density_kgm3": _req(_number(gt=0.0)),
+                                "power_loss_fractions": _req(
+                                    _list_of(_number(ge=0.0, lt=1.0))
+                                ),
                             },
                             rules=(_cut_out_above_cut_in,),
                         )
@@ -342,10 +402,24 @@ _STORAGE_OPTIONS = _block(
                             {
                                 "round_trip_efficiency": _req(_number(gt=0.0, le=1.0)),
                                 "dc_per_nominal": _req(_number(ge=1.0)),
-                                "black_start_reserve_mwh": _opt(_number(ge=0.0)),
+                                "black_start_reserve_mwh": _req(_number(ge=0.0)),
+                                "duration_h_for_tariff": _req(_number(gt=0.0)),
+                                "usd_per_kwh": _req(_low_mode_high),
+                                "om_usd_per_dc_kwh_year": _req(_number(ge=0.0)),
                             }
                         )
                     ),
+                }
+            )
+        ),
+        "hourly_profile": _req(
+            _Mapping(
+                {
+                    "reference_config": _req(_repo_file),
+                    "reference_point": _req(_nonempty_str),
+                    "transfer_summary": _req(_repo_file),
+                    "reference_height_m": _req(_number(gt=0.0)),
+                    "high_output_check_mw": _req(_number(gt=0.0)),
                 }
             )
         ),
@@ -359,11 +433,13 @@ _STORAGE_OPTIONS = _block(
                                     "id": _req(_nonempty_str),
                                     "power_mw": _req(_number(gt=0.0)),
                                     "energy_mwh": _req(_number(gt=0.0)),
+                                    "operation": _req(_enum(STORAGE_OPERATIONS)),
                                 }
                             )
                         )
                     )
-                }
+                },
+                rules=(_unique_ids("options"),),
             )
         ),
         "tariff": _req(
@@ -373,20 +449,52 @@ _STORAGE_OPTIONS = _block(
                     "wind_components": _req(_COMPONENTS),
                     "storage_priority_components": _req(_COMPONENTS),
                     "storage_other_components": _req(_COMPONENTS),
+                    "cross_check_priority_components": _req(_COMPONENTS),
+                    "cross_check_other_components": _req(_COMPONENTS),
                     "round_trip_efficiency_basis": _req(_number(gt=0.0, le=1.0)),
                     "contract_years": _req(_positive_int),
                     "priority_window_utc_hours": _req(_UTC_HOURS),
-                    "component_check_tolerance": _opt(_number(ge=0.0)),
+                    "component_check_tolerance": _req(_number(ge=0.0)),
+                    "one_time_adjustment_weights": _req(
+                        _Mapping(
+                            {
+                                "lkr_usd": _req(_number(ge=0.0, le=1.0)),
+                                "ccpi": _req(_number(ge=0.0, le=1.0)),
+                            },
+                            rules=(_weights_sum_to_one,),
+                        )
+                    ),
                 }
             )
         ),
-        "grid_limits": _opt(
+        "grid_limits": _req(
             _Mapping(
                 {
                     "export_limit_mw": _req(_number(gt=0.0)),
-                    "ramp_limit_mw_per_min": _opt(_number(gt=0.0)),
+                    "export_cap_readings": _req(_export_caps),
+                    "ramp_limit_mw_per_min": _req(_number(gt=0.0)),
+                    "illustrative_other_wind_mw": _req(_list_of(_number(ge=0.0))),
                 }
             )
+        ),
+        "firming_supplier": _req(
+            _Mapping(
+                {
+                    "offer_usd_per_dc_kwh": _req(_number(gt=0.0)),
+                    "dc_block_usd_per_dc_kwh": _req(_number(gt=0.0)),
+                    "ac_skid_usd": _req(_number(gt=0.0)),
+                    "ac_skid_mw": _req(_number(gt=0.0)),
+                    "ems_usd": _req(_number(ge=0.0)),
+                    "install_transport_share": _req(_number(ge=0.0, lt=1.0)),
+                    "service_share_of_cif_per_year": _req(_number(ge=0.0, lt=1.0)),
+                    "usable_per_dc": _req(_number(gt=0.0, le=1.0)),
+                    "smallest_block_dc_mwh": _req(_number(gt=0.0)),
+                    "power_cell_premium": _req(_list_of(_number(ge=1.0))),
+                }
+            )
+        ),
+        "uncertainty": _req(
+            _Mapping({"wind_yield_sigma": _req(_number(ge=0.0, lt=1.0))})
         ),
         "pricing_config": _opt(_repo_file),
     }
@@ -591,23 +699,6 @@ _SOLAR_STORAGE_SIZING = _block(
         "limitations": _req(_list_of(_nonempty_str)),
     }
 )
-
-
-def _bool(value: Any, path: str, errors: List[str]) -> None:
-    if not isinstance(value, bool):
-        errors.append(f"{path}: must be true or false (got {value!r})")
-
-
-def _unique_ids(key: str) -> Callable[[Mapping[str, Any], str, List[str]], None]:
-    def rule(block: Mapping[str, Any], path: str, errors: List[str]) -> None:
-        entries = block.get(key)
-        if not isinstance(entries, list):
-            return
-        ids = [str(e.get("id")) for e in entries if isinstance(e, Mapping)]
-        if len(ids) != len(set(ids)):
-            errors.append(f"{path}.{key}: ids must be unique")
-
-    return rule
 
 
 def _downside_not_above_p50(
@@ -877,6 +968,7 @@ __all__ = [
     "plan_site_analyses",
     "COST_BUILDUP_ROUTES",
     "SCREENING_LABEL",
+    "STORAGE_OPERATIONS",
     "SITE_ANALYSIS_BLOCKS",
     "allowed_keys",
     "declared_site_analysis_blocks",

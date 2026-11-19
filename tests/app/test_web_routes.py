@@ -531,3 +531,50 @@ def test_v1_surface_still_requires_bearer(client: Any) -> None:
     """The wizard's cookie gate must not have loosened the /v1 bearer requirement."""
     resp = client.post("/v1/cases/surface", json={"site_name": "x"})
     assert resp.status_code == 401
+
+
+def test_run_states_irr_coverage_beside_the_capital_risk_figures(
+    client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1763 / #1746 step 1: an IRR taken over fewer than every trial says so."""
+    import app.api.main as api_main
+
+    note = (
+        "50 of 1000 trials have no defined equity_irr and are excluded from its mean, "
+        "range and percentiles."
+    )
+    base = _canned_surface().capital_risk
+    assert base is not None
+    partial = base.model_copy(
+        update={
+            "irr_coverage_notes": [note],
+            "hurdle_defined_count": 950,
+            "metrics": [
+                m.model_copy(
+                    update={
+                        "defined_count": 950,
+                        "total_count": 1000,
+                        "coverage_note": note,
+                    }
+                )
+                for m in base.metrics
+            ],
+        }
+    )
+    monkeypatch.setattr(
+        api_main,
+        "build_case_surface",
+        lambda _inputs: _canned_surface(capital_risk=partial),
+    )
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert f"IRR coverage:</strong> {note}" in resp.text
+    assert resp.text.count("950 of 1000") == 2  # the hurdle row and the IRR metric row
+
+
+def test_run_without_undefined_irr_shows_no_coverage_note(client: Any) -> None:
+    _login(client)
+    resp = client.post("/wizard/run", data=_full_form(), headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "IRR coverage:" not in resp.text

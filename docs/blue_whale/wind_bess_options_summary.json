@@ -1117,7 +1117,7 @@
    }
   }
  },
- "scenario_sha256": "4ce9a6b9e7bef6e4603eae02e41dd3ffe8eae6846195f415d3558ba3b6fa9131",
+ "scenario_sha256": "c04be584e2be43d3b5d45ec33728473e6a791f5e4c8152bddb92b7c1a0f74b23",
  "schema": "blue_whale_wind_bess_options_summary_v1",
  "tariff": {
   "bess_component_after_adjustment": {

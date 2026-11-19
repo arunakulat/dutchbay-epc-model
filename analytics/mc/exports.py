@@ -37,6 +37,12 @@ except Exception:  # pragma: no cover
 
 from analytics.contracts_v14 import MonteCarloResult
 from analytics.core.covenant_breach import is_floor_pinned, prob_breach
+from analytics.mc.aggregate import (
+    IRR_METRICS,
+    irr_exclusion_note,
+    irr_ranked_note,
+    ranked_worst_percentiles,
+)
 
 
 @dataclass(frozen=True)
@@ -177,22 +183,36 @@ def build_lender_risk_table(
         # metrics (DSCR, IRR, NPV, LLCR, PLCR) that adverse tail is the LOW end, so
         # P90 = 10th pct and P95 = 5th pct. Reporting the raw 90th/95th pct here would
         # emit the favourable upside and understate tail risk to a lender.
-        if higher_is_better:
-            p90, p95 = _p(arr, 10), _p(arr, 5)
-        else:
-            p90, p95 = _p(arr, 90), _p(arr, 95)
-        std = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
-        rows.append(
-            {
-                "metric": label,
-                "P50": _p(arr, 50),
-                "P90": p90,
-                "P95": p95,
-                "mean": float(arr.mean()) if arr.size else None,
-                "std": std if arr.size else None,
-                **_trial_coverage(result, key),
-            }
+        coverage = _trial_coverage(result, key)
+        ranked = bool(
+            key in IRR_METRICS and coverage["unavailable_trials"] and arr.size
         )
+        if ranked:
+            # #1746 step 2: a trial with no defined IRR ranks below every defined one.
+            pct = ranked_worst_percentiles(
+                arr, coverage["unavailable_trials"], (5, 10, 50)
+            )
+            p50, p90, p95 = pct[50], pct[10], pct[5]
+        elif higher_is_better:
+            p50, p90, p95 = _p(arr, 50), _p(arr, 10), _p(arr, 5)
+        else:
+            p50, p90, p95 = _p(arr, 50), _p(arr, 90), _p(arr, 95)
+        std = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
+        row: dict[str, Any] = {
+            "metric": label,
+            "P50": p50,
+            "P90": p90,
+            "P95": p95,
+            "mean": float(arr.mean()) if arr.size else None,
+            "std": std if arr.size else None,
+            **coverage,
+        }
+        if key in IRR_METRICS and coverage["unavailable_trials"]:
+            # #1746 step 1: an IRR row that leaves trials out says so beside its figures.
+            row["coverage_note"] = (irr_ranked_note if ranked else irr_exclusion_note)(
+                key, coverage["unavailable_trials"], coverage["total_trials"]
+            )
+        rows.append(row)
 
     # Core metrics table. Every metric here is higher-is-better, so P90/P95 are the
     # downside (exceedance) tail -- see add_metric().
