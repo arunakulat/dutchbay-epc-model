@@ -402,16 +402,18 @@
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">
-    <h2>Sensitivity Tornado &mdash; Project IRR</h2>
-    <p class="muted">One-at-a-time sensitivity of the project IRR to each driver
-      (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered by swing
-      magnitude, widest first.</p>
+    <h2>Sensitivity Tornado &mdash; {{ ctx.tornado.metric_label }}</h2>
+    <p class="muted">One-at-a-time sensitivity of the {{ ctx.tornado.metric_label }} to each
+      driver (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered
+      by swing magnitude, widest first
+      {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | list %}, and drivers whose
+      swing is undefined last{% endif %}.</p>
     <table>
       <thead>
         <tr>
           <th>Driver</th>
-          <th style="text-align:right;">Downside IRR</th>
-          <th style="text-align:right;">Upside IRR</th>
+          <th style="text-align:right;">Downside case</th>
+          <th style="text-align:right;">Upside case</th>
           <th style="text-align:right;">Swing</th>
         </tr>
       </thead>
