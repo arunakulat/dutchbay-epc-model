@@ -10,7 +10,7 @@ canonical analytic AEP chain. The pieces (one scenario file drives both):
    height can never silently diverge from the finance hub height.
 2. :func:`build_arco_assessment` takes a hub-height wind-speed *series*, fits a Weibull,
    and computes the **implied** AEP by running the analytic engine
-   (:func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config`) on the
+   (:func:`wind_resource.aep_summary.build_aep_summary_from_config`) on the
    *fitted* ``(A, k)`` — then reports the drift of the fit vs the scenario's declared
    ``wind_resource.weibull_a/k``. It does NOT overwrite the declared baseline (VALIDATE
    mode): the auditable headline — bankable net P50 **464.3 GWh**, the modelled 473.8 GWh
@@ -139,7 +139,7 @@ def _implied_aep(scenario: Mapping[str, Any], fit: WeibullFit) -> Dict[str, Any]
     summary, so the caller sees what the lender headline WOULD be on ARCO-fitted data —
     without mutating the real scenario.
     """
-    from analytics.wind.aep_summary_builder import build_aep_summary_from_config
+    from wind_resource.aep_summary import build_aep_summary_from_config
 
     probe = copy.deepcopy(dict(scenario))
     probe.setdefault("wind_resource", {})

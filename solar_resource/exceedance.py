@@ -24,7 +24,7 @@ OPTIONAL ``resource.solar.uncertainty`` block (#604): ``SolarResourceConfig.from
 accepts the block, and :func:`solar_uncertainty_from_config` peels the ``p50_haircut_pct`` /
 ``correlation`` / ``life_years`` exceedance knobs off it before building the budget
 (mirroring the wind side's ``resource.uncertainty`` helper in
-``analytics.wind.aep_summary_builder``). A scenario WITHOUT the block behaves byte-identically
+``wind_resource.aep_summary``). A scenario WITHOUT the block behaves byte-identically
 to the pre-wiring defaults — default budget, haircut 0.0; the wind-side no-EYA haircut policy
 default (#587) deliberately does NOT port to solar. The combined 1-year sigma at the
 defaults is ~7.6%.
@@ -138,7 +138,7 @@ def solar_uncertainty_from_config(
 ) -> "tuple[SolarUncertaintyBudget, float, float, int]":
     """Budget + exceedance knobs from a ``resource.solar.uncertainty`` mapping (#604).
 
-    The solar analogue of ``analytics.wind.aep_summary_builder._uncertainty_from_config``:
+    The solar analogue of ``wind_resource.aep_summary._uncertainty_from_config``:
     the ``p50_haircut_pct`` / ``correlation`` / ``life_years`` knobs are peeled off the
     block FIRST (they parameterise the exceedance build-up, not the 1-sigma budget), and
     the remainder is handed to :meth:`SolarUncertaintyBudget.from_scenario`, so an unknown

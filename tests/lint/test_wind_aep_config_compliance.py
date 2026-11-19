@@ -138,9 +138,7 @@ class TestNoMaskingDefaultLiterals:
         assert 'wake_loss_pct", 8.0' not in _src("analytics/wind/pipeline_aep_v14.py")
 
     def test_summary_builder_has_no_hub_height_fallback(self) -> None:
-        assert 'get("hub_height_m", 150' not in _src(
-            "analytics/wind/aep_summary_builder.py"
-        )
+        assert 'get("hub_height_m", 150' not in _src("wind_resource/aep_summary.py")
 
     def test_era5_from_yaml_has_no_turbine_identity_fallbacks(self) -> None:
         src = _src("wind_resource/era5_retrieval.py")
@@ -175,10 +173,12 @@ def test_hours_per_year_is_unified() -> None:
     """The bankable and analytic engines must use the same year length (was 8766 vs 8760)."""
     import analytics.wind.aep_tornado as tornado
     import analytics.wind.losses_model as losses
+    import wind_resource.aep_integral as integral
     import wind_resource.bankable_aep as bankable
 
     assert (
         bankable.HOURS_PER_YEAR
+        == integral.HOURS_PER_YEAR
         == tornado.HOURS_PER_YEAR
         == losses.HOURS_PER_YEAR
         == 8760.0

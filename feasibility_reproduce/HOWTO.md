@@ -55,7 +55,7 @@ STOP — the environment differs; do not proceed.
 
 **Baseline the long way** — prove the full `bankable_aep` chain reproduces the committed AEP:
 ```python
-from analytics.wind.aep_summary_builder import build_aep_summary_from_config
+from wind_resource.aep_summary import build_aep_summary_from_config
 import yaml
 s = build_aep_summary_from_config(yaml.safe_load(open("scenarios/dutchbay_lendercase_2025Q4.yaml")))
 # → net_site_aep_gwh 464.36, capacity_factor 0.3322  (= committed 464.3 GWh / 0.332)
@@ -69,7 +69,7 @@ s = build_aep_summary_from_config(yaml.safe_load(open("scenarios/dutchbay_lender
 .venv/bin/python feasibility_reproduce/lib/wind_provenance.py
 ```
 Runs offline:
-- **fresh bankable AEP** — `analytics.wind.aep_summary_builder.build_aep_summary_from_config` → net P50 464.36 GWh, P75 432.8, P90 404.4, CF 0.3322, loss stack 14.49 %.
+- **fresh bankable AEP** — `wind_resource.aep_summary.build_aep_summary_from_config` → net P50 464.36 GWh, P75 432.8, P90 404.4, CF 0.3322, loss stack 14.49 %.
 - **AEP tornado** — `analytics.wind.aep_tornado.tornado_from_config` → wind-speed bias ±5 % = ±20.5 % (dominant), power-curve −16 %, shear ±6.6 %, losses ±6.4 %.
 - **micro-siting** — `wind_resource.layout_optimizer.optimize_layout` (DTU TopFarm on PyWake), baseline-polish → **+~1 % AEP** candidate (551.0 → ~558 GWh). Use `use_smart_start=False` (a smart-start reseed can land *below* baseline — a misleading negative uplift).
 
