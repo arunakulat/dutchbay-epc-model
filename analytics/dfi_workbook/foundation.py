@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 
-from analytics.dfi_workbook.registry import CellRegistry
-from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
+from analytics.dfi_workbook.registry import CellRegistry, _reject_control_chars
 from analytics.reproducible_workbook import (
     PathLike,
     freeze_workbook_reproducible,
@@ -23,6 +24,16 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 CONTROL_SHEET_NAME = "Control_Provenance"
 INPUTS_SHEET_NAME = "Inputs"
 LEDGER_SHEET_NAME = "Module_Ledger"
+
+# Pure-string F-5 non-reliance notice (identical wording to
+# analytics.executive_workbook.EXECUTIVE_WORKBOOK_F5_CAVEAT, defined locally so
+# analytics.dfi_workbook stays free of pandas/numpy at import time).
+DFI_WORKBOOK_F5_CAVEAT: str = (
+    "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs for "
+    "screening and discussion only. They support no covenant, lender or IC "
+    "representation, and no quarterly CFADS or intra-year DSCR figure may be used "
+    "for covenant purposes."
+)
 
 CANONICAL_LEDGER_STATUSES: tuple[str, ...] = (
     "executed",
@@ -43,7 +54,11 @@ DEFAULT_FORMULA_BOUNDARY_NOTE: str = (
     "explicit provenance rather than simplified spreadsheet approximations."
 )
 
-_FORBIDDEN_OUTPUT_EXTENSIONS: frozenset[str] = frozenset({".xlsm", ".xlsb", ".xltm"})
+_FORMULA_TRIGGER_PREFIXES: tuple[str, ...] = ("=", "+", "-", "@")
+_LEDGER_STATUS_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ISO_DATETIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
 
 _INPUT_HEADERS: tuple[str, ...] = (
     "Key",
@@ -66,18 +81,59 @@ _LEDGER_HEADERS: tuple[str, ...] = (
 )
 
 
-def _require_non_empty_str(value: object, field_name: str) -> str:
-    """Validate that ``value`` is a non-empty, non-blank string."""
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string.")
-    return value
-
-
-def _require_str(value: object, field_name: str) -> str:
-    """Validate that ``value`` is a string (empty allowed)."""
+def _validate_literal_text(
+    value: object,
+    field_name: str,
+    *,
+    allow_empty: bool = False,
+) -> str:
+    """Validate text against control characters and leading formula triggers."""
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string, got {type(value).__name__}.")
+    _reject_control_chars(value, field_name)
+    stripped = value.strip()
+    if not allow_empty and not stripped:
+        raise ValueError(f"{field_name} must be a non-empty string.")
+    if stripped.startswith(_FORMULA_TRIGGER_PREFIXES):
+        raise ValueError(
+            f"{field_name} {value!r} starts with forbidden formula-injection "
+            f"character {stripped[0]!r}; active formula prefixes are disallowed."
+        )
     return value
+
+
+def _validate_iso8601_timestamp(value: object, field_name: str) -> str:
+    """Validate that ``value`` is a timezone-aware ISO-8601 datetime or ISO date."""
+    text = _validate_literal_text(value, field_name, allow_empty=False)
+    if text != text.strip():
+        raise ValueError(
+            f"{field_name} {text!r} must not have leading or trailing whitespace."
+        )
+    if _ISO_DATE_RE.fullmatch(text):
+        try:
+            date.fromisoformat(text)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field_name} {text!r} is not a valid ISO-8601 date: {exc}."
+            ) from exc
+        return text
+    if not _ISO_DATETIME_PREFIX_RE.match(text):
+        raise ValueError(
+            f"{field_name} {text!r} must be a valid timezone-aware ISO-8601 "
+            "datetime (e.g. '2026-11-19T12:00:00Z') or ISO date ('YYYY-MM-DD')."
+        )
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"{field_name} {text!r} is not a valid ISO-8601 datetime: {exc}."
+        ) from exc
+    if parsed.tzinfo is None:
+        raise ValueError(
+            f"{field_name} {text!r} must include an explicit UTC or timezone offset "
+            "(e.g. 'Z' or '+00:00')."
+        )
+    return text
 
 
 def _require_openpyxl() -> Any:
@@ -105,31 +161,59 @@ class WorkbookInputItem(BaseModel):
     number_format: str = "General"
     provenance: str
 
-    @field_validator(
-        "key", "section", "label", "number_format", "provenance", mode="before"
-    )
+    @field_validator("key", mode="before")
+    @classmethod
+    def _validate_key(cls, value: object) -> str:
+        text = _validate_literal_text(value, "key", allow_empty=False)
+        if text != text.strip():
+            raise ValueError(
+                f"WorkbookInputItem.key {text!r} must not have leading or "
+                "trailing whitespace."
+            )
+        return text
+
+    @field_validator("section", "label", "provenance", mode="before")
     @classmethod
     def _validate_required_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _require_non_empty_str(value, str(info.field_name))
+        return _validate_literal_text(value, str(info.field_name), allow_empty=False)
+
+    @field_validator("number_format", mode="before")
+    @classmethod
+    def _validate_number_format(cls, value: object) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("number_format must be a non-empty string.")
+        _reject_control_chars(value, "number_format")
+        if value.strip().startswith("="):
+            raise ValueError(f"number_format {value!r} must not start with '='.")
+        return value
 
     @field_validator("unit", mode="before")
     @classmethod
     def _validate_unit(cls, value: object) -> str:
-        return _require_str(value, "unit")
+        return _validate_literal_text(value, "unit", allow_empty=True)
 
     @field_validator("value", mode="before")
     @classmethod
-    def _validate_scalar_value(cls, value: Any) -> Union[float, int, str, bool]:
-        if hasattr(value, "item") and type(value).__module__.startswith("numpy"):
-            value = value.item()
-        if not isinstance(value, (bool, int, float, str)):
+    def _validate_scalar_value(cls, value: object) -> Union[float, int, str, bool]:
+        if type(value) not in (bool, int, float, str):
             raise ValueError(
-                "WorkbookInputItem.value must be bool, int, float, or str; "
-                f"got {type(value).__name__}."
+                "WorkbookInputItem.value must be strict Python bool, int, float, "
+                f"or str; got {type(value).__name__}."
             )
-        if isinstance(value, float) and not math.isfinite(value):
-            raise ValueError(f"WorkbookInputItem.value must be finite, got {value!r}.")
-        return value
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                raise ValueError(
+                    f"WorkbookInputItem.value must be finite, got {value!r}."
+                )
+            return value
+        if isinstance(value, str):
+            return _validate_literal_text(value, "value", allow_empty=True)
+        if isinstance(value, (bool, int)):
+            return value
+        raise ValueError(  # pragma: no cover - unreachable after type check
+            "WorkbookInputItem.value must be strict Python bool, int, float, "
+            f"or str; got {type(value).__name__}."
+        )
 
 
 class ModuleLedgerEntry(BaseModel):
@@ -149,18 +233,39 @@ class ModuleLedgerEntry(BaseModel):
         "module_path",
         "pipeline_stage",
         "role_description",
-        "status",
         "excel_representation",
         mode="before",
     )
     @classmethod
     def _validate_required_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _require_non_empty_str(value, str(info.field_name))
+        return _validate_literal_text(value, str(info.field_name), allow_empty=False)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _validate_status(cls, value: object) -> str:
+        if not isinstance(value, str):
+            raise ValueError(f"status must be a string, got {type(value).__name__}.")
+        _reject_control_chars(value, "status")
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("status must be a non-empty string.")
+        if not _LEDGER_STATUS_RE.fullmatch(normalized):
+            raise ValueError(
+                f"Invalid ModuleLedgerEntry.status {value!r}: expected lowercase "
+                "identifier matching ^[a-z][a-z0-9_]*$ (no uppercase, wildcards, "
+                "operators, or spaces) so Excel COUNTIF stays exact."
+            )
+        if normalized == "total":
+            raise ValueError(
+                "ModuleLedgerEntry.status 'total' is reserved for the "
+                "Module_Ledger rollup Total row."
+            )
+        return normalized
 
     @field_validator("reason", "provenance_ref", mode="before")
     @classmethod
     def _validate_optional_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _require_str(value, str(info.field_name))
+        return _validate_literal_text(value, str(info.field_name), allow_empty=True)
 
 
 class DfiWorkbookMetadata(BaseModel):
@@ -174,29 +279,54 @@ class DfiWorkbookMetadata(BaseModel):
     config_sha256: str
     engine_version: str
     generated_at: str
-    non_reliance_notice: str = EXECUTIVE_WORKBOOK_F5_CAVEAT
+    non_reliance_notice: str = DFI_WORKBOOK_F5_CAVEAT
     formula_boundary_note: str = DEFAULT_FORMULA_BOUNDARY_NOTE
 
     @field_validator(
         "project_name",
         "scenario_name",
-        "config_sha256",
         "engine_version",
-        "generated_at",
-        "non_reliance_notice",
         "formula_boundary_note",
         mode="before",
     )
     @classmethod
     def _validate_required_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _require_non_empty_str(value, str(info.field_name))
+        return _validate_literal_text(value, str(info.field_name), allow_empty=False)
+
+    @field_validator("config_sha256", mode="before")
+    @classmethod
+    def _validate_config_sha256(cls, value: object) -> str:
+        text = _validate_literal_text(value, "config_sha256", allow_empty=False)
+        if not _SHA256_HEX_RE.fullmatch(text):
+            raise ValueError(
+                f"config_sha256 {text!r} must be a 64-character lowercase hex "
+                "SHA-256 digest matching ^[0-9a-f]{64}$."
+            )
+        return text
+
+    @field_validator("generated_at", mode="before")
+    @classmethod
+    def _validate_generated_at(cls, value: object) -> str:
+        return _validate_iso8601_timestamp(value, "generated_at")
+
+    @field_validator("non_reliance_notice", mode="before")
+    @classmethod
+    def _validate_non_reliance_notice(cls, value: object) -> str:
+        text = _validate_literal_text(value, "non_reliance_notice", allow_empty=False)
+        if not text.startswith(DFI_WORKBOOK_F5_CAVEAT):
+            raise ValueError(
+                "DfiWorkbookMetadata.non_reliance_notice must start with the "
+                "canonical F-5 hold (DFI_WORKBOOK_F5_CAVEAT); the non-reliance "
+                "notice cannot be suppressed or replaced."
+            )
+        return text
 
     @field_validator("run_mode", mode="before")
     @classmethod
     def _validate_run_mode(cls, value: object) -> Optional[str]:
         if value is None:
             return None
-        return _require_non_empty_str(value, "run_mode")
+        return _validate_literal_text(value, "run_mode", allow_empty=False)
 
 
 @dataclass(frozen=True)
@@ -261,6 +391,11 @@ def _populate_control_provenance_sheet(
     styles: _WorkbookStyles,
 ) -> None:
     """Populate Sheet 1 (``Control_Provenance``) with notice and metadata."""
+    if not metadata.non_reliance_notice.startswith(DFI_WORKBOOK_F5_CAVEAT):
+        raise ValueError(
+            "DfiWorkbookMetadata.non_reliance_notice must start with "
+            "DFI_WORKBOOK_F5_CAVEAT; cannot emit workbook without F-5 hold."
+        )
     ws.title = CONTROL_SHEET_NAME
     ws.views.sheetView[0].showGridLines = True
 
@@ -514,7 +649,7 @@ def build_dfi_workbook_foundation(
 
     Raises:
         ValueError: If ``inputs`` is empty, duplicate keys occur, metadata
-            validation fails, or a macro-enabled output extension is requested.
+            validation fails, or the output path does not use ``.xlsx``.
     """
     validated_metadata = (
         metadata
@@ -530,10 +665,10 @@ def build_dfi_workbook_foundation(
     validated_ledger = [_coerce_ledger_entry(entry) for entry in ledger_entries]
 
     out_path = Path(output_path).expanduser().resolve()
-    if out_path.suffix.lower() in _FORBIDDEN_OUTPUT_EXTENSIONS:
+    if out_path.suffix.lower() != ".xlsx":
         raise ValueError(
-            f"Macro-enabled workbook extension {out_path.suffix!r} is forbidden; "
-            "DFI workbooks must be macro-free .xlsx artifacts."
+            f"Workbook output path {out_path.name!r} has extension "
+            f"{out_path.suffix!r}; DFI workbooks must be macro-free .xlsx artifacts."
         )
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -564,6 +699,7 @@ __all__ = [
     "CANONICAL_LEDGER_STATUSES",
     "CONTROL_SHEET_NAME",
     "DEFAULT_FORMULA_BOUNDARY_NOTE",
+    "DFI_WORKBOOK_F5_CAVEAT",
     "DfiWorkbookMetadata",
     "INPUTS_SHEET_NAME",
     "LEDGER_SHEET_NAME",

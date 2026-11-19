@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 
 _FORBIDDEN_SHEET_CHARS: frozenset[str] = frozenset(r"\/?*[:]")
 _EXCEL_MAX_SHEET_LEN = 31
@@ -14,7 +14,18 @@ _COL_RE = re.compile(r"^[A-Za-z]{1,3}$")
 _UNQUOTED_SHEET_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _A1_COLLISION_RE = re.compile(r"^[A-Za-z]{1,3}[1-9][0-9]*$")
 _R1C1_COLLISION_RE = re.compile(r"^R[0-9]*C[0-9]*$", re.IGNORECASE)
-_RESERVED_UNQUOTED_SHEETS = frozenset({"true", "false"})
+_RESERVED_UNQUOTED_SHEETS = frozenset({"true", "false", "r", "c"})
+
+
+def _reject_control_chars(value: str, label: str) -> str:
+    """Reject ASCII control characters (``\\x00``–``\\x1f``) in text fields."""
+    bad_ctrls = sorted({repr(ch) for ch in value if ord(ch) < 0x20})
+    if bad_ctrls:
+        raise ValueError(
+            f"{label} {value!r} contains forbidden ASCII control character(s): "
+            f"{bad_ctrls}."
+        )
+    return value
 
 
 def column_letters_to_index(column: str) -> int:
@@ -55,14 +66,20 @@ def validate_sheet_name(sheet: str) -> str:
         The validated worksheet name unchanged.
 
     Raises:
-        ValueError: If ``sheet`` is not a string, is empty/blank, exceeds
-            31 characters, starts or ends with ``'``, or contains any of
-            ``\\ / ? * [ ] :``.
+        ValueError: If ``sheet`` is not a string, is empty/blank, has leading or
+            trailing whitespace, contains ASCII control characters
+            (``\\x00``–``\\x1f``), exceeds 31 characters, starts or ends with
+            ``'``, or contains any of ``\\ / ? * [ ] :``.
     """
     if not isinstance(sheet, str):
         raise ValueError(f"Sheet name must be a string, got {type(sheet).__name__}.")
     if not sheet or not sheet.strip():
         raise ValueError("Sheet name must be non-empty.")
+    _reject_control_chars(sheet, "Sheet name")
+    if sheet != sheet.strip():
+        raise ValueError(
+            f"Sheet name {sheet!r} must not have leading or trailing whitespace."
+        )
     if len(sheet) > _EXCEL_MAX_SHEET_LEN:
         raise ValueError(
             f"Sheet name {sheet!r} is {len(sheet)} characters; Excel allows at "
@@ -84,9 +101,9 @@ def quote_sheet_name(sheet: str) -> str:
     """Format a validated worksheet name for safe use in Excel formulas.
 
     Simple identifier sheet names (such as ``Inputs`` or ``Module_Ledger``) are
-    returned unquoted unless they collide with cell references or boolean
-    literals; all other valid names are wrapped in single quotes with internal
-    apostrophes doubled.
+    returned unquoted unless they collide with cell references (including A1,
+    R1C1, and bare ``R``/``C``) or boolean literals; all other valid names are
+    wrapped in single quotes with internal apostrophes doubled.
 
     Args:
         sheet: Worksheet name to format.
@@ -154,19 +171,21 @@ class CellRef(BaseModel):
 
     @field_validator("unit", "provenance", mode="before")
     @classmethod
-    def _validate_str_field(cls, value: object) -> str:
+    def _validate_str_field(cls, value: object, info: ValidationInfo) -> str:
+        field_name = str(info.field_name)
         if not isinstance(value, str):
             raise ValueError(
-                f"Expected string metadata field, got {type(value).__name__}."
+                f"Expected string metadata field {field_name}, got "
+                f"{type(value).__name__}."
             )
-        return value
+        return _reject_control_chars(value, field_name)
 
     @field_validator("number_format", mode="before")
     @classmethod
     def _validate_number_format(cls, value: object) -> str:
         if not isinstance(value, str) or not value.strip():
             raise ValueError("number_format must be a non-empty string.")
-        return value
+        return _reject_control_chars(value, "number_format")
 
     @property
     def coord(self) -> str:
@@ -227,11 +246,17 @@ class CellRegistry:
             The registered immutable :class:`CellRef`.
 
         Raises:
-            ValueError: If ``key`` is empty, already registered, or collides
-                with an existing ``(sheet, column, row)`` coordinate.
+            ValueError: If ``key`` is empty, has leading/trailing whitespace,
+                contains ASCII control characters, is already registered, or
+                collides with an existing ``(sheet, column, row)`` coordinate.
         """
         if not isinstance(key, str) or not key.strip():
             raise ValueError("CellRegistry key must be a non-empty string.")
+        _reject_control_chars(key, "CellRegistry key")
+        if key != key.strip():
+            raise ValueError(
+                f"CellRegistry key {key!r} must not have leading or trailing whitespace."
+            )
         cell_ref = CellRef(
             sheet=sheet,
             column=column,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from analytics.dfi_workbook.foundation import (
+    DFI_WORKBOOK_F5_CAVEAT,
     DfiWorkbookMetadata,
     ModuleLedgerEntry,
     WorkbookInputItem,
@@ -13,6 +14,7 @@ from analytics.dfi_workbook.registry import CellRef, CellRegistry
 __all__ = [
     "CellRef",
     "CellRegistry",
+    "DFI_WORKBOOK_F5_CAVEAT",
     "DfiWorkbookMetadata",
     "ModuleLedgerEntry",
     "WorkbookInputItem",

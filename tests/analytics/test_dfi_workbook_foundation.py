@@ -16,19 +16,25 @@ from __future__ import annotations
 import ast
 import hashlib
 import io
+import os
+import re
 import shutil
 import subprocess
+import sys
 import time
+import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import openpyxl
 import pytest
 from pydantic import ValidationError
 
 from analytics.dfi_workbook import (
+    DFI_WORKBOOK_F5_CAVEAT,
     CellRef,
     CellRegistry,
     DfiWorkbookMetadata,
@@ -201,6 +207,39 @@ def test_dfi_workbook_package_has_no_forbidden_layer_imports() -> None:
                 assert not (mod == "finance" or mod.startswith("finance.")), fin_msg
                 pipe_msg = f"{py_file.name} imports forbidden pipeline module {mod!r}"
                 assert not mod.startswith("analytics.pipeline_"), pipe_msg
+                exec_msg = f"{py_file.name} must not import {mod!r}"
+                assert not (
+                    mod == "analytics.executive_workbook"
+                    or mod == "pandas"
+                    or mod.startswith("pandas.")
+                    or mod == "numpy"
+                    or mod.startswith("numpy.")
+                ), exec_msg
+
+
+def test_f5_caveat_matches_executive_workbook_and_stays_pandas_numpy_free() -> None:
+    assert DFI_WORKBOOK_F5_CAVEAT == EXECUTIVE_WORKBOOK_F5_CAVEAT
+    repo_root = Path(__file__).resolve().parents[2]
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONPATH"] = str(repo_root)
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys, analytics.dfi_workbook; "
+                "assert 'pandas' not in sys.modules, 'pandas leaked at import'; "
+                "assert 'numpy' not in sys.modules, 'numpy leaked at import'; "
+                "assert 'openpyxl' not in sys.modules, 'openpyxl leaked at import'"
+            ),
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, f"Clean-import guard failed: {proc.stderr}"
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +266,10 @@ class TestCellRef:
         a1_collision = CellRef(sheet="FY2026", column="B", row=3)
         assert a1_collision.formula_ref() == "'FY2026'!$B$3"
 
+        for rc_name in ("R", "r", "C", "c", "RC", "R1C1", "R12C34"):
+            rc_ref = CellRef(sheet=rc_name, column="A", row=1)
+            assert rc_ref.formula_ref() == f"'{rc_name}'!$A$1"
+
         max_len = CellRef(sheet="S" * 31, column="A", row=1)
         assert len(max_len.sheet) == 31
 
@@ -235,6 +278,13 @@ class TestCellRef:
         [
             "",
             "   ",
+            " Inputs",
+            "Inputs ",
+            "In\x00puts",
+            "In\nputs",
+            "In\rputs",
+            "In\tputs",
+            "In\x1fputs",
             "S" * 32,
             "Bad\\Sheet",
             "Bad/Sheet",
@@ -250,6 +300,15 @@ class TestCellRef:
     def test_invalid_sheet_name_fails_loud(self, bad_sheet: str) -> None:
         with pytest.raises(ValueError):
             CellRef(sheet=bad_sheet, column="A", row=1)
+
+    @pytest.mark.parametrize("bad_ctrl", ["ok\x00", "ok\n", "ok\r", "ok\t", "ok\x1f"])
+    def test_cell_ref_rejects_control_chars_in_metadata(self, bad_ctrl: str) -> None:
+        with pytest.raises(ValueError):
+            CellRef(sheet="Inputs", column="A", row=1, unit=bad_ctrl)
+        with pytest.raises(ValueError):
+            CellRef(sheet="Inputs", column="A", row=1, provenance=bad_ctrl)
+        with pytest.raises(ValueError):
+            CellRef(sheet="Inputs", column="A", row=1, number_format=bad_ctrl)
 
     @pytest.mark.parametrize(
         "bad_col",
@@ -322,8 +381,9 @@ class TestCellRegistry:
 
     def test_empty_key_and_inverted_range_fail_loud(self) -> None:
         reg = CellRegistry()
-        with pytest.raises(ValueError):
-            reg.register("   ", sheet="Inputs", column="D", row=2)
+        for bad_key in ("   ", " k1", "k1 ", " k1 ", "k1\n", "k1\x00", "\tk1"):
+            with pytest.raises(ValueError):
+                reg.register(bad_key, sheet="Inputs", column="D", row=2)
         with pytest.raises(ValueError, match="Inverted"):
             reg.range_ref("Inputs", "D", 5, "D", 2)
         with pytest.raises(ValueError, match="Inverted"):
@@ -338,13 +398,26 @@ class TestCellRegistry:
 class TestStrictContracts:
     def test_metadata_defaults_and_non_reliance_refusal(self) -> None:
         meta = _sample_metadata()
+        assert meta.non_reliance_notice == DFI_WORKBOOK_F5_CAVEAT
         assert meta.non_reliance_notice == EXECUTIVE_WORKBOOK_F5_CAVEAT
         assert "HOLD (F-5, #1110, v15.6.1)" in meta.non_reliance_notice
         assert "Option B" in meta.formula_boundary_note
 
-        for bad_notice in ("", "   "):
+        for bad_notice in (
+            "",
+            "   ",
+            "Approved for IC reliance",
+            "HOLD (F-5, #1110, v15.6.1): custom truncated notice",
+            f"Approved for IC reliance. {DFI_WORKBOOK_F5_CAVEAT}",
+            f"  {DFI_WORKBOOK_F5_CAVEAT}",
+        ):
             with pytest.raises(ValueError, match="non_reliance_notice"):
                 _sample_metadata(non_reliance_notice=bad_notice)
+
+        appended = _sample_metadata(
+            non_reliance_notice=f"{DFI_WORKBOOK_F5_CAVEAT} Scenario: stress-test."
+        )
+        assert appended.non_reliance_notice.startswith(DFI_WORKBOOK_F5_CAVEAT)
 
         with pytest.raises(ValidationError):
             DfiWorkbookMetadata(
@@ -357,7 +430,56 @@ class TestStrictContracts:
             )
 
     @pytest.mark.parametrize(
-        "bad_val", [float("nan"), float("inf"), float("-inf"), None, [1]]
+        "bad_sha",
+        [
+            "A" * 64,
+            "g" * 64,
+            "a" * 63,
+            "a" * 65,
+            " " + "a" * 64,
+            "not-a-sha",
+        ],
+    )
+    def test_metadata_rejects_invalid_config_sha256(self, bad_sha: str) -> None:
+        with pytest.raises(ValueError, match="config_sha256"):
+            _sample_metadata(config_sha256=bad_sha)
+
+    def test_metadata_validates_generated_at_iso8601(self) -> None:
+        for ok_ts in (
+            "2026-11-19T12:00:00Z",
+            "2026-11-19T12:00:00+00:00",
+            "2026-11-19T17:30:00+05:30",
+            "2026-11-19",
+        ):
+            assert _sample_metadata(generated_at=ok_ts).generated_at == ok_ts
+
+        for bad_ts in (
+            "not-a-date",
+            "2026-13-01T00:00:00Z",
+            "2026-02-30",
+            "2026-11-19T12:00:00",
+            "20261119",
+            " 2026-11-19T12:00:00Z",
+            "=TODAY()",
+        ):
+            with pytest.raises(ValueError, match="generated_at"):
+                _sample_metadata(generated_at=bad_ts)
+
+    @pytest.mark.parametrize(
+        "bad_val",
+        [
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            None,
+            [1],
+            (1,),
+            np.array([1.0]),
+            np.array(1.0),
+            np.float64(1.0),
+            np.int64(1),
+            np.bool_(True),
+        ],
     )
     def test_input_item_rejects_non_finite_and_non_scalar(self, bad_val: Any) -> None:
         with pytest.raises(ValueError):
@@ -369,6 +491,156 @@ class TestStrictContracts:
                 unit="MW",
                 provenance="cfg",
             )
+
+    def test_input_item_allows_negative_numeric_and_hyphenated_strings(self) -> None:
+        neg_int = WorkbookInputItem(
+            key="tax.loss_carryforward",
+            section="Tax-Config",
+            label="Initial Balance",
+            value=-42,
+            unit="USD",
+            provenance="base-case",
+        )
+        assert neg_int.value == -42
+
+        neg_float = WorkbookInputItem(
+            key="macro.delta_pct",
+            section="Macro-Assumptions",
+            label="CPI Adjustment",
+            value=-0.25,
+            unit="pct",
+            provenance="non-reliance-case",
+        )
+        assert neg_float.value == -0.25
+
+        with pytest.raises(ValueError, match="whitespace"):
+            WorkbookInputItem(
+                key=" padded.key ",
+                section="Sec",
+                label="Lbl",
+                value=1.0,
+                unit="MW",
+                provenance="cfg",
+            )
+
+    @pytest.mark.parametrize(
+        "bad_status",
+        [
+            "MixedCase",
+            "EXECUTED",
+            "Executed",
+            "*",
+            "exec*",
+            "?",
+            "~",
+            "total",
+            "Total",
+            "<>failed",
+            "=executed",
+            ">1",
+            "<0",
+            "executed\n",
+            "\texecuted",
+            "executed\x00",
+            "with space",
+            "1bad",
+            "",
+            "   ",
+        ],
+    )
+    def test_ledger_status_rejects_non_canonical_and_wildcard_inputs(
+        self, bad_status: str
+    ) -> None:
+        with pytest.raises(ValueError):
+            ModuleLedgerEntry(
+                module_path="finance.cashflow_v14",
+                pipeline_stage="cashflow",
+                role_description="Cashflow engine",
+                status=bad_status,
+                excel_representation="engine_table",
+            )
+
+    def test_ledger_status_strips_outer_spaces_on_valid_lowercase(self) -> None:
+        entry = ModuleLedgerEntry(
+            module_path="finance.cashflow_v14",
+            pipeline_stage="cashflow",
+            role_description="Multi-tranche cashflow",
+            status="  executed  ",
+            excel_representation="engine_table",
+        )
+        assert entry.status == "executed"
+
+    @pytest.mark.parametrize(
+        "bad_payload",
+        [
+            "=1+1",
+            "+CMD|' /C calc'!A0",
+            "-1+1",
+            "@SUM(1,1)",
+            " =1+1",
+            "\t=1+1",
+            "\r=1+1",
+            "\n=1+1",
+            "line1\nline2",
+            "line1\rline2",
+            "bad\x00nul",
+            "bad\x1fus",
+        ],
+    )
+    def test_formula_injection_and_control_chars_rejected_across_models(
+        self, bad_payload: str
+    ) -> None:
+        for field in (
+            "project_name",
+            "scenario_name",
+            "run_mode",
+            "engine_version",
+            "formula_boundary_note",
+        ):
+            with pytest.raises(ValueError):
+                _sample_metadata(**{field: bad_payload})
+
+        notice_val = (
+            f"{DFI_WORKBOOK_F5_CAVEAT} {bad_payload}"
+            if any(ord(c) < 0x20 for c in bad_payload)
+            else bad_payload
+        )
+        with pytest.raises(ValueError):
+            _sample_metadata(non_reliance_notice=notice_val)
+
+        for item_field in ("key", "section", "label", "unit", "provenance", "value"):
+            kwargs: dict[str, Any] = {
+                "key": "k.ok",
+                "section": "Sec",
+                "label": "Lbl",
+                "value": "USD",
+                "unit": "MW",
+                "provenance": "cfg",
+            }
+            kwargs[item_field] = bad_payload
+            with pytest.raises(ValueError):
+                WorkbookInputItem(**kwargs)
+
+        for ledger_field in (
+            "module_path",
+            "pipeline_stage",
+            "role_description",
+            "excel_representation",
+            "reason",
+            "provenance_ref",
+        ):
+            l_kwargs: dict[str, Any] = {
+                "module_path": "finance.cashflow_v14",
+                "pipeline_stage": "cashflow",
+                "role_description": "Cashflow",
+                "status": "executed",
+                "excel_representation": "engine_table",
+                "reason": "",
+                "provenance_ref": "",
+            }
+            l_kwargs[ledger_field] = bad_payload
+            with pytest.raises(ValueError):
+                ModuleLedgerEntry(**l_kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +769,245 @@ class TestBuildDfiWorkbookFoundation:
                 inputs=_sample_inputs(),
                 ledger_entries=_sample_ledger(),
             )
+
+        for bad_name in (
+            "bad.xlam",
+            "bad.xlsb",
+            "bad.xltm",
+            "bad.xls",
+            "no_suffix",
+            "bad.csv",
+        ):
+            with pytest.raises(ValueError, match="macro-free"):
+                build_dfi_workbook_foundation(
+                    tmp_path / bad_name,
+                    metadata=meta,
+                    inputs=_sample_inputs(),
+                    ledger_entries=_sample_ledger(),
+                )
+
+    def test_always_run_ooxml_xml_formula_parity_and_responsiveness_oracle(
+        self, tmp_path: Path
+    ) -> None:
+        main_ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+        rel_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        pkg_rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+        cell_ref_re = re.compile(r"^([A-Z]+)([0-9]+)$")
+        countif_re = re.compile(
+            r"^COUNTIF\(Module_Ledger!\$D\$2:\$D\$(\d+),\s*I(\d+)\)$"
+        )
+        sum_re = re.compile(r"^SUM\(Module_Ledger!\$J\$2:\$J\$(\d+)\)$")
+
+        def _parse_sheet_cells(
+            zf: zipfile.ZipFile,
+            sheet_xml_path: str,
+            shared_strings: list[str],
+        ) -> dict[str, tuple[str | None, str | None]]:
+            root = ET.fromstring(zf.read(sheet_xml_path))
+            cells: dict[str, tuple[str | None, str | None]] = {}
+            for cell_el in root.findall(f".//{{{main_ns}}}c"):
+                coord = cell_el.attrib["r"]
+                f_el = cell_el.find(f"{{{main_ns}}}f")
+                formula = f_el.text if f_el is not None else None
+                cell_type = cell_el.attrib.get("t")
+                val: str | None = None
+                if cell_type == "inlineStr":
+                    val = "".join(
+                        t.text or ""
+                        for t in cell_el.findall(f".//{{{main_ns}}}is/{{{main_ns}}}t")
+                    )
+                elif cell_type == "s":
+                    v_el = cell_el.find(f"{{{main_ns}}}v")
+                    if v_el is not None and v_el.text is not None:
+                        val = shared_strings[int(v_el.text)]
+                else:
+                    v_el = cell_el.find(f"{{{main_ns}}}v")
+                    if v_el is not None:
+                        val = v_el.text
+                cells[coord] = (val, formula)
+            return cells
+
+        def _verify_ooxml_workbook(
+            tag: str,
+            ledger: tuple[ModuleLedgerEntry, ...],
+            *,
+            meta: DfiWorkbookMetadata,
+            inputs: tuple[WorkbookInputItem, ...],
+        ) -> tuple[dict[str, int], int]:
+            out_path = tmp_path / f"ooxml_{tag}.xlsx"
+            build_dfi_workbook_foundation(
+                out_path,
+                metadata=meta,
+                inputs=inputs,
+                ledger_entries=ledger,
+            )
+            with zipfile.ZipFile(out_path) as zf:
+                shared_strings: list[str] = []
+                if "xl/sharedStrings.xml" in zf.namelist():
+                    ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+                    for si in ss_root.findall(f"{{{main_ns}}}si"):
+                        shared_strings.append(
+                            "".join(t.text or "" for t in si.iter(f"{{{main_ns}}}t"))
+                        )
+
+                rels_root = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+                rel_targets: dict[str, str] = {}
+                for rel in rels_root.findall(f"{{{pkg_rel_ns}}}Relationship"):
+                    target = rel.attrib["Target"].lstrip("/")
+                    if not target.startswith("xl/"):
+                        target = f"xl/{target}"
+                    rel_targets[rel.attrib["Id"]] = target
+
+                wb_root = ET.fromstring(zf.read("xl/workbook.xml"))
+                sheet_map: list[tuple[str, str]] = []
+                for sh in wb_root.findall(f".//{{{main_ns}}}sheet"):
+                    rid = sh.attrib[f"{{{rel_ns}}}id"]
+                    sheet_map.append((sh.attrib["name"], rel_targets[rid]))
+
+                assert [name for name, _ in sheet_map] == [
+                    "Control_Provenance",
+                    "Inputs",
+                    "Module_Ledger",
+                ]
+                sheet_paths = dict(sheet_map)
+
+                ctrl_cells = _parse_sheet_cells(
+                    zf, sheet_paths["Control_Provenance"], shared_strings
+                )
+                assert not any(
+                    formula is not None for _, formula in ctrl_cells.values()
+                ), "Unexpected <f> formula found on Control_Provenance"
+                a1_text = ctrl_cells["A1"][0]
+                assert a1_text is not None
+                assert a1_text.startswith(DFI_WORKBOOK_F5_CAVEAT)
+
+                inputs_cells = _parse_sheet_cells(
+                    zf, sheet_paths["Inputs"], shared_strings
+                )
+                assert not any(
+                    formula is not None for _, formula in inputs_cells.values()
+                ), "Unexpected <f> formula found on Inputs sheet"
+                for row_idx in range(2, 2 + len(inputs)):
+                    assert inputs_cells[f"D{row_idx}"][1] is None
+
+                ledger_cells = _parse_sheet_cells(
+                    zf, sheet_paths["Module_Ledger"], shared_strings
+                )
+
+            d_statuses: dict[int, str] = {}
+            for coord, (val, formula) in ledger_cells.items():
+                m = cell_ref_re.fullmatch(coord)
+                assert m is not None
+                col_letters, row_num = m.group(1), int(m.group(2))
+                if col_letters != "J":
+                    err_msg = (
+                        f"Unexpected <f> formula in Module_Ledger!{coord}: {formula}"
+                    )
+                    assert formula is None, err_msg
+                if col_letters == "D" and row_num >= 2 and val is not None:
+                    d_statuses[row_num] = val
+
+            expected_end_row = max(2, 1 + len(ledger))
+            evaluated_counts: dict[str, int] = {}
+            rollup_rows: list[int] = []
+            row_idx = 2
+            while True:
+                label, label_formula = ledger_cells[f"I{row_idx}"]
+                _, j_formula = ledger_cells[f"J{row_idx}"]
+                assert label is not None and label_formula is None
+                assert j_formula is not None
+                if label == "Total":
+                    sum_match = sum_re.fullmatch(j_formula)
+                    assert sum_match is not None, f"Unexpected SUM formula: {j_formula}"
+                    assert int(sum_match.group(1)) == row_idx - 1
+                    assert rollup_rows == list(range(2, row_idx))
+                    evaluated_total = sum(evaluated_counts.values())
+                    break
+
+                cnt_match = countif_re.fullmatch(j_formula)
+                assert cnt_match is not None, f"Unexpected COUNTIF formula: {j_formula}"
+                assert int(cnt_match.group(1)) == expected_end_row
+                assert int(cnt_match.group(2)) == row_idx
+                evaluated_counts[label] = sum(
+                    1
+                    for r in range(2, expected_end_row + 1)
+                    if d_statuses.get(r, "").casefold() == label.casefold()
+                )
+                rollup_rows.append(row_idx)
+                row_idx += 1
+
+            return evaluated_counts, evaluated_total
+
+        base_ledger = _sample_ledger()
+        base_counts, base_total = _verify_ooxml_workbook(
+            "base",
+            base_ledger,
+            meta=_sample_metadata(),
+            inputs=_sample_inputs(),
+        )
+        expected_base = Counter(entry.status for entry in base_ledger)
+        for status_name, cnt in base_counts.items():
+            assert cnt == expected_base.get(status_name, 0)
+        assert base_total == len(base_ledger)
+
+        expanded_ledger = base_ledger + (
+            ModuleLedgerEntry(
+                module_path="analytics.custom_plugin",
+                pipeline_stage="custom",
+                role_description="Custom extension module",
+                status="custom_deferred",
+                excel_representation="ledger_only",
+                reason="deferred in wave 3",
+            ),
+            ModuleLedgerEntry(
+                module_path="finance.irr",
+                pipeline_stage="core",
+                role_description="Canonical IRR/NPV helper",
+                status="executed",
+                excel_representation="engine_table",
+            ),
+            ModuleLedgerEntry(
+                module_path="analytics.grid_guard",
+                pipeline_stage="grid",
+                role_description="Grid guard check",
+                status="failed",
+                excel_representation="ledger_only",
+            ),
+        )
+        appended_meta = _sample_metadata(
+            non_reliance_notice=f"{DFI_WORKBOOK_F5_CAVEAT} Scenario: stress-case."
+        )
+        neg_inputs = _sample_inputs() + (
+            WorkbookInputItem(
+                key="tax.tlcf_opening_usd",
+                section="Tax-Config",
+                label="Opening Tax Loss",
+                value=-125000.5,
+                unit="USD",
+                number_format="#,##0.00",
+                provenance="base-case",
+            ),
+        )
+        exp_counts, exp_total = _verify_ooxml_workbook(
+            "expanded",
+            expanded_ledger,
+            meta=appended_meta,
+            inputs=neg_inputs,
+        )
+        expected_exp = Counter(entry.status for entry in expanded_ledger)
+        assert exp_counts["executed"] == expected_exp["executed"] == 3
+        assert exp_counts["failed"] == expected_exp["failed"] == 1
+        assert exp_counts["custom_deferred"] == 1
+        assert exp_total == len(expanded_ledger) == 8
+
+        empty_counts, empty_total = _verify_ooxml_workbook(
+            "empty",
+            (),
+            meta=_sample_metadata(),
+            inputs=_sample_inputs(),
+        )
+        assert all(val == 0 for val in empty_counts.values())
+        assert empty_total == 0
 
     def test_macro_free_zip_and_byte_reproducibility_oracle(
         self, tmp_path: Path
