@@ -7,7 +7,7 @@ repository, de-rated by clipping, integrated, and discarded. No curve value, no 
 curve and no hash of the file is written or printed.
 
 The yield reuses the repository's wind maths rather than adding any:
-:func:`analytics.wind.aep_tornado.gross_aep_farm_gwh` integrates the curve over the
+:func:`wind_resource.aep_integral.gross_aep_farm_gwh` integrates the curve over the
 Weibull, :func:`wind_resource.bankable_aep.density_velocity_factor` corrects it to site
 air density, :func:`analytics.wind.losses_model.apply_losses` applies the loss stack, and
 :func:`wind_resource.bankable_aep.gross_aep_weibull`, an independently written integrator,
@@ -54,8 +54,8 @@ from analytics.gis.shadow_flicker import (
     sunny_steps,
     tip_height_setback,
 )
-from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import HOURS_PER_YEAR, apply_losses
+from wind_resource.aep_integral import gross_aep_farm_gwh
 from wind_resource.bankable_aep import density_velocity_factor, gross_aep_weibull
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

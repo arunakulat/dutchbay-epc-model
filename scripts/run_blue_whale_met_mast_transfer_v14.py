@@ -1408,7 +1408,7 @@ def change_evidence(
     because the transfer is applied hour by hour to every long-term hour, so each calendar
     month enters with its own reference hours and calendar weight.
     """
-    from analytics.wind.aep_tornado import gross_aep_farm_gwh
+    from wind_resource.aep_integral import gross_aep_farm_gwh
 
     def omni_net(a: float, k: float) -> float:
         return net(gross_aep_farm_gwh(a, k, ws / factor, clipped, 1))

@@ -147,6 +147,7 @@ def run(
     script: Path,
     limitations: Sequence[str],
     project_limitations: Sequence[str] = (),
+    n_workers: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Run the sizing and return the JSON-ready summary.
 
@@ -166,7 +167,8 @@ def run(
     unit_cfg = _read(str(cfg["unit_config"]))
     pricing_cfg = _read(str(cfg["pricing_config"]))
     scenario = _read(str(cfg["scenario"]))
-    sizing_cfg = {k: v for k, v in cfg.items() if k != "hydra"}
+    workers = cfg.get("n_workers", 1) if n_workers is None else n_workers
+    sizing_cfg = {k: v for k, v in cfg.items() if k not in ("hydra", "n_workers")}
     project = _is_project_schema(cfg.get("schema_version"))
     inputs = ["unit_config", "pricing_config", "scenario"]
     if project:
@@ -178,6 +180,7 @@ def run(
             regulatory_cfg=_read(str(cfg["regulatory_config"])),
             scenario=scenario,
             site=site_context(unit_cfg, _read),
+            n_workers=workers,
         )
     else:
         result = run_sizing(
@@ -186,6 +189,7 @@ def run(
             pricing_cfg=pricing_cfg,
             scenario=scenario,
             site=site_context(unit_cfg, _read),
+            n_workers=workers,
         )
     spec = dict(result.spec)
     spec["inputs_sha256"] = {str(cfg[k]): _sha256(str(cfg[k])) for k in inputs}

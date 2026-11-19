@@ -311,3 +311,141 @@ metadata:
     - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.2 (2026-11-01): wind resource from met mast 617725 (PR 5, #1353 comment 6556910250): sector-wise variance-ratio MCP at 120 m against NASA POWER / MERRA-2, long-term 2015-2025, transferred 26.7 km to the turbine through the reference, sheared to 130 m. Wind CF 0.374256 -> 0.487560, net AEP 31.15 -> 40.57 GWh (P90 1-year 33.73, 20-year 33.92). Not lender-grade; the met-mast HOLD stands'
     - 'v0.1 (2026-11-01): the turbine as its own project, built first (owner decision, #1353 comment 6556854201). Wind block unchanged from the hybrid v0.6 (#1530: 9.5 MW, CF 0.374256, 31.15 GWh, capex 12.35M placeholder); tariff 25.73 (PUCSL Annex 2 wind); capex 14.35M with the 2.0M grid/civils/development placeholder; O&M 0.5M; no solar, no BESS'
+
+# Site-analysis blocks (#1578 U2; contract analytics/site_analysis_blocks.py, #1754). Read only
+# by the site analyses, never by the engine. Moved from conf/blue_whale_wind_bess_options.yaml
+# and conf/blue_whale_equipment_parity.yaml, which the single-site scripts still read; the
+# block-driven runs reproduce them exactly.
+
+# Wind battery options (scripts/run_wind_bess_options_v14.py). PUCSL's BESS tariff names solar
+# PV only, so every wind + BESS revenue basis is a WORKING ASSUMPTION built from the solar +
+# BESS formula, for screening only. The wind tariff (25.73 = 20.80 + 4.93) is this scenario's.
+storage_options:
+  site:
+    name: Blue Whale Lot 5B wind turbine (the separate 9.5 MW wind project, no solar)
+    location: DutchBay T2 position, Kalpitiya peninsula, Puttalam District
+  retrieved: "2026-11-14"
+  sources:
+    - "PUCSL, Decision on Feed in Tariffs Effective from August 25, 2026 (pdf sha256 1151efd22a797eca174d06c1b1c6af9380193a8ecba121362bbf9a5879f16c45): Table 7 ground-mounted and floating solar PV with BESS lines, s.2.2.3.5 90% round-trip efficiency, s.3.3 the 1730h-2130h window, Table 7 notes [1] and [2]"
+    - "CEB, Addendum to the Guide for grid interconnection of embedded generators (December 2000) - Wind (pdf sha256 38d018218db2254e82ba6cc7e0cdd91cef2b27e4a3c17c24d16852bdc6af6012), s.3.1: 10 MW/minute per grid substation, shared by installed capacity"
+    - "A generic battery supplier's budgetary offer (CIF, excluding duty and taxes), published without naming the supplier on the owner's approval of 2026-11-14 22:16Z"
+    - "conf/blue_whale_pv_bess_pricing.yaml (battery all-in USD/kWh) and docs/blue_whale/met_mast_transfer_summary.json (shear, long-term mean, yield and its 1-sigma uncertainty)"
+  method_config: conf/wind_bess_options.yaml
+  notes: >-
+    Owner direction 2026-11-14: a battery is needed only for a ramping and black-start function
+    and is not mandatory; it charges from the turbine off-peak and is paid at peak on the
+    solar + BESS terms (the whole wind peak rate). The 40 MW AC black-start battery is
+    UNCONFIRMED (PUCSL discussions only, no document); cycled_10_40 is the owner's 10/40 reading
+    of it. About 0.5 MW of grid-forming inverter as the black-start floor, the 0.5 MWh reserve,
+    the 2% service share and the power-cell premium are assumptions. The 10 MW
+    standardised-PPA limit stays the open legal question of conf/blue_whale_pucsl_fit_2026.yaml.
+  technology:
+    wind_turbine:
+      rated_mw: 9.5
+      hub_height_m: 130.0
+      rotor_diameter_m: 206.0
+      cut_in_ms: 3.0
+      cut_out_ms: 25.0
+      air_density_kgm3: 1.15
+      power_loss_fractions: [0.02, 0.01]   # electrical 2%, other 1% (#1530)
+    battery:
+      round_trip_efficiency: 0.85
+      dc_per_nominal: 1.1               # input B20 placeholder
+      black_start_reserve_mwh: 0.5      # ASSUMPTION
+      duration_h_for_tariff: 4.0        # PUCSL methodology s.5.1.1 / s.5.2.1; recorded, not read
+      usd_per_kwh: {low: 129.13, mode: 140.74, high: 202.51}
+      om_usd_per_dc_kwh_year: 1.8       # input B20 (#1646 basis)
+  hourly_profile:
+    # Shape only, from public inputs: the NASA POWER hourly reference at the turbine point
+    # (pins in the reference config), the committed shear and long-term mean, and a generic
+    # Cp-limited curve tuned to the committed gross capacity factor. No OEM curve value.
+    reference_config: conf/blue_whale_met_mast_transfer.yaml
+    reference_point: turbine
+    transfer_summary: docs/blue_whale/met_mast_transfer_summary.json
+    reference_height_m: 50.0
+    high_output_check_mw: 9.0
+  sizes:
+    options:
+      - {id: held_0_5_0_5, power_mw: 0.5, energy_mwh: 0.5, operation: held}
+      - {id: held_1_1, power_mw: 1.0, energy_mwh: 1.0, operation: held}
+      - {id: cycled_0_5_2, power_mw: 0.5, energy_mwh: 2.0, operation: cycled}
+      - {id: cycled_1_4, power_mw: 1.0, energy_mwh: 4.0, operation: cycled}
+      - {id: cycled_2_5_10, power_mw: 2.5, energy_mwh: 10.0, operation: cycled}
+      - {id: cycled_10_40, power_mw: 10.0, energy_mwh: 40.0, operation: cycled}
+  tariff:
+    currency: LKR
+    wind_components: [20.8, 4.93]
+    storage_priority_components: [47.08, 3.02]    # Table 7, ground mounted
+    storage_other_components: [18.0, 2.72]       # the standalone ground-solar rate
+    cross_check_priority_components: [53.28, 4.36]  # Table 7, floating
+    cross_check_other_components: [23.58, 3.92]
+    round_trip_efficiency_basis: 0.9
+    contract_years: 15
+    priority_window_utc_hours: [12, 13, 14, 15]   # 17:30-21:30 Asia/Colombo
+    component_check_tolerance: 0.01
+    one_time_adjustment_weights: {lkr_usd: 0.7, ccpi: 0.3}
+  grid_limits:
+    export_limit_mw: 10.0
+    # B: wind + battery at most 10 MW at the connection point; C: the battery has its own
+    # export allowance. Reading A (turbine + battery power at most 10 MW) is a per-option flag.
+    export_cap_readings: {B: 10.0, C: null}
+    ramp_limit_mw_per_min: 10.0
+    illustrative_other_wind_mw: [0.0, 90.0]
+  firming_supplier:
+    offer_usd_per_dc_kwh: 90.0009
+    dc_block_usd_per_dc_kwh: 72.6308
+    ac_skid_usd: 229072.36
+    ac_skid_mw: 10.0
+    ems_usd: 41126.89
+    install_transport_share: 0.07245
+    service_share_of_cif_per_year: 0.02
+    usable_per_dc: 0.91
+    smallest_block_dc_mwh: 20.0
+    power_cell_premium: [1.0, 3.0]
+  uncertainty:
+    wind_yield_sigma: 0.132
+  pricing_config: conf/blue_whale_pv_bess_pricing.yaml
+
+# Equipment cost parity (scripts/run_equipment_parity_v14.py; #1755). A conditional benchmark,
+# not a quote: the benchmark project's cost is an approximate secondary figure.
+equipment_cost_parity:
+  site:
+    name: Blue Whale Lot 5B wind turbine (one EN206 machine on a 130 m tower)
+    location: DutchBay T2 position, Kalpitiya peninsula, Puttalam District
+  retrieved: "2026-11-14"
+  sources:
+    - "docs/knowledge_base/01_wind_epc_costs_and_scaling.md §1; Envision 2026-02-11 / Hayleys 2026-10-05 public statements"
+  method_config: conf/equipment_parity.yaml
+  energy_summary: docs/blue_whale/met_mast_transfer_summary.json
+  capex_config: conf/blue_whale_capex_solar_resource.yaml
+  operating_life_years: 20
+  loss_retention_factors: [0.97, 0.98, 0.98, 0.99]
+  benchmark:
+    name: Mannar wind farm
+    source: "docs/knowledge_base/01_wind_epc_costs_and_scaling.md §1; Envision 2026-02-11 / Hayleys 2026-10-05 public statements"
+    status: "Approximate secondary benchmark; original SINOHYDRO PDF missing; final Hayleys contract unverified"
+    turbine_count: 10
+    rated_capacity_mw: 50
+    historical_unreconciled_capacity_mw: 56
+    turbine_supply_usd: 19490000
+    annual_aep_mwh: 207000
+    operating_life_years: 20
+  sensitivity_premium_pct: [-10.0, 0.0, 5.0, 10.0, 20.0]
+  cost_buildup_packages:
+    - {id: E01, package: "One complete EN206 machine and 130 m tower", route: common, quoted_amount_usd: null}
+    - {id: E02, package: "Origin handling, international freight and insurance", route: common, quoted_amount_usd: null}
+    - {id: E03, package: "Colombo discharge, storage, clearance and route-specific reload", route: route_specific, quoted_amount_usd: null}
+    - {id: E04, package: "Import levies, domestic taxes and tax cash funding", route: common, quoted_amount_usd: null}
+    - {id: M01, package: "Marine engineering, bathymetry, metocean and ground/interface surveys", route: marine, quoted_amount_usd: null}
+    - {id: M02, package: "Barge and tug mobilization and demobilization", route: marine, quoted_amount_usd: null}
+    - {id: M03, package: "Barge/tug operating hire, fuel and waiting", route: marine, quoted_amount_usd: null}
+    - {id: M04, package: "Racks, grillage, sea fastening and ballast engineering", route: marine, quoted_amount_usd: null}
+    - {id: M05, package: "Jetty, ramp, moorings, shoreline interface and access licence", route: marine, quoted_amount_usd: null}
+    - {id: M06, package: "Dredging, dredge transport and disposal if required", route: marine_conditional, quoted_amount_usd: null}
+    - {id: M07, package: "Offloading cranes, lifting equipment and platforms", route: marine, quoted_amount_usd: null}
+    - {id: M08, package: "Jetty-to-foundation haul and local upgrades", route: marine, quoted_amount_usd: null}
+    - {id: R01, package: "Road-route survey and engineered approvals", route: road, quoted_amount_usd: null}
+    - {id: R02, package: "Road transporter mobilization, movements and demobilization", route: road, quoted_amount_usd: null}
+    - {id: R03, package: "Road/utility alterations, temporary rights and reinstatement", route: road, quoted_amount_usd: null}
+    - {id: C01, package: "One turbine foundation, crane pad and site works", route: common, quoted_amount_usd: null}
+    - {id: C02, package: "Main erection and assist cranes; installation and demobilization", route: common, quoted_amount_usd: null}

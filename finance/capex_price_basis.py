@@ -35,7 +35,17 @@ The engine also reads capex amounts stated under other keys, some of them in pla
 #1591 D-1/A-1 those amounts bypassed the price date silently. By the owner's ruling of
 2026-11-14 the factor now applies to every such amount automatically, and the change is
 disclosed: each key and its stated amount is listed under
-``capex.price_basis_applied.automatically_escalated``, and a warning is logged.
+``capex.price_basis_applied.automatically_escalated``, and a warning is logged. The ``project``
+section's capex totals, which the equity distribution reads, are among those keys.
+
+By the ruling of 2026-11-15 each per-technology
+``generation.technologies.<name>.capex_usd`` takes the same factor as the total. It is a
+component of the total, priced at the same price year, never read in place of it: the
+financed engine treats it as reporting-only, and the batch LCOS view, the per-technology
+WBS and the portfolio aggregator read it. Its stated amounts are recorded under
+``capex.price_basis_applied.technology_capex_at_price_year``, as ``usd_total``'s is under
+``usd_total_at_price_year``, with no warning, because the declared block itself
+escalates them.
 """
 
 from __future__ import annotations
@@ -56,6 +66,7 @@ logger = logging.getLogger(__name__)
 PRICE_BASIS_KEY = "price_basis"
 APPLIED_KEY = "price_basis_applied"
 AUTO_KEY = "automatically_escalated"
+TECH_KEY = "technology_capex_at_price_year"
 _ALLOWED_KEYS = frozenset({"price_year", "escalation_pct", "source"})
 
 # Capex amounts the engine reads besides capex.usd_total (#1591 D-1/A-1): the debt and
@@ -77,6 +88,9 @@ _SECTION_AMOUNT_KEYS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("finance", ("capex_total_usd", "capex_usd")),
     ("costs", ("capex_total_usd", "capex_usd", "total_capex_usd", "total_capex")),
     ("tax", ("depreciable_capex_lkr", "dep_base_lkr")),
+    # The equity distribution's flat capex lookup (finance/equity_distribution_v14_hydra.py)
+    # also reads the project section's totals (#1704 review).
+    ("project", ("capex_usd", "capex_total_usd", "total_capex_usd")),
 )
 _TOP_LEVEL_AMOUNT_KEYS = ("capex_usd_total", "capex_total_usd", "total_capex_usd")
 
@@ -243,6 +257,44 @@ def _escalate_breakdown(
         block[name] = items
 
 
+def _escalate_technologies(
+    out: Dict[str, Any], factor: float, found: Dict[str, float]
+) -> None:
+    """Escalate each ``generation.technologies.<name>.capex_usd`` (ruling 2026-11-15).
+
+    The per-technology capex is a component of the financed total, priced at the same
+    price year. The financed engine treats it as reporting-only, but the batch LCOS
+    view, the per-technology WBS and the portfolio aggregator read it, so it takes the
+    factor the total takes. A BESS ``revenue.augmentation_schedule`` is spent in its own
+    operating year and is not a construction draw, so it is not escalated.
+    """
+    for gen_name in list(out):
+        if not isinstance(gen_name, str) or gen_name.lower() != "generation":
+            continue
+        generation = out[gen_name]
+        if not isinstance(generation, Mapping):
+            continue
+        generation = copy.deepcopy(dict(generation))
+        techs = generation.get("technologies")
+        if not isinstance(techs, Mapping):
+            continue
+        techs = dict(techs)
+        for tech, block in techs.items():
+            if not isinstance(block, Mapping):
+                continue
+            block = dict(block)
+            _escalate_in(
+                block,
+                ("capex_usd",),
+                f"{gen_name}.technologies.{tech}.",
+                factor,
+                found,
+            )
+            techs[tech] = block
+        generation["technologies"] = techs
+        out[gen_name] = generation
+
+
 def _escalate_other_amounts(out: Dict[str, Any], factor: float) -> Dict[str, float]:
     """Escalate every capex amount except ``capex.usd_total``; return what moved.
 
@@ -276,6 +328,10 @@ def apply_capex_price_basis(config: Mapping[str, Any]) -> Dict[str, Any]:
     multiplied by :func:`capex_escalation_factor`, and the block is replaced by
     ``capex.price_basis_applied``.
 
+    Each ``generation.technologies.<name>.capex_usd`` is multiplied by the same
+    factor and its stated amount recorded under
+    ``capex.price_basis_applied.technology_capex_at_price_year`` (ruling 2026-11-15).
+
     Every other capex amount the engine reads (see ``_SECTION_AMOUNT_KEYS``, the
     numeric ``capex.breakdown`` line items and the top-level aliases) is multiplied by
     the same factor automatically (#1591 D-1/A-1). Those keys and their stated amounts
@@ -302,6 +358,8 @@ def apply_capex_price_basis(config: Mapping[str, Any]) -> Dict[str, Any]:
             f"got {stated_raw!r}"
         )
     auto = _escalate_other_amounts(out, factor)
+    technologies: Dict[str, float] = {}
+    _escalate_technologies(out, factor, technologies)
     if stated_raw is None and not auto:
         raise ValueError(
             "capex.price_basis found no capex amount to escalate: state "
@@ -321,6 +379,8 @@ def apply_capex_price_basis(config: Mapping[str, Any]) -> Dict[str, Any]:
             "construction_periods": resolved["construction_periods"],
         }
     )
+    if technologies:
+        applied[TECH_KEY] = technologies
     if auto:
         applied[AUTO_KEY] = auto
         logger.warning(
@@ -337,10 +397,11 @@ def automatic_escalation_message(
     """The disclosure for capex amounts escalated automatically (#1591 D-1/A-1)."""
     return (
         f"capex.price_basis: the price-year factor {factor:.6f} (from {price_year}) was "
-        f"applied AUTOMATICALLY to {', '.join(keys)}, which the engine reads as capex "
-        "amounts beside capex.usd_total. Each is taken as stated at the price year; "
-        "the stated amounts are kept in capex.price_basis_applied."
-        f"{AUTO_KEY}."
+        f"applied AUTOMATICALLY to {', '.join(keys)}: capex amounts stated beside or "
+        "instead of capex.usd_total (a capex.breakdown is escalated to stay "
+        "consistent with it). Each is taken as stated "
+        "at the price year; LKR amounts keep the FX they were stated at; the stated "
+        f"amounts are kept in capex.price_basis_applied.{AUTO_KEY}."
     )
 
 
@@ -367,6 +428,8 @@ def automatic_escalation(config: Mapping[str, Any]) -> Dict[str, Any] | None:
 
 
 __all__ = [
+    "AUTO_KEY",
+    "TECH_KEY",
     "apply_capex_price_basis",
     "automatic_escalation",
     "automatic_escalation_message",

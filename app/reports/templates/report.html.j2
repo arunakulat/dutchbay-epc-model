@@ -407,16 +407,18 @@
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">
-    <h2>Sensitivity Tornado &mdash; Project IRR</h2>
-    <p class="muted">One-at-a-time sensitivity of the project IRR to each driver
-      (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered by swing
-      magnitude, widest first.</p>
+    <h2>Sensitivity Tornado &mdash; {{ ctx.tornado.metric_label }}</h2>
+    <p class="muted">One-at-a-time sensitivity of the {{ ctx.tornado.metric_label }} to each
+      driver (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered
+      by swing magnitude, widest first
+      {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | list %}, and drivers whose
+      swing is undefined last{% endif %}.</p>
     <table>
       <thead>
         <tr>
           <th>Driver</th>
-          <th style="text-align:right;">Downside IRR</th>
-          <th style="text-align:right;">Upside IRR</th>
+          <th style="text-align:right;">Downside case</th>
+          <th style="text-align:right;">Upside case</th>
           <th style="text-align:right;">Swing</th>
         </tr>
       </thead>
@@ -518,6 +520,11 @@
     <p class="muted">Probabilistic risk from a Monte-Carlo ({{ ctx.capital_risk.method }})
       over {{ ctx.capital_risk.n_trials }} trials — {{ ctx.capital_risk.scenario }},
       engine v{{ ctx.capital_risk.model_version }}.</p>
+    {# #1763 / #1746 step 1: an IRR with undefined trials is reported over its defined
+       trials only; say so before any figure, prominently. #}
+    {% for note in ctx.capital_risk.irr_coverage_notes %}
+    <p class="fx-warning"><strong>IRR coverage:</strong> {{ note }}</p>
+    {% endfor %}
     <h3>Covenant-breach probability</h3>
     <table>
       <thead><tr><th>Covenant</th><th style="text-align:right;">Floor</th><th style="text-align:right;">Breach probability</th></tr></thead>
@@ -535,14 +542,16 @@
       covenant.</p>
     <p>Probability equity IRR is below the
       {{ fmt_ratio_pct(ctx.capital_risk.target_equity_irr) }} hurdle:
-      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>.</p>
+      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>{% if ctx.capital_risk.hurdle_defined_count is not none and ctx.capital_risk.hurdle_defined_count < ctx.capital_risk.n_trials %}
+      (over the {{ ctx.capital_risk.hurdle_defined_count }} of {{ ctx.capital_risk.n_trials }} trials with a defined equity IRR){% endif %}.</p>
     <h3>Value at Risk / Expected Shortfall</h3>
     <table>
-      <thead><tr><th>Metric</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
+      <thead><tr><th>Metric</th><th style="text-align:right;">Trials</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
       <tbody>
         {% for m in ctx.capital_risk.metrics %}
         <tr>
-          <td>{{ m.metric }}</td>
+          <td>{{ m.metric }}{% if m.coverage_note %} *{% endif %}</td>
+          <td class="num">{% if m.defined_count is not none and m.total_count is not none %}{{ m.defined_count }} of {{ m.total_count }}{% else %}{{ ctx.capital_risk.n_trials }}{% endif %}</td>
           {% if m.unit == "usd" %}
           <td class="num">{{ fmt_usd(m.mean) }}</td>
           <td class="num">{{ fmt_usd(m.var) }}</td>
@@ -556,6 +565,10 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.capital_risk.irr_coverage_notes %}
+    <p class="muted">* Taken over the trials with a defined IRR only; see the IRR coverage
+      note above.</p>
+    {% endif %}
     {% if ctx.capital_risk.npv_distribution_img %}
     <h3>NPV distribution</h3>
     <img src="{{ ctx.capital_risk.npv_distribution_img }}" alt="NPV distribution" style="max-width:100%;" />
@@ -1308,6 +1321,50 @@
     </table>
     {% else %}
     <p class="muted">No structured manifest was emitted for this run.</p>
+    {% endif %}
+    {# Yield reconciliation (#1768): what the AEP <-> capacity-factor check compared.
+       Render-when-present: a report built without a run result omits it. #}
+    {% if ctx.yield_reconciliation %}
+    {% set yr = ctx.yield_reconciliation %}
+    <h3>Yield reconciliation</h3>
+    {# One sentence per fact, joined with explicit spaces so block-tag trimming cannot run
+       them together. #}
+    {# yr_parts holds plain text only; autoescape escapes it on output. The status markup
+       sits in the template itself so it is never escaped as text. #}
+    {% set yr_parts = [] %}
+    {% if yr.gate_applied %}
+    {% set _ = yr_parts.append("The fail-loud reconciliation gate ran on this configuration and passed.") %}
+    {% else %}
+    {% set _ = yr_parts.append("The fail-loud reconciliation gate did not run on this configuration (for example an inline configuration or a screening run), so a deviation outside tolerance is reported here rather than refused.") %}
+    {% endif %}
+    {% if yr.tolerance_pct is not none %}
+    {% set _ = yr_parts.append("Tolerance " ~ ("%.2f" | format(yr.tolerance_pct)) ~ "%" ~ (" (audited override of the default)" if yr.tolerance_overridden else "") ~ ".") %}
+    {% endif %}
+    {% if yr.reason %}
+    {% set _ = yr_parts.append(yr.reason ~ ".") %}
+    {% endif %}
+    <p>Status: <strong>{{ yr.status | replace("_", " ") }}</strong>. {{ yr_parts | join(" ") }}</p>
+    {% if yr.rows %}
+    <table>
+      <thead><tr><th>Check</th><th>Reference</th><th class="num">Reference (GWh)</th><th class="num">Compared (GWh)</th><th class="num">Deviation</th><th>Within tolerance</th></tr></thead>
+      <tbody>
+        {% for row in yr.rows %}
+        <tr>
+          <td>{{ row.check }}</td>
+          <td>{{ row.source }}</td>
+          <td class="num">{% if row.reference_gwh is not none %}{{ "%.2f" | format(row.reference_gwh) }}{% else %}&mdash;{% endif %}</td>
+          <td class="num">{% if row.compared_gwh is not none %}{{ "%.2f" | format(row.compared_gwh) }}{% else %}&mdash;{% endif %}</td>
+          <td class="num">{% if row.deviation_pct is not none %}{{ "%+.2f" | format(row.deviation_pct) }}%{% else %}&mdash;{% endif %}</td>
+          <td>{{ "yes" if row.within_tolerance else "no" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <p class="disclaimer">This is a disclosure of a consistency check, not a yield basis. The engine
+      still bills revenue off capacity_mw &times; capacity_factor; the check compares that figure with
+      the scenario's own bankable references, so a scenario that declares none is not checked, and a
+      reference is only as current as the export it came from.</p>
     {% endif %}
     <h3>Methodology</h3>
     <p class="disclaimer">

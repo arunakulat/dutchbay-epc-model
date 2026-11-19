@@ -26,8 +26,10 @@ from analytics.aep_provenance import (
     register_scenario_approved_sources,
 )
 from analytics.aep_reconciliation import (
+    YIELD_GATE_SITE_API_BOUNDARY,
     AepReconciliationError,
     reconcile_capacity_factor_with_bankable_aep,
+    record_gate_applied_at_seam,
 )
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.cost.benchmark import capex_benchmark
@@ -693,6 +695,8 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         # receives the authored config and resolves it itself.
         normalize_native_capex(cfg)
         result = run_v14_pipeline(config=cfg, validation_mode=payload.validation_mode)
+        # The gate above ran on this exact cfg; record that on the result (#1768).
+        record_gate_applied_at_seam(result, YIELD_GATE_SITE_API_BOUNDARY)
     except (
         ConfigValidationError,
         AepReconciliationError,

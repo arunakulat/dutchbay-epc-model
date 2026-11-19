@@ -131,7 +131,7 @@
           ></span>
         </span>
         <span class="bar-row__value">
-          {% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}—{% endif %}
+          {% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}undefined{% endif %}
         </span>
       </div>
       {% endfor %}
@@ -150,14 +150,25 @@
         {% for bar in surface.tornado.bars %}
         <tr>
           <td>{{ bar.label }}</td>
-          <td>{% if bar.base is not none %}{{ bar.base }}{% else %}—{% endif %}</td>
-          <td>{% if bar.low_case is not none %}{{ bar.low_case }}{% else %}—{% endif %}</td>
-          <td>{% if bar.high_case is not none %}{{ bar.high_case }}{% else %}—{% endif %}</td>
-          <td>{% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}—{% endif %}</td>
+          <td>{% if bar.base is not none %}{{ bar.base }}{% else %}undefined{% endif %}</td>
+          <td>{% if bar.low_case is not none %}{{ bar.low_case }}{% else %}undefined{% endif %}</td>
+          <td>{% if bar.high_case is not none %}{{ bar.high_case }}{% else %}undefined{% endif %}</td>
+          <td>{% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}undefined{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    {% set tornado_undefined = surface.tornado.bars | selectattr("impact_abs", "none") | list
+       + surface.tornado.bars | selectattr("low_case", "none") | list
+       + surface.tornado.bars | selectattr("high_case", "none") | list
+       + surface.tornado.bars | selectattr("base", "none") | list %}
+    {% if tornado_undefined %}
+    <p class="note tornado-undefined-note">
+      &ldquo;undefined&rdquo; marks a point where the metric has no value for that case, as
+      in the report. It is not zero and not a value left out. Drivers whose swing is
+      undefined are listed last.
+    </p>
+    {% endif %}
     {% else %}
     <p class="note">Not computed for this run.</p>
     {% endif %}
@@ -272,6 +283,9 @@
       Scenario: {{ cr.scenario }} · Model: {{ cr.model_version }} · Method:
       {{ cr.method }} · {{ cr.n_trials }} trials.
     </p>
+    {% for note in cr.irr_coverage_notes %}
+    <p class="note"><strong>IRR coverage:</strong> {{ note }}</p>
+    {% endfor %}
 
     <table class="data-table">
       <caption class="data-table__caption">Covenant-breach probability vs floor</caption>
@@ -307,12 +321,14 @@
         <tr>
           <th scope="col">Probability below hurdle</th>
           <th scope="col">Target equity IRR</th>
+          <th scope="col">Trials</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td>{{ cr.probability_below_hurdle }}</td>
           <td>{{ cr.target_equity_irr }}</td>
+          <td>{% if cr.hurdle_defined_count is not none %}{{ cr.hurdle_defined_count }} of {{ cr.n_trials }}{% else %}{{ cr.n_trials }}{% endif %}</td>
         </tr>
       </tbody>
     </table>
@@ -324,6 +340,7 @@
         <tr>
           <th scope="col">Metric</th>
           <th scope="col">Unit</th>
+          <th scope="col">Trials</th>
           <th scope="col">Mean</th>
           <th scope="col">{{ cr.metrics[0].var_label }}</th>
           <th scope="col">{{ cr.metrics[0].cvar_label }}</th>
@@ -334,6 +351,7 @@
         <tr>
           <td>{{ m.metric }}</td>
           <td>{{ m.unit }}</td>
+          <td>{% if m.defined_count is not none and m.total_count is not none %}{{ m.defined_count }} of {{ m.total_count }}{% else %}{{ cr.n_trials }}{% endif %}</td>
           <td>{{ m.mean }}</td>
           <td>{{ m.var }}</td>
           <td>{{ m.cvar }}</td>

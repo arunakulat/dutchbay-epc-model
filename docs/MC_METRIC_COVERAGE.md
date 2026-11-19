@@ -45,15 +45,84 @@ for unavailable table cells, and its lean Monte Carlo block includes metric cove
 
 Convergence diagnostics and engine tail estimates use each metric's defined sample.
 Small-sample qualification remains in force; coverage is not evidence of convergence.
-The joint capital-risk report requires complete aligned observations and now refuses an
-incomplete cohort before writing artifacts. It directs callers to the metric-wise MC
-summary and coverage rather than selecting complete cases or imputing zero. This is an
-explicit limitation: partial-cohort joint reports are not delivered by this change.
+The joint capital-risk report requires complete aligned observations for NPV, DSCR, LLCR
+and PLCR, and refuses an incomplete cohort of those before writing artifacts. An IRR is
+the exception: see "IRR coverage" below.
 
 The public HTTP response model is unchanged: its existing extensible engine-result
 mapping carries these additive fields. Raw internal arrays gain nullable entries and
 consumers must preserve their positions. No release, lender, Board, evidence-grade or
 HOLD authority follows from this reporting correction.
+
+## IRR coverage (#1746 step 1, #1763)
+
+A trial whose cash flow changes sign more than once has no unique IRR, and one whose NPV
+never reaches zero has none (#1525). Its IRR is unavailable while every other metric of
+the trial is real. The evaluation gateway drops a KPI it cannot convert, so such a trial
+usually reaches the aggregate as a `missing` observation rather than an `undefined` one.
+
+Every IRR statistic is taken over that metric's defined trials, and every surface that
+shows one says how many trials it leaves out:
+
+- **Summary.** Each `summary[metric]` carries `defined_count` and `excluded_count`
+  (total minus defined). An IRR metric (`project_irr`, `equity_irr`) that excludes any
+  trial also carries `coverage_note`, the same text is listed under
+  `metadata.irr_coverage_notes`, and a warning is logged. `project_irr_excluded_count`
+  sits beside the flat `project_irr_*` fields. An MC job's API `engine_result` carries
+  all of these.
+- **Lender risk table.** An IRR row that excludes trials gains a `coverage_note` column
+  beside its existing `defined_trials`, `total_trials` and `unavailable_trials`.
+- **Capital-risk report** (owner ruling 2026-11-16, "Report with coverage"). The report is
+  built rather than refused. Each IRR metric's VaR/CVaR, mean, percentiles and the
+  probability below the equity hurdle are taken over its defined trials.
+  `CapitalRiskReport.irr_coverage` records the counts and the note, and the snapshot's
+  IRR rows carry them. The rendered report and the web results state each note before the
+  figures, show "defined of total" trials beside every return metric, and state the
+  trial count behind the hurdle probability. The API surface carries the same fields
+  (contract 2.3). An IRR metric with fewer than 20 defined trials is still refused,
+  because the VaR/CVaR tail needs at least 20 observations.
+
+The capital-risk note says the excluded trials may be the worst outcomes, because a
+lower-tail figure over the defined trials can then read better than the full
+distribution. This disclosure moves no figure for a run in which every trial has a
+defined IRR.
+
+## Undefined IRR trials ranked worst (#1746 step 2)
+
+Owner ruling on #1746 (2026-11-15): a Monte Carlo trial whose IRR is undefined ranks
+below every defined trial. When a lower-tail percentile falls on those trials, it is
+reported as undefined, at or below the lowest defined IRR, rather than as a number taken
+from the defined trials only.
+
+The Monte Carlo summary and the lender risk table apply it to `project_irr` and
+`equity_irr` when any trial is excluded and at least one is defined
+(`ranked_worst_percentiles` in `analytics/mc/aggregate.py`):
+
+- **Percentiles.** The excluded trials take the lowest ranks of all trials, and each
+  percentile is read at its position in that full ranking with `np.percentile`'s linear
+  interpolation. A percentile whose position touches an excluded rank, including one that
+  would interpolate between the last excluded and the lowest defined trial, is `None`.
+  `percentile_bound` gives the lowest defined IRR that it lies at or below, and
+  `percentile_basis` is `excluded_trials_ranked_worst`. Such a percentile is left out of
+  `MonteCarloResult.percentiles`, and the flat `project_irr_p10` / `_p50` / `_p90` follow
+  the ranking.
+- **Upper tail.** An upper percentile is read from the same ranking, so it stays a number
+  and moves down a little, because the excluded trials count in its denominator.
+- **Mean and standard deviation.** A trial ranked worst has no value to average, so the
+  mean and standard deviation stay over the defined trials; `mean_basis` is
+  `defined_trials` and the note says so.
+- **Minimum and maximum.** `min` is `None`, because the worst trial has no defined IRR;
+  `min_defined` keeps the lowest defined value. `max` is unchanged.
+- **Lender risk table.** P50, P90 (10th percentile) and P95 (5th percentile) of an IRR
+  row are read from the ranking; an undefined one is a missing cell. The row's
+  `coverage_note` gives the ranked note.
+
+With no trial excluded the ranking is `np.percentile` exactly, so a run whose trials all
+have a defined IRR is unchanged. The capital-risk report keeps the step 1 behaviour, per
+the owner's 2026-11-16 ruling on #1763 ("Report with coverage"): its IRR VaR/CVaR,
+percentiles and hurdle probability are over the trials that define each IRR, with the
+excluded count stated. It does not rank undefined trials and gives them no hurdle
+treatment.
 
 ## Independent oracle and impact
 

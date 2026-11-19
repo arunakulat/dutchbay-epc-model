@@ -27,7 +27,11 @@ from analytics.aep_provenance import (
     enforce_aep_provenance,
     register_scenario_approved_sources,
 )
-from analytics.aep_reconciliation import reconcile_capacity_factor_with_bankable_aep
+from analytics.aep_reconciliation import (
+    YIELD_GATE_SITE_SERVICE_SEAM,
+    reconcile_capacity_factor_with_bankable_aep,
+    record_gate_applied_at_seam,
+)
 from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
@@ -119,6 +123,10 @@ def run_finance_case(
         validation_mode=validation_mode,
         validation_modules=modules,
     )
+    if not skip_bankable_reconciliation:
+        # The gate ran above on a copy of this same scenario; record that (#1768). A
+        # screening run skipped it, so its record keeps gate_applied false.
+        record_gate_applied_at_seam(result, YIELD_GATE_SITE_SERVICE_SEAM)
     # Auditable run manifest (resolved-config SHA-256 + engine version + commit) so this
     # gateway's result is reproducible and tamper-evident (ICAEW posture). As of #577 the
     # engine (run_v14_pipeline) stamps the manifest itself from the RESOLVED config it

@@ -693,8 +693,13 @@ def evaluate_with_casper_tail_risk(
     # sized debt, so it is not config-derivable) for the WBS's project-WACC disclosure.
     from analytics.portfolio.tech_wbs import build_multi_tech_wbs
 
+    # Read the configuration the engine priced (#1569, #1578 F2): with a declared
+    # capex.price_basis, the financed total and each per-technology capex_usd are both
+    # escalated to the construction draws, so the allocation reconciles to the total the
+    # run financed rather than to the price-year figures.
     multi_tech_wbs = build_multi_tech_wbs(
-        base_config, project_wacc_nominal=_resolved_wacc_nominal(scenario.wacc)
+        evaluated_scenario_config(base_config),
+        project_wacc_nominal=_resolved_wacc_nominal(scenario.wacc),
     )
 
     return CasperResult(

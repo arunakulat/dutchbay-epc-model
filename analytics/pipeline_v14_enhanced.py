@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
+from analytics.aep_reconciliation import build_yield_reconciliation_record
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
     EquityPerformance,
@@ -1147,6 +1148,14 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
 
         cfg = _validate_config_type_and_structure(config)
+        # #1768: describe the AEP <-> capacity-factor reconciliation on the configuration
+        # exactly as loaded. A scenario file was loaded through load_scenario_config, whose
+        # fail-loud gate has just passed on it; an inline mapping (an API case, or a Monte
+        # Carlo / sensitivity trial that perturbs the capacity factor on purpose) was not
+        # gated here. Disclosure only: it never raises and changes no figure.
+        yield_reconciliation = build_yield_reconciliation_record(
+            cfg, gate_applied=isinstance(config, (str, Path))
+        )
         from finance.native_cost_inputs import normalize_native_capex
 
         cfg = normalize_native_capex(cfg)
@@ -1197,6 +1206,9 @@ def run_v14_pipeline_enhanced(
         # MC/sensitivity per-trial entries, scripts — now receives the manifest;
         # outer stampers defer to it (stamp-if-absent). Additive metadata only.
         run_manifest = build_run_manifest(cfg, validation_mode=mode).as_dict()
+        # Bind the record to this run's manifest without changing the manifest's own field
+        # set (the web API's ManifestBlock and the manifest schema version stay as they are).
+        yield_reconciliation["config_sha256"] = run_manifest["config_sha256"]
 
         phase_start = time.time()
         # Lazy import: breaks the cashflow_v14 <-> analytics cold-import cycle
@@ -1529,6 +1541,8 @@ def run_v14_pipeline_enhanced(
                 "degraded_reasons": list(fx_degraded_reasons),
             },
             "run_manifest": run_manifest,
+            # #1768: what the AEP <-> capacity-factor reconciliation compared and found.
+            "yield_reconciliation": yield_reconciliation,
         }
         if capex_price_basis_auto is not None:
             # Render-when-present: a run with no automatic escalation keeps its keys.

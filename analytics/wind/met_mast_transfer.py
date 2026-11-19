@@ -12,7 +12,7 @@ Reuse (``FRAMEWORK-03``): the transfer kernels are :func:`wind_resource.mcp.vari
 :func:`wind_resource.mcp.linear_regression_transfer` and :func:`wind_resource.mcp.pearson_r`;
 the campaign-adequacy record is :func:`wind_resource.mcp.run_mcp`'s; Weibull fits are
 :func:`wind_resource.weibull_fit.fit_weibull_on_series`; gross yield is
-:func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`. This module adds the sector
+:func:`wind_resource.aep_integral.gross_aep_farm_gwh`. This module adds the sector
 book-keeping, the circular statistics, the clock-offset evidence, the shear and transfer
 tables, and the profile, turbulence and uncertainty aggregates.
 
@@ -30,7 +30,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from analytics.wind.aep_tornado import gross_aep_farm_gwh
+from wind_resource.aep_integral import gross_aep_farm_gwh
 from wind_resource.mcp import (
     linear_regression_transfer,
     pearson_r,

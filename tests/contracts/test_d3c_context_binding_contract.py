@@ -78,10 +78,9 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
-# #1429's second debt step, whose D3B fixture now declares debt.construction_periods 2
-# (the build time the engine used to fill in): the new config key is echoed into the
-# result and no computed value moves (main's engine gives the same digest with the same
-# fixture). Before that by #1429's debt-fallback step, whose D3B fixture now declares debt.debt_ratio 0.70 (the
+# #1578's per-technology capex price basis (15.28.0): only the engine identity moved (main's
+# engine with only the VERSION bump gives the same digest). Before that by
+# #1429's debt-fallback step, whose D3B fixture now declares debt.debt_ratio 0.70 (the
 # gearing the engine used to fill in): the new config key is echoed into the result and no
 # computed value moves (main's engine gives the same digest with the same fixture). Before
 # that by #1429 (15.27.0), whose D3B fixture now declares returns.project_discount_rate 0.10 (the
@@ -110,7 +109,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "72e99b2a94753cf24584d00d961e9d089a5bb9484a0b8be9ea2ffbea9f5c3eb7"
+    "b47dec9d57c95b96065edcb18849ca121505ec72f48bc2d000fb81ab5003afdd"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

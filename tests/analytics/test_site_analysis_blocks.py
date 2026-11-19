@@ -53,13 +53,39 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
                 "rotor_diameter_m": 150.0,
                 "cut_in_ms": 3.0,
                 "cut_out_ms": 25.0,
+                "air_density_kgm3": 1.2,
+                "power_loss_fractions": [0.03, 0.01],
             },
-            "battery": {"round_trip_efficiency": 0.85, "dc_per_nominal": 1.1},
+            "battery": {
+                "round_trip_efficiency": 0.85,
+                "dc_per_nominal": 1.1,
+                "black_start_reserve_mwh": 0.25,
+                "duration_h_for_tariff": 4.0,
+                "usd_per_kwh": {"low": 100.0, "mode": 120.0, "high": 160.0},
+                "om_usd_per_dc_kwh_year": 2.0,
+            },
+        },
+        "hourly_profile": {
+            "reference_config": "conf/blue_whale_met_mast_transfer.yaml",
+            "reference_point": "turbine",
+            "transfer_summary": "docs/blue_whale/met_mast_transfer_summary.json",
+            "reference_height_m": 50.0,
+            "high_output_check_mw": 4.5,
         },
         "sizes": {
             "options": [
-                {"id": "small", "power_mw": 2.0, "energy_mwh": 8.0},
-                {"id": "large", "power_mw": 4.0, "energy_mwh": 16.0},
+                {
+                    "id": "small",
+                    "power_mw": 2.0,
+                    "energy_mwh": 8.0,
+                    "operation": "cycled",
+                },
+                {
+                    "id": "large",
+                    "power_mw": 4.0,
+                    "energy_mwh": 16.0,
+                    "operation": "held",
+                },
             ]
         },
         "tariff": {
@@ -67,11 +93,33 @@ VALID_BLOCKS: Dict[str, Dict[str, Any]] = {
             "wind_components": [20.0, 5.0],
             "storage_priority_components": [40.0, 3.0],
             "storage_other_components": [15.0, 2.0],
+            "cross_check_priority_components": [45.0, 4.0],
+            "cross_check_other_components": [20.0, 3.0],
             "round_trip_efficiency_basis": 0.9,
             "contract_years": 15,
             "priority_window_utc_hours": [12, 13, 14, 15],
+            "component_check_tolerance": 0.01,
+            "one_time_adjustment_weights": {"lkr_usd": 0.6, "ccpi": 0.4},
         },
-        "grid_limits": {"export_limit_mw": 10.0},
+        "grid_limits": {
+            "export_limit_mw": 10.0,
+            "export_cap_readings": {"low": 5.0, "none": None},
+            "ramp_limit_mw_per_min": 8.0,
+            "illustrative_other_wind_mw": [0.0, 50.0],
+        },
+        "firming_supplier": {
+            "offer_usd_per_dc_kwh": 100.0,
+            "dc_block_usd_per_dc_kwh": 80.0,
+            "ac_skid_usd": 200000.0,
+            "ac_skid_mw": 8.0,
+            "ems_usd": 40000.0,
+            "install_transport_share": 0.05,
+            "service_share_of_cif_per_year": 0.02,
+            "usable_per_dc": 0.9,
+            "smallest_block_dc_mwh": 10.0,
+            "power_cell_premium": [1.0, 2.0],
+        },
+        "uncertainty": {"wind_yield_sigma": 0.1},
     },
     "solar_storage_sizing": {
         **_ENVELOPE,
@@ -362,6 +410,41 @@ def test_missing_envelope_key_fails(block: str) -> None:
             "storage_options.sizes.options: must be a non-empty list",
         ),
         (
+            "storage_options",
+            lambda b: b["sizes"]["options"][0].update({"operation": "parked"}),
+            "storage_options.sizes.options[0].operation: must be one of",
+        ),
+        (
+            "storage_options",
+            lambda b: b["sizes"]["options"][1].update({"id": "small"}),
+            "storage_options.sizes.options: ids must be unique",
+        ),
+        (
+            "storage_options",
+            lambda b: b["tariff"]["one_time_adjustment_weights"].update({"ccpi": 0.3}),
+            "storage_options.tariff.one_time_adjustment_weights: weights must sum to 1",
+        ),
+        (
+            "storage_options",
+            lambda b: b["technology"]["battery"]["usd_per_kwh"].update({"low": 130.0}),
+            "storage_options.technology.battery.usd_per_kwh: must satisfy low <= mode",
+        ),
+        (
+            "storage_options",
+            lambda b: b["grid_limits"].update({"export_cap_readings": {}}),
+            "storage_options.grid_limits.export_cap_readings: must be a non-empty mapping",
+        ),
+        (
+            "storage_options",
+            lambda b: b["grid_limits"]["export_cap_readings"].update({"low": -1.0}),
+            "storage_options.grid_limits.export_cap_readings.low: must be > 0",
+        ),
+        (
+            "storage_options",
+            lambda b: b.pop("firming_supplier"),
+            "storage_options.firming_supplier: required key is missing",
+        ),
+        (
             "solar_storage_sizing",
             lambda b: b["grid"].update({"bess_power_mw": [True]}),
             "solar_storage_sizing.grid.bess_power_mw[0]: must be a finite number",
@@ -578,6 +661,11 @@ DECLARED_BLOCKS = {
     "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": ["solar_storage_sizing"],
     # #1578 U4: the FX and tenor screening's inputs.
     "scenarios/dutchbay_basecase_2025Q4.yaml": ["financing_screening"],
+    # #1578 U2 and #1755: the wind battery options' and the equipment parity's inputs.
+    "scenarios/blue_whale_wind_lot5b_2026.yaml": [
+        "storage_options",
+        "equipment_cost_parity",
+    ],
 }
 
 
