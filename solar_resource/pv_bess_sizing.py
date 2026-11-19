@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from statistics import NormalDist
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -1586,6 +1587,70 @@ def _grid_values(raw: Any, where: str) -> Tuple[float, ...]:
     return vals
 
 
+def _validate_n_workers(n_workers: int) -> int:
+    """Validate that ``n_workers`` is a positive integer."""
+    if isinstance(n_workers, bool) or not isinstance(n_workers, int) or n_workers < 1:
+        raise ValueError("n_workers must be a positive integer")
+    return n_workers
+
+
+_WORKER_EVAL_ARGS: Optional[Tuple[Context, Trials, bool, float]] = None
+
+
+def _init_worker_pool(
+    ctx: Context, trials: Trials, has_base: bool, curtailment_fraction: float
+) -> None:
+    """Store shared read-only point-evaluation inputs once per worker process."""
+    global _WORKER_EVAL_ARGS
+    _WORKER_EVAL_ARGS = (ctx, trials, has_base, curtailment_fraction)
+
+
+def _evaluate_point_worker(point: PointInputs) -> PointResult:
+    """Evaluate one grid point inside a ``ProcessPoolExecutor`` worker."""
+    assert _WORKER_EVAL_ARGS is not None
+    ctx, trials, has_base, curtailment_fraction = _WORKER_EVAL_ARGS
+    return evaluate_point(
+        ctx,
+        point,
+        trials,
+        has_base=has_base,
+        curtailment_fraction=curtailment_fraction,
+        evaluator=evaluate_with_overrides,
+    )
+
+
+def _evaluate_points_batch(
+    ctx: Context,
+    points_list: Sequence[PointInputs],
+    trials: Trials,
+    *,
+    has_base: bool,
+    curtailment_fraction: float = 0.0,
+    evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
+) -> List[PointResult]:
+    """Evaluate independent grid points serially or across CPU worker processes."""
+    workers = _validate_n_workers(n_workers)
+    if workers > 1 and len(points_list) > 1 and evaluator is evaluate_with_overrides:
+        with ProcessPoolExecutor(
+            max_workers=min(workers, len(points_list)),
+            initializer=_init_worker_pool,
+            initargs=(ctx, trials, has_base, curtailment_fraction),
+        ) as pool:
+            return list(pool.map(_evaluate_point_worker, points_list))
+    return [
+        evaluate_point(
+            ctx,
+            point,
+            trials,
+            has_base=has_base,
+            curtailment_fraction=curtailment_fraction,
+            evaluator=evaluator,
+        )
+        for point in points_list
+    ]
+
+
 def run_sizing(
     sizing_cfg: Mapping[str, Any],
     *,
@@ -1594,6 +1659,7 @@ def run_sizing(
     scenario: Mapping[str, Any],
     site: Mapping[str, Any],
     evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
 ) -> SizingRun:
     """Run the seeded Monte Carlo over the decision grid.
 
@@ -1721,9 +1787,11 @@ def run_sizing(
     resource["inverter_eff_nom"] = pricing.inverter.european_efficiency
     turbine_shade = site.get("shading")
 
+    _validate_n_workers(n_workers)
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
     base_only: List[Tuple[PointInputs, bool]] = []
+    pending_evals: List[Tuple[int, PointInputs]] = []
     evaluations = 0
     for ratio in ratios:
         arr_raw = {**dict(unit_cfg["array"]), "dc_ac_ratio": ratio}
@@ -1835,10 +1903,21 @@ def run_sizing(
             if not fits:
                 results.append(None)
                 continue
-            res = evaluate_point(ctx, point, trials, has_base=True, evaluator=evaluator)
-            evaluations += trials.n
-            results.append(res)
+            results.append(None)
+            pending_evals.append((len(results) - 1, point))
             base_only.append((point, meets_rule))
+    if pending_evals:
+        eval_results = _evaluate_points_batch(
+            ctx,
+            [p for _, p in pending_evals],
+            trials,
+            has_base=True,
+            evaluator=evaluator,
+            n_workers=n_workers,
+        )
+        for (idx, _), res in zip(pending_evals, eval_results, strict=True):
+            results[idx] = res
+            evaluations += trials.n
     stats: List[Dict[str, Any]] = []
     for entry, pres in zip(points, results, strict=True):
         if pres is None:
@@ -2519,6 +2598,7 @@ def run_project_sizing(
     scenario: Mapping[str, Any],
     site: Mapping[str, Any],
     evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
 ) -> SizingRun:
     """Size the separate solar + BESS project under each reading of the capacity limit.
 
@@ -2741,9 +2821,11 @@ def run_project_sizing(
     pitch_cache: Dict[int, Any] = {}
     pv_cache: Dict[Tuple[Any, ...], Any] = {}
     land_max: Dict[float, int] = {}
+    _validate_n_workers(n_workers)
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
     evaluated: List[Tuple[PointInputs, Dict[str, Any]]] = []
+    pending_evals: List[Tuple[int, PointInputs]] = []
     evaluations = 0
     for power in powers:
         energy = duration * power
@@ -2903,12 +2985,21 @@ def run_project_sizing(
                     inverter_count=inv.inverter_count,
                     inverter_kw=pricing.inverter.nominal_ac_kw,
                 )
-                res = evaluate_point(
-                    ctx, point, trials, has_base=True, evaluator=evaluator
-                )
-                evaluations += trials.n
-                results.append(res)
+                results.append(None)
+                pending_evals.append((len(results) - 1, point))
                 evaluated.append((point, entry))
+    if pending_evals:
+        eval_results = _evaluate_points_batch(
+            ctx,
+            [p for _, p in pending_evals],
+            trials,
+            has_base=True,
+            evaluator=evaluator,
+            n_workers=n_workers,
+        )
+        for (idx, _), res in zip(pending_evals, eval_results, strict=True):
+            results[idx] = res
+            evaluations += trials.n
 
     stats: List[Dict[str, Any]] = []
     for entry, pres in zip(points, results, strict=True):

@@ -14,6 +14,9 @@ extras, and limitations** the code itself discloses.
 - **Companion documents.** The [Development Guide](DEVELOPMENT.md) covers setup and workflow;
   the register `DutchBay_TechDebt_Register_2026-07-11.md` and the deep-research credibility
   report (both delivered separately) cover code health and external methodology validation.
+  The [Module coverage map](MODULE_COVERAGE_MAP.md) (#1751) says, module by module, whether
+  its results reach the pipeline run, an emitter, the lender report, the web app or only a
+  script, or nothing at runtime; a lint test keeps it in step with the code's imports.
 
 ## Architecture at a glance
 
@@ -687,6 +690,7 @@ Files read (repo-relative): `analytics/mc/{__init__,samplers,correlation,converg
 | `scripts/ci/check_legacy_imports.py`, `ci_structure_check.py` | Structural guards: forbid production code under `analytics`/`finance`/`tests` from importing `legacy`/`dutchbay_v14chat`, and validate the expected directory layout, required `__init__.py` files, and absence of orphaned root files. Exit non-zero on violation. |
 | `scripts/ci/model_guard.py`, `validate.py`, `check_all_py_files.py` | `model_guard.py` runs `validate_parameter_ranges` against a scenario to catch negative IRR / implausible sweeps / missing values; `validate.py` is a config validator with optional jsonschema and graceful PyYAML degradation; `check_all_py_files.py` batches mypy/format checks with rich/loguru reporting. |
 | `inspect_era5.py`, `process_era5_wind_data.py` | ERA5 NetCDF tooling: `inspect_era5.py` dumps dataset dimensions/coords/variables (xarray); `process_era5_wind_data.py` reads the turbine layout and `turbine.hub_height_m` from a layout YAML (DutchBay's is `conf/dutchbay_wake_14_turbines.yaml`), processes the counted turbines, skips another project's `external_waker` turbines, and extrapolates 10 m/100 m wind to the configured hub height via a power-law shear coefficient. |
+| `module_coverage_map.py` | Writes `docs/MODULE_COVERAGE_MAP.md` (#1751) from a LibCST scan of every tracked module's imports: each module in `analytics`, `finance`, `app`, `wind_resource` and `solar_resource` is classed `pipeline`, `emitter`, `report`, `web`, `script`, `unreached` or `retired` by the strongest entry point that reaches it (a module with a `__main__` block, such as the Hydra CLIs under `analytics/cli/`, is a script entry point itself), keeping the map's hand-written notes. `check_map` is what `tests/lint/test_module_coverage_map.py` runs. A dynamic import with a computed name cannot be followed; the map lists those files. |
 | `codebase_datalake_ingress.py` | Repo-local codebase indexer: reads a manifest snapshot and emits CSV indexes of files, imports, exports and calls (AST-based), plus a relevance closure seeded from `analytics/**` and `finance/**`. Never deletes snapshots; only rewrites `derived/` each run. |
 
 ### Academic / methodological grounding
