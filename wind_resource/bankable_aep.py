@@ -22,10 +22,10 @@ All inputs are config-driven (GWTF ARCH-01). No finance logic lives here.
 WHICH PARTS OF THIS MODULE THE LENDER PATH ACTUALLY CALLS (#1281)
 -----------------------------------------------------------------
 The committed headline is assembled by
-:func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config`, which calls
+:func:`wind_resource.aep_summary.build_aep_summary_from_config`, which calls
 (1) :func:`density_velocity_factor`, (3) :func:`model_wake_loss` and (4)
 :func:`exceedance_levels` / :class:`UncertaintyBudget` from here — but takes (2) gross
-AEP from :func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`, not from
+AEP from :func:`wind_resource.aep_integral.gross_aep_farm_gwh`, not from
 :func:`gross_aep_weibull` below. That is deliberate: keeping a second, independently
 written integrator OUT of the production path is what lets it serve as an oracle for
 the one that is in it (``TEST-01``), and the two are pinned to agree by
@@ -49,7 +49,8 @@ from analytics.core.exceedance import EXCEEDANCE_Z
 logger = logging.getLogger(__name__)
 
 IEC_REFERENCE_AIR_DENSITY_KGM3 = 1.225
-# Standard 8760-h year — MUST match analytics.wind.{losses_model,aep_tornado}.HOURS_PER_YEAR
+# Standard 8760-h year — MUST match analytics.wind.losses_model.HOURS_PER_YEAR and
+# wind_resource.aep_integral.HOURS_PER_YEAR
 # so the bankable and analytic engines reconcile exactly (was 8766 mean-Julian, a ~0.07%
 # cross-engine drift; enforced by tests/lint/test_wind_aep_config_compliance.py).
 HOURS_PER_YEAR = 8760.0
@@ -124,8 +125,8 @@ def gross_aep_weibull(
 
     NOT THE PRODUCTION INTEGRATOR (#1281). Despite this module's name, the gross AEP
     behind the committed headline is computed by
-    :func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`, which
-    :func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config` calls; this
+    :func:`wind_resource.aep_integral.gross_aep_farm_gwh`, which
+    :func:`wind_resource.aep_summary.build_aep_summary_from_config` calls; this
     function has no production caller. It is retained deliberately, as an independently
     written second implementation that the lender path can be checked against — an
     oracle in the ``TEST-01`` sense, which it could not be if the production path used it.
@@ -520,7 +521,7 @@ class UncertaintyBudget:
 
     WIND-6 (#484): these category sigmas are NOT hardcoded into the AEP path — every field
     is config-drivable via ``resource.uncertainty.*`` (see
-    ``analytics.wind.aep_summary_builder._uncertainty_from_config``); the values here are the
+    ``wind_resource.aep_summary._uncertainty_from_config``); the values here are the
     IEC defaults used only when a scenario does not override them. The ``interannual_variability_pct``
     in particular CAN and should be validated against the value COMPUTED from the site
     timeseries (``wind_analyzer.calculate_interannual_variability`` -> ``cov_annual_ws``):
@@ -574,7 +575,7 @@ _SIGMA_KEYS: frozenset[str] = frozenset(f.name for f in fields(UncertaintyBudget
 #: Policy knobs that legitimately share the ``resource.uncertainty`` mapping but are
 #: deliberately consumed by the CALLERS, never by this parser (the #653/#618 split):
 #: ``wind_resource.energy_calculator.calculate_net_aep`` and
-#: ``analytics.wind.aep_summary_builder._uncertainty_from_config`` read these directly.
+#: ``wind_resource.aep_summary._uncertainty_from_config`` read these directly.
 _CALLER_POLICY_KEYS: frozenset[str] = frozenset(
     {"p50_haircut_pct", "correlation", "life_years"}
 )
@@ -683,7 +684,7 @@ class ExceedanceResult:
 
 
 #: Recommended default pre-construction P50 over-prediction haircut (%), applied by the config
-#: layer (:func:`analytics.wind.aep_summary_builder._uncertainty_from_config`) ONLY when a
+#: layer (:func:`wind_resource.aep_summary._uncertainty_from_config`) ONLY when a
 #: scenario declares no ``resource.uncertainty.p50_haircut_pct``. Operational P50s run BELOW
 #: pre-construction model estimates: Hammond & Simley (WES 2026) measure a −6.6%/−7.4%
 #: pre-construction bias, and the operational-vs-predicted validation literature places the

@@ -32,9 +32,9 @@ from typing import Any, Dict
 import yaml
 from synthetic_site import load_synthetic_site, turbine_spec_from_power_curve
 
-from analytics.wind.aep_summary_builder import build_aep_summary_from_config
 from analytics.wind.aep_tornado import tornado_from_config
 from finance.cashflow_v14_utils import get_nested
+from wind_resource.aep_summary import build_aep_summary_from_config
 from wind_resource.layout_optimizer import optimize_layout
 
 KIT = Path(__file__).resolve().parent.parent

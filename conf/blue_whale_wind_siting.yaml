@@ -123,7 +123,7 @@ resource:
   loss_overrides:
     wake_loss_pct: 0.0
   # Agreement required between the production gross-AEP integrator
-  # (analytics.wind.aep_tornado.gross_aep_farm_gwh) and the independent one kept as its
+  # (wind_resource.aep_integral.gross_aep_farm_gwh) and the independent one kept as its
   # oracle (wind_resource.bankable_aep.gross_aep_weibull).
   integrator_tolerance_pct: 0.1
 
