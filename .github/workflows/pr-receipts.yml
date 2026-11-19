@@ -1,27 +1,7 @@
-# GWTF VERIFY-01 — a claimed check without a receipt is not a check.
-#
-# Makes .github/pull_request_template.md load-bearing: the receipts table must exist and
-# every Result cell must say something a reviewer can act on. A check that was not run is
-# declared as "not run - <reason>"; a blank cell fails.
-#
-# This is a cheap, self-contained job (no dependency install, no test run). It is not a
-# substitute for the real gates — CI remains the merge authority for whether the checks
-# themselves passed.
-#
-# LIMIT, stated so nobody mistakes green for verified: this job checks that every Result
-# cell SAYS something. It cannot re-run a command or confirm a figure, so a table carrying
-# plausible but stale numbers passes. Green here means "nothing was left silent" — the
-# reviewer still has to read the table. Disclosure is what it enforces, and silence is the
-# failure that cannot be caught downstream. This job IS a *required* status check on main (#1139), so it fails
-# closed: a pull request without receipts cannot merge. The ruleset matches the job's RENDERED NAME below, which
-# test_receipts_job_name_is_pinned_for_the_branch_ruleset pins -- renaming it here without updating the ruleset
-# would stop the required check reporting and block every merge to main.
 name: PR Receipts
 
 on:
   pull_request:
-    # `edited` matters: editing the description to add the receipts must re-run the check,
-    # otherwise a fix cannot clear the failure without an unrelated push.
     types: [opened, edited, synchronize, reopened]
     branches: [main, develop]
 
@@ -40,27 +20,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
       - name: Check verification receipts
-        # The body is untrusted, author-controlled text. It is passed through the
-        # environment and never interpolated into the shell — a `${{ }}` expansion of the
-        # body directly into `run:` would be a script-injection hole.
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/ci/check_pr_receipts.py
 
+  intake:
+    name: Verification intake (INTAKE-01)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
       - name: Check tracker-first work intake
-        # Author-controlled body text is data, not interpolated shell source.
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
           PR_CREATED_AT: ${{ github.event.pull_request.created_at }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python scripts/ci/check_pr_intake.py

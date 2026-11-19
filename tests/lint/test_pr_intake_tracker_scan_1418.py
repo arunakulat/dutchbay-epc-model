@@ -83,6 +83,7 @@ class FakeGitHub:
         }
         self.work_comment = work_comment
         self.pages_read: List[int] = []
+        self.tracker_issue_read = False
 
     def __call__(self, repository: str, path: str, token: str) -> Any:
         assert repository == REPOSITORY and token == "token"
@@ -91,6 +92,7 @@ class FakeGitHub:
         if path.startswith("issues/comments/"):
             return self.work_comment
         if path == "issues/1353":
+            self.tracker_issue_read = True
             return self.tracker
         if path.startswith("issues/1353/comments?"):
             query = dict(part.split("=") for part in path.split("?", 1)[1].split("&"))
@@ -231,6 +233,7 @@ def test_a_direct_tracker_comment_reads_no_comment_page(
     fake = FakeGitHub(_tracker(1250, {}), work_comment=direct)
     code, out = _run(monkeypatch, fake, capsys, body=body)
     assert code == 0, out
+    assert not fake.tracker_issue_read
     assert fake.pages_read == []
 
 
