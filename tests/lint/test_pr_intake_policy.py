@@ -347,6 +347,25 @@ def test_workflow_keeps_required_job_and_uses_env_for_untrusted_body() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     parsed = yaml.safe_load(workflow)
     assert parsed["jobs"]["receipts"]["name"] == "Verification receipts (VERIFY-01)"
+    assert parsed["jobs"]["intake"]["name"] == "Verification intake (INTAKE-01)"
+    intake_steps = parsed["jobs"]["intake"]["steps"]
+    intake_run_steps = [
+        step
+        for step in intake_steps
+        if "python scripts/ci/check_pr_intake.py" in step.get("run", "")
+    ]
+    assert len(intake_run_steps) == 1
+    intake_env = intake_run_steps[0].get("env", {})
+    for key in (
+        "PR_BODY",
+        "PR_AUTHOR",
+        "PR_AUTHOR_TYPE",
+        "PR_CREATED_AT",
+        "PR_NUMBER",
+        "GITHUB_TOKEN",
+        "GITHUB_REPOSITORY",
+    ):
+        assert key in intake_env, f"intake job step missing env key {key!r}"
     assert "run: python scripts/ci/check_pr_intake.py" in workflow
     assert parsed["permissions"]["issues"] == "read"
     assert parsed["permissions"]["pull-requests"] == "read"

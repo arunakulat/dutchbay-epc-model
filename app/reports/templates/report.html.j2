@@ -402,16 +402,18 @@
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">
-    <h2>Sensitivity Tornado &mdash; Project IRR</h2>
-    <p class="muted">One-at-a-time sensitivity of the project IRR to each driver
-      (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered by swing
-      magnitude, widest first.</p>
+    <h2>Sensitivity Tornado &mdash; {{ ctx.tornado.metric_label }}</h2>
+    <p class="muted">One-at-a-time sensitivity of the {{ ctx.tornado.metric_label }} to each
+      driver (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered
+      by swing magnitude, widest first
+      {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | list %}, and drivers whose
+      swing is undefined last{% endif %}.</p>
     <table>
       <thead>
         <tr>
           <th>Driver</th>
-          <th style="text-align:right;">Downside IRR</th>
-          <th style="text-align:right;">Upside IRR</th>
+          <th style="text-align:right;">Downside case</th>
+          <th style="text-align:right;">Upside case</th>
           <th style="text-align:right;">Swing</th>
         </tr>
       </thead>
@@ -513,6 +515,11 @@
     <p class="muted">Probabilistic risk from a Monte-Carlo ({{ ctx.capital_risk.method }})
       over {{ ctx.capital_risk.n_trials }} trials — {{ ctx.capital_risk.scenario }},
       engine v{{ ctx.capital_risk.model_version }}.</p>
+    {# #1763 / #1746 step 1: an IRR with undefined trials is reported over its defined
+       trials only; say so before any figure, prominently. #}
+    {% for note in ctx.capital_risk.irr_coverage_notes %}
+    <p class="fx-warning"><strong>IRR coverage:</strong> {{ note }}</p>
+    {% endfor %}
     <h3>Covenant-breach probability</h3>
     <table>
       <thead><tr><th>Covenant</th><th style="text-align:right;">Floor</th><th style="text-align:right;">Breach probability</th></tr></thead>
@@ -530,14 +537,16 @@
       covenant.</p>
     <p>Probability equity IRR is below the
       {{ fmt_ratio_pct(ctx.capital_risk.target_equity_irr) }} hurdle:
-      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>.</p>
+      <strong>{{ fmt_ratio_pct(ctx.capital_risk.probability_below_hurdle) }}</strong>{% if ctx.capital_risk.hurdle_defined_count is not none and ctx.capital_risk.hurdle_defined_count < ctx.capital_risk.n_trials %}
+      (over the {{ ctx.capital_risk.hurdle_defined_count }} of {{ ctx.capital_risk.n_trials }} trials with a defined equity IRR){% endif %}.</p>
     <h3>Value at Risk / Expected Shortfall</h3>
     <table>
-      <thead><tr><th>Metric</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
+      <thead><tr><th>Metric</th><th style="text-align:right;">Trials</th><th style="text-align:right;">Mean</th><th style="text-align:right;">VaR</th><th style="text-align:right;">CVaR / ES</th></tr></thead>
       <tbody>
         {% for m in ctx.capital_risk.metrics %}
         <tr>
-          <td>{{ m.metric }}</td>
+          <td>{{ m.metric }}{% if m.coverage_note %} *{% endif %}</td>
+          <td class="num">{% if m.defined_count is not none and m.total_count is not none %}{{ m.defined_count }} of {{ m.total_count }}{% else %}{{ ctx.capital_risk.n_trials }}{% endif %}</td>
           {% if m.unit == "usd" %}
           <td class="num">{{ fmt_usd(m.mean) }}</td>
           <td class="num">{{ fmt_usd(m.var) }}</td>
@@ -551,6 +560,10 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.capital_risk.irr_coverage_notes %}
+    <p class="muted">* Taken over the trials with a defined IRR only; see the IRR coverage
+      note above.</p>
+    {% endif %}
     {% if ctx.capital_risk.npv_distribution_img %}
     <h3>NPV distribution</h3>
     <img src="{{ ctx.capital_risk.npv_distribution_img }}" alt="NPV distribution" style="max-width:100%;" />

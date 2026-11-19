@@ -1118,8 +1118,9 @@ class Context:
         tariff: The unit config's tariff.
         wind: The fixed wind block.
         pricing: The cited prices.
-        grid_civils_development_usd: Plant-level capex outside the unit (input B26).
-        fixed_opex_usd_per_year: Wind O&M plus insurance, land and SPV (inputs B10, B28).
+        grid_civils_development_usd: Plant-level capex outside the unit.
+        fixed_opex_usd_per_year: Plant-level fixed O&M outside the unit (insurance, land,
+            SPV and any other plant).
         losses_on_charge: Book the whole round-trip loss on charge, each trial at its own
             RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
             2026 methodology's convention, s.5.1.2). False keeps the dispatcher's convention (the
@@ -1775,7 +1776,7 @@ def run_sizing(
                 equipment=equipment,
                 required_fenced_area_m2=area.fenced_area_m2,
             )
-            # The turbine's shadow on this layout's tables (input B33), when the unit
+            # The turbine's shadow on this layout's tables, when the unit
             # config models it and every table is placed; a point that does not fit is
             # not evaluated, so it keeps the unshaded series.
             pv = pv_unshaded
@@ -2006,7 +2007,7 @@ PROJECT_SIZING_KEYS = (
     "recommendation",
     "output",
 )
-#: The keys of one 10 MW reading (``None`` = no limit of that kind).
+#: The keys of one reading of the capacity limit (``None`` = no limit of that kind).
 READING_KEYS = (
     "max_pv_ac_plus_bess_mw",
     "max_export_mw",
@@ -2014,6 +2015,10 @@ READING_KEYS = (
     "max_bess_power_mw",
 )
 LAND_MAX = "land_max"
+#: Names a reading may not take: ``committed`` names the committed reading in the sizing
+#: config, and a reading called ``by_reading`` would make its ``eligible_<name>`` key
+#: overwrite each point's ``eligible_by_reading`` mapping.
+RESERVED_READING_NAMES = ("committed", "by_reading")
 
 
 @dataclass(frozen=True)
@@ -2161,11 +2166,14 @@ class RegulatoryBasis:
         if (
             not isinstance(names, Mapping)
             or not names
-            or any(not isinstance(k, str) or not k or k == "committed" for k in names)
+            or any(
+                not isinstance(k, str) or not k or k in RESERVED_READING_NAMES
+                for k in names
+            )
         ):
             raise ValueError(
                 "regulatory.standardised_ppa_limit.readings must map one or more "
-                "reading names (not 'committed') to their text"
+                "reading names (not 'committed' or 'by_reading') to their text"
             )
         term = bess["contract_years"]
         if isinstance(term, bool) or int(term) != term or int(term) < 1:
@@ -2288,7 +2296,7 @@ def reading_allows(
     bess_power_mw: float,
     export_limit_mw: float,
 ) -> bool:
-    """Whether a size meets one reading of the 10 MW limit.
+    """Whether a size meets one reading of the capacity limit.
 
     Under a reading with an export limit the dispatch must be held to it; a reading
     without one relies on the PV AC plus BESS power limit.
@@ -2514,7 +2522,7 @@ def run_project_sizing(
 ) -> SizingRun:
     """Size the separate solar + BESS project under each reading of the capacity limit.
 
-    The decision variables are the PV DC (whole tables, up to the most the placeholder lot
+    The decision variables are the PV DC (whole tables, up to the most the lot
     takes with the turbine kept), the PV AC and the BESS power, with the BESS energy fixed at
     the PUCSL 4 h. Every point that fits the lot and the inverter is evaluated once, with
     the same seeded trials as :func:`run_sizing`, through :func:`evaluate_point`; each
@@ -2859,7 +2867,7 @@ def run_project_sizing(
                 if not (fits and meets_rule and any(allowed.values())):
                     results.append(None)
                     continue
-                # With the turbine's shadow modelled (input B33), the PV depends on
+                # With the turbine's shadow modelled, the PV depends on
                 # which tables the layout places, and the packing moves with the BESS
                 # footprint, so the packing is part of the key.
                 packing = (
@@ -3427,6 +3435,7 @@ __all__ = [
     "LAND_MAX",
     "PROJECT_SIZING_KEYS",
     "READING_KEYS",
+    "RESERVED_READING_NAMES",
     "RegulatoryBasis",
     "apply_unit_overrides",
     "reading_allows",

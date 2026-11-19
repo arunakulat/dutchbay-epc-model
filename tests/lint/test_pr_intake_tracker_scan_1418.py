@@ -83,14 +83,18 @@ class FakeGitHub:
         }
         self.work_comment = work_comment
         self.pages_read: List[int] = []
+        self.tracker_issue_read = False
+        self.paths: List[str] = []
 
     def __call__(self, repository: str, path: str, token: str) -> Any:
         assert repository == REPOSITORY and token == "token"
+        self.paths.append(path)
         if path == f"issues/{WORK_ISSUE}":
             return {"number": WORK_ISSUE, "created_at": "2026-11-15T02:40:00Z"}
         if path.startswith("issues/comments/"):
             return self.work_comment
         if path == "issues/1353":
+            self.tracker_issue_read = True
             return self.tracker
         if path.startswith("issues/1353/comments?"):
             query = dict(part.split("=") for part in path.split("?", 1)[1].split("&"))
@@ -231,6 +235,7 @@ def test_a_direct_tracker_comment_reads_no_comment_page(
     fake = FakeGitHub(_tracker(1250, {}), work_comment=direct)
     code, out = _run(monkeypatch, fake, capsys, body=body)
     assert code == 0, out
+    assert not fake.tracker_issue_read
     assert fake.pages_read == []
 
 
@@ -270,3 +275,15 @@ def test_an_empty_tracker_reads_no_page_and_fails_unlinked(
     assert code == 1
     assert "not recorded on tracker #1353" in out
     assert fake.pages_read == []
+    assert not any(path.startswith("pulls?") for path in fake.paths)
+
+
+def test_malformed_static_body_fails_fast_without_api_calls(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakeGitHub(_tracker(10, {9: _intake(9)}))
+    bad_body = _body().replace(f"Base SHA: {'a' * 40}", "Base SHA: short")
+    code, out = _run(monkeypatch, fake, capsys, body=bad_body)
+    assert code == 1
+    assert "Base SHA" in out
+    assert fake.paths == []

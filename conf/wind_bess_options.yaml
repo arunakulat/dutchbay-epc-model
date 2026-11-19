@@ -1,0 +1,55 @@
+# Wind battery options: method configuration (#1578 U2).
+#
+# Read by scripts/run_wind_bess_options_v14.py (Hydra; one JSON object on stdout, CLI-01,
+# CLI-03) through analytics.wind.wind_bess_options_runner. Every site input (turbine, battery,
+# options, tariff basis, grid limits, the hourly-profile reference, the firming supplier's
+# prices and the wind-yield uncertainty) comes from the scenario's `storage_options` block
+# (analytics/site_analysis_blocks.py, #1754); the wind tariff comes from the scenario itself.
+# A scenario without the block reports "not applicable". Only method inputs live here.
+#
+# Usage:
+#   DUTCHBAY_NASA_POWER_DIR=/path/outside/the/repository \
+#     .venv/bin/python scripts/run_wind_bess_options_v14.py scenario=scenarios/<file>.yaml
+
+schema_version: wind_bess_options_method_v1
+
+# Required on the command line: the scenario whose block is evaluated.
+scenario: null
+
+method:
+  hold: >-
+    SCREENING ONLY, not lender-grade. A wind + BESS revenue basis built from a solar + BESS
+    tariff formula is a working assumption, not a published tariff. The hourly shape is a
+    generic Cp-limited curve on a reanalysis, calibrated to the scenario's committed yield,
+    which keeps its own resource holds. F-5 (no quarterly CFADS or intra-year DSCR figure
+    supports a lender representation), #1110 and v15.6.1 stand.
+  # The base revenue basis and its sensitivities (members of
+  # analytics.wind.wind_bess_options.REVENUE_BASES).
+  revenue_bases:
+    base: whole_wind_peak_rate
+    sensitivities: [stacked, whole_wind_peak_rate_on_all_window_exports]
+  # Monte Carlo on the base basis: capex (triangular on the block's battery price), battery
+  # round-trip efficiency (uniform), residual fade (triangular) and wind yield (normal, at
+  # the block's wind_yield_sigma), Latin hypercube.
+  monte_carlo:
+    seed: 20261101
+    n_trials: 256
+    sampler: lhs
+    rte: {low: 0.82, high: 0.88}
+    residual_fade: {low: 0.0, mode: 0.0, high: 0.02}
+    rte_grid: [0.80, 0.82, 0.835, 0.85, 0.865, 0.88, 0.90]
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

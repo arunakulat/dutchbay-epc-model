@@ -103,6 +103,7 @@ def test_the_template_ships_a_parsable_receipts_table() -> None:
 # workflow name ("PR Receipts"), so this literal -- not that one -- is the load-bearing
 # string.
 REQUIRED_CHECK_NAME = "Verification receipts (VERIFY-01)"
+REQUIRED_INTAKE_CHECK_NAME = "Verification intake (INTAKE-01)"
 
 
 def test_receipts_job_name_is_pinned_for_the_branch_ruleset() -> None:
@@ -121,14 +122,16 @@ def test_receipts_job_name_is_pinned_for_the_branch_ruleset() -> None:
     jobs = workflow["jobs"]
     names = {job.get("name") for job in jobs.values()}
 
-    assert REQUIRED_CHECK_NAME in names, (
-        f"no job in pr-receipts.yml is named {REQUIRED_CHECK_NAME!r}; found {sorted(n for n in names if n)}. "
-        "If a ruleset already requires that check, this rename blocks every merge to main."
-    )
+    for required_name in (REQUIRED_CHECK_NAME, REQUIRED_INTAKE_CHECK_NAME):
+        assert required_name in names, (
+            f"no job in pr-receipts.yml is named {required_name!r}; found {sorted(n for n in names if n)}. "
+            "If a ruleset already requires that check, this rename blocks every merge to main."
+        )
 
     # The workflow name is NOT the check name. Requiring "PR Receipts" in a ruleset
     # matches nothing and enforces nothing -- silently. Pin them as distinct.
     assert workflow["name"] != REQUIRED_CHECK_NAME
+    assert workflow["name"] != REQUIRED_INTAKE_CHECK_NAME
 
 
 def test_workflow_passes_the_body_through_the_environment() -> None:

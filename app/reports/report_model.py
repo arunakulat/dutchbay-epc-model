@@ -674,6 +674,11 @@ class CapitalRiskMetricRow(BaseModel):
     cvar: float
     var_label: str  # e.g. "VaR(95%)"
     cvar_label: str  # e.g. "CVaR/ES(95%)"
+    #: Trials this row's statistics are taken over, of ``total_count`` (#1763). Below the
+    #: total only for an IRR metric with undefined trials, which ``coverage_note`` states.
+    defined_count: Optional[int] = None
+    total_count: Optional[int] = None
+    coverage_note: Optional[str] = None
 
 
 class CapitalRiskBlock(BaseModel):
@@ -706,6 +711,12 @@ class CapitalRiskBlock(BaseModel):
     probability_below_hurdle: float
     target_equity_irr: float
     metrics: List[CapitalRiskMetricRow]
+    #: The IRR coverage disclosures (#1763, #1746 step 1), one per IRR metric with
+    #: undefined trials; empty when every trial has a defined IRR. The template states them
+    #: before the figures, and ``probability_below_hurdle`` is over the trials with a
+    #: defined equity IRR (``hurdle_defined_count`` of ``n_trials``).
+    irr_coverage_notes: List[str] = Field(default_factory=list)
+    hurdle_defined_count: Optional[int] = None
     #: The NPV-distribution chart's basename (no absolute path — avoids leaking the server
     #: filesystem layout into a lender document) and, when the PNG exists, an embedded
     #: base64 data-URI so the chart renders self-contained. None when matplotlib degraded.
@@ -1911,6 +1922,8 @@ def _build_capital_risk(
         return None
     cb = capital_risk.tail_report.covenant_breaches
     thresholds = cb.thresholds
+    # Per-IRR-metric trial coverage (#1763); every other metric covers every trial.
+    coverage = capital_risk.irr_coverage
     metrics = [
         CapitalRiskMetricRow(
             metric=summary.metric_name,
@@ -1922,6 +1935,13 @@ def _build_capital_risk(
             cvar=summary.var_cvar.cvar,
             var_label=summary.var_cvar.var_label,
             cvar_label=summary.var_cvar.cvar_label,
+            defined_count=int(
+                coverage.get(summary.metric_name, {}).get(
+                    "defined_count", capital_risk.n_trials
+                )
+            ),
+            total_count=capital_risk.n_trials,
+            coverage_note=coverage.get(summary.metric_name, {}).get("note"),
         )
         for summary in (
             capital_risk.tail_report.equity_irr,
@@ -1946,6 +1966,14 @@ def _build_capital_risk(
         probability_below_hurdle=capital_risk.tail_report.probability_below_hurdle,
         target_equity_irr=capital_risk.tail_report.target_equity_irr,
         metrics=metrics,
+        irr_coverage_notes=[
+            str(facts["note"]) for facts in coverage.values() if facts.get("note")
+        ],
+        hurdle_defined_count=(
+            int(coverage["equity_irr"]["defined_count"])
+            if "equity_irr" in coverage
+            else capital_risk.n_trials
+        ),
         npv_distribution_filename=png_path.name,
         npv_distribution_img=img,
     )
@@ -2167,7 +2195,7 @@ def _build_multi_tech(
 def _normalize_report_wind_rose(rose: Dict[str, Any]) -> Dict[str, Any]:
     """Guarantee ``sector_label`` + ``prevailing_sector_deg`` on a canonical rose block (#851).
 
-    The canonical :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` emits both keys
+    The canonical :func:`wind_resource.aep_summary._resolve_wind_rose` emits both keys
     on the ``direction_deg`` path (via :func:`~analytics.wind.wind_rose.build_wind_rose`) but
     NEITHER on the pre-binned ``sector_deg`` + ``frequency`` path. Rather than fork a divergent
     resolver, the report reuses the canonical block and back-fills those two display fields
@@ -2198,7 +2226,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     """Resolve the optional ``resource.wind_rose`` display block for the report layer (#851).
 
     Reuses the CANONICAL resolver
-    :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` (the exact block the #742
+    :func:`wind_resource.aep_summary._resolve_wind_rose` (the exact block the #742
     AEP-summary provenance carries — no divergent copy) and normalises the two display fields
     the pre-binned path omits (:func:`_normalize_report_wind_rose`). Returns ``None`` when no
     rose is declared. Display / provenance only — applies NO AEP correction. Propagates the
@@ -2206,7 +2234,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     (:func:`_build_wind_chapter`) catches it so a bad config degrades the report gracefully
     rather than crashing it.
     """
-    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+    from wind_resource.aep_summary import _resolve_wind_rose
 
     rose = _resolve_wind_rose(resource)
     if rose is None:
