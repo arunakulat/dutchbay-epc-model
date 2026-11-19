@@ -581,6 +581,9 @@ for _path, _disposition in (
     (("full_result", "metrics"), ResultPathDisposition.OPAQUE_ARTIFACT),
     (("full_result", "fx_integration"), ResultPathDisposition.STRUCTURED_PROJECTION),
     (("full_result", "run_manifest"), ResultPathDisposition.ORIGIN_INVARIANT),
+    # #1768: the AEP <-> capacity-factor reconciliation record. Held as an opaque audit
+    # artifact (section 20), not carried as an observation.
+    (("full_result", "yield_reconciliation"), ResultPathDisposition.OPAQUE_ARTIFACT),
     (("full_result", "warnings"), ResultPathDisposition.STRUCTURED_PROJECTION),
     (
         ("full_result", "scenario_result", "scenario_name"),
@@ -930,6 +933,7 @@ D3C_ARTIFACT_ONLY_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
     MappingProxyType(
         {
             ("full_result", "metrics"): (_S20,),
+            ("full_result", "yield_reconciliation"): (_S20,),
             ("full_result", "scenario_result", "metadata"): (_S20,),
             ("full_result", "scenario_result", "fx_curve"): (_S13,),
             ("full_result", "debt_result", "dscr_by_year"): (_S12,),

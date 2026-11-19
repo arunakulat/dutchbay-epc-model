@@ -872,6 +872,38 @@ class RefinanceCoverageBlock(BaseModel):
     caveat: str
 
 
+class YieldReconciliationRow(BaseModel):
+    """One AEP comparison the yield reconciliation made (#1768)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: ``P50`` (billed ``capacity_mw x capacity_factor x 8.760`` against a bankable net AEP)
+    #: or ``P90`` (the frozen P90 against the exported P90).
+    check: str
+    source: str
+    reference_gwh: Optional[float] = None
+    compared_gwh: Optional[float] = None
+    deviation_pct: Optional[float] = None
+    within_tolerance: bool
+
+
+class YieldReconciliationBlock(BaseModel):
+    """What the run's AEP <-> capacity-factor reconciliation compared and found (#1768).
+
+    Projects the pipeline result's ``yield_reconciliation`` record unchanged. Disclosure only:
+    the fail-loud gate is unchanged and no figure is derived here.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: str
+    gate_applied: bool
+    tolerance_pct: Optional[float] = None
+    tolerance_overridden: bool = False
+    reason: Optional[str] = None
+    rows: List[YieldReconciliationRow] = Field(default_factory=list)
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -995,6 +1027,9 @@ class ReportContext(BaseModel):
     #: byte-identical).
     refinance_coverage: Optional[RefinanceCoverageBlock] = None
     manifest: Dict[str, Any]
+    #: The run's yield reconciliation (#1768). None when the caller supplies no run result
+    #: or the result carries no record; the audit section then omits the table.
+    yield_reconciliation: Optional[YieldReconciliationBlock] = None
     #: F-5 non-reliance notice shown on the cover (#1760). Set by the capital-risk emitter, whose
     #: report a run that writes its figures now writes by default and the release asset
     #: ships; None (the default) omits it, so every other report stays byte-identical.
@@ -2160,7 +2195,7 @@ def _build_multi_tech(
 def _normalize_report_wind_rose(rose: Dict[str, Any]) -> Dict[str, Any]:
     """Guarantee ``sector_label`` + ``prevailing_sector_deg`` on a canonical rose block (#851).
 
-    The canonical :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` emits both keys
+    The canonical :func:`wind_resource.aep_summary._resolve_wind_rose` emits both keys
     on the ``direction_deg`` path (via :func:`~analytics.wind.wind_rose.build_wind_rose`) but
     NEITHER on the pre-binned ``sector_deg`` + ``frequency`` path. Rather than fork a divergent
     resolver, the report reuses the canonical block and back-fills those two display fields
@@ -2191,7 +2226,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     """Resolve the optional ``resource.wind_rose`` display block for the report layer (#851).
 
     Reuses the CANONICAL resolver
-    :func:`analytics.wind.aep_summary_builder._resolve_wind_rose` (the exact block the #742
+    :func:`wind_resource.aep_summary._resolve_wind_rose` (the exact block the #742
     AEP-summary provenance carries — no divergent copy) and normalises the two display fields
     the pre-binned path omits (:func:`_normalize_report_wind_rose`). Returns ``None`` when no
     rose is declared. Display / provenance only — applies NO AEP correction. Propagates the
@@ -2199,7 +2234,7 @@ def _resolve_report_wind_rose(resource: Mapping[str, Any]) -> Optional[Dict[str,
     (:func:`_build_wind_chapter`) catches it so a bad config degrades the report gracefully
     rather than crashing it.
     """
-    from analytics.wind.aep_summary_builder import _resolve_wind_rose
+    from wind_resource.aep_summary import _resolve_wind_rose
 
     rose = _resolve_wind_rose(resource)
     if rose is None:
@@ -2661,6 +2696,66 @@ _REFINANCE_F5_CAVEAT = (
 )
 
 
+def _optional_float(value: Any) -> Optional[float]:
+    """A real number as float; anything else (None, bool, text) as None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
+
+
+def _build_yield_reconciliation(
+    run_result: Optional[Mapping[str, Any]],
+) -> Optional[YieldReconciliationBlock]:
+    """Project the run's ``yield_reconciliation`` record into a report block (#1768).
+
+    ``None`` when there is no run result or it carries no record (a legacy caller), so the
+    table is omitted. The rows restate the record's comparisons; nothing is recomputed.
+    """
+    if not isinstance(run_result, Mapping):
+        return None
+    record = run_result.get("yield_reconciliation")
+    if not isinstance(record, Mapping):
+        return None
+    rows: List[YieldReconciliationRow] = []
+    p50 = record.get("p50")
+    if isinstance(p50, Mapping):
+        implied = _optional_float(record.get("implied_net_aep_gwh"))
+        for ref in p50.get("references") or []:
+            if not isinstance(ref, Mapping):
+                continue
+            rows.append(
+                YieldReconciliationRow(
+                    check="P50",
+                    source=str(ref.get("source", "")),
+                    reference_gwh=_optional_float(ref.get("net_aep_gwh")),
+                    compared_gwh=implied,
+                    deviation_pct=_optional_float(ref.get("deviation_pct")),
+                    within_tolerance=ref.get("within_tolerance") is True,
+                )
+            )
+    p90 = record.get("p90")
+    if isinstance(p90, Mapping) and "summary_source" in p90:
+        rows.append(
+            YieldReconciliationRow(
+                check="P90",
+                source=str(p90.get("summary_source", "")),
+                reference_gwh=_optional_float(p90.get("summary_net_aep_p90_gwh")),
+                compared_gwh=_optional_float(p90.get("frozen_net_aep_p90_gwh")),
+                deviation_pct=_optional_float(p90.get("deviation_pct")),
+                within_tolerance=p90.get("within_tolerance") is True,
+            )
+        )
+    reason = record.get("reason")
+    return YieldReconciliationBlock(
+        status=str(record.get("status", "")),
+        gate_applied=record.get("gate_applied") is True,
+        tolerance_pct=_optional_float(record.get("tolerance_pct")),
+        tolerance_overridden=record.get("tolerance_overridden") is True,
+        reason=str(reason) if reason else None,
+        rows=rows,
+    )
+
+
 def _build_refinance_coverage(
     debt_result: Optional[Mapping[str, Any]],
     run_result: Optional[Mapping[str, Any]] = None,
@@ -2875,4 +2970,5 @@ def build_report_context(
         fx_fallback_note=_build_fx_fallback_note(run_result),
         refinance_coverage=_build_refinance_coverage(debt_result, run_result),
         manifest=dict(case_result.run_manifest or {}),
+        yield_reconciliation=_build_yield_reconciliation(run_result),
     )

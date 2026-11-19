@@ -28,8 +28,8 @@ Protected surfaces
 2. Production packages:
    - ``finance/`` (all modules — ZERO exceptions)
    - ``api/`` (all modules — ZERO exceptions)
-   - ``wind_resource/`` (all modules — frozen to pre-existing allowlist)
-   - ``app/`` (all modules — frozen to pre-existing allowlist)
+   - ``wind_resource/`` (all modules — ZERO exceptions since #1615)
+   - ``app/`` (all modules — ZERO exceptions since #1615)
 3. Production evaluation & loader core (ZERO exceptions):
    - ``analytics/evaluation_v14.py``
    - ``analytics/pipeline_v14_enhanced.py``
@@ -84,16 +84,13 @@ PROTECTED_PACKAGE_DIRS: Tuple[str, ...] = (
     "app",
 )
 
-#: Pre-existing legacy callers recorded in Issue #1551 Phase 0 audit.
-#: These will be eliminated in Phase 1 by extracting pure utilities
-#: into wind_resource/ or a shared utility package. No new entries may be added.
-PHASE_0_LEGACY_ALLOWLIST: Dict[str, frozenset[str]] = {
-    "wind_resource/arco_assessment.py": frozenset(
-        {"analytics.wind.aep_summary_builder"}
-    ),
-    "wind_resource/crossval.py": frozenset({"analytics.wind.aep_summary_builder"}),
-    "app/reports/report_model.py": frozenset({"analytics.wind.aep_summary_builder"}),
-}
+#: Pre-existing legacy callers recorded in Issue #1551 Phase 0 audit. Phase 0 had three
+#: (``wind_resource/arco_assessment.py``, ``wind_resource/crossval.py`` and
+#: ``app/reports/report_model.py``, each importing ``analytics.wind.aep_summary_builder``).
+#: #1615 moved the summary builder and the Weibull integral into ``wind_resource/``
+#: (``aep_summary.py`` and ``aep_integral.py``) and repointed all three, so the list is now
+#: empty. No entries may be added.
+PHASE_0_LEGACY_ALLOWLIST: Dict[str, frozenset[str]] = {}
 
 
 def _dotted(node: Optional[cst.BaseExpression]) -> str:
@@ -278,12 +275,23 @@ def test_protected_live_surfaces_never_import_orphaned_aep_cluster() -> None:
 
 
 def test_legacy_allowlist_is_minimal() -> None:
-    """Phase 0 allowlist is locked to exactly the 3 known pre-existing legacy sites."""
-    assert len(PHASE_0_LEGACY_ALLOWLIST) == 3
-    assert set(PHASE_0_LEGACY_ALLOWLIST) == {
-        "wind_resource/arco_assessment.py",
-        "wind_resource/crossval.py",
-        "app/reports/report_model.py",
-    }
-    for allowed_mods in PHASE_0_LEGACY_ALLOWLIST.values():
-        assert allowed_mods == frozenset({"analytics.wind.aep_summary_builder"})
+    """The Phase 0 allowlist is empty: #1615 repointed the three legacy sites."""
+    assert PHASE_0_LEGACY_ALLOWLIST == {}
+
+
+def test_moved_helpers_are_one_implementation() -> None:
+    """#1615: the cluster paths re-export the main wind engine's objects, not copies."""
+    import analytics.wind.aep_summary_builder as legacy_summary
+    import analytics.wind.aep_tornado as legacy_tornado
+    import wind_resource.aep_integral as integral
+    import wind_resource.aep_summary as summary
+
+    assert legacy_tornado.gross_aep_farm_gwh is integral.gross_aep_farm_gwh
+    assert summary.gross_aep_farm_gwh is integral.gross_aep_farm_gwh
+    for name in (
+        "build_aep_summary_from_config",
+        "validate_curve_selection",
+        "write_aep_summary",
+        "_resolve_wind_rose",
+    ):
+        assert getattr(legacy_summary, name) is getattr(summary, name), name
