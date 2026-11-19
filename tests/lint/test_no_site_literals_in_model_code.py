@@ -62,23 +62,13 @@ _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 
 #: (repository-relative path, rule, the literal's opening text) -> why it stays.
 ALLOWED: Dict[Tuple[str, str, str], str] = {
-    # Site-named schema versions: renamed by U2 and U4 (#1578 universal ruling). #1725
-    # already renamed the PV + BESS sizing ones.
+    # Site-named schema versions: renamed by U2 (#1578 universal ruling). #1725 already
+    # renamed the PV + BESS sizing ones, and U4 removed the FX screening's.
     (
         "analytics/wind/wind_bess_options.py",
         "site-name",
         "blue_whale_wind_bess_options_v1",
     ): "U2",
-    (
-        "analytics/finance/blue_whale_fx_tenor_screening.py",
-        "site-name",
-        "blue_whale_fx_tenor_screening_v1",
-    ): "U4, after #1730",
-    (
-        "analytics/finance/blue_whale_fx_tenor_screening.py",
-        "site-path",
-        "scenarios/dutchbay_basecase_2025Q4.yaml",
-    ): "U4, after #1730 (which edits this file)",
     (
         "analytics/grid/curtailment_qsts.py",
         "site-name",
@@ -145,7 +135,7 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "scripts/run_blue_whale_equipment_parity_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_fx_tenor_screening_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_met_mast_transfer_v14.py": (14, _BLUE_WHALE_RUNNER),
-    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (4, _BLUE_WHALE_RUNNER),
+    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (3, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_solar_bess_v14.py": (7, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_bess_options_v14.py": (5, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_siting_v14.py": (5, _BLUE_WHALE_RUNNER),
