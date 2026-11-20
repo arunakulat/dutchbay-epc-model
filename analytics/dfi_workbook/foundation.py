@@ -83,6 +83,20 @@ _LEDGER_HEADERS: tuple[str, ...] = (
 
 # Conservative cell-text capacity, measured in UTF-16 code units.
 _MAX_CELL_TEXT_UNITS = 32767
+# Conservative numeric input domain from Microsoft's Excel specifications:
+# https://support.microsoft.com/en-us/excel/excel-specifications-and-limits
+# Reject rather than round source values that exceed 15 significant digits.
+_MAX_EXACT_INPUT_INTEGER = 999_999_999_999_999
+_MIN_INPUT_FLOAT_MAGNITUDE = 2.2251e-308
+_MAX_INPUT_FLOAT_MAGNITUDE = 9.99999999999999e307
+
+
+def _validate_xml_characters(value: str, field_name: str) -> None:
+    """Refuse Unicode characters that cannot appear in an XML 1.0 document."""
+    if any(
+        0xD800 <= ord(char) <= 0xDFFF or ord(char) in (0xFFFE, 0xFFFF) for char in value
+    ):
+        raise ValueError(f"{field_name} must contain valid Unicode XML 1.0 text.")
 
 
 def _validate_literal_text(
@@ -95,6 +109,7 @@ def _validate_literal_text(
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string, got {type(value).__name__}.")
     _reject_control_chars(value, field_name)
+    _validate_xml_characters(value, field_name)
     try:
         units = len(value.encode("utf-16-le")) // 2
     except UnicodeEncodeError as exc:
@@ -162,7 +177,15 @@ def _require_openpyxl() -> Any:
 
 
 class WorkbookInputItem(BaseModel):
-    """Typed scalar input; empty source strings are refused rather than emitted blank."""
+    """Scalar source that can be represented without implicit rounding.
+
+    Integers are limited to +/-999999999999999. Nonzero floats must be within
+    Excel's documented input range and round-trip through 15 significant decimal
+    digits to the same Python float. This is a representation check, not a
+    rounding operation. Higher-precision or out-of-range sources must be supplied
+    explicitly as text; numeric calculations on those text sources are not implied.
+    Empty strings and XML-illegal text are refused before workbook emission.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -196,6 +219,7 @@ class WorkbookInputItem(BaseModel):
         if not isinstance(value, str) or not value.strip():
             raise ValueError("number_format must be a non-empty string.")
         _reject_control_chars(value, "number_format")
+        _validate_xml_characters(value, "number_format")
         if value.strip().startswith("="):
             raise ValueError(f"number_format {value!r} must not start with '='.")
         return value
@@ -218,10 +242,30 @@ class WorkbookInputItem(BaseModel):
                 raise ValueError(
                     f"WorkbookInputItem.value must be finite, got {value!r}."
                 )
+            if value != 0.0 and not (
+                _MIN_INPUT_FLOAT_MAGNITUDE <= abs(value) <= _MAX_INPUT_FLOAT_MAGNITUDE
+            ):
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds the supported Excel numeric "
+                    "input range (nonzero magnitude 2.2251e-308 through "
+                    "9.99999999999999e307); supply the source explicitly as text."
+                )
+            if float(format(value, ".15g")) != value:
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds supported Excel numeric "
+                    "precision (15 significant digits); supply the source "
+                    "explicitly as text rather than silently rounding it."
+                )
             return value
         if isinstance(value, str):
             return _validate_literal_text(value, "value", allow_empty=False)
         if isinstance(value, (bool, int)):
+            if not isinstance(value, bool) and abs(value) > _MAX_EXACT_INPUT_INTEGER:
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds the supported Excel numeric "
+                    "integer range (+/-999999999999999); supply the source "
+                    "explicitly as text to preserve its identity."
+                )
             return value
         raise ValueError(  # pragma: no cover - unreachable after type check
             "WorkbookInputItem.value must be strict Python bool, int, float, "

@@ -16,6 +16,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import io
+import math
 import os
 import re
 import shutil
@@ -25,6 +26,7 @@ import time
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +71,143 @@ def _sample_metadata(**overrides: Any) -> DfiWorkbookMetadata:
     }
     payload.update(overrides)
     return DfiWorkbookMetadata(**payload)
+
+
+@pytest.mark.parametrize("codepoint", (0xFFFE, 0xFFFF))
+@pytest.mark.parametrize("surface", ("input", "metadata", "ledger"))
+def test_xml_illegal_literals_are_refused_before_destination_creation(
+    tmp_path: Path, codepoint: int, surface: str
+) -> None:
+    destination = tmp_path / "invalid_xml.xlsx"
+    literal = "source" + chr(codepoint)
+    with pytest.raises(ValueError, match="XML"):
+        build_dfi_workbook_foundation(
+            destination,
+            metadata=_sample_metadata(
+                **({"project_name": literal} if surface == "metadata" else {})
+            ),
+            inputs=(
+                WorkbookInputItem(
+                    key="source",
+                    section="Source",
+                    label="Literal",
+                    value=literal if surface == "input" else "valid",
+                    unit="",
+                    provenance="source",
+                ),
+            ),
+            ledger_entries=(
+                ModuleLedgerEntry(
+                    module_path="source.module",
+                    pipeline_stage="source",
+                    role_description=literal if surface == "ledger" else "valid",
+                    status="executed",
+                    excel_representation="ledger_only",
+                ),
+            ),
+        )
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("literal", ("source\ufffd", "source\U00010000"))
+def test_xml_boundary_literals_reopen_exactly(tmp_path: Path, literal: str) -> None:
+    item = _sample_inputs()[0].model_dump() | {"value": literal}
+    destination, _ = build_dfi_workbook_foundation(
+        tmp_path / "valid_xml.xlsx",
+        metadata=_sample_metadata(),
+        inputs=(WorkbookInputItem.model_validate(item),),
+        ledger_entries=(),
+    )
+    with zipfile.ZipFile(destination) as archive:
+        for name in archive.namelist():
+            if name.endswith(".xml"):
+                ET.fromstring(archive.read(name))
+    workbook = openpyxl.load_workbook(destination)
+    assert workbook["Inputs"]["D2"].value == literal
+    workbook.close()
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        10**15,
+        -(10**15),
+        9007199254740992,
+        9007199254740993,
+        10000000000000000,
+        10000000000000001,
+        sys.float_info.max,
+        -sys.float_info.max,
+        sys.float_info.min,
+        math.nextafter(0.0, 1.0),
+        math.nextafter(2.2251e-308, 0.0),
+        math.nextafter(9.99999999999999e307, math.inf),
+        1.234567890123456,
+        0.1 + 0.2,
+    ),
+)
+def test_unsupported_numeric_sources_are_refused_before_emission(
+    tmp_path: Path, value: int | float
+) -> None:
+    destination = tmp_path / "unsafe_numeric.xlsx"
+    with pytest.raises(ValueError, match="Excel numeric"):
+        item = WorkbookInputItem.model_validate(
+            _sample_inputs()[0].model_dump() | {"value": value}
+        )
+        build_dfi_workbook_foundation(
+            destination,
+            metadata=_sample_metadata(),
+            inputs=(item,),
+            ledger_entries=(),
+        )
+    assert not destination.exists()
+
+
+def test_supported_numeric_boundaries_survive_xml_and_readback(tmp_path: Path) -> None:
+    """Decimal XML checks do not share the exporter's float formatting oracle."""
+    values = (
+        999999999999998,
+        999999999999999,
+        -999999999999999,
+        0,
+        True,
+        -2.5,
+        0.1,
+        1.23456789012345,
+        2.2251e-308,
+        -2.2251e-308,
+        9.99999999999999e307,
+        -9.99999999999999e307,
+    )
+    items = tuple(
+        WorkbookInputItem.model_validate(
+            _sample_inputs()[0].model_dump() | {"key": f"n{n}", "value": value}
+        )
+        for n, value in enumerate(values)
+    )
+    path, registry = build_dfi_workbook_foundation(
+        tmp_path / "numeric_boundaries.xlsx",
+        metadata=_sample_metadata(),
+        inputs=items,
+        ledger_entries=(),
+    )
+    with zipfile.ZipFile(path) as archive:
+        tree = ET.fromstring(archive.read("xl/worksheets/sheet2.xml"))
+    workbook = openpyxl.load_workbook(path)
+    for n, value in enumerate(values):
+        ref = registry.get(f"n{n}")
+        coordinate = f"D{ref.row}"
+        cell = workbook["Inputs"][coordinate]
+        assert cell.value == value
+        if isinstance(value, bool):
+            assert cell.data_type == "b"
+            continue
+        assert cell.data_type == "n"
+        assert math.isfinite(cell.value)
+        element = tree.find(f'.//{{*}}c[@r="{coordinate}"]/{{*}}v')
+        assert element is not None and element.text is not None
+        assert Decimal(element.text) == Decimal(str(value))
+    workbook.close()
 
 
 def _sample_inputs() -> tuple[WorkbookInputItem, ...]:
