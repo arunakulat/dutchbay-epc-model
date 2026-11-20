@@ -1202,3 +1202,131 @@ def test_error_spelled_literals_keep_text_type_in_all_three_sheets(
             if name.startswith("xl/worksheets/") and name.endswith(".xml"):
                 tree = ET.fromstring(archive.read(name))
                 assert not tree.findall('.//{*}c[@t="e"]')
+
+
+def test_last_supported_text_retains_distinct_input_identity(tmp_path: Path) -> None:
+    """A boundary-length source must not collide with another registered input."""
+    keys = ("k" * 32766 + "a", "k" * 32766 + "b")
+    values = ("v" * 32766 + "a", "v" * 32766 + "b")
+    provenance = ("p" * 32766 + "a", "p" * 32766 + "b")
+    items = tuple(
+        WorkbookInputItem(
+            key=key,
+            section="Source",
+            label="Boundary",
+            value=value,
+            unit="",
+            provenance=source,
+        )
+        for key, value, source in zip(keys, values, provenance, strict=True)
+    )
+    path, registry = build_dfi_workbook_foundation(
+        tmp_path / "boundary.xlsx",
+        metadata=_sample_metadata(),
+        inputs=items,
+        ledger_entries=(),
+    )
+    sheet = openpyxl.load_workbook(path)["Inputs"]
+    for row, (key, value, source) in enumerate(
+        zip(keys, values, provenance, strict=True), 2
+    ):
+        assert sheet.cell(row, 1).value == key
+        assert sheet.cell(row, 4).value == value
+        assert sheet.cell(row, 6).value == source
+        assert registry.get(key).row == row
+
+
+@pytest.mark.parametrize(
+    "field", ("key", "section", "label", "value", "unit", "provenance")
+)
+def test_refuses_unrepresentable_input_text_before_emission(field: str) -> None:
+    payload = _sample_inputs()[0].model_dump()
+    payload[field] = "a" * 32768
+    with pytest.raises(ValueError, match="32767"):
+        WorkbookInputItem.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "project_name",
+        "scenario_name",
+        "engine_version",
+        "run_mode",
+        "formula_boundary_note",
+        "non_reliance_notice",
+    ),
+)
+def test_refuses_unrepresentable_metadata_text_before_emission(field: str) -> None:
+    text = "a" * 32768
+    if field == "non_reliance_notice":
+        text = DFI_WORKBOOK_F5_CAVEAT + text
+    with pytest.raises(ValueError, match="32767"):
+        _sample_metadata(**{field: text})
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "module_path",
+        "pipeline_stage",
+        "role_description",
+        "status",
+        "excel_representation",
+        "reason",
+        "provenance_ref",
+    ),
+)
+def test_refuses_unrepresentable_ledger_text_before_emission(field: str) -> None:
+    payload = {
+        "module_path": "sample.module",
+        "pipeline_stage": "stage",
+        "role_description": "source metadata",
+        "status": "executed",
+        "excel_representation": "metadata",
+        "reason": "",
+        "provenance_ref": "",
+    }
+    payload[field] = "a" * 32768
+    with pytest.raises(ValueError, match="32767"):
+        ModuleLedgerEntry.model_validate(payload)
+
+
+def test_empty_scalar_and_invalid_unicode_are_explicitly_refused() -> None:
+    payload = _sample_inputs()[0].model_dump()
+    for text in ("", chr(0xD800)):
+        with pytest.raises(ValueError):
+            WorkbookInputItem.model_validate({**payload, "value": text})
+
+
+def test_supplementary_unicode_respects_cell_text_capacity(tmp_path: Path) -> None:
+    payload = _sample_inputs()[0].model_dump()
+    safe_text = "\U0001f30d" * 16383 + "x"
+    item = WorkbookInputItem.model_validate({**payload, "value": safe_text})
+    path, _ = build_dfi_workbook_foundation(
+        tmp_path / "unicode.xlsx",
+        metadata=_sample_metadata(),
+        inputs=(item,),
+        ledger_entries=(),
+    )
+    assert openpyxl.load_workbook(path)["Inputs"]["D2"].value == safe_text
+    with pytest.raises(ValueError, match="32767"):
+        WorkbookInputItem.model_validate({**payload, "value": "\U0001f30d" * 16384})
+
+
+def test_public_builder_refuses_keys_distinguishable_only_past_capacity(
+    tmp_path: Path,
+) -> None:
+    payload = _sample_inputs()[0].model_dump()
+    bad_inputs: Any = tuple(
+        {**payload, "key": "k" * 32767 + suffix} for suffix in ("a", "b")
+    )
+    destination = tmp_path / "must_not_exist.xlsx"
+    with pytest.raises(ValueError, match="32767"):
+        build_dfi_workbook_foundation(
+            destination,
+            metadata=_sample_metadata(),
+            inputs=bad_inputs,
+            ledger_entries=(),
+        )
+    assert not destination.exists()
