@@ -1142,3 +1142,63 @@ class TestBuildDfiWorkbookFoundation:
         counts_empty, total_empty = _evaluate_with_soffice("empty_ledger", ())
         assert all(v == 0 for v in counts_empty.values())
         assert total_empty == 0
+
+
+@pytest.mark.parametrize("token", _EXCEL_ERRORS[:-1])
+def test_error_spelled_literals_keep_text_type_in_all_three_sheets(
+    tmp_path: Path, token: str
+) -> None:
+    """Accepted text must survive serialization without becoming an Excel error."""
+    path, _ = build_dfi_workbook_foundation(
+        tmp_path / "literal_types.xlsx",
+        metadata=_sample_metadata(
+            project_name=token,
+            scenario_name=token,
+            engine_version=token,
+            formula_boundary_note=token,
+        ),
+        inputs=(
+            WorkbookInputItem(
+                key="literal_input",
+                section=token,
+                label=token,
+                value=token,
+                unit=token,
+                provenance=token,
+            ),
+        ),
+        ledger_entries=(
+            ModuleLedgerEntry(
+                module_path="sample.module",
+                pipeline_stage=token,
+                role_description=token,
+                status="executed",
+                excel_representation=token,
+                reason=token,
+                provenance_ref=token,
+            ),
+        ),
+    )
+    workbook = openpyxl.load_workbook(path, data_only=False)
+    expected = {
+        "Control_Provenance": ("B4", "B5", "B8", "B10"),
+        "Inputs": ("B2", "C2", "D2", "E2", "F2"),
+        "Module_Ledger": ("B2", "C2", "E2", "F2", "G2"),
+    }
+    for sheet, cells in expected.items():
+        for address in cells:
+            cell = workbook[sheet][address]
+            assert (cell.value, cell.data_type) == (token, "s")
+    formulas = [
+        str(cell.value)
+        for row in workbook["Module_Ledger"]
+        for cell in row
+        if cell.data_type == "f"
+    ]
+    assert any(value.startswith("=COUNTIF(") for value in formulas)
+    assert any(value.startswith("=SUM(") for value in formulas)
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if name.startswith("xl/worksheets/") and name.endswith(".xml"):
+                tree = ET.fromstring(archive.read(name))
+                assert not tree.findall('.//{*}c[@t="e"]')

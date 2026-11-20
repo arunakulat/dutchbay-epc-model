@@ -431,6 +431,7 @@ def _populate_control_provenance_sheet(
     for row_idx, (field_name, field_value) in enumerate(rows, start=4):
         key_cell = ws.cell(row=row_idx, column=1, value=field_name)
         val_cell = ws.cell(row=row_idx, column=2, value=field_value)
+        val_cell.data_type = "s"
         key_cell.font = styles.body_font
         key_cell.alignment = styles.body_alignment
         key_cell.border = styles.thin_border
@@ -484,6 +485,9 @@ def _populate_inputs_sheet(
         )
         for col_idx, val in enumerate(row_values, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            if isinstance(val, str):
+                # Literal source text must not inherit Excel error-token inference.
+                cell.data_type = "s"
             cell.font = styles.body_font
             cell.border = styles.thin_border
             if col_idx == 4:
@@ -536,6 +540,9 @@ def _populate_module_ledger_sheet(
         )
         for col_idx, val in enumerate(row_values, start=1):
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            if isinstance(val, str):
+                # Literal source text must not inherit Excel error-token inference.
+                cell.data_type = "s"
             cell.font = styles.body_font
             cell.alignment = styles.body_alignment
             cell.border = styles.thin_border
