@@ -81,6 +81,10 @@ _LEDGER_HEADERS: tuple[str, ...] = (
 )
 
 
+# Conservative cell-text capacity, measured in UTF-16 code units.
+_MAX_CELL_TEXT_UNITS = 32767
+
+
 def _validate_literal_text(
     value: object,
     field_name: str,
@@ -91,6 +95,15 @@ def _validate_literal_text(
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string, got {type(value).__name__}.")
     _reject_control_chars(value, field_name)
+    try:
+        units = len(value.encode("utf-16-le")) // 2
+    except UnicodeEncodeError as exc:
+        raise ValueError(f"{field_name} must contain valid Unicode text.") from exc
+    if units > _MAX_CELL_TEXT_UNITS:
+        raise ValueError(
+            f"{field_name} exceeds the 32767 UTF-16-unit workbook cell-text limit; "
+            "shorten or externally reference the source rather than truncate it."
+        )
     stripped = value.strip()
     if not allow_empty and not stripped:
         raise ValueError(f"{field_name} must be a non-empty string.")
@@ -149,7 +162,7 @@ def _require_openpyxl() -> Any:
 
 
 class WorkbookInputItem(BaseModel):
-    """Typed contract for one scalar input parameter written to ``Inputs``."""
+    """Typed scalar input; empty source strings are refused rather than emitted blank."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -207,7 +220,7 @@ class WorkbookInputItem(BaseModel):
                 )
             return value
         if isinstance(value, str):
-            return _validate_literal_text(value, "value", allow_empty=True)
+            return _validate_literal_text(value, "value", allow_empty=False)
         if isinstance(value, (bool, int)):
             return value
         raise ValueError(  # pragma: no cover - unreachable after type check
@@ -245,7 +258,7 @@ class ModuleLedgerEntry(BaseModel):
     def _validate_status(cls, value: object) -> str:
         if not isinstance(value, str):
             raise ValueError(f"status must be a string, got {type(value).__name__}.")
-        _reject_control_chars(value, "status")
+        _validate_literal_text(value, "status", allow_empty=False)
         normalized = value.strip()
         if not normalized:
             raise ValueError("status must be a non-empty string.")
