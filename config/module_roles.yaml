@@ -165,6 +165,17 @@ modules:
     role_description: Evaluates development-readiness and E&S permit status registers for financial close.
     excel_representation: governance_metadata
 
+  - module_path: analytics.dfi_workbook.foundation
+    pipeline_stage: reporting_delivery
+    role_description: Builds a macro-free reproducible workbook foundation with provenance, scalar inputs, and execution-status rollup formulas.
+    excel_representation: non_model_adapter
+    notes: Preparatory workbook surface; canonical execution-record projection and financial formula qualification remain separate integration gates.
+
+  - module_path: analytics.dfi_workbook.registry
+    pipeline_stage: reporting_delivery
+    role_description: Allocates validated workbook cell coordinates and resolves formula references without computing financial outcomes.
+    excel_representation: non_model_adapter
+
   - module_path: analytics.dscr_sensitivity
     pipeline_stage: risk_sensitivity_opt
     role_description: Runs dual-DSCR sensitivity sweeps across tariff, capacity factor, and financing levers.
