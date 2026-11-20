@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -776,3 +777,169 @@ def test_build_module_execution_ledger_validates_uniqueness_membership_and_count
             records=(rec1,),
             summary_counts={**dict(ledger.summary_counts), "executed": 99},
         )
+
+
+@pytest.mark.parametrize(
+    ("yaml_value", "mode"),
+    [
+        ("!!set {wind: null}", "required"),
+        ("!!set {wind: null, wind: null}", "required"),
+        ("!!pairs []", "none"),
+        ("!!omap []", "none"),
+    ],
+)
+def test_tagged_collections_cannot_normalize_to_valid_extras(
+    tmp_path: Path, yaml_value: str, mode: str
+) -> None:
+    modules = [spec.model_dump(mode="json") for spec in _complete_stage_specs()]
+    modules[0].update(extra_mode=mode, optional_extras="EXTRAS_PLACEHOLDER")
+    template = json.dumps(
+        {"schema_version": "1.0", "stages": list(PipelineStage), "modules": modules}
+    )
+    path = tmp_path / "registry.yaml"
+    plain_sequence = "[wind]" if mode == "required" else "[]"
+    path.write_text(template.replace('"EXTRAS_PLACEHOLDER"', plain_sequence))
+    assert load_module_role_registry(path).modules[0].extra_mode.value == mode
+    path.write_text(template.replace('"EXTRAS_PLACEHOLDER"', yaml_value))
+    with pytest.raises(ValueError, match="plain YAML"):
+        load_module_role_registry(path)
+
+
+def test_duplicate_merge_keys_cannot_disappear_during_flattening(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "registry.yaml"
+    path.write_text('<<: {schema_version: "1.0"}\n<<: {stages: []}\nmodules: []\n')
+    with pytest.raises(ValueError, match="Duplicate YAML mapping key '<<'"):
+        load_module_role_registry(path)
+
+
+@pytest.mark.parametrize("supplied", [True, "1", 1.0])
+def test_json_summary_counts_require_integer_tokens(supplied: object) -> None:
+    ledger = build_module_execution_ledger("fixture", [_exec_record()])
+    payload = json.loads(ledger.model_dump_json())
+    payload["summary_counts"]["executed"] = supplied
+    with pytest.raises(ValidationError, match="summary_counts.executed"):
+        ModuleExecutionLedger.model_validate_json(json.dumps(payload))
+    del payload["summary_counts"]
+    assert ModuleExecutionLedger.model_validate_json(json.dumps(payload)) == ledger
+
+
+@pytest.mark.parametrize(
+    ("module", "paths"),
+    [
+        ("run_full_pipeline_v14", {"frozen": (), "auto_wind": ("wind",)}),
+        ("wind_resource.aep_summary", {"frozen": (), "live_wake": ("wind",)}),
+        ("app.api.jobs_router", {"memory": ("api",), "redis": ("api", "jobs")}),
+    ],
+)
+def test_conditional_skips_identify_the_selected_runtime_path(
+    module: str, paths: dict[str, tuple[str, ...]]
+) -> None:
+    registry = load_module_role_registry()
+    role = registry.get(module)
+    assert role.extra_mode.value == "conditional"
+    assert {p.name: p.required_extras for p in role.dependency_paths} == paths
+    template = _record_from_spec(role).model_dump()
+
+    def record_ledger(**fields: Any) -> ModuleExecutionLedger:
+        record = ModuleExecutionRecord.model_validate({**template, **fields})
+        return build_module_execution_ledger("fixture", [record], registry)
+
+    for path_name, required in paths.items():
+        assert record_ledger(dependency_path=path_name).summary_counts["executed"] == 1
+        for extra in {*role.optional_extras, "gis"}:
+            skip = dict(
+                status="skipped_optional_extra",
+                dependency_path=path_name,
+                missing_extra=extra,
+                reason=f"Missing [{extra}] for {path_name}.",
+            )
+            if extra in required:
+                ledger = record_ledger(**skip)
+                assert ledger.summary_counts["skipped_optional_extra"] == 1
+                assert (
+                    ModuleExecutionLedger.model_validate_json(ledger.model_dump_json())
+                    == ledger
+                )
+            else:
+                with pytest.raises(ValueError, match="not declared"):
+                    record_ledger(**skip)
+
+    with pytest.raises(ValueError, match="Unknown dependency_path"):
+        record_ledger(dependency_path="other")
+    skip_fields = {
+        "status": "skipped_optional_extra",
+        "reason": "Dependency unavailable.",
+    }
+    with pytest.raises(ValueError, match="dependency_path"):
+        record_ledger(**skip_fields, missing_extra=role.optional_extras[0])
+    with pytest.raises(ValueError, match="missing_extra"):
+        record_ledger(
+            **skip_fields,
+            dependency_path=next(name for name, required in paths.items() if required),
+        )
+    with pytest.raises(ValidationError, match="missing_extra"):
+        record_ledger(missing_extra=role.optional_extras[0])
+
+
+@pytest.mark.parametrize(
+    ("mode", "paths", "error"),
+    [
+        ("required", [("offline", [])], "require extra_mode"),
+        ("conditional", [], "distinct requirements"),
+        (
+            "conditional",
+            [("first", ["wind"]), ("second", ["wind"])],
+            "distinct requirements",
+        ),
+        (
+            "conditional",
+            [("same", []), ("same", ["wind"])],
+            "Duplicate dependency path",
+        ),
+        ("conditional", [("offline", []), ("online", ["jobs"])], "union"),
+        (
+            "conditional",
+            [("offline", []), ("online", ["wind", "wind"])],
+            "Duplicate entries",
+        ),
+        (
+            "conditional",
+            [("offline", []), ("online", ["bogus"])],
+            "Unknown optional_extras",
+        ),
+    ],
+)
+def test_conditional_declarations_reject_inconsistent_requirements(
+    mode: str, paths: list[tuple[str, list[str]]], error: str
+) -> None:
+    fields = _role_spec().model_dump()
+    fields.update(
+        extra_mode=mode,
+        optional_extras=["wind"],
+        dependency_paths=[
+            {"name": name, "required_extras": extras} for name, extras in paths
+        ],
+    )
+    with pytest.raises(ValidationError, match=error):
+        ModuleRoleSpec.model_validate(fields)
+
+
+def test_router_skip_cannot_borrow_jobs_from_the_redis_path() -> None:
+    registry = load_module_role_registry()
+    role = registry.get("app.api.jobs_router")
+    # Old records omit both new fields. Executed still has its original meaning.
+    executed = _record_from_spec(role)
+    assert build_module_execution_ledger("fixture", [executed], registry).records == (
+        executed,
+    )
+    skip = _record_from_spec(
+        role,
+        status=ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA,
+        reason="Redis worker dependency is missing.",
+    )
+    for fields in ({}, {"missing_extra": "jobs"}):
+        record = ModuleExecutionRecord.model_validate({**skip.model_dump(), **fields})
+        with pytest.raises(ValueError, match="dependency_path"):
+            build_module_execution_ledger("fixture", [record], registry)

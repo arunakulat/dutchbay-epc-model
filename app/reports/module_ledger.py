@@ -27,13 +27,14 @@ from typing import Annotated, Any, Literal, Optional
 
 import yaml
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
     PlainSerializer,
     PrivateAttr,
+    StrictInt,
     StringConstraints,
-    field_validator,
     model_validator,
 )
 
@@ -71,7 +72,7 @@ RoleDescription = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=12)
 ]
 FrozenIntMapping = Annotated[
-    Mapping[str, int],
+    Mapping[str, StrictInt],
     PlainSerializer(lambda value: dict(value), return_type=dict[str, int]),
 ]
 
@@ -110,6 +111,7 @@ class OptionalExtraMode(str, Enum):
     NONE = "none"
     REQUIRED = "required"
     CASPER_FALLBACK = "casper_fallback"
+    CONDITIONAL = "conditional"
 
 
 class ExcelRepresentationKind(str, Enum):
@@ -135,7 +137,27 @@ _REASON_REQUIRED_STATUSES: frozenset[ModuleExecutionStatus] = frozenset(
 
 
 class _StrictSafeLoader(yaml.SafeLoader):
-    """PyYAML SafeLoader that rejects duplicate or unhashable mapping keys."""
+    """Accept plain registry collections, including inside aliases and merge sources."""
+
+    def compose_node(
+        self, parent: yaml.nodes.Node | None, index: Any
+    ) -> yaml.nodes.Node | None:
+        node = super().compose_node(parent, index)
+        # Check the YAML representation before SafeLoader can turn a tagged
+        # collection (e.g. !!set or !!pairs) into a different Python shape.
+        if isinstance(node, yaml.nodes.MappingNode):
+            if node.tag != self.DEFAULT_MAPPING_TAG:
+                raise ValueError(f"Expected plain YAML mapping, got {node.tag}")
+            if sum(key.tag == "tag:yaml.org,2002:merge" for key, _ in node.value) > 1:
+                raise ValueError(
+                    "Duplicate YAML mapping key '<<' in module role registry"
+                )
+        elif (
+            isinstance(node, yaml.nodes.SequenceNode)
+            and node.tag != self.DEFAULT_SEQUENCE_TAG
+        ):
+            raise ValueError(f"Expected plain YAML sequence, got {node.tag}")
+        return node
 
 
 def _construct_mapping_no_duplicates(
@@ -167,6 +189,36 @@ _StrictSafeLoader.add_constructor(
 )
 
 
+def _validate_optional_extras(value: tuple[str, ...]) -> tuple[str, ...]:
+    unknown = [entry for entry in value if entry not in KNOWN_OPTIONAL_EXTRAS]
+    if unknown:
+        known = ", ".join(sorted(KNOWN_OPTIONAL_EXTRAS))
+        bad = ", ".join(repr(entry) for entry in unknown)
+        raise ValueError(
+            f"Unknown optional_extras entry {bad}; expected one of: {known}"
+        )
+    counts = Counter(value)
+    duplicates = sorted(entry for entry, count in counts.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            f"Duplicate entries in optional_extras: {', '.join(duplicates)}"
+        )
+    return value
+
+
+ExtraNames = Annotated[tuple[str, ...], AfterValidator(_validate_optional_extras)]
+DependencyPathName = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]*$")]
+
+
+class DependencyPath(BaseModel):
+    """Optional packages required together for a named execution path."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: DependencyPathName
+    required_extras: ExtraNames
+
+
 class ModuleRoleSpec(BaseModel):
     """Declared architectural role and workbook mapping for one Python module."""
 
@@ -176,27 +228,10 @@ class ModuleRoleSpec(BaseModel):
     pipeline_stage: PipelineStage
     role_description: RoleDescription
     excel_representation: ExcelRepresentationKind
-    optional_extras: tuple[str, ...] = ()
+    optional_extras: ExtraNames = ()
+    dependency_paths: tuple[DependencyPath, ...] = ()
     extra_mode: OptionalExtraMode = OptionalExtraMode.NONE
     notes: Optional[NonEmptyText] = None
-
-    @field_validator("optional_extras")
-    @classmethod
-    def _validate_optional_extras(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        unknown = [entry for entry in value if entry not in KNOWN_OPTIONAL_EXTRAS]
-        if unknown:
-            known = ", ".join(sorted(KNOWN_OPTIONAL_EXTRAS))
-            bad = ", ".join(repr(entry) for entry in unknown)
-            raise ValueError(
-                f"Unknown optional_extras entry {bad}; expected one of: {known}"
-            )
-        counts = Counter(value)
-        duplicates = sorted(entry for entry, count in counts.items() if count > 1)
-        if duplicates:
-            raise ValueError(
-                f"Duplicate entries in optional_extras: {', '.join(duplicates)}"
-            )
-        return value
 
     @model_validator(mode="after")
     def _validate_extra_mode_consistency(self) -> ModuleRoleSpec:
@@ -209,6 +244,23 @@ class ModuleRoleSpec(BaseModel):
             raise ValueError(
                 "ModuleRoleSpec with non-empty optional_extras cannot use extra_mode='none'"
             )
+        if self.extra_mode is OptionalExtraMode.CONDITIONAL:
+            names = {path.name for path in self.dependency_paths}
+            if len(names) != len(self.dependency_paths):
+                raise ValueError("Duplicate dependency path name")
+            requirements = {
+                frozenset(path.required_extras) for path in self.dependency_paths
+            }
+            if len(requirements) < 2:
+                raise ValueError("Conditional paths must declare distinct requirements")
+            if set(self.optional_extras) != {
+                extra for path in requirements for extra in path
+            }:
+                raise ValueError(
+                    "optional_extras must equal the union of path requirements"
+                )
+        elif self.dependency_paths:
+            raise ValueError("dependency_paths require extra_mode='conditional'")
         return self
 
 
@@ -314,13 +366,22 @@ class ModuleExecutionRecord(BaseModel):
     role_description: RoleDescription
     status: ModuleExecutionStatus
     excel_representation: ExcelRepresentationKind
+    dependency_path: DependencyPathName | None = None
+    missing_extra: str | None = None
     reason: Optional[NonEmptyText] = None
     key_outputs: tuple[NonEmptyText, ...] = ()
     provenance_refs: tuple[NonEmptyText, ...] = ()
     caveat: Optional[NonEmptyText] = None
 
     @model_validator(mode="after")
-    def _validate_reason_required(self) -> ModuleExecutionRecord:
+    def _validate_status_details(self) -> ModuleExecutionRecord:
+        if self.missing_extra is not None and (
+            self.status is not ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA
+            or self.missing_extra not in KNOWN_OPTIONAL_EXTRAS
+        ):
+            raise ValueError(
+                "missing_extra must name a known extra for a skipped_optional_extra record"
+            )
         if self.status in _REASON_REQUIRED_STATUSES and (
             self.reason is None or not self.reason.strip()
         ):
@@ -371,6 +432,41 @@ class ModuleExecutionLedger(BaseModel):
         return self
 
 
+def _validate_record_dependencies(
+    record: ModuleExecutionRecord, spec: ModuleRoleSpec
+) -> None:
+    """Check the selected path and the dependency cited for a skip."""
+    skipped = record.status is ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA
+    if skipped and spec.extra_mode is OptionalExtraMode.CONDITIONAL:
+        if record.dependency_path is None or record.missing_extra is None:
+            raise ValueError(
+                f"A skipped_optional_extra record for {spec.module_path} "
+                "requires dependency_path and missing_extra"
+            )
+
+    extras = spec.optional_extras
+    if record.dependency_path is not None:
+        for path in spec.dependency_paths:
+            if path.name == record.dependency_path:
+                extras = path.required_extras
+                break
+        else:
+            raise ValueError(
+                f"Unknown dependency_path {record.dependency_path!r} for {spec.module_path}"
+            )
+
+    if record.missing_extra is not None and record.missing_extra not in extras:
+        raise ValueError(
+            f"Missing extra {record.missing_extra!r} is not declared for "
+            f"{spec.module_path} on path {record.dependency_path!r}"
+        )
+    if skipped and not extras:
+        raise ValueError(
+            f"ModuleExecutionRecord for {spec.module_path!r} cannot have "
+            "status 'skipped_optional_extra' when registry optional_extras is empty"
+        )
+
+
 def build_module_execution_ledger(
     profile: str,
     records: Iterable[ModuleExecutionRecord],
@@ -380,7 +476,10 @@ def build_module_execution_ledger(
 
     Fails loudly on duplicate ``module_path`` entries and, when ``registry`` is
     supplied, on unregistered modules, metadata drift against ``registry``, or
-    ``skipped_optional_extra`` on a module declaring no ``optional_extras``.
+    skips unsupported by the selected dependencies. For a conditional module,
+    a missing-extra skip must identify both the selected path and an extra
+    required there. Other modules retain reason-only skip records. For all
+    statuses, a supplied path must belong to the module.
     """
     records_tuple = tuple(records)
 
@@ -417,14 +516,7 @@ def build_module_execution_ledger(
                     f"ModuleExecutionRecord for {record.module_path!r} has "
                     "role_description that does not match registry spec"
                 )
-            if (
-                record.status is ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA
-                and not spec.optional_extras
-            ):
-                raise ValueError(
-                    f"ModuleExecutionRecord for {record.module_path!r} cannot have "
-                    "status 'skipped_optional_extra' when registry optional_extras is empty"
-                )
+            _validate_record_dependencies(record, spec)
 
     return ModuleExecutionLedger(profile=profile, records=records_tuple)
 
@@ -445,6 +537,7 @@ def load_module_role_registry(
 
 __all__ = [
     "DEFAULT_MODULE_ROLES_PATH",
+    "DependencyPath",
     "ExcelRepresentationKind",
     "KNOWN_OPTIONAL_EXTRAS",
     "ModuleExecutionLedger",

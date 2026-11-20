@@ -961,7 +961,10 @@ modules:
     optional_extras:
       - api
       - jobs
-    extra_mode: required
+    extra_mode: conditional
+    dependency_paths:
+      - {name: memory, required_extras: [api]}
+      - {name: redis, required_extras: [api, jobs]}
     notes: Requires [api] (fastapi) at import time; default memory backend runs without [jobs], while JOBS_BACKEND=redis requires [jobs] (arq, redis).
 
   - module_path: app.api.main
@@ -1426,6 +1429,11 @@ modules:
     pipeline_stage: core_finance
     role_description: Canonical Hydra CLI orchestrating resource adapters, v14 finance runs, MC, and optional emitters.
     excel_representation: non_model_adapter
+    optional_extras: [wind]
+    extra_mode: conditional
+    dependency_paths:
+      - {name: frozen, required_extras: []}
+      - {name: auto_wind, required_extras: [wind]}
     notes: Opt-in wind/solar/grid paths consume frozen exports or optional extras when explicitly enabled.
 
   - module_path: solar_resource.bifacial_guard
@@ -1435,7 +1443,7 @@ modules:
 
   - module_path: solar_resource.blue_whale_site_inputs
     pipeline_stage: cost_levies_epc
-    role_description: Pure land-cost blend calculations for wind/BESS equipment plus stepped solar pvlib yield inputs.
+    role_description: Calculates landed wind and BESS equipment CAPEX and stepped solar yield inputs using pvlib.
     excel_representation: engine_table_plus_rollup
     optional_extras:
       - solar
@@ -1533,6 +1541,11 @@ modules:
     pipeline_stage: resource_yield
     role_description: Validates turbine curve selection and builds reproducible analytic wind AEP summaries.
     excel_representation: engine_table_plus_rollup
+    optional_extras: [wind]
+    extra_mode: conditional
+    dependency_paths:
+      - {name: frozen, required_extras: []}
+      - {name: live_wake, required_extras: [wind]}
 
   - module_path: wind_resource.arco_assessment
     pipeline_stage: resource_yield
