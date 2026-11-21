@@ -242,8 +242,11 @@ def test_without_the_declaration_only_the_capex_bar_is_not_computed(
     assert reason.startswith("PipelineValidationError: ")
     assert "capex.breakdown" in reason
     assert math.isnan(capex.impact_abs)
-    # Not computed is not "undefined": no rate failed to solve.
-    assert CAPEX not in suite.metadata.get("undefined_drivers", [])
+    # Not computed is not "undefined": no rate failed to solve. The list holds driver
+    # labels; OPEX, whose high point is undefined here, shows the list is live.
+    undefined = suite.metadata["undefined_drivers"]
+    assert "OPEX" in undefined
+    assert capex.metric_name == "CAPEX" and "CAPEX" not in undefined
     # The rest of the tornado renders. (This scenario's project IRR is undefined at the
     # high OPEX point, so the low point is the one with a figure.)
     assert "not_computed" not in opex.metadata
