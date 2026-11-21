@@ -236,9 +236,19 @@ def test_the_lender_case_still_calls_the_sponsor_in_its_refinance_years(
 
 
 def _schedule(
-    coverage: Optional[float], treatment: str = "refinance", threshold: float = 1.30
+    coverage: Optional[float],
+    treatment: str = "refinance",
+    threshold: float = 1.30,
+    balloon: float = 0.0,
 ) -> Dict[str, Any]:
-    rows = [{"year": 1, "cfads_usd": 1_000_000.0, "debt_service_usd": 0.0}]
+    rows = [
+        {
+            "year": 1,
+            "cfads_usd": 1_000_000.0,
+            "debt_service_usd": 0.0,
+            "balloon_resolution": balloon,
+        }
+    ]
     debt: Dict[str, Any] = {
         "balloon_treatment": treatment,
         "annual_row_debt_period_map": [{"annual_row_index": 0, "debt_period": 3}],
@@ -268,4 +278,20 @@ def test_coverage_at_the_threshold_meets_it() -> None:
 
 def test_no_published_coverage_and_a_zero_threshold_never_lock() -> None:
     assert _schedule(None)["refinance_tranche_locked"] is False
-    assert _schedule(0.5, threshold=0.0)["refinance_tranche_locked"] is False
+    # A zero threshold switches the lock-up off, even for a tranche the year cannot cover.
+    assert _schedule(-0.5, threshold=0.0)["refinance_tranche_locked"] is False
+
+
+@pytest.mark.parametrize(
+    ("treatment", "paid"), [("refinance", -0.005), ("cash_sweep", 0.0)]
+)
+def test_the_sweep_rounding_allowance_stays_a_cash_sweep_rule(
+    treatment: str, paid: float
+) -> None:
+    """A refinance shortfall of half a cent is a sponsor call, as it was before.
+
+    Only a cash sweep is settled by the pipeline to USD 0.01, so only there is a shortfall
+    that small the settlement's rounding rather than a cash call.
+    """
+    row = _schedule(2.0, treatment=treatment, balloon=1_000_000.005)
+    assert row["equity_distribution_usd"] == pytest.approx(paid, abs=1e-9)
