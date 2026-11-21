@@ -761,9 +761,10 @@ examined in full in the separately delivered deep-research credibility report.
   service draws the reserve first, then cash the SPV holds for the sponsor, then a sponsor
   cure booked as negative equity cash flow; each step is a row field, and the shortfall is
   no longer clamped to zero.
-- **Monte Carlo default.** The Monte Carlo engine allows a toy fallback by default
-  (`allow_toy_fallback=True`); a failed trial substitutes tagged, counted placeholder KPIs. A
-  lender or production run should set this to `false`.
+- **Monte Carlo default.** The Monte Carlo engine's toy fallback is off by default (#962,
+  owner decision 2026-11-21): a failed trial stops the run with its error. A smoke config may
+  opt in with `allow_toy_fallback: true`, and a failed trial then substitutes tagged, counted
+  placeholder KPIs; declared lender and IC run modes refuse the fallback even then.
 - **Default breach probability.** Because debt is sculpted to the covenant floor, the default
   DSCR-breach probability is structurally near zero; the honest breach distribution requires
   the opt-in `monte_carlo.fixed_debt_stress` path.

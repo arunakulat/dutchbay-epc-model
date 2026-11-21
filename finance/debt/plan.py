@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from finance.debt.balloon import (
     _balloon_resolution_path,
@@ -20,7 +20,11 @@ from finance.debt.dscr_contract import (
     _operating_dscr_minimum,
 )
 from finance.debt.funding import _build_funding
-from finance.debt.helpers import _as_float, _section_case_insensitive
+from finance.debt.helpers import (
+    _as_float,
+    _required_number,
+    _section_case_insensitive,
+)
 from finance.debt.layer import _coverage_ratios, apply_debt_layer
 from finance.debt.placeholders import _FORBID_TOY_FALLBACK_KEY
 from finance.debt.sizing import _maybe_autosolve_dscr
@@ -32,6 +36,22 @@ from finance.debt.terms import (
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so log
 # filters and caplog assertions still see these records.
 logger = logging.getLogger("finance.debt_v14")
+
+
+def resolve_max_balloon_pct(config: Mapping[str, Any]) -> float:
+    """The balloon covenant limit, ``constraints.max_balloon_pct``, refused when absent.
+
+    The engine used to fill an absent limit with 0.10, a Dutch Bay figure (#1429, inventory
+    group D09). It is a lender term with no code default: strict pre-flight and
+    :func:`plan_debt` both refuse a scenario that omits it, naming the path.
+
+    Raises:
+        ValueError: If the limit is absent, a boolean, not numeric or not finite.
+    """
+    constraints = _section_case_insensitive(config, "constraints") or {}
+    return _required_number(
+        constraints.get("max_balloon_pct"), "constraints.max_balloon_pct"
+    )
 
 
 def plan_debt(
@@ -243,10 +263,7 @@ def plan_debt(
     if amortizing_base <= 0.0:  # fallback if IDC detail is absent
         amortizing_base = _as_float(core.get("debt_total"), 0.0)
     balloon_pct = structural_balloon / amortizing_base if amortizing_base > 0 else 0.0
-    max_balloon_pct = _as_float(
-        (_section_case_insensitive(config, "constraints") or {}).get("max_balloon_pct"),
-        0.10,
-    )
+    max_balloon_pct = resolve_max_balloon_pct(config)
     balloon_covenant_breach = balloon_pct > max_balloon_pct
 
     principal_by = {
