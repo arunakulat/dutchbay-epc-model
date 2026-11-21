@@ -138,8 +138,10 @@ overlap judgment or the time the first edit occurred.
   authority only: it lifts no `HOLD` and confers no grade, release, audit, lender or Board
   authority. For an `R2` or `R3` PR, green includes the required check
   `Independent review (RECRUIT-01)`: an accepting domain record and an accepting assurance
-  record bound to the exact head, neither from a session that wrote a commit on it (#1486;
-  header format in `RECRUIT-01` module 3 §4.1).
+  record bound to the exact head, neither from a session that wrote a commit on it, and no
+  withheld acceptance at that head, since one veto blocks (#1486; header format, trains and
+  limits in `RECRUIT-01` module 3 §4.1). The check cannot authenticate a declared session, so
+  still verify independence before merging.
 - Do not use `git stash` for cross-branch peeking because the stash namespace is shared
   across worktrees.
 - Stage only files belonging to the task. Commit, push and open PRs when the requested delivery

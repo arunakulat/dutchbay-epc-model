@@ -93,15 +93,44 @@ Role: domain            (or: assurance)
 PR: #<number>
 Commit: <40-hex head the lane reviewed>
 Reviewer-Session: <the lane's own session id>
-Disposition: ACCEPT     (or APPROVE or PASS; anything else does not count)
+Disposition: ACCEPT     (or APPROVE or PASS, as the whole value; anything else withholds)
+Car: #<car number>      (train pull requests only; see §8)
 ```
 
 The digest is over the block's bytes with LF line endings and one trailing LF. The check counts a
 record only when its `Commit` is the pull request's current head, its `PR` is that pull request,
 the comment comes from the owner or a collaborator, and its `Reviewer-Session` names no session
 that wrote a commit on the pull request (read from the commits' `Claude-Session:` trailers). The
-two records must name two different reviewers. Every agent posts as the owner's account, so the
-session identity, not the comment author, is what separates a lane from the writer.
+two records must name two different reviewers.
+
+**One veto blocks acceptance (§1).** For each reviewer and role the check reads only the
+reviewer's latest record at the current head, so a lane can correct its own record. If any such
+latest record does not accept (`REJECT`, `CHANGES-REQUESTED`, a conditional acceptance, or any
+other value), the check fails, whatever accepting records sit beside it. A record bound to an
+older head is not a veto at the new head.
+
+**What the check cannot see.** Every agent posts as the owner's account, so the check compares the
+session a record *declares* with the sessions in the commits' `Claude-Session:` trailers. It
+refuses a declared identity that matches a trailered writer, which catches the honest mistakes (a
+lane that pushed a commit, a writer that names itself). It cannot authenticate the declared
+identity, so an invented session name passes, and a commit without a trailer (Codex, manual or
+train commits) names no writer to compare against. The check is therefore an anti-accident
+control, not proof of independence: the coordinator still verifies independence under §1 before
+merging.
+
+**Class.** The body declares the class on a line `Risk class: R<n>` (a list item or bold label is
+read too; the template's guidance sits on the line above). An undeclared class fails, except on a
+Dependabot pull request, which is read as `R2` because `REVIEW-01` classes dependency bumps as
+`R2`; its lanes still post records at the Dependabot head, and a recreated Dependabot pull request
+needs them again.
+
+**Where it runs.** The workflow triggers on `pull_request_target`, so GitHub takes the workflow
+file from `main`, and it checks out the base commit, so the script is `main`'s too. A pull request
+cannot edit the check that judges it, and no pull-request code runs.
+
+**Trains.** On a `train/` branch the check reads each car's number from its commit subject and
+requires one accepting pair per car, from §8 carry-forward records posted on the train pull request,
+bound to the train head, each with `Car: #<car>`; a veto for any car blocks the train.
 
 Consequences: a head that moves for any reason, including a merge-only base refresh under §7,
 needs both roles bound again at the new head (a light re-bind for each role is enough when §7's
@@ -232,6 +261,14 @@ A side's test selection is the test files it adds or changes, and every test fil
 statements name a module it changes. An empty selection is recorded as empty, and the reference
 search then carries the direction alone. §7's proof 2 for a single pull request's base advance is
 unchanged: this narrower link test applies only to a train.
+
+**Posting the carry-forward.** A car's disposition reaches the train head only as a record: each of
+the car's lanes posts its carry-forward on the train pull request in the §4.1 header, with
+`Commit:` the train head and `Car: #<car>`, and the train body declares the highest class among its
+cars. The required check `Independent review (RECRUIT-01)` then needs one accepting domain and
+assurance pair per car and no withheld acceptance for any car (§4.1). This is how §4.1's rule that
+a moved head needs both roles bound again applies to a train: the binding is this carry-forward, not
+a fresh review.
 
 If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
 to its own head. A judgement that another car cannot matter never substitutes for these artifacts.
