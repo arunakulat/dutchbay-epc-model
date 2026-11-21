@@ -53,11 +53,13 @@ CANONICAL_LEDGER_STATUSES: tuple[str, ...] = (
 )
 
 DEFAULT_FORMULA_BOUNDARY_NOTE: str = (
-    "Option B Formula Boundary: Scalar parameters on 'Inputs' and workbook-internal "
-    "summaries (including 'Module_Ledger' status rollups) use live Excel formulas "
-    "bound via CellRegistry; complex upstream physics, Monte Carlo simulations, and "
-    "debt-sculpting schedules in downstream sheets are engine-computed tables with "
-    "explicit provenance rather than simplified spreadsheet approximations."
+    "Option B Formula Boundary: values on 'Inputs' are literal, engine-supplied "
+    "scalar parameters registered by coordinate in CellRegistry; they are not "
+    "formulas. The only live Excel formulas in this workbook are the "
+    "'Module_Ledger' status rollups (COUNTIF/SUM). Complex upstream physics, "
+    "Monte Carlo simulations and debt-sculpting schedules are engine-computed "
+    "and are not part of this foundation workbook; no simplified spreadsheet "
+    "approximation of them is offered."
 )
 
 _FORMULA_TRIGGER_PREFIXES: tuple[str, ...] = ("=", "+", "-", "@")
@@ -403,6 +405,9 @@ class DfiWorkbookMetadata(BaseModel):
     generated_at: str
     non_reliance_notice: str = DFI_WORKBOOK_F5_CAVEAT
     formula_boundary_note: str = DEFAULT_FORMULA_BOUNDARY_NOTE
+    # Free scenario wording lives in its own field and row, never in the F-5
+    # notice cell, so no appended text can qualify or withdraw the hold.
+    scenario_note: Optional[str] = None
 
     @field_validator(
         "project_name",
@@ -435,13 +440,21 @@ class DfiWorkbookMetadata(BaseModel):
     @classmethod
     def _validate_non_reliance_notice(cls, value: object) -> str:
         text = _validate_literal_text(value, "non_reliance_notice", allow_empty=False)
-        if not text.startswith(DFI_WORKBOOK_F5_CAVEAT):
+        if text != DFI_WORKBOOK_F5_CAVEAT:
             raise ValueError(
-                "DfiWorkbookMetadata.non_reliance_notice must start with the "
-                "canonical F-5 hold (DFI_WORKBOOK_F5_CAVEAT); the non-reliance "
-                "notice cannot be suppressed or replaced."
+                "DfiWorkbookMetadata.non_reliance_notice must equal the canonical "
+                "F-5 hold (DFI_WORKBOOK_F5_CAVEAT) exactly; the non-reliance notice "
+                "cannot be suppressed, replaced, prefixed or extended. Put any "
+                "scenario wording in scenario_note."
             )
         return text
+
+    @field_validator("scenario_note", mode="before")
+    @classmethod
+    def _validate_scenario_note(cls, value: object) -> Optional[str]:
+        if value is None:
+            return None
+        return _validate_literal_text(value, "scenario_note", allow_empty=False)
 
     @field_validator("run_mode", mode="before")
     @classmethod
@@ -513,10 +526,11 @@ def _populate_control_provenance_sheet(
     styles: _WorkbookStyles,
 ) -> None:
     """Populate Sheet 1 (``Control_Provenance``) with notice and metadata."""
-    if not metadata.non_reliance_notice.startswith(DFI_WORKBOOK_F5_CAVEAT):
+    if metadata.non_reliance_notice != DFI_WORKBOOK_F5_CAVEAT:
         raise ValueError(
-            "DfiWorkbookMetadata.non_reliance_notice must start with "
-            "DFI_WORKBOOK_F5_CAVEAT; cannot emit workbook without F-5 hold."
+            "DfiWorkbookMetadata.non_reliance_notice must equal "
+            "DFI_WORKBOOK_F5_CAVEAT exactly; cannot emit workbook without the "
+            "unaltered F-5 hold."
         )
     ws.title = CONTROL_SHEET_NAME
     ws.views.sheetView[0].showGridLines = True
@@ -549,6 +563,10 @@ def _populate_control_provenance_sheet(
         ("engine_version", metadata.engine_version),
         ("generated_at", metadata.generated_at),
         ("formula_boundary_note", metadata.formula_boundary_note),
+        (
+            "scenario_note",
+            metadata.scenario_note if metadata.scenario_note is not None else "",
+        ),
     )
     for row_idx, (field_name, field_value) in enumerate(rows, start=4):
         key_cell = ws.cell(row=row_idx, column=1, value=field_name)

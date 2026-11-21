@@ -842,10 +842,9 @@ class TestStrictContracts:
             with pytest.raises(ValueError, match="non_reliance_notice"):
                 _sample_metadata(non_reliance_notice=bad_notice)
 
-        appended = _sample_metadata(
-            non_reliance_notice=f"{DFI_WORKBOOK_F5_CAVEAT} Scenario: stress-test."
-        )
-        assert appended.non_reliance_notice.startswith(DFI_WORKBOOK_F5_CAVEAT)
+        noted = _sample_metadata(scenario_note="Scenario: stress-test.")
+        assert noted.non_reliance_notice == DFI_WORKBOOK_F5_CAVEAT
+        assert noted.scenario_note == "Scenario: stress-test."
 
         with pytest.raises(ValidationError):
             DfiWorkbookMetadata(
@@ -1307,7 +1306,7 @@ class TestBuildDfiWorkbookFoundation:
                 ), "Unexpected <f> formula found on Control_Provenance"
                 a1_text = ctrl_cells["A1"][0]
                 assert a1_text is not None
-                assert a1_text.startswith(DFI_WORKBOOK_F5_CAVEAT)
+                assert a1_text == DFI_WORKBOOK_F5_CAVEAT
 
                 inputs_cells = _parse_sheet_cells(
                     zf, sheet_paths["Inputs"], shared_strings
@@ -1402,9 +1401,7 @@ class TestBuildDfiWorkbookFoundation:
                 excel_representation="ledger_only",
             ),
         )
-        appended_meta = _sample_metadata(
-            non_reliance_notice=f"{DFI_WORKBOOK_F5_CAVEAT} Scenario: stress-case."
-        )
+        appended_meta = _sample_metadata(scenario_note="Scenario: stress-case.")
         neg_inputs = _sample_inputs() + (
             WorkbookInputItem(
                 key="tax.tlcf_opening_usd",
@@ -1758,3 +1755,72 @@ def test_public_builder_refuses_keys_distinguishable_only_past_capacity(
             ledger_entries=(),
         )
     assert not destination.exists()
+
+
+# ---------------------------------------------------------------------------
+# F-5 hold is exact: no suffix can qualify or withdraw it (review D1, #1812)
+# ---------------------------------------------------------------------------
+
+_F5_HOSTILE_SUFFIXES: tuple[str, ...] = (
+    " HOLD LIFTED: approved for lender and covenant reliance.",
+    " Scenario: stress-test.",
+    "\u200b",
+    ".",
+    " ",
+)
+
+
+@pytest.mark.parametrize("suffix", _F5_HOSTILE_SUFFIXES)
+def test_f5_notice_refuses_any_appended_text(suffix: str) -> None:
+    with pytest.raises(ValueError, match="non_reliance_notice"):
+        _sample_metadata(non_reliance_notice=DFI_WORKBOOK_F5_CAVEAT + suffix)
+
+
+def test_f5_notice_refuses_copied_model_with_suffix(tmp_path: Path) -> None:
+    lifted = _sample_metadata().model_copy(
+        update={
+            "non_reliance_notice": DFI_WORKBOOK_F5_CAVEAT
+            + " HOLD LIFTED: approved for lender and covenant reliance."
+        }
+    )
+    dest = tmp_path / "lifted.xlsx"
+    with pytest.raises(ValueError, match="non_reliance_notice"):
+        build_dfi_workbook_foundation(
+            dest,
+            metadata=lifted,
+            inputs=_sample_inputs(),
+            ledger_entries=_sample_ledger(),
+        )
+    assert not dest.exists()
+
+
+def test_scenario_note_has_its_own_row_and_a1_is_exact(tmp_path: Path) -> None:
+    from openpyxl import load_workbook
+
+    note = "Scenario: stress-case. HOLD LIFTED"
+    dest = tmp_path / "noted.xlsx"
+    build_dfi_workbook_foundation(
+        dest,
+        metadata=_sample_metadata(scenario_note=note),
+        inputs=_sample_inputs(),
+        ledger_entries=_sample_ledger(),
+    )
+    ws = load_workbook(dest)["Control_Provenance"]
+    assert ws["A1"].value == DFI_WORKBOOK_F5_CAVEAT
+    fields = {
+        ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value
+        for r in range(4, ws.max_row + 1)
+    }
+    assert fields["scenario_note"] == note
+
+
+@pytest.mark.parametrize("bad", ("", "   ", "=1", "-1", "source\ufffe"))
+def test_scenario_note_is_literal_safe(bad: str) -> None:
+    with pytest.raises(ValueError, match="scenario_note"):
+        _sample_metadata(scenario_note=bad)
+
+
+def test_formula_boundary_note_does_not_claim_input_formulas() -> None:
+    note = _sample_metadata().formula_boundary_note
+    assert "not formulas" in note
+    assert "use live Excel formulas bound via CellRegistry" not in note
