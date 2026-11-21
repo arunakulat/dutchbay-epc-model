@@ -837,6 +837,11 @@ modules:
     role_description: Resolves and validates optional scenario-level site analysis configuration blocks.
     excel_representation: governance_metadata
 
+  - module_path: analytics.site_analysis_runs
+    pipeline_stage: governance
+    role_description: Runs a scenario's declared site analyses and stamps each summary with code and config digests.
+    excel_representation: governance_metadata
+
   - module_path: analytics.storage_dispatch
     pipeline_stage: tech_hybrid_bess
     role_description: Evaluates default-off hourly BESS charge/discharge instruction feasibility against ratings.
@@ -1146,6 +1151,16 @@ modules:
   - module_path: app.reports.report_orchestration
     pipeline_stage: reporting_delivery
     role_description: Typed orchestration seams separating finance evaluation, report sensitivity, and context assembly.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.site_analysis_model
+    pipeline_stage: reporting_delivery
+    role_description: Typed report models for the screening site-analysis sections and their statuses.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.site_analysis_sections
+    pipeline_stage: reporting_delivery
+    role_description: Builds one screening report section per declared site analysis, with stale-summary checks.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.solar_assessment
