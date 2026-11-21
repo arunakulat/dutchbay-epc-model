@@ -1,4 +1,9 @@
-"""Export public scenario references and blank financing questions, not lender terms."""
+"""Export public scenario references and blank financing questions, not lender terms.
+
+The scenario is named in configuration (``scenario``, a path under ``scenarios/``), never
+in this module, so the questionnaire runs for any scenario that declares every path in
+``SUPPORTED_PATHS`` (#1783).
+"""
 
 from __future__ import annotations
 
@@ -13,10 +18,9 @@ from typing import Any, Mapping
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-SCENARIOS = {
-    "wind": "scenarios/blue_whale_wind_lot5b_2026.yaml",
-    "solar_bess": "scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
-}
+#: The one directory a questionnaire may read its scenario from, relative to the root.
+SCENARIO_DIR = "scenarios"
+_SCENARIO_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.ya?ml")
 SUPPORTED_PATHS = frozenset(
     {
         "Financing_Terms.interest_rate_nominal",
@@ -56,6 +60,37 @@ def _text(value: Any, label: str) -> str:
     return value
 
 
+def scenario_path(value: Any) -> str:
+    """Return a configured scenario path after checking its shape.
+
+    Args:
+        value: The configured ``scenario`` value.
+
+    Returns:
+        The path unchanged: ``scenarios/`` followed by one or more plain path segments,
+        the last a ``.yaml`` or ``.yml`` file name.
+
+    Raises:
+        QuestionnaireError: If the value is not such a path, including an unset Hydra
+            ``???`` value, an absolute path, or one that leaves ``scenarios/``.
+    """
+    if not isinstance(value, str):
+        raise QuestionnaireError("scenario: a path under scenarios/ is required")
+    parts = value.split("/")
+    if (
+        len(parts) < 2
+        or parts[0] != SCENARIO_DIR
+        or not _SCENARIO_NAME.fullmatch(parts[-1])
+        or any(
+            not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", part) for part in parts[1:]
+        )
+    ):
+        raise QuestionnaireError(
+            "scenario: expected scenarios/<name>.yaml, got " + json.dumps(value)
+        )
+    return value
+
+
 class _UniqueLoader(yaml.SafeLoader):
     pass
 
@@ -86,10 +121,8 @@ def build_questionnaire(config: Mapping[str, Any], raw: bytes) -> dict[str, Any]
     Raises:
         QuestionnaireError: If configuration or required source values are invalid.
     """
-    _keys(config, {"project", "output_name", "fields", "gaps"}, "config")
-    project = config["project"]
-    if not isinstance(project, str) or project not in SCENARIOS:
-        raise QuestionnaireError("unsupported project")
+    _keys(config, {"scenario", "output_name", "fields", "gaps"}, "config")
+    scenario = scenario_path(config["scenario"])
     name = _text(config["output_name"], "output_name")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         raise QuestionnaireError("output_name must be a simple file stem")
@@ -158,7 +191,7 @@ def build_questionnaire(config: Mapping[str, Any], raw: bytes) -> dict[str, Any]
                     "value": value,
                     "unit": item["unit"],
                     "source_kind": "model_assumption",
-                    "source_model_path": SCENARIOS[project],
+                    "source_model_path": scenario,
                     "source_sha256": digest,
                     "source_field_path": path,
                 }
@@ -178,11 +211,11 @@ def build_questionnaire(config: Mapping[str, Any], raw: bytes) -> dict[str, Any]
     if paths != SUPPORTED_PATHS:
         raise QuestionnaireError("all supported source paths must be configured")
     return {
-        "schema_version": "1",
-        "project": project,
+        "schema_version": "2",
+        "scenario": scenario,
         "notice": "Public model references are assumptions, not confirmed transaction terms. This outbound questionnaire is not a validated F5-02 evidence return. Completed answers require separately scoped private ingress and acceptance under F5-02 controls; this generator does not import answers or authenticate terms.",
         "source": {
-            "path": SCENARIOS[project],
+            "path": scenario,
             "sha256": digest,
             "raw_yaml_base64": base64.b64encode(raw).decode("ascii"),
         },
@@ -197,7 +230,7 @@ def export_questionnaire(
 
     Args:
         config: Strict export configuration.
-        root: Repository root supplying the two public scenarios and outputs directory.
+        root: Repository root holding the configured scenario and the outputs directory.
 
     Returns:
         Relative output paths and source hash for a concise receipt.
@@ -210,10 +243,19 @@ def export_questionnaire(
         from openpyxl.worksheet.worksheet import Worksheet
     except ImportError as exc:
         raise QuestionnaireError("openpyxl is required for workbook export") from exc
-    project = config.get("project")
-    if not isinstance(project, str) or project not in SCENARIOS:
-        raise QuestionnaireError("unsupported project")
-    raw = (root / SCENARIOS[project]).read_bytes()
+    scenario = scenario_path(config.get("scenario"))
+    base = (root / SCENARIO_DIR).resolve()
+    source_file = root / scenario
+    # Read only a regular file that resolves inside scenarios/, never through a link.
+    if (
+        source_file.is_symlink()
+        or not source_file.is_file()
+        or not source_file.resolve().is_relative_to(base)
+    ):
+        raise QuestionnaireError(
+            f"scenario not found under {SCENARIO_DIR}/: {scenario}"
+        )
+    raw = source_file.read_bytes()
     data = build_questionnaire(config, raw)
     out = root / "outputs"
     out.mkdir(exist_ok=True)
@@ -279,7 +321,7 @@ def export_questionnaire(
     readme = wb.create_sheet("Read me")
     readme.append(["Status", "Outbound questionnaire; answers are unconfirmed"])
     readme.append(["Notice", data["notice"]])
-    readme.append(["Project", data["project"]])
+    readme.append(["Scenario", data["scenario"]])
     readme.append(["Model source", data["source"]["path"]])
     readme.append(["Source SHA-256", data["source"]["sha256"]])
     created_json = False

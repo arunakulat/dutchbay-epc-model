@@ -670,7 +670,10 @@ def test_cli_switched_on_by_name_requires_the_pdf(
     [
         (None, "Wind"),
         ({"wind_resource": {"weibull_a": 8.0}}, "Wind"),
-        ({}, "Renewable Energy"),
+        # #1844 domain D2: no technologies block is the engine's wind path.
+        ({}, "Wind"),
+        ({"project": {"technology": "wind"}}, "Wind"),
+        ({"project": {"technology": "solar"}}, "Solar"),
         (
             {"generation": {"technologies": {"solar": {"capacity_factor": 0.2}}}},
             "Solar",
@@ -710,3 +713,16 @@ def test_the_wind_reports_keep_their_subtitle(api_case: Any) -> None:
     )
     assert "Utility-Scale Wind — Project-Finance Summary" in html
     assert "{technology}" not in html
+
+
+@pytest.mark.parametrize(
+    "scenario_file",
+    ["dutchbay_basecase_2025Q4.yaml", "dutchbay_lendercase_2025Q4.yaml"],
+)
+def test_the_dutchbay_wind_cases_read_wind(scenario_file: str) -> None:
+    """#1844 domain D2: a committed wind case without a technologies block reads "Wind"."""
+    import yaml
+
+    path = Path(__file__).resolve().parents[2] / "scenarios" / scenario_file
+    scenario = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert technology_subtitle("{technology}", scenario) == "Wind"

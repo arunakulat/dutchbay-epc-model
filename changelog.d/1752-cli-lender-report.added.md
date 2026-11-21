@@ -10,5 +10,7 @@
   pages included), a documentary source note under every table naming the model run and the
   section, numeric columns right-aligned, and the font and print provenance. The report
   subtitle now names the scenario's own technologies (for example "Wind + Battery Storage")
-  instead of always "Wind"; a wind scenario's report, the API report included, reads as before.
+  instead of always "Wind". A scenario that declares no `generation.technologies` runs the
+  engine's single-technology wind path and still reads "Wind" (or its own `project.technology`
+  when declared), so every wind scenario's report, the API report included, keeps its subtitle.
   No KPI moves (#1752).
