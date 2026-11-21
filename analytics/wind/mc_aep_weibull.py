@@ -11,7 +11,7 @@ of years — i.e. the 10th percentile of the distribution (conservative).
 
 Method note: each Monte-Carlo draw is a plausible annual Weibull resource
 ``(A_i, k_i)``; its AEP is computed analytically via the OEM curve
-(:func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`), so the base case is
+(:func:`wind_resource.aep_integral.gross_aep_farm_gwh`), so the base case is
 method-consistent with the headline AEP for whatever curve and scenario it is given,
 and the spread reflects resource uncertainty (not Monte-Carlo sampling noise). The
 committed lender headline is the bankable net P50 **464.3 GWh** (15 x IEA-10MW,
@@ -34,8 +34,8 @@ import numpy as np
 import pandas as pd
 
 from analytics.power_curves.oem_parser import parse_power_curve
-from analytics.wind.aep_tornado import gross_aep_farm_gwh
 from analytics.wind.losses_model import apply_losses
+from wind_resource.aep_integral import gross_aep_farm_gwh
 
 # Exceedance percentile -> distribution percentile (P90 = 10th pct, conservative).
 EXCEEDANCE_TO_PERCENTILE = {"p50": 50.0, "p75": 25.0, "p90": 10.0, "p99": 1.0}

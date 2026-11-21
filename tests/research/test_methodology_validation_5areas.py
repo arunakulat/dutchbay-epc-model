@@ -344,7 +344,9 @@ def test_cip_forward_curve_matches_covered_interest_parity() -> None:
     r_lkr, r_usd = 0.12, 0.06
     spot_0 = 300.0
     config = {
-        "Financing_Terms": {"rates": {"lkr_nominal": r_lkr, "usd_nominal": r_usd}}
+        "Financing_Terms": {"rates": {"lkr_nominal": r_lkr, "usd_nominal": r_usd}},
+        # Required since #1429: no code default for the build time (was 2 periods).
+        "timeline": {"construction_years": 2},
     }
     curve = _forward_curve(config, 5, spot_0)
     ratio = (1.0 + r_lkr) / (1.0 + r_usd)

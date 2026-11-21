@@ -115,14 +115,13 @@ def test_two_financing_terms_keys_that_disagree_are_refused() -> None:
         ({"construction_periods": "1.0"}, 1, 1),
         ({}, 1, 1),
         ({}, 3, 3),
-        ({}, None, 2),
         ({"construction_periods": 4}, None, 4),
     ],
 )
 def test_agreeing_or_single_declarations_resolve(
     financing: dict[str, Any], timeline_years: Any, expected: int
 ) -> None:
-    """Agreeing pairs pass; ``timeline`` alone is used; neither keeps the default 2."""
+    """Agreeing pairs pass; ``timeline`` alone is used (neither: see the next test)."""
     config = _config(financing=financing, timeline_years=timeline_years)
 
     assert _resolve_construction_periods(config) == expected
@@ -130,6 +129,39 @@ def test_agreeing_or_single_declarations_resolve(
     if "construction_periods" not in financing:
         # Extraction fills an absent key with the resolved count, never a default.
         assert _extract_financing_terms(config)["construction_periods"] == expected
+
+
+def test_no_declared_build_time_is_refused() -> None:
+    """Neither the financing section nor ``timeline`` declares a count: refused (#1429).
+
+    Before #1429's second debt step the engine used two periods, the Dutch Bay build
+    time. The refusal names both places the count can be declared.
+    """
+    config = _config(financing={}, timeline_years=None)
+    with pytest.raises(ValueError) as excinfo:
+        _resolve_construction_periods(config)
+    message = str(excinfo.value)
+    assert (
+        "construction_periods (or timeline.construction_years) is required" in message
+    )
+    assert "no code default (#1429)" in message
+    with pytest.raises(ValueError, match="no code default"):
+        apply_debt_layer(config, annual_rows=[])
+
+
+@pytest.mark.parametrize(
+    "value", ["two", True, float("nan"), None], ids=["text", "bool", "nan", "null"]
+)
+def test_a_declared_count_that_is_not_a_number_is_refused(value: Any) -> None:
+    """Before #1429 a non-numeric count became two periods; now it is refused."""
+    config = _config(financing={}, timeline_years=value)
+    if value is None:
+        # A null timeline count is no declaration, so the absence is refused.
+        with pytest.raises(ValueError, match="is required; there is no code default"):
+            _resolve_construction_periods(config)
+        return
+    with pytest.raises(ValueError, match="timeline.construction_years is required"):
+        _resolve_construction_periods(config)
 
 
 @pytest.mark.parametrize("section", ["financing", "debt"])
@@ -225,7 +257,13 @@ def _load(path: Path) -> dict[str, Any] | None:
 
 @pytest.mark.parametrize("path", _committed_scenarios(), ids=lambda p: p.name)
 def test_committed_scenario_count_equals_its_declared_build_time(path: Path) -> None:
-    """No committed scenario runs on a count other than the build time it declares."""
+    """No committed scenario runs on a count other than the build time it declares.
+
+    A committed scenario that declares no build time at all is refused, never given two
+    periods (#1429). Each of those already fails strict pre-flight on main for other
+    reasons; ``test_committed_scenarios_without_a_build_time_are_the_known_set`` pins
+    which they are.
+    """
     config = _load(path)
     if config is None:
         pytest.skip("not a single-document mapping")
@@ -234,10 +272,42 @@ def test_committed_scenario_count_equals_its_declared_build_time(path: Path) -> 
         timeline.get("construction_years") if isinstance(timeline, dict) else None
     )
 
+    if path.name in _NO_BUILD_TIME:
+        with pytest.raises(ValueError, match="no code default"):
+            _resolve_construction_periods(config)
+        return
     count = _resolve_construction_periods(config)
 
     if declared is not None:
         assert count == int(declared)
+
+
+#: Committed scenarios that declare no construction-period count anywhere. None of them
+#: runs through strict pre-flight on main (each fails it for other reasons), so #1429
+#: writes no build time into them rather than another site's figure.
+_NO_BUILD_TIME = {
+    "contracts_edgecase_base_v14.yaml",
+    "dscr_sensitivity_example.yaml",
+    "dutchbay_mc_enhanced_2025Q4.yaml",
+    "dutchbay_sprint17_enhanced.yaml",
+    "kolonnawa_epc_100mw.yaml",
+    "sensitivity_parameters_examples.yaml",
+}
+
+
+def test_committed_scenarios_without_a_build_time_are_the_known_set() -> None:
+    """The scenarios refused for a missing build time are exactly the known set."""
+    refused = set()
+    for path in _committed_scenarios():
+        config = _load(path)
+        if config is None:
+            continue
+        try:
+            _resolve_construction_periods(config)
+        except ValueError as exc:
+            if "no code default" in str(exc):
+                refused.add(path.name)
+    assert refused == _NO_BUILD_TIME
 
 
 def test_superseded_hybrid_runs_on_its_declared_one_year_build() -> None:

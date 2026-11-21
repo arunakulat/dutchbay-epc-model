@@ -70,6 +70,8 @@ BASE_CONFIG: Dict[str, Any] = {
         "annual_depr": 0.0589,
     },
     "capex": {"usd_total": 120_000_000.0},
+    # Required since #1429: no code default for the build time (was 2 periods).
+    "timeline": {"construction_years": 2},
     # CIP forward inputs: mirror the canonical lender-case rate resolution.
     "Financing_Terms": {
         "rates": {
@@ -139,7 +141,9 @@ def test_cip_rates_parity_with_debt_engine_on_every_config_shape() -> None:
         # debt-only shape (rates synthesized from interest_rate by the debt engine)
         {"debt": {"interest_rate": 0.09}},
     ]
-    for cfg in shapes:
+    for shape in shapes:
+        # Required since #1429: no code default for the build time (was 2 periods).
+        cfg = {**shape, "timeline": {"construction_years": 2}}
         terms = _extract_financing_terms(cfg)
         rates = terms.get("rates", {}) if isinstance(terms, dict) else {}
         expected_lkr = _rate_decimal(

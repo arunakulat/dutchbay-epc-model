@@ -706,6 +706,8 @@ def _authored_config(
             "target_dscr": 1.4,
             "interest_rate_pct": 6,
             "term_years": 18,
+            # Required since #1429: no code default for the build time (was 2).
+            "construction_periods": 2,
         },
         # Required since #1429: no code default for the project discount rate.
         "returns": {"project_discount_rate": 0.10},

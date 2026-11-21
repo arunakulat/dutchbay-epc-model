@@ -21,6 +21,7 @@ from finance.debt.helpers import (
     _section_case_insensitive,
 )
 from finance.debt.layer import apply_debt_layer
+from finance.debt.terms import _extract_financing_terms
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
 # log filters and caplog assertions still see these records.
@@ -443,10 +444,15 @@ def _resize_for_amortization(
 
     # Read the gearing where _config_at_debt_ratio writes it: Financing_Terms when the
     # config has that section, else the top level. Before #1429 this read only
-    # Financing_Terms and fell back to 0.70, so a flat config's own gearing was ignored.
+    # Financing_Terms.debt_ratio and fell back to 0.70. Under Financing_Terms the bound
+    # is the gearing the debt layer itself used: the extractor applies the debt_pct /
+    # leverage_pct aliases and their percent scaling, so pre-flight, the layer and this
+    # bisection read one figure (before the #1429 follow-up a gearing declared only
+    # through an alias was refused here after pre-flight had accepted it).
     fin = _section_case_insensitive(config, "Financing_Terms")
     if fin is not None:
-        hi_raw, hi_path = fin.get("debt_ratio"), "Financing_Terms.debt_ratio"
+        hi_raw = _extract_financing_terms(config).get("debt_ratio")
+        hi_path = "Financing_Terms.debt_ratio (or debt_pct / leverage_pct)"
     else:
         hi_raw, hi_path = config.get("debt_ratio"), "debt_ratio"
     lo, hi = 0.0, _required_number(hi_raw, hi_path)

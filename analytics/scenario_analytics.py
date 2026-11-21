@@ -37,7 +37,7 @@ from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.bess_lcos import compute_lcos_suite
-from finance.capex_price_basis import apply_capex_price_basis
+from finance.capex_price_basis import apply_capex_price_basis, automatic_escalation
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
@@ -107,6 +107,11 @@ class BatchScenarioResult:
     #: version + commit for this scenario. ``None`` for a scenario that failed before the
     #: manifest could be built.
     run_manifest: Optional[Dict[str, Any]] = None
+    #: The capex price-basis disclosure (#1578 next-20 item 5), the same block the
+    #: canonical pipeline result carries under ``capex_price_basis``: present only when
+    #: a declared ``capex.price_basis`` escalated a capex amount other than
+    #: ``capex.usd_total`` automatically (finance.capex_price_basis), else ``None``.
+    capex_price_basis: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -279,6 +284,7 @@ class ScenarioAnalytics:
             # #1569: escalate capex from its declared price date to the construction
             # draws, as the canonical pipeline does. No capex.price_basis -> unchanged.
             config = apply_capex_price_basis(config)
+            capex_price_basis = automatic_escalation(config)
 
             # Determine discount rate (scenario, config, global)
             discount_rate = self._effective_discount_rate(config)
@@ -404,6 +410,7 @@ class ScenarioAnalytics:
                 discount_rate=discount_rate,
                 lcos=lcos,
                 run_manifest=run_manifest,
+                capex_price_basis=capex_price_basis,
             )
         except Exception as exc:
             logger.error("Scenario %s failed: %s", name, exc)
@@ -512,6 +519,14 @@ class ScenarioAnalytics:
                     {"scenario": r.name, "manifest": r.run_manifest}
                     for r in results
                     if r.run_manifest is not None
+                ],
+                # The capex price-basis disclosure (#1578 next-20 item 5): one entry per
+                # scenario whose declared capex.price_basis escalated a capex amount
+                # other than capex.usd_total automatically; [] for a batch with none.
+                "capex_price_basis": [
+                    {"scenario": r.name, "disclosure": r.capex_price_basis}
+                    for r in results
+                    if r.capex_price_basis is not None
                 ],
             },
         )

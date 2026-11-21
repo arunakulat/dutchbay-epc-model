@@ -73,6 +73,8 @@ def _base_config() -> Dict[str, Any]:
         "opex": {"usd_per_year": 1_000_000.0},
         "fx": {"start_lkr_per_usd": 300.0},
         "tax": dict(_FULL_TAX),
+        # Required since #1429: no code default for the build time (was 2 periods).
+        "timeline": {"construction_years": 2},
     }
 
 
@@ -248,6 +250,7 @@ def test_construction_periods_move_operating_fx_not_capex_tax_basis() -> None:
     cfg_one["fx"]["annual_depr"] = 0.10
     cfg_one["capex"] = {"usd_total": 1_000_000.0}
     cfg_one["Financing_Terms"] = {"construction_periods": 1}
+    cfg_one.pop("timeline")  # the build time is declared under Financing_Terms here
 
     cfg_three = {
         **cfg_one,

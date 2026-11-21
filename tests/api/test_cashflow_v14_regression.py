@@ -10,6 +10,7 @@ from finance.cashflow_v14 import build_annual_rows
 
 # ✅ FIXED: Use proper percentage notation (> 1.0 for percent, < 1.0 for decimal)
 BASE_CONFIG: dict = {
+    "timeline": {"construction_years": 2},  # required since #1429 (no code default)
     "project": {
         "project_life_years": 5,
         "capacity_mw": 150.0,

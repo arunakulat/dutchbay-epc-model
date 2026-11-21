@@ -393,6 +393,8 @@ class TestRoundTrip:
             },
             "tariff": {"tariff_type": "fixed", "ppa_term_years": 20},
             "opex": {"usd_per_year": 0.0},  # opex zero — we only care about net_kwh
+            # Required since #1429: no code default for the build time (was 2 periods).
+            "timeline": {"construction_years": 2},
         }
         patched = wind_export_to_scenario_patch(
             p75_export, minimal_scenario, adapter_mode="fill_if_absent"

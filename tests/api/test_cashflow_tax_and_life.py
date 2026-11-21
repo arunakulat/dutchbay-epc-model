@@ -34,6 +34,7 @@ from finance import cashflow_v14 as cf_mod  # type: ignore  # noqa: E402
 # ---------------------------------------------------------------------------
 
 BASE_PARAMS = {
+    "timeline": {"construction_years": 2},  # required since #1429 (no code default)
     "project": {
         "capacity_mw": 100.0,
         "capacity_factor": 0.40,

@@ -39,9 +39,12 @@ from analytics.sensitivity.engine import (
 # flat bar would misrepresent interest-rate exposure in a lender tornado. This
 # is tracked as a follow-up (interest-rate override routing).
 #
-# ``Financing_Terms.tenor_years`` is included even though it is flat for the
-# (unlevered) project IRR — that flatness is *correct*; it moves the levered
-# equity IRR, which is the metric a lender stresses tenor against.
+# ``Financing_Terms.tenor_years`` is included because it moves the levered equity
+# IRR, which is the metric a lender stresses tenor against. It is flat for the
+# project IRR on most scenarios, but not on all: on the DutchBay lender case it moves
+# the project IRR, with or without corporate tax, because that IRR is solved on the
+# engine's CFADS. Whether the project IRR should depend on the debt terms there is a
+# finance question, not settled here (#1487 item 2).
 #
 # (config_key, label, low_pct, high_pct)
 _DEFAULT_DRIVERS: tuple[tuple[str, str, float, float], ...] = (

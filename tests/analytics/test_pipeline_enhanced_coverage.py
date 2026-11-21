@@ -290,10 +290,31 @@ def test_debt_fee_rate_guarantee_gated_on_flag() -> None:
     assert math.isclose(_debt_fee_rate(on), 0.01 + 0.03 / 15.0, rel_tol=1e-12)
 
 
-def test_debt_fee_rate_zero_tenor_falls_back_to_default() -> None:
-    """A zero tenor must not divide-by-zero; falls back to 15.0 (line 293 guard)."""
-    cfg = {"Financing_Terms": {"fees": {"upfront_pct": 0.03}, "tenor_years": 0}}
-    assert math.isclose(_debt_fee_rate(cfg), 0.03 / 15.0, rel_tol=1e-12)
+@pytest.mark.parametrize(
+    ("tenor", "message"),
+    [
+        (0, "must be positive"),
+        (None, "Financing_Terms.tenor_years is required"),
+    ],
+    ids=["zero", "absent"],
+)
+def test_debt_fee_rate_refuses_a_tenor_it_cannot_amortise_over(
+    tenor: Any, message: str
+) -> None:
+    """An upfront fee needs a positive declared tenor; before #1429 it used 15 years."""
+    cfg = {"Financing_Terms": {"fees": {"upfront_pct": 0.03}, "tenor_years": tenor}}
+    with pytest.raises(ValueError, match=message):
+        _debt_fee_rate(cfg)
+
+
+def test_debt_fee_rate_amortises_over_term_years_and_needs_no_tenor_without_a_fee() -> (
+    None
+):
+    """``term_years`` is the tenor the debt layer uses; no upfront fee, no tenor read."""
+    cfg = {"Financing_Terms": {"fees": {"upfront_pct": 0.03}, "term_years": 12}}
+    assert math.isclose(_debt_fee_rate(cfg), 0.03 / 12.0, rel_tol=1e-12)
+    no_fee = {"Financing_Terms": {"guarantee_revenue_pct": 0.01}}
+    assert _debt_fee_rate(no_fee) == 0.0
 
 
 # ---------------------------------------------------------------------------

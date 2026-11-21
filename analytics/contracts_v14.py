@@ -1404,6 +1404,9 @@ class MonteCarloResult(ContractMixin):
     project_irr_p10: float | None = None
     project_irr_p50: float | None = None
     project_irr_p90: float | None = None
+    #: Trials whose project IRR is undefined and so are left out of the project IRR
+    #: mean, std and percentiles above (#1746 step 1). None when no IRR was reported.
+    project_irr_excluded_count: int | None = None
     project_npv_mean: float | None = None
     project_npv_p10: float | None = None
     project_npv_p50: float | None = None

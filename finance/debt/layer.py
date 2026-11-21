@@ -55,7 +55,7 @@ def apply_debt_layer(
         drawdown_pct = placeholder_debt_drawdown_pct(construction_periods)
     prefix = _financing_key_prefix(params)
     debt_ratio = _required_number(p.get("debt_ratio"), f"{prefix}debt_ratio")
-    tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
+    tenor = max(0, int(_required_number(p.get("tenor_years"), f"{prefix}tenor_years")))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))
     amort_raw = p.get("amortization_style", _AMORT_DEFAULT_STYLE)
     if amort_raw is not None and not isinstance(amort_raw, str):

@@ -62,23 +62,14 @@ _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 
 #: (repository-relative path, rule, the literal's opening text) -> why it stays.
 ALLOWED: Dict[Tuple[str, str, str], str] = {
-    # Site-named schema versions: renamed by U2 and U4 (#1578 universal ruling). #1725
-    # already renamed the PV + BESS sizing ones.
+    # Site-named schema versions. #1725 renamed the PV + BESS sizing ones, and U4 removed
+    # the FX screening's. U2 gave the wind battery options a generic config schema for the
+    # scenario-driven path; this default stays only for the single-site config it validates.
     (
         "analytics/wind/wind_bess_options.py",
         "site-name",
         "blue_whale_wind_bess_options_v1",
-    ): "U2",
-    (
-        "analytics/finance/blue_whale_fx_tenor_screening.py",
-        "site-name",
-        "blue_whale_fx_tenor_screening_v1",
-    ): "U4, after #1730",
-    (
-        "analytics/finance/blue_whale_fx_tenor_screening.py",
-        "site-path",
-        "scenarios/dutchbay_basecase_2025Q4.yaml",
-    ): "U4, after #1730 (which edits this file)",
+    ): "U2: the single-site config's schema; the scenario path uses a generic one",
     (
         "analytics/grid/curtailment_qsts.py",
         "site-name",
@@ -145,7 +136,7 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "scripts/run_blue_whale_equipment_parity_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_fx_tenor_screening_v14.py": (2, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_met_mast_transfer_v14.py": (14, _BLUE_WHALE_RUNNER),
-    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (4, _BLUE_WHALE_RUNNER),
+    "scripts/run_blue_whale_pv_bess_sizing_v14.py": (3, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_solar_bess_v14.py": (7, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_bess_options_v14.py": (5, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_siting_v14.py": (5, _BLUE_WHALE_RUNNER),
@@ -153,8 +144,8 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "analysis_tools/financing_questionnaire.py": (4, _QUESTIONNAIRE),
     "analytics/wind/blue_whale_equipment_parity.py": (
         17,
-        "single-site adapter kept by #1755 for its byte-identical legacy output; its "
-        "inputs move into the scenario with U2",
+        "single-site adapter kept by #1755 for its byte-identical legacy output; since U2 "
+        "its inputs are also the wind scenario's equipment_cost_parity block",
     ),
     "analytics/grid/synthetic_feeder_placeholder.py": (
         8,

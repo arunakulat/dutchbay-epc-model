@@ -76,7 +76,7 @@ Their 2015-2025 WS50M means are 6.791 and 6.887 m/s, hourly correlation 0.969.
    sector) and their circular-mean direction difference (all-sector -2.4 degrees), the
    direction difference interpolated between sector centres.
 8. **Yield.** Gross AEP is the frequency-weighted sum of the 16 sector Weibull yields at 130 m
-   through `analytics.wind.aep_tornado.gross_aep_farm_gwh`, with #1530's density factor and loss
+   through `wind_resource.aep_integral.gross_aep_farm_gwh` (moved from `analytics.wind.aep_tornado` under #1615), with #1530's density factor and loss
    stack. Cross-checks: the omnidirectional Weibull through #1530's `single_turbine_yield`
    (integrators within 0.0007% of each other) and the hourly time series.
 

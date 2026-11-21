@@ -12,7 +12,8 @@ def _register_debt_schema() -> None:
 
     The ``debt`` logical module previously registered ZERO specs, so strict validation over
     ``['cashflow','debt']`` guarded no debt field at all (audit D11, #579). The debt engine is
-    intentionally default-tolerant — a missing ``tenor_years`` defaults to 15 — and several
+    default-tolerant for most fields (the tenor, gearing, target DSCR and build time are now
+    required at pre-flight by ``resolve_debt_sizing_terms``, #1429) and several
     committed scenarios carry no debt block, so these are validate-WHEN-PRESENT specs
     (``required=False``): a missing value passes untouched, but a *present* malformed value
     (a non-positive tenor, a non-numeric/negative rate, an out-of-[0,1] gearing) now fails loud

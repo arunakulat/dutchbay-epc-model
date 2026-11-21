@@ -13,7 +13,7 @@ SCOPE / WIND-4 (#484): this is the TIMESERIES-INTEGRATION AEP path used by the
 ``era5_retrieval.compute_site_aep``). It is NOT on the lender FINANCE path — the canonical
 bankable headline (net P50 464.3 GWh, frozen into ``scenarios/aep_summary_dutchbay_10mw.json``)
 is produced by the analytic-Weibull integrator
-``analytics.wind.aep_summary_builder → analytics.wind.aep_tornado.gross_aep_farm_gwh``, which
+``wind_resource.aep_summary → wind_resource.aep_integral.gross_aep_farm_gwh``, which
 ``run_v14_pipeline`` consumes. The 2026 deep-research audit (WIND-4) alleged this calculator
 "double-counts wake and mislabels gross"; that was re-verified against the code and is NOT the
 case: ``calculate_gross_aep`` integrates the power curve over the raw wind timeseries to a TRUE
@@ -412,7 +412,7 @@ class EnergyCalculator:
         ``UncertaintyBudget()`` defaults exactly. A declared ``p50_haircut_pct``
         is NOT applied on this diagnostic path — the kernel 0.0 identity is
         hard-pinned pending the #653 policy decision (the bankable
-        ``aep_summary_builder`` path is the one that applies the haircut policy).
+        ``wind_resource.aep_summary`` path is the one that applies the haircut policy).
 
         Args:
             gross_aep_mwh: Gross AEP in MWh/year. If None, calculates it.
