@@ -32,6 +32,7 @@ from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_model import (
     CapitalStructureBlock,
+    LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
     build_report_context,
@@ -360,11 +361,13 @@ def build_report_context_from_case(
     capital_risk: Optional[CapitalRiskReport] = None,
     sections_not_run: Sequence[SectionNotRun] = (),
     capital_structure: Optional[CapitalStructureBlock] = None,
+    lender_sensitivities: Optional[LenderSensitivityBlock] = None,
 ) -> ReportContext:
     """Assemble a render-ready context from already-computed typed inputs.
 
-    ``capital_risk``, ``sections_not_run`` and ``capital_structure`` (#1825 slice i) are
-    supplied only by the batch CLI's lender report (#1752); the API route passes none.
+    ``capital_risk``, ``sections_not_run``, ``capital_structure`` (#1825 slice i) and
+    ``lender_sensitivities`` (#1825 slice ii) are supplied only by the batch CLI's lender
+    report (#1752); the API route passes none.
 
     Every lender report built through this seam carries the F-5 non-reliance notice on its
     cover and beside its sensitivities, and says when its tornado was not computed (#1818).
@@ -391,4 +394,6 @@ def build_report_context_from_case(
         update["sections_not_run"] = list(sections_not_run)
     if capital_structure is not None:
         update["capital_structure"] = capital_structure
+    if lender_sensitivities is not None:
+        update["lender_sensitivities"] = lender_sensitivities
     return context.model_copy(update=update)
