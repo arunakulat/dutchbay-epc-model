@@ -69,9 +69,22 @@ def test_no_phantom_covenant_lockup() -> None:
     and every PERIOD sits at or above it. So the guard is now "one year, year 1, and for
     that reason" rather than "none", which still fails loudly if the phase bug returns.
     The year-1 fold itself is tracked at #1353, issuecomment-6433557550.
+
+    #1779 adds the refinanced balloon tranche to the lock-up. Its three years (15 to 17)
+    lock on the tranche's own coverage, so the case now locks four years; the guard
+    still holds the scheduled test to the year-1 fold alone.
     """
-    kpis = evaluate_with_overrides(LENDER_CONFIG, overrides={})
-    assert kpis["equity_covenant_locked_years"] == 1
+    full = evaluate_with_overrides(LENDER_CONFIG, overrides={}, return_full_result=True)
+    kpis = full["kpis"]
+    # #1779: the lock-up also tests the refinanced balloon tranche, whose coverage is below
+    # the threshold in all three of its years (15 to 17). The scheduled test still locks
+    # only the year-1 fold, so the phase-bug guard reads the scheduled locks alone.
+    rows = full["equity_distribution"]["annual_distributions"]
+    locked = [int(r["year"]) for r in rows if r["covenant_locked"]]
+    tranche = [int(r["year"]) for r in rows if r["refinance_tranche_locked"]]
+    assert locked == [1, 15, 16, 17]
+    assert tranche == [15, 16, 17]
+    assert kpis["equity_covenant_locked_years"] == len(locked)
     # Every PERIOD is still genuinely sculpted to the target; only the year-1 fold is
     # under it, and only by the bridge-service artifact described above.
     assert kpis["min_dscr_period"] == pytest.approx(1.30, abs=0.02)
