@@ -9,9 +9,11 @@ labelled assumption until a term sheet sets it. The model holds two month figure
 - ``min_reserve_months`` in the equity waterfall. It sizes the reserve built from operating
   cash, in every mode. ``equity_summary`` carries its source and basis.
 
-Each source names the key that set the figure, or ``code_default`` when the engine's
-6-month fallback did, including when the winning key is null or not a number. Changing the
-governing key moves both the label and the figure; no figure moves on committed scenarios.
+Each source names the key that set the figure. The waterfall's figure is still labelled
+``code_default`` when its 6-month fallback sets it. The funding months have no code default
+since #1429 (D08): a scenario that declares none, or whose winning key is null or not a
+number, is refused naming the key. Changing the governing key moves both the label and the
+figure; no figure moves on committed scenarios.
 """
 
 from __future__ import annotations
@@ -105,21 +107,8 @@ def test_lender_case_labels_both_month_figures(baseline: Dict[str, Any]) -> None
             3.0,
         ),
         ({"dsra_months": 9}, "Financing_Terms.dsra_months", 9.0),
-        ({"reserves": {}}, "code_default", 6.0),
-        # A present null shadows the rungs below it, and the engine falls back to 6.
-        ({"dsra": {"target_months": None}, "dsra_months": 9}, "code_default", 6.0),
-        ({"dsra_months": None, "reserves": {"dsra_months": 9}}, "code_default", 6.0),
-        # A value that is not a number also falls back, and is labelled so.
-        ({"reserves": {"dsra_months": "six"}}, "code_default", 6.0),
     ],
-    ids=[
-        "dsra-block",
-        "legacy-key",
-        "code-default",
-        "null-target-shadows",
-        "null-legacy-shadows",
-        "non-numeric",
-    ],
+    ids=["dsra-block", "legacy-key"],
 )
 def test_funding_source_is_the_key_that_set_the_months(
     kwargs: Dict[str, Any], source: str, months: float
@@ -128,6 +117,32 @@ def test_funding_source_is_the_key_that_set_the_months(
     assert funding["dsra_target_source"] == source
     assert funding["dsra_target_months"] == pytest.approx(months)
     assert funding["dsra_target_basis"] == _BASIS
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "path"),
+    [
+        # No key declares the months: there is no 6-month code default (#1429, D08).
+        ({"reserves": {}}, "Financing_Terms.reserves.dsra_months"),
+        # A present null shadows the rungs below it and is refused naming that key.
+        (
+            {"dsra": {"target_months": None}, "dsra_months": 9},
+            "Financing_Terms.dsra.target_months",
+        ),
+        (
+            {"dsra_months": None, "reserves": {"dsra_months": 9}},
+            "Financing_Terms.dsra_months",
+        ),
+        # A value that is not a number is refused too.
+        ({"reserves": {"dsra_months": "six"}}, "Financing_Terms.reserves.dsra_months"),
+    ],
+    ids=["absent", "null-target-shadows", "null-legacy-shadows", "non-numeric"],
+)
+def test_funding_months_without_a_number_are_refused_naming_the_key(
+    kwargs: Dict[str, Any], path: str
+) -> None:
+    with pytest.raises(Exception, match=rf"{path.replace('.', '[.]')} is required"):
+        _run(**kwargs)
 
 
 def test_funding_months_move_nothing_while_fund_at_close_is_off(

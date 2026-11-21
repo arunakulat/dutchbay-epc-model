@@ -354,12 +354,12 @@ class MonteCarloEngine:
     (and the same param set/order) to both ``MonteCarloEngine`` instances and the draws line
     up. This is by design, not a defect — the engine does not implicitly couple two runs.
 
-    Toy fallback (MC-9, #473): when a trial's full v14 evaluation raises, the engine appends a
-    deterministic toy-metric stand-in so a smoke run still yields an array; the trial is tagged
-    ``_toy_fallback`` and counted in ``toy_fallback_count``. Set
-    ``monte_carlo.allow_toy_fallback: false`` to fail loud instead — a production run then
-    RAISES on the first failed trial rather than reporting fabricated KPIs. Declared lender
-    and IC modes forbid the fallback even if the config explicitly enables it (#962).
+    Toy fallback (MC-9, #473): off by default (#962). A trial whose full v14 evaluation raises
+    stops the run with the trial's error rather than reporting fabricated KPIs. A smoke config
+    may opt in with ``monte_carlo.allow_toy_fallback: true``; the engine then appends a
+    deterministic toy-metric stand-in so the run still yields an array, tags the trial
+    ``_toy_fallback`` and counts it in ``toy_fallback_count``. Declared lender and IC modes
+    forbid the fallback even if the config explicitly enables it.
     """
 
     def __init__(
@@ -451,10 +451,13 @@ class MonteCarloEngine:
         # never itself trigger fabricated KPIs. The existing policy is a permission ceiling;
         # permissive/undeclared modes retain the engine setting, including explicit false.
         self._run_mode = resolve_run_mode(self._base_config)
+        # Off unless the config opts in (#962, owner decision 2026-11-21): a failed trial
+        # stops the run rather than being replaced by a fabricated toy metric. Smoke configs
+        # that exercise the toy path declare ``allow_toy_fallback: true``.
         self._allow_toy_fallback: bool = (
-            bool(_mc_cfg.get("allow_toy_fallback", True))
+            bool(_mc_cfg.get("allow_toy_fallback", False))
             if isinstance(_mc_cfg, Mapping)
-            else True
+            else False
         )
         if self._run_mode is not None:
             self._allow_toy_fallback = (
