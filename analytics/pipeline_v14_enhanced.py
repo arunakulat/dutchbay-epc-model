@@ -1105,6 +1105,12 @@ def _update_kpis_with_equity_distribution(
             "source": "equity_distribution_v14_hydra",
             "status": status,
             "equity_investment_source": summary_raw.get("equity_investment_source"),
+            # #1688: the #1456 ranking flag rides here for surfaces that hold only the
+            # ScenarioResult (the CASPER payload). Metadata only: it stays out of kpis.
+            "equity_irr_ranks_reliably": summary_raw.get("equity_irr_ranks_reliably"),
+            "equity_cashflow_sign_changes": summary_raw.get(
+                "equity_cashflow_sign_changes"
+            ),
         },
     )
 
