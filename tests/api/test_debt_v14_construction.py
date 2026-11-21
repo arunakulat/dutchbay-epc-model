@@ -24,8 +24,10 @@ from finance.debt_v14 import plan_debt
 def _make_simple_financing_config() -> Dict[str, Any]:
     """Minimal financing config for construction debt testing."""
     return {
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
         "Financing_Terms": {
             "construction_periods": 2,
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
             "construction_schedule": [50.0, 50.0],
             "debt_drawdown_pct": [0.5, 0.5],
             "grace_years": 0,
