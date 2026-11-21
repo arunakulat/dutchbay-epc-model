@@ -1,0 +1,289 @@
+{
+  "attribution_pp": {
+    "frozen_to_live_synthetic_row": 0.91,
+    "layout_under_site_rose": 11.14,
+    "layout_under_uniform_rose": 9.62,
+    "site_rose_on_recorded_layout": 1.95,
+    "site_rose_on_synthetic_row": 0.43,
+    "total_frozen_to_live_recorded": 12.05
+  },
+  "bankable_sensitivity": {
+    "basis_wake_pct": 7.32,
+    "live_wake_pct": 19.44,
+    "net_energy_factor": 0.869278,
+    "note": "Relative change only: gross energy, the non-wake losses and the uncertainty budget are unchanged, so every exceedance level moves by the same factor. A sensitivity, not a lender figure.",
+    "relative_change_pct": {
+      "p50_gwh": -13.07,
+      "p90_1yr_gwh": -13.07,
+      "p90_life_gwh": -13.07
+    }
+  },
+  "basis_wake_14_pct": 7.32,
+  "deficit_model_sweep": [
+    {
+      "all_turbines_pct": 19.33,
+      "counted_t2_waking_pct": 19.44,
+      "deficit_model": "bastankhah",
+      "model_name": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)"
+    },
+    {
+      "all_turbines_pct": 23.75,
+      "counted_t2_waking_pct": 23.87,
+      "deficit_model": "turbopark",
+      "model_name": "TurboGaussian (TurbOPark)"
+    }
+  ],
+  "frozen_wake_15_pct": 7.28,
+  "inputs_sha256": {
+    "conf/dutchbay_wake_14_turbines.yaml": "42c8ede699094d6b559f61eafacd2d6db71eddfeee71a3e9a7d493a5b1a06eaa",
+    "conf/dutchbay_wake_gap_1589.yaml": "7d73b19b287c624e4b4e79cd2a1449819f0def2769bac37dec3aecb5760411af"
+  },
+  "label": "Investigation and disclosed sensitivity only (#1589). The lender basis is the re-baselined wake loss of the wake_rebaseline config, and is not changed here. Live figures use the configured turbine curves (iea_reference_10mw) and the configured wind resource, not measured site wind or turbulence data.",
+  "layout_by_rose_all_turbines": {
+    "recorded_layout_site_rose": {
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 19.33
+    },
+    "recorded_layout_uniform_rose": {
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 17.39
+    },
+    "synthetic_row_site_rose": {
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 8.19
+    },
+    "synthetic_row_uniform_rose": {
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 7.76
+    }
+  },
+  "live": {
+    "recorded_layout_all_turbines_pct": 19.33,
+    "recorded_layout_counted_t2_waking_pct": 19.44,
+    "synthetic_row_all_turbines_pct": 8.19,
+    "synthetic_row_counted_t2_waking_pct": 8.15
+  },
+  "per_turbine_live_pct": {
+    "T1": 12.9,
+    "T10": 24.2,
+    "T11": 22.05,
+    "T12": 16.03,
+    "T13": 12.36,
+    "T14": 12.04,
+    "T15": 3.64,
+    "T3": 19.92,
+    "T4": 28.43,
+    "T5": 25.41,
+    "T6": 31.31,
+    "T7": 21.86,
+    "T8": 25.51,
+    "T9": 16.45
+  },
+  "per_turbine_live_range": {
+    "highest": {
+      "id": "T6",
+      "pct": 31.31
+    },
+    "lowest": {
+      "id": "T15",
+      "pct": 3.64
+    }
+  },
+  "rotor_diameter_sweep": [
+    {
+      "all_turbines_pct": 9.79,
+      "counted_nearest_neighbour_min_rotor_diameters": 3.76,
+      "counted_t2_waking_pct": 9.78,
+      "rotor_diameter_m": 120.0
+    },
+    {
+      "all_turbines_pct": 12.22,
+      "counted_nearest_neighbour_min_rotor_diameters": 3.22,
+      "counted_t2_waking_pct": 12.23,
+      "rotor_diameter_m": 140.0
+    },
+    {
+      "all_turbines_pct": 14.68,
+      "counted_nearest_neighbour_min_rotor_diameters": 2.82,
+      "counted_t2_waking_pct": 14.71,
+      "rotor_diameter_m": 160.0
+    },
+    {
+      "all_turbines_pct": 17.14,
+      "counted_nearest_neighbour_min_rotor_diameters": 2.51,
+      "counted_t2_waking_pct": 17.21,
+      "rotor_diameter_m": 180.0
+    },
+    {
+      "all_turbines_pct": 19.33,
+      "counted_nearest_neighbour_min_rotor_diameters": 2.28,
+      "counted_t2_waking_pct": 19.44,
+      "rotor_diameter_m": 198.0
+    }
+  ],
+  "spacing": {
+    "counted_nearest_neighbour_rotor_diameters_max": 3.14,
+    "counted_nearest_neighbour_rotor_diameters_min": 2.28,
+    "rotor_diameter_m": 198.0,
+    "synthetic_row_spacing_rotor_diameters": 3.28,
+    "turbines": [
+      {
+        "bearing_deg": 200.7,
+        "distance_m": 621.1,
+        "distance_rotor_diameters": 3.14,
+        "id": "T1",
+        "nearest_id": "T2",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 202.3,
+        "distance_m": 526.2,
+        "distance_rotor_diameters": 2.66,
+        "id": "T2",
+        "nearest_id": "T3",
+        "role": "external_waker"
+      },
+      {
+        "bearing_deg": 22.3,
+        "distance_m": 526.2,
+        "distance_rotor_diameters": 2.66,
+        "id": "T3",
+        "nearest_id": "T2",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 142.4,
+        "distance_m": 460.5,
+        "distance_rotor_diameters": 2.33,
+        "id": "T4",
+        "nearest_id": "T6",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 203.2,
+        "distance_m": 461.8,
+        "distance_rotor_diameters": 2.33,
+        "id": "T5",
+        "nearest_id": "T7",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 168.4,
+        "distance_m": 451.1,
+        "distance_rotor_diameters": 2.28,
+        "id": "T6",
+        "nearest_id": "T8",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 23.2,
+        "distance_m": 461.8,
+        "distance_rotor_diameters": 2.33,
+        "id": "T7",
+        "nearest_id": "T5",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 348.4,
+        "distance_m": 451.1,
+        "distance_rotor_diameters": 2.28,
+        "id": "T8",
+        "nearest_id": "T6",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 123.1,
+        "distance_m": 455.5,
+        "distance_rotor_diameters": 2.3,
+        "id": "T9",
+        "nearest_id": "T11",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 247.7,
+        "distance_m": 465.4,
+        "distance_rotor_diameters": 2.35,
+        "id": "T10",
+        "nearest_id": "T11",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 303.1,
+        "distance_m": 455.5,
+        "distance_rotor_diameters": 2.3,
+        "id": "T11",
+        "nearest_id": "T9",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 189.9,
+        "distance_m": 495.1,
+        "distance_rotor_diameters": 2.5,
+        "id": "T12",
+        "nearest_id": "T13",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 9.9,
+        "distance_m": 495.1,
+        "distance_rotor_diameters": 2.5,
+        "id": "T13",
+        "nearest_id": "T12",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 244.9,
+        "distance_m": 559.3,
+        "distance_rotor_diameters": 2.82,
+        "id": "T14",
+        "nearest_id": "T15",
+        "role": "counted"
+      },
+      {
+        "bearing_deg": 64.9,
+        "distance_m": 559.3,
+        "distance_rotor_diameters": 2.82,
+        "id": "T15",
+        "nearest_id": "T14",
+        "role": "counted"
+      }
+    ]
+  },
+  "turbulence_intensity_sweep": [
+    {
+      "all_turbines_pct": 22.23,
+      "counted_t2_waking_pct": 22.43,
+      "k_star": 0.0268,
+      "turbulence_intensity": 0.06
+    },
+    {
+      "all_turbines_pct": 20.67,
+      "counted_t2_waking_pct": 20.81,
+      "k_star": 0.0344,
+      "turbulence_intensity": 0.08
+    },
+    {
+      "all_turbines_pct": 19.33,
+      "counted_t2_waking_pct": 19.44,
+      "k_star": 0.042,
+      "turbulence_intensity": 0.1
+    },
+    {
+      "all_turbines_pct": 18.16,
+      "counted_t2_waking_pct": 18.23,
+      "k_star": 0.0496,
+      "turbulence_intensity": 0.12
+    },
+    {
+      "all_turbines_pct": 17.12,
+      "counted_t2_waking_pct": 17.17,
+      "k_star": 0.0572,
+      "turbulence_intensity": 0.14
+    }
+  ],
+  "work_item": "#1589"
+}

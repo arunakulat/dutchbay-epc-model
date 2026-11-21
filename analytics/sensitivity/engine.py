@@ -62,80 +62,224 @@ def _resolves_in_config(cfg: Mapping[str, Any], dotted_key: str) -> bool:
 #: The project capacity factor, which a per-technology scenario must keep in step with its
 #: technologies' own capacity factors.
 _PROJECT_CAPACITY_FACTOR = "project.capacity_factor"
+_CAPEX_USD_TOTAL = "capex.usd_total"
 
 
 def _number(value: Any) -> TypeGuard[float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def coherent_overrides(
-    base_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
-) -> Dict[str, Any]:
-    """Return ``overrides`` plus the per-technology shocks that keep the scenario coherent.
+def coupled_technology_capacity_factors(
+    base_cfg: Mapping[str, Any],
+) -> Dict[str, float]:
+    """The per-technology capacity factors the year-1 capacity reconciliation counts.
 
-    A scenario that declares ``generation.technologies`` models its output per technology,
-    and the pipeline requires the technologies' capacity-weighted capacity factor to
-    reconcile with ``project.capacity_mw * project.capacity_factor`` within 1%
-    (``finance/cashflow_v14_production.py``). A shock on the project capacity factor alone
-    fails that check, so a scenario with that block got no tornado at all. Here a shock on
-    ``project.capacity_factor`` also scales the ``capacity_factor`` of every technology the
-    reconciliation counts (a non-storage block with both ``capacity_mw`` and
-    ``capacity_factor``) by the same ratio (#1787). The capacity-weighted sum then moves
-    exactly with the project figure, and the reconciliation holds at every shocked point.
-
-    Any other override, and a scenario with no such technology (none declared, or storage
-    only), pass unchanged.
-
-    Raises:
-        ValueError: The base project capacity factor is missing or not positive while a
-            technology must be scaled, a technology name holds a ".", or the overrides
-            already set a technology's capacity factor.
+    One helper for every caller that shocks ``project.capacity_factor`` (#1817): the
+    tornado and global SA (:func:`coherent_overrides`) and the Monte Carlo engine. It
+    counts exactly what ``finance.cashflow_v14_production.resolve_tech_generation_specs``
+    counts: a block that is not a storage type and declares both ``capacity_mw`` and
+    ``capacity_factor``, its capacity factor read with ``float`` (so a numeric string
+    counts, as it does there). A value ``float`` cannot read is left out here; the
+    pipeline refuses that scenario on its own.
     """
-    out = dict(overrides)
-    if _PROJECT_CAPACITY_FACTOR not in overrides:
-        return out
     generation = base_cfg.get("generation")
     techs = generation.get("technologies") if isinstance(generation, Mapping) else None
     if not isinstance(techs, Mapping):
-        return out
-    # The reconciliation's own storage test (finance/cashflow_v14_production.py), imported
-    # here rather than at module scope: the evaluation gateway is this module's only
-    # module-level route into the engine (tests/lint/test_no_direct_finance_pipeline_imports.py).
+        return {}
+    # The reconciliation's own storage test, imported here rather than at module scope:
+    # the evaluation gateway is this module's only module-level route into the engine
+    # (tests/lint/test_no_direct_finance_pipeline_imports.py).
     from finance.tech_types import is_storage_type
 
-    counted = {
-        str(name): float(block["capacity_factor"])
-        for name, block in techs.items()
-        if isinstance(block, Mapping)
-        and not is_storage_type(block.get("type"))
-        and _number(block.get("capacity_mw"))
-        and _number(block.get("capacity_factor"))
-    }
-    if not counted:
-        return out
-    project = base_cfg.get("project")
-    raw_base = project.get("capacity_factor") if isinstance(project, Mapping) else None
-    base = float(raw_base) if _number(raw_base) else 0.0
-    if base <= 0.0:
-        raise ValueError(
-            "a project.capacity_factor shock on a scenario with generation.technologies "
-            f"needs a positive base project.capacity_factor, not {raw_base!r}"
-        )
-    ratio = float(overrides[_PROJECT_CAPACITY_FACTOR]) / base
-    for name, tech_cf in counted.items():
-        if "." in name:
+    counted: Dict[str, float] = {}
+    for name, block in techs.items():
+        if not isinstance(block, Mapping) or is_storage_type(block.get("type")):
+            continue
+        cap, cf = block.get("capacity_mw"), block.get("capacity_factor")
+        if cap is None or cf is None:
+            continue
+        try:
+            float(cap)
+            counted[str(name)] = float(cf)
+        except (TypeError, ValueError):
+            continue
+    return counted
+
+
+def declared_breakdown_reconciliation(cfg: Mapping[str, Any]) -> Dict[str, str]:
+    """Read and validate each ``monte_carlo.parameters`` entry's ``reconcile_breakdown``.
+
+    On a ``capex.derive_from_breakdown`` scenario the trial path cross-checks
+    ``capex.usd_total`` against the sum of ``capex.breakdown`` and refuses a >0.5%
+    mismatch, so a plain ``capex.usd_total`` shock fails. Declaring
+    ``reconcile_breakdown: pro_rata`` on that parameter scales every numeric breakdown line
+    by the same factor as the shocked total: a uniform overrun or underrun across the line
+    items (#1762). The Monte Carlo engine, the tornado and the global SA all read the one
+    declaration (#1817). It is explicit (CCCDIR): nothing is reconciled unless the scenario
+    asks, and the key is refused anywhere it would not mean exactly that.
+
+    Returns:
+        ``{parameter name: mode}`` for each declaring parameter (only
+        ``{"capex.usd_total": "pro_rata"}`` is valid).
+
+    Raises:
+        ValueError: An unknown mode, a parameter other than ``capex.usd_total``, a scenario
+            without ``capex.derive_from_breakdown`` and a ``capex.breakdown`` mapping, a QRA
+            contingency, or a breakdown that does not sum to a positive total.
+    """
+    mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
+    params = (mc.get("parameters", []) or mc.get("params", [])) if mc else []
+    out: Dict[str, str] = {}
+    for idx, p in enumerate(params if isinstance(params, list) else []):
+        if not isinstance(p, Mapping) or "reconcile_breakdown" not in p:
+            continue
+        name = str(p.get("name"))
+        mode = str(p["reconcile_breakdown"]).strip().lower()
+        where = f"monte_carlo.parameters[{idx}].name {name!r}"
+        if mode != "pro_rata":
             raise ValueError(
-                f"generation.technologies[{name!r}]: a technology name with a '.' cannot "
-                "be shocked by a dotted override"
+                f"{where}: reconcile_breakdown must be 'pro_rata', got "
+                f"{p['reconcile_breakdown']!r}."
             )
-        key = f"generation.technologies.{name}.capacity_factor"
-        if key in overrides:
+        if name != "capex.usd_total":
             raise ValueError(
-                f"{key} is overridden directly and through {_PROJECT_CAPACITY_FACTOR}; "
-                "shock one of them"
+                f"{where}: reconcile_breakdown applies to capex.usd_total only."
             )
-        out[key] = tech_cf * ratio
+        capex = cfg.get("capex")
+        breakdown = capex.get("breakdown") if isinstance(capex, Mapping) else None
+        if not (
+            isinstance(capex, Mapping)
+            and capex.get("derive_from_breakdown")
+            and isinstance(breakdown, Mapping)
+        ):
+            raise ValueError(
+                f"{where}: reconcile_breakdown needs capex.derive_from_breakdown and "
+                "a capex.breakdown mapping in the scenario."
+            )
+        from analytics.cost.contingency import contingency_is_qra
+
+        if contingency_is_qra(capex):
+            raise ValueError(
+                f"{where}: reconcile_breakdown is not defined for a QRA contingency "
+                "(the QRA recomputes the total and ignores capex.usd_total)."
+            )
+        if not sum(_breakdown_lines(breakdown).values()) > 0.0:
+            raise ValueError(
+                f"{where}: capex.breakdown must sum to a positive total to be "
+                "scaled pro rata."
+            )
+        out[name] = mode
     return out
+
+
+def _breakdown_lines(breakdown: Mapping[str, Any]) -> Dict[str, float]:
+    return {str(k): float(v) for k, v in breakdown.items() if _number(v)}
+
+
+def pro_rata_breakdown(base_cfg: Mapping[str, Any], total: float) -> Dict[str, float]:
+    """Every numeric ``capex.breakdown`` line scaled so the lines sum to ``total``.
+
+    The scaling of a declared ``reconcile_breakdown: pro_rata`` (#1762), shared by the
+    Monte Carlo engine, the tornado and the global SA (#1817). The caller has validated
+    the declaration with :func:`declared_breakdown_reconciliation`.
+    """
+    lines = _breakdown_lines(base_cfg["capex"]["breakdown"])
+    factor = float(total) / sum(lines.values())
+    return {name: value * factor for name, value in lines.items()}
+
+
+def coherent_overrides(
+    base_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Return ``overrides`` plus the shocks that keep the scenario coherent.
+
+    Two couplings, each following the scenario's own inputs:
+
+    - **Per-technology capacity factors (#1787).** A scenario that declares
+      ``generation.technologies`` models its output per technology, and the pipeline
+      requires the technologies' capacity-weighted capacity factor to reconcile with
+      ``project.capacity_mw * project.capacity_factor`` within 1%
+      (``finance/cashflow_v14_production.py``). A shock on ``project.capacity_factor``
+      also scales the capacity factor of every technology the reconciliation counts
+      (:func:`coupled_technology_capacity_factors`) by the same ratio, so the check holds
+      at every shocked point.
+    - **A declared CAPEX breakdown reconciliation (#1817).** When the scenario's
+      ``monte_carlo.parameters`` declare ``reconcile_breakdown: pro_rata`` on
+      ``capex.usd_total``, a shock on ``capex.usd_total`` also scales every numeric
+      ``capex.breakdown`` line pro rata (:func:`pro_rata_breakdown`), as the Monte Carlo
+      engine does. Without the declaration the shock passes unchanged, and the trial
+      path refuses it as before.
+
+    Any other override, and a scenario with neither coupling, pass unchanged.
+
+    Raises:
+        ValueError: The base project capacity factor is missing or not positive while a
+            technology must be scaled; a technology or breakdown line name holds a ".";
+            the overrides already set a value the coupling would set; or the
+            ``reconcile_breakdown`` declaration is invalid.
+    """
+    out = dict(overrides)
+    if _PROJECT_CAPACITY_FACTOR in overrides:
+        counted = coupled_technology_capacity_factors(base_cfg)
+        if counted:
+            project = base_cfg.get("project")
+            raw_base = (
+                project.get("capacity_factor") if isinstance(project, Mapping) else None
+            )
+            try:
+                base = float(raw_base) if raw_base is not None else 0.0
+            except (TypeError, ValueError):
+                base = 0.0
+            if not base > 0.0:
+                raise ValueError(
+                    "a project.capacity_factor shock on a scenario with "
+                    "generation.technologies needs a positive base "
+                    f"project.capacity_factor, not {raw_base!r}"
+                )
+            ratio = float(overrides[_PROJECT_CAPACITY_FACTOR]) / base
+            for name, tech_cf in counted.items():
+                _set_coupled(
+                    out,
+                    overrides,
+                    name,
+                    f"generation.technologies.{name}.capacity_factor",
+                    tech_cf * ratio,
+                    what="a technology",
+                )
+    if _CAPEX_USD_TOTAL in overrides and _CAPEX_USD_TOTAL in (
+        declared_breakdown_reconciliation(base_cfg)
+    ):
+        lines = pro_rata_breakdown(base_cfg, float(overrides[_CAPEX_USD_TOTAL]))
+        for name, value in lines.items():
+            _set_coupled(
+                out,
+                overrides,
+                name,
+                f"capex.breakdown.{name}",
+                value,
+                what="a capex.breakdown line",
+            )
+    return out
+
+
+def _set_coupled(
+    out: Dict[str, Any],
+    overrides: Mapping[str, Any],
+    name: str,
+    key: str,
+    value: float,
+    *,
+    what: str,
+) -> None:
+    if "." in name:
+        raise ValueError(
+            f"{key}: {what} name with a '.' cannot be shocked by a dotted override"
+        )
+    if key in overrides:
+        raise ValueError(
+            f"{key} is overridden directly and through a coupled shock; shock one of them"
+        )
+    out[key] = value
 
 
 @dataclass(frozen=True)
@@ -256,8 +400,11 @@ def _flag_undefined_metric(
     for tornado, labels in zip(suite.tornado_results, undefined_cases, strict=True):
         if labels:
             tornado.metadata["undefined_cases"] = list(labels)
+    # A bar that was not computed (#1817) is disclosed as such, not as undefined.
     undefined_drivers = [
-        t.metric_name for t in suite.tornado_results if not math.isfinite(t.impact_abs)
+        t.metric_name
+        for t in suite.tornado_results
+        if not math.isfinite(t.impact_abs) and "not_computed" not in t.metadata
     ]
     suite.metadata["undefined_base"] = undefined_base
     suite.metadata["undefined_points"] = n_undefined
@@ -473,7 +620,16 @@ def run_sensitivity_analysis(
     primary_metric = metric_keys[0] if metric_keys else "project_irr"
     base_value = _read_sweep_metric(base_kpis, primary_metric, case="the base case")
     undefined_cases: List[List[str]] = []
+    not_computed_drivers: Dict[str, str] = {}
     n_evaluations = 1
+    # The refusals a single driver may raise (#1817), imported here because the
+    # evaluation gateway is this module's only module-level route into the pipeline.
+    from analytics.pipeline_v14_enhanced import (
+        PipelineConfigError,
+        PipelineValidationError,
+    )
+
+    refusals = (PipelineValidationError, PipelineConfigError, ValueError)
 
     for p in parameters:
         # Reject parameters that don't resolve to a real config path (else a silent flat
@@ -488,29 +644,48 @@ def run_sensitivity_analysis(
             logger.warning(message)
         cases: List[Dict[str, Any]] = []
         undefined_labels: List[str] = []
-        for label, contract_overrides in iter_param_cases_from_contract(p):
-            overrides = coherent_overrides(base_cfg, contract_overrides)
-            out = evaluate_with_overrides(
-                config_path=None,
-                raw_config=base_cfg,
-                overrides=overrides,
-            )
-            kpis = _coerce_kpis(out)
-            val = _read_sweep_metric(
-                kpis, primary_metric, case=_describe_case(label, overrides)
-            )
-            n_evaluations += 1
-            if math.isnan(val):
-                undefined_labels.append(label)
+        not_computed: str | None = None
+        planned = list(iter_param_cases_from_contract(p))
+        try:
+            for label, contract_overrides in planned:
+                overrides = coherent_overrides(base_cfg, contract_overrides)
+                out = evaluate_with_overrides(
+                    config_path=None,
+                    raw_config=base_cfg,
+                    overrides=overrides,
+                )
+                kpis = _coerce_kpis(out)
+                val = _read_sweep_metric(
+                    kpis, primary_metric, case=_describe_case(label, overrides)
+                )
+                n_evaluations += 1
+                if math.isnan(val):
+                    undefined_labels.append(label)
 
-            record: Dict[str, Any] = {
-                "label": label,
-                "overrides": dict(overrides),
-                "value": val,
-            }
-            if run_cfg.attach_trial_metadata:
-                record["metadata"] = {"kpis": dict(kpis)}
-            cases.append(record)
+                record: Dict[str, Any] = {
+                    "label": label,
+                    "overrides": dict(overrides),
+                    "value": val,
+                }
+                if run_cfg.attach_trial_metadata:
+                    record["metadata"] = {"kpis": dict(kpis)}
+                cases.append(record)
+        except refusals as exc:
+            # #1817: a driver the trial path refuses (e.g. a CAPEX shock on a breakdown
+            # scenario with no reconcile_breakdown declaration) is reported "not
+            # computed" with its reason, and the other bars still render. Every point
+            # of the bar is left undefined, never a partial or zero swing. Only a
+            # refusal is caught: a config or pipeline validation error, or a
+            # ValueError from the coupling. Any other exception is a fault and raises.
+            not_computed = f"{type(exc).__name__}: {exc}"
+            logger.warning(
+                "sensitivity driver %r not computed: %s", p.variable_name, not_computed
+            )
+            cases = [
+                {"label": label, "overrides": dict(ov), "value": math.nan}
+                for label, ov in planned
+            ]
+            undefined_labels = []
 
         tornado = engine_to_tornado_result(
             parameter=p,
@@ -518,6 +693,9 @@ def run_sensitivity_analysis(
             base_value=base_value,
             cases=cases,
         )
+        if not_computed is not None:
+            tornado.metadata["not_computed"] = not_computed
+            not_computed_drivers[p.variable_name] = not_computed
         tornado_results.append(tornado)
         undefined_cases.append(undefined_labels)
 
@@ -542,4 +720,5 @@ def run_sensitivity_analysis(
         n_evaluations=n_evaluations,
         strict=run_cfg.strict,
     )
+    suite.metadata["not_computed_drivers"] = dict(not_computed_drivers)
     return _flag_degenerate_metric(suite, primary_metric)
