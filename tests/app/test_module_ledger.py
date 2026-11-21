@@ -831,6 +831,9 @@ def test_json_summary_counts_require_integer_tokens(supplied: object) -> None:
         ("run_full_pipeline_v14", {"frozen": (), "auto_wind": ("wind",)}),
         ("wind_resource.aep_summary", {"frozen": (), "live_wake": ("wind",)}),
         ("app.api.jobs_router", {"memory": ("api",), "redis": ("api", "jobs")}),
+        ("app.api.main", {"base": ("api",), "pdf_report": ("api", "report")}),
+        ("app.reports.renderer", {"html": (), "pdf_report": ("report",)}),
+        ("app.web.routes", {"base": ("api",), "pdf_report": ("api", "report")}),
     ],
 )
 def test_conditional_skips_identify_the_selected_runtime_path(
@@ -881,6 +884,52 @@ def test_conditional_skips_identify_the_selected_runtime_path(
         )
     with pytest.raises(ValidationError, match="missing_extra"):
         record_ledger(missing_extra=role.optional_extras[0])
+
+
+def test_api_pdf_dependency_guard_matches_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "weasyprint", None)
+
+    from fastapi import HTTPException
+
+    from app.api.main import health, run_case_report_pdf
+    from app.models.inputs import WindFarmInputs
+
+    inputs = WindFarmInputs(
+        site_name="Dependency guard test",
+        capacity_mw=148.9,
+        capacity_factor=0.332,
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=20.3,
+        ppa_term_years=20,
+        capex_total_usd=159_600_000.0,
+        opex_annual_usd=5_000_000.0,
+        fx_start_lkr_per_usd=333.79,
+    )
+    assert health()["status"] == "ok"
+    with pytest.raises(HTTPException) as refused_pdf:
+        run_case_report_pdf(inputs)
+    assert refused_pdf.value.status_code == 503
+    assert "[report]" in refused_pdf.value.detail
+
+    registry = load_module_role_registry()
+    role = registry.get("app.api.main")
+    template = _record_from_spec(
+        role,
+        status=ModuleExecutionStatus.SKIPPED_OPTIONAL_EXTRA,
+        reason=refused_pdf.value.detail,
+    ).model_dump()
+    pdf_skip = ModuleExecutionRecord.model_validate(
+        {**template, "dependency_path": "pdf_report", "missing_extra": "report"}
+    )
+    ledger = build_module_execution_ledger("sync_lender", [pdf_skip], registry)
+    assert ledger.records == (pdf_skip,)
+    assert ledger.summary_counts["skipped_optional_extra"] == 1
+
+    base_skip = pdf_skip.model_copy(update={"dependency_path": "base"})
+    with pytest.raises(ValueError, match="Missing extra 'report' is not declared"):
+        build_module_execution_ledger("sync_lender", [base_skip], registry)
 
 
 @pytest.mark.parametrize(

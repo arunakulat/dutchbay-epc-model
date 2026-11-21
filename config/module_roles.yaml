@@ -984,7 +984,12 @@ modules:
     excel_representation: non_model_adapter
     optional_extras:
       - api
-    extra_mode: required
+      - report
+    extra_mode: conditional
+    dependency_paths:
+      - {name: base, required_extras: [api]}
+      - {name: pdf_report, required_extras: [api, report]}
+    notes: The base API includes health and HTML routes. The PDF route also requires WeasyPrint from [report] and returns HTTP 503 if the backend is unavailable.
 
   - module_path: app.api.responses
     pipeline_stage: reporting_delivery
@@ -1122,7 +1127,10 @@ modules:
     excel_representation: non_model_adapter
     optional_extras:
       - report
-    extra_mode: casper_fallback
+    extra_mode: conditional
+    dependency_paths:
+      - {name: html, required_extras: []}
+      - {name: pdf_report, required_extras: [report]}
     notes: HTML rendering uses core Jinja2; PDF rendering requires [report] (weasyprint) and raises ReportDependencyError when absent.
 
   - module_path: app.reports.report_config
@@ -1209,7 +1217,12 @@ modules:
     excel_representation: non_model_adapter
     optional_extras:
       - api
-    extra_mode: required
+      - report
+    extra_mode: conditional
+    dependency_paths:
+      - {name: base, required_extras: [api]}
+      - {name: pdf_report, required_extras: [api, report]}
+    notes: The wizard PDF route delegates to app.api.main.run_case_report_pdf and propagates its HTTP 503 when the [report] backend is unavailable.
 
   - module_path: finance.bess_lcos
     pipeline_stage: tech_hybrid_bess
