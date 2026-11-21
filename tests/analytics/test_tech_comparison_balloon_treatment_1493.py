@@ -5,8 +5,9 @@ treatment. The cross-technology comparison block can still list cases that resol
 differently (a cash-sweep base case beside the refinancing lender case, say), and then their
 equity figures mix the treatment difference into what the table presents as a technology or
 capex difference. Each column now states the treatment and the balloon its run published, and
-the section carries a caveat when the cases that carry a balloon resolve it differently. The
-values are read from each run's published ``debt_result``; no figure is recomputed.
+the section carries a caveat when the treatments that act on the cases differ: those of cases
+that carry a balloon, and ``amortize``, which resizes the debt to leave none. The values are
+read from each run's published ``debt_result``; no figure is recomputed.
 """
 
 from __future__ import annotations
@@ -117,11 +118,18 @@ def test_a_treatment_that_is_not_a_name_is_dropped(bad: Any) -> None:
         ((("refinance", 1e6), ("cash_sweep", 1e6)), True),
         # Same treatment on both.
         ((("refinance", 1e6), ("refinance", 2e6)), False),
-        # A case left with no balloon still counts: the treatment can change the debt
-        # itself (an amortize case is resized to leave none), so equity still differs.
+        # amortize always counts: it resizes the debt to leave no balloon, so its figures
+        # differ from a balloon case's even with none left (#1855 domain review, O-1).
         ((("refinance", 1e6), ("amortize", 0.0)), True),
-        ((("refinance", 1e6), ("cash_sweep", None)), True),
+        # A treatment that acts only on a balloon changes nothing for a case that leaves
+        # none, so that case is like for like whichever it names (#1855 domain review, D-2).
+        ((("refinance", 1e6), ("cash_sweep", 0.0)), False),
+        ((("refinance", 1e6), ("cash_sweep", None)), False),
+        ((("refinance", 0.0), ("cash_sweep", 0.0)), False),
         ((("refinance", 0.0), ("refinance", 0.0)), False),
+        # amortize beside a case with no balloon: neither has a balloon to resolve.
+        ((("amortize", 0.0), ("refinance", 0.0)), False),
+        ((("amortize", 0.0), ("refinance", 1e6), ("cash_sweep", 0.0)), True),
         # An unpublished treatment is not counted as a third one.
         ((("refinance", 1e6), (None, 1e6)), False),
     ],
@@ -164,6 +172,18 @@ def test_the_caveat_fires_for_a_case_its_treatment_left_with_no_balloon() -> Non
     )
     assert ">amortize (no balloon arises)<" in html
     assert _CAVEAT in html
+
+
+def test_no_caveat_beside_a_case_its_treatment_cannot_act_on() -> None:
+    """A balloon case beside a different-treatment case with no balloon is like for like."""
+    html = _render(
+        _block(
+            ("Lender case", _kpis("refinance", 26_560_551.7)),
+            ("Swept, no balloon", _kpis("cash_sweep", 0.0)),
+        )
+    )
+    assert ">cash sweep (no balloon arises)<" in html
+    assert _CAVEAT not in html
 
 
 def test_no_caveat_when_every_balloon_is_resolved_the_same_way() -> None:

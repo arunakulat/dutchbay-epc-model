@@ -849,19 +849,23 @@ class TechComparisonBlock(BaseModel):
 
     @property
     def balloon_treatments_differ(self) -> bool:
-        """True when the compared cases publish more than one balloon treatment (#1493).
+        """True when the treatments that act on the compared cases differ (#1493).
 
         Their figures then mix the treatment difference into what the table presents as a
         technology or capex difference, so the section says so: equity figures most of all,
-        and in some cases project IRR, project NPV and CFADS too. A case that leaves no
-        balloon at maturity still counts: a treatment can change the debt itself (an
-        ``amortize`` case is resized to leave none), so its figures differ even with no
-        balloon left. A case that publishes no treatment is not counted as another one.
+        and in some cases project IRR, project NPV and CFADS too.
+
+        A treatment is counted only where it can act. ``refinance``, ``cash_sweep`` and the
+        like act only on a balloon, so a case that leaves none is like for like whichever of
+        them it names, and is not counted. ``amortize`` is always counted: it resizes the
+        debt to leave no balloon, and a published zero cannot tell a resized case from one
+        that never needed it. A case that publishes no treatment is not counted either.
         """
         treatments = {
             row.balloon_treatment
             for row in self.rows
             if row.balloon_treatment is not None
+            and (row.carries_balloon or row.balloon_treatment == "amortize")
         }
         return len(treatments) > 1
 
