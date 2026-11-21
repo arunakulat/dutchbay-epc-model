@@ -5,4 +5,6 @@
   the reasons the figures differ, and supports no bankable resource claim. One report seam,
   `app/reports/aep_resource_sensitivity.py`, may import the two cluster modules; the boundary
   guard keeps finance, the API, `wind_resource/` and the runners closed. A scenario without the
-  inputs lists the section under "Sections not run". No KPI moves (#1615 step B).
+  inputs lists the section under "Sections not run". A run that bills more than one generating
+  technology (wind and solar) gets no comparison, because its committed basis is not wind-only.
+  No KPI moves (#1615 step B).

@@ -85,6 +85,28 @@ def _committed_basis(
     return p50, p90
 
 
+def _generating_technologies(scenario: Mapping[str, Any]) -> list[str]:
+    """The generating technologies the scenario declares (storage left out).
+
+    The committed P50/P90 cover every generating technology the run bills. When there is
+    more than one, the committed basis is not wind-only, and comparing the wind cluster with
+    it would put the other technologies' energy into the gap.
+    """
+    from finance.tech_types import is_storage_type
+
+    generation = scenario.get("generation")
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if not isinstance(techs, Mapping):
+        return []
+    return sorted(
+        str(name)
+        for name, block in techs.items()
+        if isinstance(block, Mapping)
+        and not is_storage_type(block.get("type"))
+        and not is_storage_type(name)
+    )
+
+
 def _pct_diff(value: float, reference: float) -> float:
     return 100.0 * (value - reference) / reference
 
@@ -198,12 +220,28 @@ def build_aep_resource_sensitivity(
     ]
     pct = mc["percentiles"]
     committed_p50, committed_p90 = _committed_basis(run_result)
+    # The note works from the committed figures as the table prints them (one decimal), so
+    # the table and the note always agree.
+    if committed_p50 is not None:
+        committed_p50 = round(committed_p50, 1)
+    if committed_p90 is not None:
+        committed_p90 = round(committed_p90, 1)
+    generating = _generating_technologies(scenario)
+    mixed_basis = len(generating) > 1
+    if mixed_basis:
+        committed_p50 = committed_p90 = None
     uncertainty = resource.get("uncertainty") or {}
-    haircut_pct = (
-        _float(uncertainty.get("p50_haircut_pct"))
-        if isinstance(uncertainty, Mapping)
-        else None
+    haircut_declared = isinstance(uncertainty, Mapping) and (
+        "p50_haircut_pct" in uncertainty
     )
+    if haircut_declared:
+        haircut_pct = _float(uncertainty.get("p50_haircut_pct"))
+    else:
+        # The same default the frozen AEP summary applies when the scenario is silent
+        # (wind_resource.aep_summary).
+        from wind_resource.bankable_aep import RECOMMENDED_P50_HAIRCUT_PCT
+
+        haircut_pct = float(RECOMMENDED_P50_HAIRCUT_PCT)
 
     notes = [
         (
@@ -214,6 +252,12 @@ def build_aep_resource_sensitivity(
             "timeseries engine that wrote the committed figure."
         )
     ]
+    if mixed_basis:
+        notes.append(
+            "No comparison with the committed basis is made: the run bills more than one "
+            f"generating technology ({', '.join(generating)}), so its committed net P50 and "
+            "P90 are not wind-only. The cluster figures above are wind only."
+        )
     if committed_p50 is not None:
         line = (
             f"Against the net P50 the finance run uses, {committed_p50:,.1f} GWh, the cluster "
@@ -227,6 +271,11 @@ def build_aep_resource_sensitivity(
                 f"committed basis is about {pre:,.1f} GWh, a difference of "
                 f"{_pct_diff(base_gwh, pre):+.1f}%."
             )
+            if not haircut_declared:
+                line += (
+                    " The scenario declares no resource.uncertainty.p50_haircut_pct, so "
+                    "this is the recommended default the frozen AEP summary applies."
+                )
         notes.append(line)
     if committed_p90 is not None:
         notes.append(

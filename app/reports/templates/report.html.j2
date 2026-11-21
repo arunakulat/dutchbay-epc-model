@@ -519,6 +519,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% set aep_committed = aep.committed_p50_gwh is not none or aep.committed_p90_gwh is not none %}
     <h3>AEP Monte Carlo</h3>
     <p class="muted">{{ "{:,}".format(aep.mc_n_samples) }} draws of the Weibull A and k, each
       with a {{ "%g"|format(aep.weibull_uncertainty_pct) }}% one-sigma (seed {{ aep.mc_seed }}).
@@ -528,17 +529,17 @@
         <tr>
           <th>Net AEP</th>
           <th style="text-align:right;">Resource Monte Carlo</th>
-          <th style="text-align:right;">Committed basis</th>
+          {% if aep_committed %}<th style="text-align:right;">Committed basis</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         <tr><td>P50</td><td class="num">{{ fmt_gwh(aep.mc_p50_gwh) }}</td>
-          <td class="num">{{ fmt_gwh(aep.committed_p50_gwh) }}</td></tr>
-        <tr><td>P75</td><td class="num">{{ fmt_gwh(aep.mc_p75_gwh) }}</td><td class="num">&mdash;</td></tr>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p50_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P75</td><td class="num">{{ fmt_gwh(aep.mc_p75_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
         <tr><td>P90</td><td class="num">{{ fmt_gwh(aep.mc_p90_gwh) }}</td>
-          <td class="num">{{ fmt_gwh(aep.committed_p90_gwh) }}</td></tr>
-        <tr><td>P99</td><td class="num">{{ fmt_gwh(aep.mc_p99_gwh) }}</td><td class="num">&mdash;</td></tr>
-        <tr><td>Mean (CV)</td><td class="num">{{ fmt_gwh(aep.mc_mean_gwh) }} ({{ "%.1f"|format(aep.mc_cv * 100) }}%)</td><td class="num">&mdash;</td></tr>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p90_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P99</td><td class="num">{{ fmt_gwh(aep.mc_p99_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+        <tr><td>Mean (CV)</td><td class="num">{{ fmt_gwh(aep.mc_mean_gwh) }} ({{ "%.1f"|format(aep.mc_cv * 100) }}%)</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
       </tbody>
     </table>
     {% if aep.reconciliation %}

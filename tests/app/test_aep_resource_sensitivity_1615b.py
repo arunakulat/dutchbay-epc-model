@@ -318,3 +318,74 @@ def test_the_density_correction_needs_both_densities(
     # note do too.
     assert "air-density correction" not in built.reconciliation[0]
     assert built.mc_p50_gwh != block.mc_p50_gwh
+
+
+# ── domain lane on #1854 at 13f9f23b: F1, F2 and F3 ───────────────────────────
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["dutchbay_hybrid_windsolar_2025Q4.yaml", "dutchbay_hybrid_bess_2025Q4.yaml"],
+)
+def test_a_hybrid_run_is_not_compared_with_its_combined_committed_basis(
+    name: str,
+) -> None:
+    # The committed P50/P90 of a wind+solar run cover both technologies. The wind cluster
+    # must not be set beside them as if the gap were the haircut or the uncertainty model.
+    hybrid = dict(load_scenario_config(str(_REPO_ROOT / "scenarios" / name)))
+    combined = {
+        "yield_reconciliation": {
+            "implied_net_aep_gwh": 506.9,
+            "p90": {"frozen_net_aep_p90_gwh": 443.9},
+        }
+    }
+    built = build_aep_resource_sensitivity(hybrid, combined)
+    assert isinstance(built, AepResourceSensitivityBlock), built
+    assert built.committed_p50_gwh is None and built.committed_p90_gwh is None
+    text = " ".join(built.reconciliation)
+    assert "not wind-only" in text and "solar, wind" in text
+    assert "differs by" not in text and "haircut" not in text
+    assert "506.9" not in text and "443.9" not in text
+    assert "Committed basis" not in _render(built)
+
+
+def test_storage_alone_does_not_make_the_basis_mixed(scenario: Dict[str, Any]) -> None:
+    import copy
+
+    with_battery = copy.deepcopy(scenario)
+    techs = with_battery.setdefault("generation", {}).setdefault("technologies", {})
+    techs["bess_1"] = {"type": "bess", "power_mw": 50.0, "energy_mwh": 200.0}
+    built = build_aep_resource_sensitivity(with_battery, _RUN_RESULT)
+    assert isinstance(built, AepResourceSensitivityBlock)
+    assert built.committed_p50_gwh == 433.0
+
+
+def test_the_note_works_from_the_committed_figure_the_table_prints(
+    scenario: Dict[str, Any],
+) -> None:
+    # The pipeline carries the unrounded implied P50; the table prints it to one decimal,
+    # and the note's arithmetic uses the same printed value.
+    unrounded = {
+        "yield_reconciliation": {
+            "implied_net_aep_gwh": 433.048848,
+            "p90": {"frozen_net_aep_p90_gwh": 377.3},
+        }
+    }
+    built = build_aep_resource_sensitivity(scenario, unrounded)
+    assert isinstance(built, AepResourceSensitivityBlock)
+    assert built.committed_p50_gwh == 433.0
+    assert (
+        "before it the committed basis is about 441.8 GWh, a difference of +0.1%."
+        in built.reconciliation[1]
+    )
+
+
+def test_a_silent_haircut_is_read_as_the_default_the_summary_applies(
+    scenario: Dict[str, Any],
+) -> None:
+    silent = _without(scenario, "resource.uncertainty.p50_haircut_pct")
+    built = build_aep_resource_sensitivity(silent, _RUN_RESULT)
+    assert isinstance(built, AepResourceSensitivityBlock)
+    line = built.reconciliation[1]
+    assert "carries a 5% pre-construction over-prediction haircut" in line
+    assert "recommended default" in line
