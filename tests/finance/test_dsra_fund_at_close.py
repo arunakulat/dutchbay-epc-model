@@ -142,17 +142,17 @@ def test_reserves_nested_dsra_months_is_wired() -> None:
     assert f_override["dsra_target_months"] == pytest.approx(6.0)
 
 
-def test_dsra_months_full_precedence_order_and_fallback() -> None:
-    """#920: pin ALL four rungs of the DSRA-months precedence, pairwise, plus the fallback:
-    ``dsra.target_months -> Financing_Terms.dsra_months -> Financing_Terms.reserves.dsra_months
-    -> 6.0`` (resolved by ``finance.debt_v14._build_funding``).
+def test_dsra_months_full_precedence_order_and_refusal() -> None:
+    """#920: pin ALL three rungs of the DSRA-months precedence, pairwise, plus the refusal:
+    ``dsra.target_months -> Financing_Terms.dsra_months -> Financing_Terms.reserves.dsra_months``
+    (resolved by ``finance.debt_v14._build_funding``), and no rung authored is refused.
 
     Prior coverage pinned rung 1 > rung 3 and each rung individually, but never rung 1 > 2,
-    rung 2 > 3, or the bare 6.0 fallback — so a resolver reshuffle that swapped the legacy
-    ``dsra_months`` key and the canonical ``reserves`` nesting (or dropped the fallback) would
-    have passed. The canonical lender case authors only rung 3 (``reserves.dsra_months: 6``),
-    whose value coincides with the fallback, masking exactly that class of regression.
-    Config-only overrides on test-local copies — canonical economics untouched.
+    rung 2 > 3, or the bare fallback — so a resolver reshuffle that swapped the legacy
+    ``dsra_months`` key and the canonical ``reserves`` nesting would have passed. The 6.0-month
+    fallback is gone since #1429 (D08): a scenario declaring none of the three is refused,
+    naming the canonical key. Config-only overrides on test-local copies — canonical
+    economics untouched.
     """
     # Rung 1 beats rung 2: an explicit dsra.target_months wins over legacy dsra_months.
     _, f = _run(dsra={"fund_at_close": True, "target_months": 3}, dsra_months=9)
@@ -162,11 +162,14 @@ def test_dsra_months_full_precedence_order_and_fallback() -> None:
         dsra={"fund_at_close": True}, dsra_months=9, reserves={"dsra_months": 12}
     )
     assert f["dsra_target_months"] == pytest.approx(9.0)
-    # Rung 4: none of the three keys authored -> the 6.0-month fallback (the market-standard
-    # "next six months of debt service", docs/knowledge_base/05_project_finance_methodology.md
-    # section 1.5).
-    _, f = _run(dsra={"fund_at_close": True}, reserves={})
-    assert f["dsra_target_months"] == pytest.approx(6.0)
+    # Rung 3 alone sets the months, so it is not shadowed by a missing fallback.
+    _, f = _run(dsra={"fund_at_close": True}, reserves={"dsra_months": 12})
+    assert f["dsra_target_months"] == pytest.approx(12.0)
+    # None of the three keys authored: refused, naming the key scenarios author (#1429).
+    with pytest.raises(
+        Exception, match=r"Financing_Terms[.]reserves[.]dsra_months is required"
+    ):
+        _run(dsra={"fund_at_close": True}, reserves={})
 
 
 def test_api_surfaces_funding_block() -> None:

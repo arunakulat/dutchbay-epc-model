@@ -59,20 +59,27 @@ def _equity_irr(cfg, overrides):
     return kpis["equity_irr"]
 
 
-def test_dotted_override_actually_applies(basecase):
-    """A near-tripled corporate tax rate must move equity IRR (pre-fix: no-op).
+def _kpi(cfg, overrides, key):
+    out = evaluate_with_overrides(
+        config_path=None, raw_config=copy.deepcopy(cfg), overrides=overrides
+    )
+    kpis = out.get("kpis", out) if hasattr(out, "get") else out
+    return kpis[key]
 
-    Direction note: the equity IRR FALLS with the tax rate, the conventional direction.
-    It used to rise here, and that reversal was an artifact of the sizing basis rather
-    than of the shields: the debt schedule was sized on CFADS carrying tax computed with
-    no interest deducted, so a higher rate shrank the sized service and flattered equity.
-    #1397 sizes on levered-tax CFADS, and with the shield priced correctly on both sides
-    the extra tax on operating income dominates again. The test's point is unchanged:
-    the dotted override is live, i.e. it materially moves the output."""
-    base = _equity_irr(basecase, {})
-    shocked = _equity_irr(basecase, {"tax.corporate_tax_rate": 0.90})
+
+def test_dotted_override_actually_applies(basecase):
+    """A near-tripled corporate tax rate must move the after-tax returns (pre-fix: no-op).
+
+    #1736: the sentinel is the project IRR, which is after tax and responds to every
+    taxed year. The equity IRR no longer does on this basecase: the only taxed years
+    are locked up, and their cash now pays the unpaid post-maturity balloon rather than
+    equity (``tests/analytics/test_tax_sensitivity.py`` pins that). The test's point is
+    unchanged: the dotted override is live, i.e. it materially moves the output, and
+    more tax costs the project."""
+    base = _kpi(basecase, {}, "project_irr")
+    shocked = _kpi(basecase, {"tax.corporate_tax_rate": 0.90}, "project_irr")
     assert shocked != pytest.approx(base), "dotted override had no effect (regression)"
-    assert shocked < base  # more tax costs equity; see docstring
+    assert shocked < base  # more tax costs the project; see docstring
 
 
 def test_dotted_and_nested_overrides_are_equivalent(basecase):
@@ -96,7 +103,8 @@ def test_one_way_sensitivity_reports_nonzero_impact(basecase):
             points=3,
             label="corporate_tax_rate",
         ),
-        cfg=TaxSensitivityConfig(metric_key="equity_irr"),
+        # #1736: project IRR, not equity IRR; see test_dotted_override_actually_applies.
+        cfg=TaxSensitivityConfig(metric_key="project_irr"),
     )
     tornado = suite.tornado_results[0]
     assert tornado.impact_abs > 0.0, "one-way tax sensitivity still reports zero impact"
