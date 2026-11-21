@@ -852,6 +852,11 @@ modules:
     role_description: Strict immutable hourly battery-dispatch ledger input contracts and physical receipts.
     excel_representation: governance_metadata
 
+  - module_path: analytics.storage_headline
+    pipeline_stage: tech_hybrid_bess
+    role_description: Adds a scenario's declared held wind battery option to capex and O&M before evaluation.
+    excel_representation: formula
+
   - module_path: analytics.storage_sizing
     pipeline_stage: tech_hybrid_bess
     role_description: Validates immutable YAML battery power, energy, and round-trip ratings for finance and dispatch.

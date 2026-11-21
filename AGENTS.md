@@ -136,7 +136,12 @@ overlap judgment or the time the first edit occurred.
   check and no conflict; a skipped advisory job is neither a blocker nor a substitute. Red,
   unreported or conflicted means drive it back to green first. Merging on green is delivery
   authority only: it lifts no `HOLD` and confers no grade, release, audit, lender or Board
-  authority.
+  authority. For an `R2` or `R3` PR, green includes the required check
+  `Independent review (RECRUIT-01)`: an accepting domain record and an accepting assurance
+  record bound to the exact head, neither from a session that wrote a commit on it, and no
+  withheld acceptance at that head, since one veto blocks (#1486; header format, trains and
+  limits in `RECRUIT-01` module 3 §4.1). The check cannot authenticate a declared session, so
+  still verify independence before merging.
 - Do not use `git stash` for cross-branch peeking because the stash namespace is shared
   across worktrees.
 - Stage only files belonging to the task. Commit, push and open PRs when the requested delivery
@@ -153,6 +158,8 @@ overlap judgment or the time the first edit occurred.
   before marking it ready for review, so the full suite runs once. The three bounded low-risk
   classes in `RECRUIT-01` module 1 §3.1 take one lane; everything else keeps the domain and
   assurance pair, and a subject change after review restarts both reviews (module 3 §6).
+  The PR body declares its class on a `Risk class:` line, and each `R2`/`R3` lane record
+  carries the module 3 §4.1 header that the required review-pair check reads.
   `test-suite.yml` defers the shards, the Coverage Gate and Grid Study on a draft, so the
   required `Test Summary` check exists only after the ready run.
 - `TRAIN-01`: the merge coordinator may land two or three reviewed draft pull requests as one
