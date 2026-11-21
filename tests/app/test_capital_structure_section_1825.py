@@ -14,6 +14,7 @@ import pytest
 
 import analytics.capital_structure_optimizer_v14 as cso
 import analytics.optimization_v14 as opt
+import app.reports.capital_structure_section as css
 from app.models.inputs import WindFarmInputs
 from app.reports.capital_structure_section import (
     DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
@@ -286,6 +287,55 @@ def test_every_search_holds_the_scenario_covenants(fakes: _Fakes) -> None:
     ]
 
 
+def test_a_covenant_whose_kpi_is_unpublished_is_held_so_the_search_fails_loud(
+    fakes: _Fakes,
+) -> None:
+    """#1859 assurance M06: a covenant the evaluation does not publish is not dropped."""
+    del fakes.base["llcr"]
+    block = _build(fakes, _scenario(min_llcr_covenant=1.2))
+    assert isinstance(block, CapitalStructureBlock)
+    assert "llcr" in _keys(fakes.calls["mix"]["constraints"])
+    assert "llcr" in block.covenant_keys
+    assert not any(line.startswith("llcr") for line in block.covenants_not_screened)
+
+
+def test_realised_gearing_is_read_against_the_financed_capex(
+    fakes: _Fakes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1859 assurance F2: an escalated capex no longer makes a binding ceiling read as breached."""
+    financed = CAPEX * 1.05
+    monkeypatch.setattr(css, "_financed_capex", lambda _s: financed)
+    fakes.ceiling_binds_to = None
+    real = fakes.evaluate
+
+    def _binding(path: str, overrides: Mapping[str, Any]) -> Mapping[str, Any]:
+        out = dict(real(path, overrides))
+        if "Financing_Terms.debt_ratio" in overrides:
+            # The engine caps debt at the ceiling times the FINANCED capex.
+            out["max_debt_usd"] = (
+                float(overrides["Financing_Terms.debt_ratio"]) * financed
+            )
+        return out
+
+    fakes.evaluate = _binding  # type: ignore[method-assign]
+    block = _build(fakes, _scenario())
+    assert isinstance(block, CapitalStructureBlock)
+    gearing = next(s for s in block.searches if s.kind == "Gearing ceiling")
+    for row in gearing.candidates:
+        ceiling = float(row.label.split("ceiling ", 1)[1].split("%", 1)[0]) / 100
+        realised = float(row.label.split("realised ", 1)[1].split("%", 1)[0]) / 100
+        assert realised == pytest.approx(ceiling, abs=0.0005), row.label
+    assert "financed capex $157.5M" in gearing.searched
+
+
+def test_the_financed_capex_carries_the_price_basis_escalation() -> None:
+    from analytics.scenario_loader import load_scenario_config
+
+    scenario = load_scenario_config("scenarios/blue_whale_wind_lot5b_2026.yaml")
+    stated = float(scenario["capex"]["usd_total"])
+    assert css._financed_capex(scenario) == pytest.approx(stated * 1.05, rel=1e-9)
+
+
 def test_a_covenant_the_committed_case_fails_is_shown_not_screened(
     fakes: _Fakes,
 ) -> None:
@@ -346,6 +396,8 @@ def test_a_scenario_that_derives_capex_from_its_breakdown_gets_no_contingency_se
 ) -> None:
     scenario = _scenario()
     scenario["capex"]["derive_from_breakdown"] = True
+    # A real derived scenario reconciles its breakdown to the total.
+    scenario["capex"]["breakdown"]["turbines_usd"] = CAPEX - LINE
     block = _build(fakes, scenario)
     assert "contingency" not in fakes.calls
     assert block.searches_not_run == [

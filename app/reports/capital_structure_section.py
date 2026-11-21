@@ -513,6 +513,20 @@ def _contingency_search(
     )
 
 
+def _financed_capex(scenario: Mapping[str, Any]) -> Optional[float]:
+    """The capex the gearing ceiling is applied to: the financed total the engine sizes on.
+
+    ``Financing_Terms.debt_ratio`` caps debt at a share of the financed capex, which is
+    ``capex.usd_total`` escalated by a declared ``capex.price_basis`` (#1569) plus any
+    capitalised import levies (#738). Dividing by the stated ``capex.usd_total`` instead
+    made a binding ceiling read as breached (30% showing 31.5% under a 5% escalation).
+    """
+    from analytics.evaluation_v14 import evaluated_scenario_config
+    from finance.debt.capex import _extract_capex_usd
+
+    return _number(_extract_capex_usd(evaluated_scenario_config(scenario)))
+
+
 def _gearing_search(
     config_path: str,
     scenario: Mapping[str, Any],
@@ -525,11 +539,14 @@ def _gearing_search(
     from analytics.optimization_v14 import optimize_parameter
 
     capex = scenario.get("capex")
-    total = _number(capex.get("usd_total")) if isinstance(capex, Mapping) else None
+    stated = _number(capex.get("usd_total")) if isinstance(capex, Mapping) else None
     terms = scenario.get("Financing_Terms")
     current = _number(terms.get("debt_ratio")) if isinstance(terms, Mapping) else None
-    if total is None or total <= 0:
+    if stated is None or stated <= 0:
         return "not run: the scenario declares no positive capex.usd_total"
+    total = _financed_capex(scenario)
+    if total is None or total <= 0:
+        return "not run: the scenario's financed capex is not positive"
     if current is None:
         return "not run: the scenario declares no Financing_Terms.debt_ratio"
     constraints = [c.constraint for c in held]
@@ -621,7 +638,9 @@ def _gearing_search(
         kind="Gearing ceiling",
         searched=(
             f"Financing_Terms.debt_ratio {settings.gearing_bounds[0]:.0%}-"
-            f"{settings.gearing_bounds[1]:.0%}, {settings.gearing_steps} steps"
+            f"{settings.gearing_bounds[1]:.0%}, {settings.gearing_steps} steps; "
+            f"realised gearing is the sized debt over the financed capex "
+            f"${total / 1e6:,.1f}M, the base the ceiling applies to"
         ),
         current=f"ceiling {current:.0%}",
         best_label=best_label,

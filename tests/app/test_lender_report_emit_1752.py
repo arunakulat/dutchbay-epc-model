@@ -364,6 +364,54 @@ def test_a_capital_structure_builder_failure_is_listed_not_raised(
     assert out.html_path.exists()
 
 
+def test_a_built_capital_structure_block_reaches_the_report(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1859 assurance M25: switched on, the built section is rendered, not listed as not run."""
+    from app.reports.capital_structure_section import CapitalStructureSettings
+    from app.reports.report_model import CapitalStructureBlock, CapitalStructureSearch
+
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+    seen: List[Any] = []
+    block = CapitalStructureBlock(
+        objective_key="equity_npv",
+        covenants=["min_dscr_period >= 1.3 (constraints.min_dscr_covenant)"],
+        covenant_keys=["min_dscr_period"],
+        searches=[
+            CapitalStructureSearch(
+                kind="Gearing ceiling",
+                searched="Financing_Terms.debt_ratio 30%-80%, 2 steps",
+                candidates=[],
+                n_evaluated=0,
+                n_feasible=0,
+            )
+        ],
+    )
+
+    def _builder(path: Any, scenario: Any, settings: Any) -> Any:
+        seen.append(settings)
+        return block
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        capital_structure=CapitalStructureSettings(enabled=True),
+        capital_structure_builder=_builder,
+    )
+    assert seen and seen[0].enabled is True
+    assert SECTION_CAPITAL_STRUCTURE not in {s.section for s in out.sections_not_run}
+    html = out.html_path.read_text(encoding="utf-8")
+    assert "<h2>Capital Structure Screening</h2>" in html
+    assert "Financing_Terms.debt_ratio 30%-80%, 2 steps" in html
+
+
 # ── the DBPL print ────────────────────────────────────────────────────────────
 
 
