@@ -220,7 +220,9 @@ def test_a_config_whose_base_does_not_resolve_is_left_to_the_trials() -> None:
     aside, so the toy-fallback smoke path behaves exactly as before."""
     cfg = {
         "monte_carlo": {
-            "parameters": [{"name": "capex.usd_total", "low": 90.0, "high": 110.0}]
+            "parameters": [{"name": "capex.usd_total", "low": 90.0, "high": 110.0}],
+            # Off by default since #962: this smoke config opts in to the toy path.
+            "allow_toy_fallback": True,
         }
     }
     engine = MonteCarloEngine(cfg)

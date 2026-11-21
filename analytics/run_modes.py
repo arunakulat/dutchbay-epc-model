@@ -5,7 +5,7 @@ run may substitute toy/fabricated numbers and how large a Monte-Carlo sample mus
 be before its tail statistics are presentable:
 
 * ``analytics.mc.engine`` — per-run ``monte_carlo.allow_toy_fallback`` (default
-  ``True``), with ``analytics.mc.aggregate`` disclosing ``toy_fallback_count``;
+  ``False`` since #962), with ``analytics.mc.aggregate`` disclosing ``toy_fallback_count``;
 * ``analytics.capital_risk_layer_v14`` — refuses any toy-contaminated MC result;
 * ``app.reports.capital_risk_emit`` — forces ``allow_toy_fallback: false`` and
   enforces the ``LENDER_GRADE_MIN_TRIALS = 1000`` sample floor on the lender path;
