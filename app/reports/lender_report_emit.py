@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
+from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
 from app.reports.renderer import render_report_html
 from app.reports.report_model import ReportContext, SectionNotRun
