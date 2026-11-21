@@ -25,6 +25,9 @@
   to 1.11%), `dutchbay_lendercase_5usc_fixed_lkr` (-16.44% to -17.59%),
   `mullikulam_2x50mw_mannar` (-19.24% to -20.61%) and `kalpitiya_lendercase_160m_fitted`
   (-5.87% to -5.72%). Project IRR, DSCR and the sized debt do not move; LLCR and PLCR move in
-  the fourth decimal place on some. The refinance lender case does not move.
+  the fourth decimal place on some. The refinance lender case does not move. On the base
+  case the equity IRR no longer responds to the corporate tax rate: its only taxed years are
+  locked up, and their cash now pays the unpaid balloon (the tax lands on the balloon
+  residual instead). Released as 15.29.0.
 - Limit: a fee deferred and still unpaid is not accrued in the three statements (they carry
   the fee paid, as before).
