@@ -1159,6 +1159,13 @@ def run_v14_pipeline_enhanced(
         from finance.native_cost_inputs import normalize_native_capex
 
         cfg = normalize_native_capex(cfg)
+        # #1823: a scenario whose storage_options block names a held headline_option carries
+        # that battery in its own figures (capex, O&M, debt sizing, KPIs), built exactly as
+        # the wind battery options analysis builds it. Once per evaluation; a scenario
+        # without the declaration is returned unchanged.
+        from analytics.storage_headline import apply_headline_storage_option
+
+        cfg = apply_headline_storage_option(cfg)
         config_path_label = (
             str(config) if isinstance(config, (str, Path)) else "<inline>"
         )

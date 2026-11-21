@@ -22,6 +22,7 @@ import yaml
 
 from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.storage_headline import apply_headline_storage_option
 from api.pipeline_api import RunPipelineRequest, run_pipeline
 from app.api.responses import CaseResult
 from app.reports.renderer import render_report_html
@@ -75,7 +76,9 @@ def test_route_reports_the_capex_the_engine_financed() -> None:
     financed = _extract_capex_usd(evaluated_scenario_config(raw))
     assert resp.cost.capex_total_usd == pytest.approx(financed, rel=1e-12)
     assert resp.cost.capex_total_usd == pytest.approx(
-        float(raw["capex"]["usd_total"]) * factor, rel=1e-12
+        # #1823: including a declared headline battery's capex.
+        float(apply_headline_storage_option(raw)["capex"]["usd_total"]) * factor,
+        rel=1e-12,
     )
 
 
