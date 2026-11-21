@@ -56,6 +56,7 @@ from finance.debt.dscr_contract import (  # noqa: F401
 )
 from finance.debt.funding import (  # noqa: F401
     _build_funding,
+    resolve_dsra_target_months,
 )
 from finance.debt.helpers import (  # noqa: F401
     _as_float,
@@ -84,6 +85,7 @@ from finance.debt.placeholders import (  # noqa: F401
 )
 from finance.debt.plan import (  # noqa: F401
     plan_debt,
+    resolve_max_balloon_pct,
 )
 from finance.debt.schedules import (  # noqa: F401
     Tranche,

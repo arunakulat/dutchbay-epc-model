@@ -70,6 +70,7 @@ class TestCanonicalCLIProducesLenderStack:
                 "capex_total_usd": 200_000_000,
                 "opex_annual_usd": 5_000_000,
             },
+            "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
             "Financing_Terms": {
                 "equity_pct": 0.30,
                 "debt_pct": 0.70,
@@ -78,6 +79,7 @@ class TestCanonicalCLIProducesLenderStack:
                 },
                 "tenor_years": 15,
                 "construction_years": 2,
+                "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
                 "interest_only_years": 2,
                 "amortization_style": "sculpted",
                 "target_dscr": 1.30,
@@ -390,6 +392,7 @@ class TestLenderStackOutputQuality:
                 "capex_total_usd": 200_000_000,
                 "opex_annual_usd": 5_000_000,
             },
+            "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
             "Financing_Terms": {
                 "equity_pct": 0.30,
                 "debt_pct": 0.70,
@@ -398,6 +401,7 @@ class TestLenderStackOutputQuality:
                 },
                 "tenor_years": 15,
                 "construction_years": 2,
+                "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
                 "interest_only_years": 2,
                 "amortization_style": "sculpted",
                 "target_dscr": 1.30,

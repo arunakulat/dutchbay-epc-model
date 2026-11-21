@@ -300,8 +300,10 @@ def _synthetic_config(construction_periods: int) -> dict[str, Any]:
             "target_dscr": 1.30,
             "mix": {"usd_commercial_min": 1.0},
             "rates": {"usd_nominal": 0.08},
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
         },
         "capex": {"usd_total": 100_000_000.0},
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
     }
 
 

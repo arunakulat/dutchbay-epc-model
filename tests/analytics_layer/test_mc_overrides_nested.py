@@ -60,6 +60,8 @@ def minimal_flat_config() -> Dict[str, Any]:
     return {
         "scenario_name": "flat_param_test",
         "monte_carlo": {
+            # Off by default since #962: this smoke config opts in to the toy path.
+            "allow_toy_fallback": True,
             "parameters": [
                 {
                     "name": "capex",
@@ -73,7 +75,7 @@ def minimal_flat_config() -> Dict[str, Any]:
                     "high": 0.12,
                     "distribution": "uniform",
                 },
-            ]
+            ],
         },
     }
 

@@ -42,6 +42,9 @@ class TornadoRow(BaseModel):
     low_case: Optional[float] = None
     high_case: Optional[float] = None
     impact_abs: Optional[float] = None  # |swing| = how far the metric moves
+    #: Why this driver's bar was not computed (#1817), e.g. the trial path refused its
+    #: shock; ``None`` for a computed bar. A not-computed bar has no values at all.
+    not_computed: Optional[str] = None
 
 
 #: Display names for the metrics a report tornado sweeps (#1487: the heading named the
@@ -67,6 +70,11 @@ class TornadoBlock(BaseModel):
     undefined_drivers: List[str] = Field(default_factory=list)
 
     @property
+    def not_computed_rows(self) -> List[TornadoRow]:
+        """Rows whose bar was not computed (#1817), with the reason on each."""
+        return [row for row in self.rows if row.not_computed is not None]
+
+    @property
     def metric_label(self) -> str:
         """The swept metric's display name, for the heading and caption (#1487)."""
         return METRIC_LABELS.get(self.metric, self.metric)
@@ -82,6 +90,7 @@ class TornadoBlock(BaseModel):
             or row.high_case is None
             or row.impact_abs is None
             for row in self.rows
+            if row.not_computed is None
         )
 
 
@@ -109,6 +118,14 @@ def _to_row(tornado: Any) -> Optional[TornadoRow]:
     )
     if not label:
         return None
+    metadata = getattr(tornado, "metadata", None) or {}
+    not_computed = metadata.get("not_computed")
+    if not_computed is not None:
+        return TornadoRow(
+            label=str(label),
+            base=_defined(tornado.base_metric),
+            not_computed=str(not_computed),
+        )
     return TornadoRow(
         label=str(label),
         base=_defined(tornado.base_metric),
@@ -154,9 +171,14 @@ def compute_report_tornado(
 
     rows = [r for r in (_to_row(tr) for tr in suite.tornado_results) if r is not None]
     # Widest defined swing first; an undefined swing has no magnitude, so it goes after
-    # every defined one, including a defined zero swing (#1487).
+    # every defined one, including a defined zero swing (#1487); a bar that was not
+    # computed at all goes last (#1817).
     rows.sort(
-        key=lambda r: (r.impact_abs is None, -(r.impact_abs or 0.0)),
+        key=lambda r: (
+            r.not_computed is not None,
+            r.impact_abs is None,
+            -(r.impact_abs or 0.0),
+        ),
     )
     if not rows:
         return None
@@ -165,7 +187,9 @@ def compute_report_tornado(
         r.base is None for r in rows
     )
     inferred_undefined_points = (1 if undefined_base else 0) + sum(
-        int(r.low_case is None) + int(r.high_case is None) for r in rows
+        int(r.low_case is None) + int(r.high_case is None)
+        for r in rows
+        if r.not_computed is None
     )
     raw_undefined_points = int(md.get("undefined_points", 0) or 0)
     undefined_points = max(raw_undefined_points, inferred_undefined_points)
@@ -173,7 +197,9 @@ def compute_report_tornado(
     if isinstance(raw_drivers, list):
         undefined_drivers = [str(d) for d in raw_drivers]
     else:
-        undefined_drivers = [r.label for r in rows if r.impact_abs is None]
+        undefined_drivers = [
+            r.label for r in rows if r.impact_abs is None and r.not_computed is None
+        ]
     return TornadoBlock(
         metric=metric,
         rows=rows,
