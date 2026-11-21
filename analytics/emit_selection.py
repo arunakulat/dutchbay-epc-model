@@ -116,6 +116,7 @@ def _needs_monte_carlo_parameters(
     try:
         names, _, kinds, _, _ = MonteCarloEngine._extract_param_definitions(scenario)
         MonteCarloEngine._refuse_native_capex_conflicts(scenario, names, kinds)
+        MonteCarloEngine._refuse_bare_capex_on_full_scenario(scenario, names)
     except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
         return (
             "the Monte Carlo engine cannot read monte_carlo.parameters: "
