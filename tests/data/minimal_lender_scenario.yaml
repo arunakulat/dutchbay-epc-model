@@ -65,9 +65,13 @@ fx:
 returns:
   project_discount_rate: 0.10    # required since #1429 (no code default)
 
+constraints:
+  max_balloon_pct: 0.10  # no code default since #1429; the engine used to fill in 0.10
+
 debt:
   debt_ratio: 0.70  # no code default since #1429; the engine used to fill in 0.70
   target_dscr: 1.4
   interest_rate_pct: 6.0
   term_years: 18
   construction_periods: 2  # no code default since #1429; the engine used to fill in 2
+  dsra_months: 6  # no code default since #1429; the engine used to fill in 6

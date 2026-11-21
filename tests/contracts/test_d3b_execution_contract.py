@@ -708,7 +708,11 @@ def _authored_config(
             "term_years": 18,
             # Required since #1429: no code default for the build time (was 2).
             "construction_periods": 2,
+            # Required since #1429: no code default for the DSRA target (was 6 months).
+            "dsra_months": 6,
         },
+        # Required since #1429: no code default for the balloon limit (was 10%).
+        "constraints": {"max_balloon_pct": 0.10},
         # Required since #1429: no code default for the project discount rate.
         "returns": {"project_discount_rate": 0.10},
     }
