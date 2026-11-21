@@ -207,3 +207,114 @@ def test_the_section_is_labelled_and_carries_f5(
 def test_no_block_means_no_section() -> None:
     html = _render(None)
     assert "Wind Resource Sensitivity" not in html
+
+
+# ── a fixed reference: the lender case at seed 42 ─────────────────────────────
+#
+# Pinned so that a swapped low/high case, a wrong-signed haircut, an ignored
+# monte_carlo.weibull_uncertainty_pct, a stated seed or draw count that the run did not use,
+# or a misplaced P-value fails here (assurance lane on #1854, mutants that the property tests
+# above let through). Recompute only on a deliberate change to the cluster or the scenario,
+# with the reason in the commit.
+
+_REFERENCE_TORNADO = [
+    ("Mean wind speed", "-5%", 396.161, "+5%", 486.546),
+    (
+        "Power curve",
+        "alt:dtu_reference_10mw",
+        371.547,
+        "oem:iea_reference_10mw",
+        442.059,
+    ),
+    ("Shear exponent", "-0.04", 427.417, "+0.04", 456.790),
+    ("Loss stack (relative)", "-20%", 456.436, "+20%", 427.997),
+]
+_REFERENCE_MC = {"p50": 440.8, "p75": 377.4, "p90": 316.1, "p99": 223.6, "mean": 435.6}
+
+
+def test_the_lender_case_matches_its_fixed_reference(
+    block: AepResourceSensitivityBlock,
+) -> None:
+    assert block.base_net_aep_gwh == 442.1
+    assert [
+        (r.driver, r.low_label, round(r.low_gwh, 3), r.high_label, round(r.high_gwh, 3))
+        for r in block.tornado
+    ] == _REFERENCE_TORNADO
+    assert (
+        block.mc_p50_gwh,
+        block.mc_p75_gwh,
+        block.mc_p90_gwh,
+        block.mc_p99_gwh,
+        block.mc_mean_gwh,
+    ) == tuple(_REFERENCE_MC.values())
+    assert block.mc_cv == 0.2034
+    assert (block.mc_n_samples, block.mc_seed, block.weibull_uncertainty_pct) == (
+        2000,
+        42,
+        10.0,
+    )
+    assert (block.committed_p50_gwh, block.committed_p90_gwh) == (433.0, 377.3)
+    assert (
+        "before it the committed basis is about 441.8 GWh, a difference of +0.1%."
+        in block.reconciliation[1]
+    )
+    assert "differs from the committed P90 of 377.3 GWh by -16.2%" in (
+        block.reconciliation[2]
+    )
+
+
+def test_the_monte_carlo_spread_follows_the_scenario_uncertainty(
+    scenario: Dict[str, Any], block: AepResourceSensitivityBlock
+) -> None:
+    narrower = dict(scenario)
+    narrower["monte_carlo"] = {
+        **scenario["monte_carlo"],
+        "weibull_uncertainty_pct": 5.0,
+    }
+    built = build_aep_resource_sensitivity(narrower, _RUN_RESULT)
+    assert isinstance(built, AepResourceSensitivityBlock)
+    assert built.weibull_uncertainty_pct == 5.0
+    assert built.mc_cv < block.mc_cv
+    assert built.mc_p90_gwh > block.mc_p90_gwh
+
+
+def test_the_printed_tables_carry_the_reference_figures(
+    block: AepResourceSensitivityBlock,
+) -> None:
+    html = _render(block)
+    section = html.split("Wind Resource Sensitivity &mdash; Net AEP", 1)[1].split(
+        "</section>", 1
+    )[0]
+    section = " ".join(section.split())
+    assert (
+        '<td>Mean wind speed</td> <td>-5%</td> <td class="num">396.2 GWh</td> '
+        '<td>+5%</td> <td class="num">486.5 GWh</td>'
+    ) in section
+    assert (
+        '<tr><td>P75</td><td class="num">377.4 GWh</td><td class="num">&mdash;</td></tr>'
+        in section
+    )
+    assert (
+        '<tr><td>P90</td><td class="num">316.1 GWh</td> '
+        '<td class="num">377.3 GWh</td></tr>'
+    ) in section
+    assert "2,000 draws of the Weibull A and k" in section
+    assert "10% one-sigma (seed 42)" in section
+
+
+def test_the_density_correction_needs_both_densities(
+    scenario: Dict[str, Any], block: AepResourceSensitivityBlock
+) -> None:
+    resource = dict(scenario["resource"])
+    curve = dict(resource["power_curve"])
+    curve.pop("air_density_ref_kgm3", None)
+    resource["power_curve"] = curve
+    wr = dict(scenario["wind_resource"])
+    wr.pop("air_density_ref_kgm3", None)
+    site_only = {**scenario, "resource": resource, "wind_resource": wr}
+    built = build_aep_resource_sensitivity(site_only, _RUN_RESULT)
+    assert isinstance(built, AepResourceSensitivityBlock)
+    # The tornado drops its correction on site density alone, so the Monte Carlo and the
+    # note do too.
+    assert "air-density correction" not in built.reconciliation[0]
+    assert built.mc_p50_gwh != block.mc_p50_gwh

@@ -145,9 +145,18 @@ def build_aep_resource_sensitivity(
     except (KeyError, ValueError) as exc:
         return f"not run: the AEP tornado could not run ({type(exc).__name__}: {exc})"
 
+    # The same rule the tornado applies (analytics.wind.aep_tornado.tornado_from_config): the
+    # site air-density correction holds only when the scenario declares both the site and the
+    # reference density. On site density alone the tornado makes no correction, so the Monte
+    # Carlo makes none either and the note does not claim one.
     rho_site = _float(power_curve.get("air_density_site_kgm3"))
     if rho_site is None:
         rho_site = _float(wr.get("air_density_kgm3"))
+    rho_ref = _float(power_curve.get("air_density_ref_kgm3"))
+    if rho_ref is None:
+        rho_ref = _float(wr.get("air_density_ref_kgm3"))
+    if rho_ref is None:
+        rho_site = None
     fit = WeibullFit(
         a=weibull_a,
         k=weibull_k,
