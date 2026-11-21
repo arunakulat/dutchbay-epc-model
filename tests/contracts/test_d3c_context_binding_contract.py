@@ -82,6 +82,9 @@ _UTC = timezone.utc
 # and constraints.max_balloon_pct 0.10 (the figures the engine used to fill in): the new
 # config keys are echoed into the result and no computed value moves (main's engine gives
 # the same digest with the same fixture). Before that by
+# #1736's one cash basis for the post-maturity sweep (15.29.0): only the engine identity
+# moved (this branch at 15.28.0 gives the previous digest; the lender case is a refinance
+# and does not reach the sweep). Before that by
 # #1578's per-technology capex price basis (15.28.0): only the engine identity moved (main's
 # engine with only the VERSION bump gives the same digest). Before that by
 # #1429's debt-fallback step, whose D3B fixture now declares debt.debt_ratio 0.70 (the
@@ -113,7 +116,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "f1916f9c0d04414f18cd9c61cfb059dcec0d39035cf93c9f7bea7d36a1836b44"
+    "4d3b39ca209a325b5196e32d93f7afa3cfc7e7e3fa98c0f10cb22701f51adb2e"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

@@ -601,6 +601,7 @@ def calculate_single_year_cfads(
     spread: float = 0.0,
     forward_rate: float = 0.0,
     senior_fee_lkr: float = 0.0,
+    interest_paid_lkr: Optional[float] = None,
 ) -> Dict[str, float]:
     """
     Compute detailed CFADS breakdown for a single year.
@@ -634,6 +635,10 @@ def calculate_single_year_cfads(
 
     interest_expense_lkr :
         Interest expense in LKR for the year.
+
+    interest_paid_lkr :
+        Interest settled in cash in the year (LKR), the base of the reported
+        ``wht_on_interest`` (#1539 DOM-4). ``None`` takes ``interest_expense_lkr``.
 
     verbose :
         If True, log the per-year CFADS breakdown.
@@ -722,6 +727,7 @@ def calculate_single_year_cfads(
         tax_profile=tax_profile,
         prior_year_losses=prior_year_losses,
         prior_loss_vintages=loss_vintages,
+        interest_paid=interest_paid_lkr,
     )
     if loss_vintages is not None:
         # FIN-8 (#482, reviewed): this writes the carried-forward loss VINTAGES back onto the
@@ -899,6 +905,7 @@ def build_annual_rows(
     interest_expense_series: Optional[List[float]] = None,
     extra_depreciable_usd: Optional[float] = None,
     senior_fee_lkr_series: Optional[List[float]] = None,
+    interest_paid_series: Optional[List[float]] = None,
 ) -> List[Dict[str, float]]:
     """
     Return list of per-year breakdown rows including CFADS in LKR and USD.
@@ -919,6 +926,11 @@ def build_annual_rows(
     (#737: guarantee + PRI on outstanding senior debt, LKR-translated by the pipeline)
     at the EBITDA line — reducing CFADS and, through ebit == ebitda, taxable income.
     None is byte-identical.
+
+    ``interest_paid_series`` is the per-operating-year interest settled in cash (LKR),
+    the base of each row's reported ``wht_on_interest`` when it differs from the
+    deduction basis of ``interest_expense_series`` (#1539 DOM-4). It moves no CFADS or
+    tax figure. None takes ``interest_expense_series`` and is byte-identical.
     """
 
     (
@@ -939,6 +951,10 @@ def build_annual_rows(
         extra_depreciable_usd=extra_depreciable_usd,
         senior_fee_lkr_series=senior_fee_lkr_series,
     )
+    paid_series: Optional[List[float]] = None
+    if interest_paid_series is not None:
+        paid_series = [float(v or 0.0) for v in interest_paid_series][:years]
+        paid_series += [0.0] * (years - len(paid_series))
 
     rows: List[Dict[str, float]] = []
     carried_losses = 0.0
@@ -964,6 +980,9 @@ def build_annual_rows(
             spread=fx_hedge.spread,
             forward_rate=forward_rate,
             senior_fee_lkr=senior_fee_series[year_index],
+            interest_paid_lkr=(
+                None if paid_series is None else paid_series[year_index]
+            ),
         )
 
         rows.append(row)

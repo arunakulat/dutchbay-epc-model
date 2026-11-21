@@ -567,8 +567,9 @@ def calculate_scenario_kpis(
         result["balloon_residual"] = float(debt_result.get("balloon_residual") or 0.0)
         # #1539: senior fee a cash sweep deferred and had not paid by the horizon, beside
         # the unpaid balloon. This is the debt engine's figure; when the equity waterfall
-        # runs, the pipeline overwrites it with what is still unpaid after the waterfall
-        # settles arrears from equity-side cash.
+        # runs, the pipeline overwrites it with what is still unpaid after the waterfall.
+        # Since #1736 the engine's sweep reads the waterfall's own cash, so the waterfall
+        # has nothing left to settle and the two figures are the same.
         result["senior_fee_deferred_residual"] = float(
             debt_result.get("senior_fee_deferred_residual") or 0.0
         )
