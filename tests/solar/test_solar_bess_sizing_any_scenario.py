@@ -37,6 +37,7 @@ ONE_POINT = {"pv_tables": [107], "pv_ac_mw": [3.5], "bess_power_mw": [0.1]}
 VOLATILE_SPEC = (
     "git_sha",
     "code_sha256",
+    "inputs_digest",
     "runtime_s",
     "result_sha256",
     "sizing_config_sha256",
