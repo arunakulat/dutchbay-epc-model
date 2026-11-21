@@ -3,6 +3,6 @@
   G4 and G5 keep their gates with no change. G6 keeps its gate, and its reviews #1158 to #1162 are
   now due because the wave they waited on has landed. G3 (#962) records what has landed, including
   the 5 US-cent variant's Monte Carlo (#1771), and the owner's 2026-11-21 decision to close #962
-  after a default-off slice; its `target_dscr` reconciliation needs a successor tracker. No item
+  after a default-off slice; its `target_dscr` reconciliation moved to #1845. No item
   leaves the register, a review log is added, and the next calendar review is 2027-02-28. No KPI
   changes.
