@@ -208,7 +208,7 @@ bess:
   # All-in USD per kWh of contracted (4 h nameplate) energy. PR 6 (2026-11-01): the BLENDED
   # range of conf/blue_whale_capex_solar_resource.yaml (docs/blue_whale/capex_blend_summary.json,
   # source PR6-CAPEX-BLEND): China FOB system prices (TrendForce September 2026, CNNC October
-  # 2026, Ember 2025) blended with the Envision offers (public per-kWh figures of
+  # 2026, Ember 2025) blended with a generic battery supplier's offers (public per-kWh figures of
   # scenarios/nso250_ltl_unit_{base,upside}.yaml) and a second OEM quotation (private, blended
   # only), landed with the repository's Sri Lankan levy postures, plus BoP, EPC margin, the
   # NSO 250 augmentation reserve, and land and auxiliaries. Low: bonded levies, low FOB, BoP
