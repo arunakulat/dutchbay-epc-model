@@ -339,6 +339,42 @@ def test_date_after_the_last_window_closes_is_refused() -> None:
     assert "after its last window" in refusal.detail
 
 
+def _overlapping_closed_windows() -> dict[str, Any]:
+    """Two closed windows for fic.cit.rate: [2020, 2030) and [2025, 2028)."""
+    data = _fic_data()
+    inner = copy.deepcopy(data["parameters"][0])
+    inner["effective_from"] = "2025-01-01"
+    inner["effective_to"] = "2028-01-01"
+    inner["value"] = 0.22
+    data["parameters"][1]["effective_to"] = "2040-01-01"
+    data["parameters"].append(inner)
+    return data
+
+
+def test_two_closed_windows_that_overlap_never_reach_the_resolver() -> None:
+    """The pack schema refuses the overlap, so no date can match two windows."""
+    with pytest.raises(ValidationError, match="overlapping effective windows"):
+        _pack(_overlapping_closed_windows())
+
+
+def test_a_registered_pack_with_overlapping_closed_windows_is_refused(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "fic").mkdir()
+    (tmp_path / "fic" / "1.0.0.yaml").write_text(
+        yaml.safe_dump(_overlapping_closed_windows()), encoding="utf-8"
+    )
+    refusal = _refusal(
+        RefusalReason.INVALID_PACK,
+        lambda: resolve(
+            [_binding(TAX, code="FIC", pack_id=FIC_PACK_ID)],
+            [date(2026, 1, 1)],
+            source=DirectoryPackSource(tmp_path),
+        ),
+    )
+    assert "overlapping effective windows" in refusal.detail
+
+
 def test_two_jurisdictions_bind_different_subjects() -> None:
     source = InMemoryPackSource(
         [_pack(_fic_data()), DirectoryPackSource().load("LK", "1.0.0")]
