@@ -336,6 +336,37 @@ def test_locked_cash_is_drawn_before_retained_cash() -> None:
     assert schedule[2]["equity_distribution_usd"] == pytest.approx(5.0)
 
 
+def test_with_both_balances_held_the_sweep_takes_locked_cash_first() -> None:
+    """Mutant M6: the order matters only when both balances are held at the sweep."""
+    # y1 unlocked, 50% holdback: 10 after service -> 5 out, 5 retained.
+    # y2 locked (DSCR 1.0): 10 trapped. The SPV now holds 10 locked and 5 retained.
+    # y3 (no service, unlocked): the sweep takes 8 from the 10 locked, leaving 2,
+    #    which the unlocked year releases under the holdback (1 out, 1 retained).
+    #    Retentions first would leave 7 locked and release 3.5 here instead.
+    # y4 (end): the 5 + 1 retained is released.
+    rows = [
+        {"year": 1, "cf_pre_debt": 20.0, "debt_service_total": 10.0, "dscr": 2.0},
+        {"year": 2, "cf_pre_debt": 20.0, "debt_service_total": 10.0, "dscr": 1.0},
+        {
+            "year": 3,
+            "cf_pre_debt": 0.0,
+            "debt_service_total": 0.0,
+            "balloon_resolution": 8.0,
+        },
+        {"year": 4, "cf_pre_debt": 0.0, "debt_service_total": 0.0},
+    ]
+    schedule = _waterfall(
+        rows,
+        {"balloon_treatment": "cash_sweep"},
+        min_dscr_threshold=1.3,
+        holdback_pct=50.0,
+    )
+    assert schedule[2]["spv_cash_applied_usd"] == pytest.approx(8.0)
+    assert [r["equity_distribution_usd"] for r in schedule] == pytest.approx(
+        [5.0, 0.0, 1.0, 6.0]
+    )
+
+
 def test_waterfall_sweep_cash_adds_back_the_fee_the_rows_paid() -> None:
     rows = [
         {"year": 1, "cf_pre_debt": 20.0, "debt_service_total": 10.0},
