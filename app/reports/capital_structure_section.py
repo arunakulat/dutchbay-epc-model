@@ -39,7 +39,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from app.reports.report_model import (
     CapitalStructureBlock,
@@ -744,9 +744,7 @@ def _dscr_held_note(
     if not any(c.constraint.key == _DSCR_KEY for c in held):
         return None
     values = [
-        _number(c.constraints.get(_DSCR_KEY))
-        for s in searches
-        for c in s.candidates
+        _number(c.constraints.get(_DSCR_KEY)) for s in searches for c in s.candidates
     ]
     finite = [v for v in values if v is not None]
     if len(finite) < 2 or len(finite) != len(values):
@@ -759,7 +757,7 @@ def _dscr_held_note(
     return (
         f"The minimum period DSCR is {finite[0]:.2f} on every candidate: the debt is "
         f"re-sized to the DSCR target at each point{how}, so the DSCR screen cannot fail "
-        "here and \"clear\" on it says only that the debt was re-sized. The headline "
+        'here and "clear" on it says only that the debt was re-sized. The headline '
         "minimum DSCR (min_dscr, the report's KPI and per-year covenant table, #790) is "
         "shown beside it for each candidate."
     )
