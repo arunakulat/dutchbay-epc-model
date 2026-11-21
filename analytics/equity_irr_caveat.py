@@ -44,10 +44,15 @@ def equity_irr_ranking_caveat(
     if count == 0:
         reason = "its equity cash flows never change sign, so no rate solves them"
     elif count is not None and count >= 2:
-        reason = (
-            f"its equity cash flows change sign {count} times, "
-            "so more than one rate, or none, can solve them"
+        # Descartes' rule of signs: the number of rates above -100% is the sign-change count
+        # less an even number. An odd count therefore always leaves at least one rate; only an
+        # even count can leave none (#1821 domain review D-1).
+        outcome = (
+            "more than one rate can solve them"
+            if count % 2
+            else "more than one rate, or none, can solve them"
         )
+        reason = f"its equity cash flows change sign {count} times, so {outcome}"
     else:
         reason = "its equity cash flows do not change sign exactly once"
     return (

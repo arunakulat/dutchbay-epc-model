@@ -223,6 +223,10 @@
         {% endfor %}
       </tbody>
     </table>
+    {% if ctx.equity_irr_caveat %}
+    {# #1688 (#1821 review D-2, D-4): the same caveat under the KPI table that prints equity IRR. #}
+    <p class="muted equity-irr-caveat-kpi"><em>{{ ctx.equity_irr_caveat }}</em></p>
+    {% endif %}
     {% else %}
     <p class="muted">No KPIs were available for this run.</p>
     {% endif %}

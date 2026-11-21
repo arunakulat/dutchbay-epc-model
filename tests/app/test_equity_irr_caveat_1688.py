@@ -69,13 +69,25 @@ def test_no_caveat_unless_the_flag_is_exactly_false() -> None:
 @pytest.mark.parametrize(
     ("sign_changes", "reason"),
     [
+        # Descartes' rule of signs (#1821 review D-1): an odd count always leaves a rate,
+        # so only an even count may say "or none".
         (
             3,
-            "its equity cash flows change sign 3 times, so more than one rate, or none, ",
+            "its equity cash flows change sign 3 times, so more than one rate can solve them.",
+        ),
+        (
+            5,
+            "its equity cash flows change sign 5 times, so more than one rate can solve them.",
         ),
         (
             2,
-            "its equity cash flows change sign 2 times, so more than one rate, or none, ",
+            "its equity cash flows change sign 2 times, "
+            "so more than one rate, or none, can solve them.",
+        ),
+        (
+            4,
+            "its equity cash flows change sign 4 times, "
+            "so more than one rate, or none, can solve them.",
         ),
         (0, "its equity cash flows never change sign, so no rate solves them."),
         (None, "its equity cash flows do not change sign exactly once."),
@@ -91,6 +103,8 @@ def test_the_caveat_names_why_and_points_to_equity_npv(
     assert caveat is not None
     assert caveat.startswith("Equity IRR does not rank this case: ")
     assert reason in caveat
+    if isinstance(sign_changes, int) and not isinstance(sign_changes, bool):
+        assert ("or none" in caveat) == (sign_changes >= 2 and sign_changes % 2 == 0)
     assert caveat.endswith(
         "Read equity NPV beside it; the model's optimisers rank on equity NPV (#1456)."
     )
@@ -158,6 +172,27 @@ def test_the_lender_report_shows_the_caveat_and_equity_npv(
     caveat_row = summary.index('<tr class="equity-irr-caveat">')
     assert irr_row < npv_row < caveat_row, "equity NPV and the caveat follow equity IRR"
     assert ctx.equity_irr_caveat in summary
+    # #1821 review D-2: the Key Financial Indicators table prints equity IRR too.
+    kfi = html.split("<h2>Key Financial Indicators</h2>", 1)[1].split("</section>", 1)[
+        0
+    ]
+    assert kfi.index("</table>") < kfi.index('class="muted equity-irr-caveat-kpi"')
+    assert ctx.equity_irr_caveat in kfi
+
+
+def test_the_kpi_only_report_still_shows_the_caveat(lender_run: Dict[str, Any]) -> None:
+    """#1821 review D-4: without scenario_config or debt_result there is no Executive
+    Summary finance block, but the Key Financial Indicators table still prints equity IRR.
+    """
+    case = CaseResult.from_pipeline_result(
+        lender_run, scenario_variant=_LENDER_CFG.stem
+    )
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=lender_run)
+    html = unescape(render_report_html(ctx))
+    kfi = html.split("<h2>Key Financial Indicators</h2>", 1)[1].split("</section>", 1)[
+        0
+    ]
+    assert equity_irr_ranking_caveat(False, 3) in kfi
 
 
 def test_a_case_whose_irr_ranks_gets_no_caveat_or_extra_row(
