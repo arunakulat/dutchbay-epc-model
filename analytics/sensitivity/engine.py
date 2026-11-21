@@ -25,7 +25,7 @@ import copy
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Dict, List, Mapping, Sequence, TypeGuard
 
 # Contracts: use your canonical contracts_v14 surfaces.
 from analytics.contracts_v14 import (
@@ -57,6 +57,85 @@ def _resolves_in_config(cfg: Mapping[str, Any], dotted_key: str) -> bool:
             return False
         node = node[part]
     return True
+
+
+#: The project capacity factor, which a per-technology scenario must keep in step with its
+#: technologies' own capacity factors.
+_PROJECT_CAPACITY_FACTOR = "project.capacity_factor"
+
+
+def _number(value: Any) -> TypeGuard[float]:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def coherent_overrides(
+    base_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Return ``overrides`` plus the per-technology shocks that keep the scenario coherent.
+
+    A scenario that declares ``generation.technologies`` models its output per technology,
+    and the pipeline requires the technologies' capacity-weighted capacity factor to
+    reconcile with ``project.capacity_mw * project.capacity_factor`` within 1%
+    (``finance/cashflow_v14_production.py``). A shock on the project capacity factor alone
+    fails that check, so a scenario with that block got no tornado at all. Here a shock on
+    ``project.capacity_factor`` also scales the ``capacity_factor`` of every technology the
+    reconciliation counts (a non-storage block with both ``capacity_mw`` and
+    ``capacity_factor``) by the same ratio (#1787). The capacity-weighted sum then moves
+    exactly with the project figure, and the reconciliation holds at every shocked point.
+
+    Any other override, and a scenario with no such technology (none declared, or storage
+    only), pass unchanged.
+
+    Raises:
+        ValueError: The base project capacity factor is missing or not positive while a
+            technology must be scaled, a technology name holds a ".", or the overrides
+            already set a technology's capacity factor.
+    """
+    out = dict(overrides)
+    if _PROJECT_CAPACITY_FACTOR not in overrides:
+        return out
+    generation = base_cfg.get("generation")
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if not isinstance(techs, Mapping):
+        return out
+    # The reconciliation's own storage test (finance/cashflow_v14_production.py), imported
+    # here rather than at module scope: the evaluation gateway is this module's only
+    # module-level route into the engine (tests/lint/test_no_direct_finance_pipeline_imports.py).
+    from finance.tech_types import is_storage_type
+
+    counted = {
+        str(name): float(block["capacity_factor"])
+        for name, block in techs.items()
+        if isinstance(block, Mapping)
+        and not is_storage_type(block.get("type"))
+        and _number(block.get("capacity_mw"))
+        and _number(block.get("capacity_factor"))
+    }
+    if not counted:
+        return out
+    project = base_cfg.get("project")
+    raw_base = project.get("capacity_factor") if isinstance(project, Mapping) else None
+    base = float(raw_base) if _number(raw_base) else 0.0
+    if base <= 0.0:
+        raise ValueError(
+            "a project.capacity_factor shock on a scenario with generation.technologies "
+            f"needs a positive base project.capacity_factor, not {raw_base!r}"
+        )
+    ratio = float(overrides[_PROJECT_CAPACITY_FACTOR]) / base
+    for name, tech_cf in counted.items():
+        if "." in name:
+            raise ValueError(
+                f"generation.technologies[{name!r}]: a technology name with a '.' cannot "
+                "be shocked by a dotted override"
+            )
+        key = f"generation.technologies.{name}.capacity_factor"
+        if key in overrides:
+            raise ValueError(
+                f"{key} is overridden directly and through {_PROJECT_CAPACITY_FACTOR}; "
+                "shock one of them"
+            )
+        out[key] = tech_cf * ratio
+    return out
 
 
 @dataclass(frozen=True)
@@ -301,7 +380,8 @@ def build_one_way_sensitivity_suite(
     # Sweep cases using adapter
     cases: List[Dict[str, Any]] = []
     undefined_labels: List[str] = []
-    for label, override_dict in iter_param_cases_from_contract(parameter):
+    for label, contract_overrides in iter_param_cases_from_contract(parameter):
+        override_dict = coherent_overrides(base_cfg, contract_overrides)
         out = evaluate_with_overrides(
             config_path=None,
             raw_config=base_cfg,
@@ -408,7 +488,8 @@ def run_sensitivity_analysis(
             logger.warning(message)
         cases: List[Dict[str, Any]] = []
         undefined_labels: List[str] = []
-        for label, overrides in iter_param_cases_from_contract(p):
+        for label, contract_overrides in iter_param_cases_from_contract(p):
+            overrides = coherent_overrides(base_cfg, contract_overrides)
             out = evaluate_with_overrides(
                 config_path=None,
                 raw_config=base_cfg,

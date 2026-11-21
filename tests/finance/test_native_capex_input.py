@@ -22,6 +22,8 @@ def config() -> dict[str, Any]:
     """Supply an explicitly synthetic conversion input at a non-round FX rate."""
     return {
         "fx": {"start_lkr_per_usd": 317.25},
+        # Required since #1429: no code default for the build time (was 2 periods).
+        "timeline": {"construction_years": 2},
         "capex": {
             "input": {
                 "currency": "LKR",
@@ -58,7 +60,7 @@ def test_nonround_fx_and_all_direct_resolvers() -> None:
 
 
 def priced_config() -> dict[str, Any]:
-    """Add a dated price basis: two default construction periods put COD in 2029."""
+    """Add a dated price basis: two declared construction periods put COD in 2029."""
     cfg = config()
     cfg["project"] = {"cod_year": 2029}
     cfg["capex"]["price_basis"] = {

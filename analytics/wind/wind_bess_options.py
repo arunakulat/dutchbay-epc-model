@@ -6,8 +6,9 @@ PV only, so the peak rate here is a WORKING ASSUMPTION built from the solar + BE
 (methodology s.5.1.2): priority = R_charging / RTE + BESS component.
 
 Every KPI comes from :func:`analytics.evaluation_v14.evaluate_with_overrides`; this module only
-builds the scenario the engine evaluates. Inputs are read from
-``conf/blue_whale_wind_bess_options.yaml`` by ``scripts/run_blue_whale_wind_bess_options_v14.py``.
+builds the scenario the engine evaluates. :mod:`analytics.wind.wind_bess_options_runner` runs it
+for any scenario that declares a ``storage_options`` block (#1578 U2), and for the single-site
+config through its own script.
 """
 
 from __future__ import annotations
@@ -112,8 +113,13 @@ SCHEMA_VERSION = "blue_whale_wind_bess_options_v1"
 OPTION_KEYS = ("name", "power_mw", "energy_mwh", "operation")
 
 
-def validate_config(cfg: Mapping[str, Any]) -> None:
+def validate_config(
+    cfg: Mapping[str, Any], *, schema_version: str = SCHEMA_VERSION
+) -> None:
     """Refuse a config with a missing or unknown key, or an inconsistent option list.
+
+    ``schema_version`` is the value the config must carry: the single-site config's by
+    default, or the one the scenario-driven runner gives the config it builds (#1578 U2).
 
     Raises:
         ValueError: On any missing or unknown key, a schema mismatch, an unknown revenue
@@ -125,8 +131,8 @@ def validate_config(cfg: Mapping[str, Any]) -> None:
             f"config keys differ: missing {sorted(set(CONFIG_KEYS) - keys)}, "
             f"unknown {sorted(keys - set(CONFIG_KEYS))}"
         )
-    if cfg["schema_version"] != SCHEMA_VERSION:
-        raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+    if cfg["schema_version"] != schema_version:
+        raise ValueError(f"schema_version must be {schema_version}")
     for block, expected in CONFIG_KEYS.items():
         if expected is not None and set(cfg[block]) != set(expected):
             raise ValueError(

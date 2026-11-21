@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass, field
 from statistics import NormalDist
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -1118,8 +1119,9 @@ class Context:
         tariff: The unit config's tariff.
         wind: The fixed wind block.
         pricing: The cited prices.
-        grid_civils_development_usd: Plant-level capex outside the unit (input B26).
-        fixed_opex_usd_per_year: Wind O&M plus insurance, land and SPV (inputs B10, B28).
+        grid_civils_development_usd: Plant-level capex outside the unit.
+        fixed_opex_usd_per_year: Plant-level fixed O&M outside the unit (insurance, land,
+            SPV and any other plant).
         losses_on_charge: Book the whole round-trip loss on charge, each trial at its own
             RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
             2026 methodology's convention, s.5.1.2). False keeps the dispatcher's convention (the
@@ -1585,6 +1587,70 @@ def _grid_values(raw: Any, where: str) -> Tuple[float, ...]:
     return vals
 
 
+def _validate_n_workers(n_workers: int) -> int:
+    """Validate that ``n_workers`` is a positive integer."""
+    if isinstance(n_workers, bool) or not isinstance(n_workers, int) or n_workers < 1:
+        raise ValueError("n_workers must be a positive integer")
+    return n_workers
+
+
+_WORKER_EVAL_ARGS: Optional[Tuple[Context, Trials, bool, float]] = None
+
+
+def _init_worker_pool(
+    ctx: Context, trials: Trials, has_base: bool, curtailment_fraction: float
+) -> None:
+    """Store shared read-only point-evaluation inputs once per worker process."""
+    global _WORKER_EVAL_ARGS
+    _WORKER_EVAL_ARGS = (ctx, trials, has_base, curtailment_fraction)
+
+
+def _evaluate_point_worker(point: PointInputs) -> PointResult:
+    """Evaluate one grid point inside a ``ProcessPoolExecutor`` worker."""
+    assert _WORKER_EVAL_ARGS is not None
+    ctx, trials, has_base, curtailment_fraction = _WORKER_EVAL_ARGS
+    return evaluate_point(
+        ctx,
+        point,
+        trials,
+        has_base=has_base,
+        curtailment_fraction=curtailment_fraction,
+        evaluator=evaluate_with_overrides,
+    )
+
+
+def _evaluate_points_batch(
+    ctx: Context,
+    points_list: Sequence[PointInputs],
+    trials: Trials,
+    *,
+    has_base: bool,
+    curtailment_fraction: float = 0.0,
+    evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
+) -> List[PointResult]:
+    """Evaluate independent grid points serially or across CPU worker processes."""
+    workers = _validate_n_workers(n_workers)
+    if workers > 1 and len(points_list) > 1 and evaluator is evaluate_with_overrides:
+        with ProcessPoolExecutor(
+            max_workers=min(workers, len(points_list)),
+            initializer=_init_worker_pool,
+            initargs=(ctx, trials, has_base, curtailment_fraction),
+        ) as pool:
+            return list(pool.map(_evaluate_point_worker, points_list))
+    return [
+        evaluate_point(
+            ctx,
+            point,
+            trials,
+            has_base=has_base,
+            curtailment_fraction=curtailment_fraction,
+            evaluator=evaluator,
+        )
+        for point in points_list
+    ]
+
+
 def run_sizing(
     sizing_cfg: Mapping[str, Any],
     *,
@@ -1593,6 +1659,7 @@ def run_sizing(
     scenario: Mapping[str, Any],
     site: Mapping[str, Any],
     evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
 ) -> SizingRun:
     """Run the seeded Monte Carlo over the decision grid.
 
@@ -1720,9 +1787,11 @@ def run_sizing(
     resource["inverter_eff_nom"] = pricing.inverter.european_efficiency
     turbine_shade = site.get("shading")
 
+    _validate_n_workers(n_workers)
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
     base_only: List[Tuple[PointInputs, bool]] = []
+    pending_evals: List[Tuple[int, PointInputs]] = []
     evaluations = 0
     for ratio in ratios:
         arr_raw = {**dict(unit_cfg["array"]), "dc_ac_ratio": ratio}
@@ -1775,7 +1844,7 @@ def run_sizing(
                 equipment=equipment,
                 required_fenced_area_m2=area.fenced_area_m2,
             )
-            # The turbine's shadow on this layout's tables (input B33), when the unit
+            # The turbine's shadow on this layout's tables, when the unit
             # config models it and every table is placed; a point that does not fit is
             # not evaluated, so it keeps the unshaded series.
             pv = pv_unshaded
@@ -1834,10 +1903,21 @@ def run_sizing(
             if not fits:
                 results.append(None)
                 continue
-            res = evaluate_point(ctx, point, trials, has_base=True, evaluator=evaluator)
-            evaluations += trials.n
-            results.append(res)
+            results.append(None)
+            pending_evals.append((len(results) - 1, point))
             base_only.append((point, meets_rule))
+    if pending_evals:
+        eval_results = _evaluate_points_batch(
+            ctx,
+            [p for _, p in pending_evals],
+            trials,
+            has_base=True,
+            evaluator=evaluator,
+            n_workers=n_workers,
+        )
+        for (idx, _), res in zip(pending_evals, eval_results, strict=True):
+            results[idx] = res
+            evaluations += trials.n
     stats: List[Dict[str, Any]] = []
     for entry, pres in zip(points, results, strict=True):
         if pres is None:
@@ -2006,7 +2086,7 @@ PROJECT_SIZING_KEYS = (
     "recommendation",
     "output",
 )
-#: The keys of one 10 MW reading (``None`` = no limit of that kind).
+#: The keys of one reading of the capacity limit (``None`` = no limit of that kind).
 READING_KEYS = (
     "max_pv_ac_plus_bess_mw",
     "max_export_mw",
@@ -2014,6 +2094,10 @@ READING_KEYS = (
     "max_bess_power_mw",
 )
 LAND_MAX = "land_max"
+#: Names a reading may not take: ``committed`` names the committed reading in the sizing
+#: config, and a reading called ``by_reading`` would make its ``eligible_<name>`` key
+#: overwrite each point's ``eligible_by_reading`` mapping.
+RESERVED_READING_NAMES = ("committed", "by_reading")
 
 
 @dataclass(frozen=True)
@@ -2161,11 +2245,14 @@ class RegulatoryBasis:
         if (
             not isinstance(names, Mapping)
             or not names
-            or any(not isinstance(k, str) or not k or k == "committed" for k in names)
+            or any(
+                not isinstance(k, str) or not k or k in RESERVED_READING_NAMES
+                for k in names
+            )
         ):
             raise ValueError(
                 "regulatory.standardised_ppa_limit.readings must map one or more "
-                "reading names (not 'committed') to their text"
+                "reading names (not 'committed' or 'by_reading') to their text"
             )
         term = bess["contract_years"]
         if isinstance(term, bool) or int(term) != term or int(term) < 1:
@@ -2288,7 +2375,7 @@ def reading_allows(
     bess_power_mw: float,
     export_limit_mw: float,
 ) -> bool:
-    """Whether a size meets one reading of the 10 MW limit.
+    """Whether a size meets one reading of the capacity limit.
 
     Under a reading with an export limit the dispatch must be held to it; a reading
     without one relies on the PV AC plus BESS power limit.
@@ -2511,10 +2598,11 @@ def run_project_sizing(
     scenario: Mapping[str, Any],
     site: Mapping[str, Any],
     evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+    n_workers: int = 1,
 ) -> SizingRun:
     """Size the separate solar + BESS project under each reading of the capacity limit.
 
-    The decision variables are the PV DC (whole tables, up to the most the placeholder lot
+    The decision variables are the PV DC (whole tables, up to the most the lot
     takes with the turbine kept), the PV AC and the BESS power, with the BESS energy fixed at
     the PUCSL 4 h. Every point that fits the lot and the inverter is evaluated once, with
     the same seeded trials as :func:`run_sizing`, through :func:`evaluate_point`; each
@@ -2733,9 +2821,11 @@ def run_project_sizing(
     pitch_cache: Dict[int, Any] = {}
     pv_cache: Dict[Tuple[Any, ...], Any] = {}
     land_max: Dict[float, int] = {}
+    _validate_n_workers(n_workers)
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
     evaluated: List[Tuple[PointInputs, Dict[str, Any]]] = []
+    pending_evals: List[Tuple[int, PointInputs]] = []
     evaluations = 0
     for power in powers:
         energy = duration * power
@@ -2859,7 +2949,7 @@ def run_project_sizing(
                 if not (fits and meets_rule and any(allowed.values())):
                     results.append(None)
                     continue
-                # With the turbine's shadow modelled (input B33), the PV depends on
+                # With the turbine's shadow modelled, the PV depends on
                 # which tables the layout places, and the packing moves with the BESS
                 # footprint, so the packing is part of the key.
                 packing = (
@@ -2895,12 +2985,21 @@ def run_project_sizing(
                     inverter_count=inv.inverter_count,
                     inverter_kw=pricing.inverter.nominal_ac_kw,
                 )
-                res = evaluate_point(
-                    ctx, point, trials, has_base=True, evaluator=evaluator
-                )
-                evaluations += trials.n
-                results.append(res)
+                results.append(None)
+                pending_evals.append((len(results) - 1, point))
                 evaluated.append((point, entry))
+    if pending_evals:
+        eval_results = _evaluate_points_batch(
+            ctx,
+            [p for _, p in pending_evals],
+            trials,
+            has_base=True,
+            evaluator=evaluator,
+            n_workers=n_workers,
+        )
+        for (idx, _), res in zip(pending_evals, eval_results, strict=True):
+            results[idx] = res
+            evaluations += trials.n
 
     stats: List[Dict[str, Any]] = []
     for entry, pres in zip(points, results, strict=True):
@@ -3427,6 +3526,7 @@ __all__ = [
     "LAND_MAX",
     "PROJECT_SIZING_KEYS",
     "READING_KEYS",
+    "RESERVED_READING_NAMES",
     "RegulatoryBasis",
     "apply_unit_overrides",
     "reading_allows",

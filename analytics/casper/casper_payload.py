@@ -385,13 +385,17 @@ def _resolve_dscr_floor(scenario: ScenarioResult | str | None) -> float | None:
 def _json_safe_cell(key: str, val: Any) -> Any:
     """Coerce a lender-risk-table cell to a strict-JSON-safe value.
 
-    The ``metric`` column is a label (str); every other column is numeric. A non-finite
-    float — the ``NaN`` placeholders ``build_lender_risk_table`` writes into the covenant
-    rows (P50/P90/P95/std) — maps to ``None`` to match the payload's None-for-missing
-    convention and keep the payload valid under a strict encoder (``allow_nan=False``).
+    The ``metric`` column is a label (str) and ``coverage_note`` is text on the IRR rows
+    that leave trials out (#1746 step 1; ``None`` on every other row); every other column
+    is numeric. A non-finite float — the ``NaN`` placeholders ``build_lender_risk_table``
+    writes into the covenant rows (P50/P90/P95/std) — maps to ``None`` to match the
+    payload's None-for-missing convention and keep the payload valid under a strict
+    encoder (``allow_nan=False``).
     """
     if key == "metric":
         return str(val)
+    if key == "coverage_note":
+        return val if isinstance(val, str) else None
     if val is None or isinstance(val, bool):
         return val
     if isinstance(val, int):

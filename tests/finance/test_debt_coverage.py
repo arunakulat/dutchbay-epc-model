@@ -229,13 +229,17 @@ def test_capex_top_level_alias_bad_string_then_toy() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 def test_financing_terms_leverage_pct_alias() -> None:
     # debt_pct absent -> falls back to leverage_pct; >1 is treated as a percent.
-    terms = _extract_financing_terms({"Financing_Terms": {"leverage_pct": 65.0}})
+    terms = _extract_financing_terms(
+        {"Financing_Terms": {"leverage_pct": 65.0, "construction_periods": 2}}
+    )
     assert terms["debt_ratio"] == pytest.approx(0.65)
 
 
 def test_financing_terms_financing_section() -> None:
     # No Financing_Terms -> the lowercase ``financing`` section is returned as-is.
-    out = _extract_financing_terms({"financing": {"debt_ratio": 0.55, "tag": "x"}})
+    out = _extract_financing_terms(
+        {"financing": {"debt_ratio": 0.55, "tag": "x", "construction_periods": 2}}
+    )
     assert out["debt_ratio"] == 0.55
     assert out["tag"] == "x"
 
@@ -243,7 +247,14 @@ def test_financing_terms_financing_section() -> None:
 def test_financing_terms_debt_section_leverage_over_one() -> None:
     # ``debt`` section with leverage_pct > 1 -> normalized to a fraction.
     out = _extract_financing_terms(
-        {"debt": {"leverage_pct": 60.0, "interest_rate_pct": 8.0, "target_dscr": 1.30}}
+        {
+            "debt": {
+                "leverage_pct": 60.0,
+                "interest_rate_pct": 8.0,
+                "target_dscr": 1.30,
+                "construction_periods": 2,
+            }
+        }
     )
     assert out["debt_ratio"] == pytest.approx(0.60)
     assert out["rates"]["usd_nominal"] == pytest.approx(0.08)
@@ -263,7 +274,9 @@ def test_financing_terms_placeholder_substitution_warns(
 ) -> None:
     """Missing draw/capex schedules on the Financing_Terms path WARN, not silent."""
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
-        terms = _extract_financing_terms({"Financing_Terms": {"debt_ratio": 0.6}})
+        terms = _extract_financing_terms(
+            {"Financing_Terms": {"debt_ratio": 0.6, "construction_periods": 2}}
+        )
     # Values are the documented placeholders (unchanged — byte-identity).
     assert terms["debt_drawdown_pct"] == [0.5, 0.5]
     assert terms["construction_schedule"] == [40.0, 60.0]
@@ -282,7 +295,13 @@ def test_compact_debt_schema_placeholder_substitution_warns(
     """
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
         terms = _extract_financing_terms(
-            {"debt": {"debt_ratio": 0.6, "target_dscr": 1.30}}
+            {
+                "debt": {
+                    "debt_ratio": 0.6,
+                    "target_dscr": 1.30,
+                    "construction_periods": 2,
+                }
+            }
         )
     assert terms["debt_drawdown_pct"] == [0.5, 0.5]
     assert terms["construction_schedule"] == [40.0, 60.0]
@@ -301,6 +320,7 @@ def test_compact_debt_schema_explicit_schedules_do_not_warn(
                 "debt": {
                     "debt_ratio": 0.6,
                     "target_dscr": 1.30,
+                    "construction_periods": 2,
                     "construction_schedule": [30.0, 70.0],
                     "debt_drawdown_pct": [0.4, 0.6],
                 }
@@ -557,6 +577,7 @@ def test_autosolve_dual_dscr_detail_none_on_value_error() -> None:
             "debt_ratio": 0.0,
             "target_dscr": 1.30,
             "dscr_p99_downside_factor": 0.80,  # no code default since #1429
+            "interest_rate_nominal": 0.08,  # no code default since #1429
             "tenor_years": 5,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -575,6 +596,7 @@ def test_autosolve_dual_dscr_detail_present_when_active() -> None:
             "debt_ratio": 0.7,
             "target_dscr": 1.30,
             "dscr_p99_downside_factor": 0.80,  # no code default since #1429
+            "interest_rate_nominal": 0.08,  # no code default since #1429
             "tenor_years": 8,
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
@@ -788,6 +810,7 @@ def test_placeholder_warn_dedup_is_kind_scoped(
                     "debt_ratio": 0.6,
                     "target_dscr": 1.30,
                     "tenor_years": 5,
+                    "construction_periods": 2,
                     "interest_rate_pct": 8.0,
                 },
                 "capex": {"usd_total": 100.0},

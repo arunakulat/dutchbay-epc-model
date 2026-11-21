@@ -327,13 +327,15 @@ def test_zero_construction_periods_puts_the_bridge_at_period_zero() -> None:
 
 
 def test_taxonomy_is_published_for_a_config_that_omits_the_field() -> None:
-    """CASPER: the keys are emitted unconditionally, including on the default path.
+    """CASPER: the keys are emitted unconditionally, including on the fallback path.
 
-    The engine's documented default is two construction periods; the taxonomy must
-    report that resolved default rather than omitting the keys.
+    With no ``Financing_Terms.construction_periods`` the count comes from
+    ``timeline.construction_years`` (there is no code default since #1429); the taxonomy
+    must report that resolved count rather than omitting the keys.
     """
     config = _synthetic_config(2)
     del config["Financing_Terms"]["construction_periods"]
+    config["timeline"] = {"construction_years": 2}
     config["Financing_Terms"]["construction_schedule"] = [50.0, 50.0]
     config["Financing_Terms"]["debt_drawdown_pct"] = [0.5, 0.5]
     debt_result = plan_debt(annual_rows=_synthetic_rows(), config=config)

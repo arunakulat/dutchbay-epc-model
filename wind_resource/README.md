@@ -12,7 +12,7 @@ lender base case the project had already retired, which is what #1279 records.
 
 | | Lender path | Diagnostic path |
 |---|---|---|
-| Entry point | `analytics.wind.aep_summary_builder.build_aep_summary_from_config` | `wind_resource.wind_pipeline.WindPipeline` |
+| Entry point | `wind_resource.aep_summary.build_aep_summary_from_config` | `wind_resource.wind_pipeline.WindPipeline` |
 | Resource input | a *declared* Weibull `(A, k)` from the scenario | an hourly hub-height *timeseries* |
 | AEP method | analytic integration of the curve over the Weibull | integration over the raw series |
 | Feeds finance | **yes** — this is the committed headline | **no**, by design |
@@ -82,7 +82,7 @@ Do not copy these into a document, a docstring or this README. Cite the path ins
 | The committed bankable AEP, its losses, uncertainty budget and full method note | `scenarios/aep_summary_dutchbay_10mw.json` |
 | The turbine, hub height, count, Weibull and loss stack of a case | that case's file in `scenarios/` |
 | Which power curve a scenario uses and where the curve came from | `resource.power_curve` in the scenario, resolved against `analytics.loader.aep_loader.APPROVED_SOURCES` |
-| How gross AEP, wake, losses and P50/P75/P90 are computed | `bankable_aep.py` and `analytics/wind/{aep_tornado,losses_model}.py` |
+| How gross AEP, wake, losses and P50/P75/P90 are computed | `bankable_aep.py`, `aep_integral.py`, `aep_summary.py` and `analytics/wind/losses_model.py` |
 | The chain of custody from ERA5 to the finance model | `docs/WIND_AEP_CHAIN_OF_CUSTODY.md` |
 | The wind interface contract | `docs/WIND_INTERFACE_SCHEMA.md` |
 

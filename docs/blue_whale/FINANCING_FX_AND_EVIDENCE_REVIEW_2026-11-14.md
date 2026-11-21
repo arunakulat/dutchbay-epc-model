@@ -10,6 +10,8 @@ Complementary to PR #1678 (`#1677`, Equipment-Cost Parity Benchmark & Logistics 
 >
 > **Addendum (BW-5, `#1578` L-12):** The core v14 engine's Python override gateways now carry an FX override to the USD OPEX share (the web API's `/run-pipeline` overrides do not yet): an FX drift stress or a Monte Carlo drift draw replaces that share's own FX path with the stressed model curve. This review is kept as written on its dates; where it calls that engine path pending, it describes the state then. The screening still does not call the engine.
 >
+> **Addendum (`#1578` U4, 17 November 2026):** The screening now runs for any scenario that declares a `financing_screening` block (contract `#1754`): `scripts/run_fx_tenor_screening_v14.py scenario=<path>`, through the site-neutral `analytics/finance/fx_tenor_screening.py`. Capex, tariff, O&M, FX at close, timeline, tax and the gearing cap come from the scenario itself, and the assumptions, cases, stress grid and FX observations below now live in `scenarios/dutchbay_basecase_2025Q4.yaml`'s block. A scenario without the block is reported as not applicable. The module and config named in this review remain as a single-site adapter whose output is byte-identical, and the block-driven run reproduces every figure below exactly. No figure in this review changes.
+>
 > **No Measured Wind Data / No P90:** There is **no measured DutchBay wind data and no measured P90**. All downside generation figures (`assumed_downside_gwh = 377.3 GWh`) are **assumed downside screening sensitivities**, not measured P90 estimates.
 
 ---

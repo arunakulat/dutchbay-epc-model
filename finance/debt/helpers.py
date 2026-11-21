@@ -29,8 +29,9 @@ def _section_case_insensitive(
 def _required_number(value: Any, path: str) -> float:
     """Return a required financing term as a finite float, or refuse naming ``path``.
 
-    The debt engine used to fill an absent gearing, target DSCR or flat downside factor
-    with Dutch Bay figures (0.70, 1.30, 0.80). Those terms now come only from the
+    The debt engine used to fill an absent gearing, target DSCR, flat downside factor,
+    tenor, capacity discount rate or construction-period count with Dutch Bay figures
+    (0.70, 1.30, 0.80, 15 years, 8% and two periods). Those terms now come only from the
     scenario YAML; there is no code default (#1429).
 
     Args:
@@ -41,9 +42,10 @@ def _required_number(value: Any, path: str) -> float:
         The declared value as a float.
 
     Raises:
-        ValueError: If the value is absent, not numeric or not finite.
+        ValueError: If the value is absent, a boolean, not numeric or not finite.
     """
-    number = as_float(value, None)
+    # A YAML boolean is not a number: ``as_float`` would read ``true`` as 1.0.
+    number = None if isinstance(value, bool) else as_float(value, None)
     if number is None or not math.isfinite(number):
         raise ValueError(
             f"{path} is required and must be a finite number (got {value!r}); "

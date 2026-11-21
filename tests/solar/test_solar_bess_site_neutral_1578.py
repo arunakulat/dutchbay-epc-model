@@ -16,6 +16,7 @@ import dataclasses
 import json
 import math
 import re
+import tokenize
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -40,6 +41,8 @@ GENERIC_MODULES = (
     "solar_resource/pv_bess_sizing.py",
     "solar_resource/pv_bess_dispatch.py",
     "analytics/gis/pv_array_layout.py",
+    # #1578 U3: the run and summary moved out of the single-site script.
+    "solar_resource/pv_bess_sizing_runner.py",
 )
 SITE_WORDING = re.compile(r"blue[ _-]?whale|\bPR \d|\bPR\d", re.IGNORECASE)
 
@@ -53,6 +56,19 @@ def _yaml(path: Path) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # L-5 and A-4: no site wording in the generic modules, docstrings included
 # ---------------------------------------------------------------------------
+@pytest.mark.parametrize("rel", GENERIC_MODULES)
+def test_generic_module_comments_carry_no_site_or_pr_wording(rel: str) -> None:
+    """Comments too (#1725 assurance A-3): the string check does not read them."""
+    with (REPO_ROOT / rel).open("rb") as handle:
+        comments = [
+            tok.string
+            for tok in tokenize.tokenize(handle.readline)
+            if tok.type == tokenize.COMMENT
+        ]
+    assert comments
+    assert [c for c in comments if SITE_WORDING.search(c)] == []
+
+
 @pytest.mark.parametrize("rel", GENERIC_MODULES)
 def test_generic_modules_carry_no_site_or_pr_wording(rel: str) -> None:
     tree = ast.parse((REPO_ROOT / rel).read_text())
@@ -161,6 +177,11 @@ def test_regulatory_readings_keep_their_config_names_and_order() -> None:
         _renamed_regulatory({"A": "combined", "B": "export"})
     )
     assert renamed.readings == ("combined", "export")
+    # Config order, not sorted order (#1725 assurance A-1): zeta comes before alpha.
+    unsorted = sz.RegulatoryBasis.from_mapping(
+        _renamed_regulatory({"A": "zeta", "B": "alpha"})
+    )
+    assert unsorted.readings == ("zeta", "alpha")
     assert dataclasses.replace(renamed, readings=basis.readings) == basis
     one = copy.deepcopy(reg)
     one["standardised_ppa_limit"]["readings"] = {"only": "One reading."}
@@ -168,7 +189,8 @@ def test_regulatory_readings_keep_their_config_names_and_order() -> None:
 
 
 @pytest.mark.parametrize(
-    "readings", [{}, ["A", "B"], {"committed": "x"}, {"": "x"}, {1: "x"}]
+    "readings",
+    [{}, ["A", "B"], {"committed": "x"}, {"by_reading": "x"}, {"": "x"}, {1: "x"}],
 )
 def test_malformed_regulatory_readings_are_refused(readings: Any) -> None:
     reg = copy.deepcopy(_yaml(REG_CONF))

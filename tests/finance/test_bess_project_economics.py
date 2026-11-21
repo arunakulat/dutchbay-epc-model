@@ -74,6 +74,8 @@ def _capacity_cfg(
         },
         "fx": {"start_lkr_per_usd": fx_start, "annual_depr_pct": 0.0},
         "returns": {"project_life_years": project_life},
+        # Required since #1429: no code default for the build time (was 2 periods).
+        "timeline": {"construction_years": 2},
         "bess_economics": economics,
     }
 
