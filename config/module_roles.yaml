@@ -1074,6 +1074,11 @@ modules:
     role_description: CASPER optional-extra availability and pin-compliance probe read from pyproject metadata.
     excel_representation: governance_metadata
 
+  - module_path: app.reports.aep_resource_sensitivity
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's labelled wind-resource AEP sensitivity section from the AEP cluster tornado and Monte Carlo.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.capital_risk_emit
     pipeline_stage: reporting_delivery
     role_description: Opt-in emitter appending Monte Carlo capital-risk analysis blocks to lender outputs.
