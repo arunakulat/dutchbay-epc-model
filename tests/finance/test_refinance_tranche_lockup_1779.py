@@ -295,3 +295,70 @@ def test_the_sweep_rounding_allowance_stays_a_cash_sweep_rule(
     """
     row = _schedule(2.0, treatment=treatment, balloon=1_000_000.005)
     assert row["equity_distribution_usd"] == pytest.approx(paid, abs=1e-9)
+
+
+def _spend_order_schedule(balloon: float, treatment: str) -> list[Dict[str, Any]]:
+    """Five years: year 1 pays out with a 50% holdback (retentions 50); years 2 and 3 are
+    tranche-locked (year 2 traps its 40); year 3 pays the balloon from no CFADS."""
+    coverage = {2: 1.0, 3: 1.0}
+    cfads = [100.0, 40.0, 0.0, 0.0, 0.0]
+    rows = [
+        {
+            "year": year,
+            "cfads_usd": cfads[year - 1],
+            "debt_service_usd": 0.0,
+            "balloon_resolution": balloon if year == 3 else 0.0,
+        }
+        for year in range(1, 6)
+    ]
+    debt: Dict[str, Any] = {
+        "balloon_treatment": treatment,
+        "annual_row_debt_period_map": [
+            {"annual_row_index": i, "debt_period": i + 3} for i in range(5)
+        ],
+        "dscr_series": [None] * 8,
+        "balloon_resolution": [0.0] * 8,
+        "debt_outstanding": [0.0] * 8,
+        "refinance": {
+            "coverage_by_period": [
+                {"period": year + 2, "coverage": cov} for year, cov in coverage.items()
+            ]
+        },
+    }
+    config = EquityDistributionConfig(
+        min_dscr_threshold=1.30, min_reserve_months=0, holdback_pct=50.0
+    )
+    return build_equity_distribution_schedule(
+        annual_rows=rows, debt_result=debt, distribution_config=config
+    )
+
+
+def test_a_refinance_shortfall_takes_trapped_cash_then_retentions_then_the_sponsor() -> (
+    None
+):
+    """The spend order on a refinance: lockup-trapped cash, then retentions, then a call.
+
+    A shortfall of 60 takes the 40 trapped in year 2 first and then 20 of year 1's 50 of
+    retentions, so nothing is left trapped for the cure in year 4 and the 30 of retentions
+    left is released at the horizon. Retentions first would leave 30 trapped and release it
+    in year 4. A shortfall of 120 takes all 90 and calls the sponsor for the other 30.
+    """
+    rows = _spend_order_schedule(60.0, "refinance")
+    assert [r["covenant_locked"] for r in rows] == [False, True, True, False, False]
+    assert rows[2]["spv_cash_applied_usd"] == pytest.approx(60.0, abs=1e-9)
+    assert rows[2]["equity_distribution_usd"] == pytest.approx(0.0, abs=1e-9)
+    assert rows[3]["equity_distribution_usd"] == pytest.approx(0.0, abs=1e-9)
+    assert rows[4]["terminal_release_usd"] == pytest.approx(30.0, abs=1e-9)
+    assert rows[4]["equity_distribution_usd"] == pytest.approx(30.0, abs=1e-9)
+
+    rows = _spend_order_schedule(120.0, "refinance")
+    assert rows[2]["spv_cash_applied_usd"] == pytest.approx(90.0, abs=1e-9)
+    assert rows[2]["equity_distribution_usd"] == pytest.approx(-30.0, abs=1e-9)
+    assert rows[4]["terminal_release_usd"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_a_bullet_shortfall_is_still_a_sponsor_call() -> None:
+    """Only a sweep and a refinance draw on SPV-held cash; a bullet still calls the sponsor."""
+    rows = _spend_order_schedule(60.0, "bullet")
+    assert rows[2]["spv_cash_applied_usd"] == pytest.approx(0.0, abs=1e-9)
+    assert rows[2]["equity_distribution_usd"] == pytest.approx(-60.0, abs=1e-9)
