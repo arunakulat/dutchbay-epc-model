@@ -454,6 +454,21 @@
       {%- if ctx.tornado.undefined_drivers %} Drivers with an undefined point:
       {{ ctx.tornado.undefined_drivers | join(", ") }}.{% endif %}</p>
     {% endif %}
+    {% if ctx.f5_notice %}
+    {# #1818: the F-5 non-reliance line beside the sensitivities. #}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% elif ctx.tornado_not_computed %}
+  {# #1818: a tornado that was not computed is said so, not left out silently. #}
+  <section class="page">
+    <h2>Sensitivity Tornado</h2>
+    <p class="tornado-not-computed"><strong>Not computed.</strong> {{ ctx.tornado_not_computed }}.
+      This report therefore shows no one-at-a-time sensitivity; that is not a finding that
+      the drivers have no effect.</p>
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
   </section>
   {% endif %}
 
