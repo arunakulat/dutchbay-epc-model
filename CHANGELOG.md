@@ -674,6 +674,26 @@ its placement in the independence section, and its resistance to an exception ad
   by pinning the former rate as fixture input; their expected values are unchanged. The
   canonical lender case is unchanged.
 
+- **One cash basis for the post-maturity sweep and the senior-fee deferral (15.29.0,
+  #1736).** A cash sweep's post-maturity balloon payments and its senior-fee deferral are now
+  decided on the cash the SPV actually has (owner ruling of 2026-11-15): the year's cash after
+  scheduled service and grossed-up interest WHT on the equity-facing rows, plus the reserve,
+  lockup-trapped cash and retentions. The debt engine and the equity waterfall now agree on
+  it; before, the engine swept on the sizing-basis CFADS while the waterfall paid from its own
+  cash, so the reserve release and trapped cash reached equity while the balloon stayed
+  unpaid. Equity KPIs move on the six committed scenarios that sweep a balloon after maturity:
+  the DutchBay base case equity IRR goes from -3.14% to -7.52% (balloon residual USD 120.74M
+  to 104.46M), master config v14 2.07% to 1.51%, optimistic 1.71% to 1.11%, the 5 US-cent
+  fixed-LKR lender case -16.44% to -17.59%, Mullikulam -19.24% to -20.61% and the Kalpitiya
+  fitted lender case -5.87% to -5.72%. Project IRR, DSCR and the sized debt do not move; LLCR
+  and PLCR move in the fourth decimal place on some; the refinance lender case does not move.
+  On the base case the equity IRR no longer responds to the corporate tax rate: its only taxed
+  years are locked up, and their cash now pays the unpaid balloon. The reported
+  `wht_on_interest` is on the interest paid (#1539 DOM-4). Limit: a deferred fee still unpaid
+  is not accrued in the three statements. HOLDs that survive: #1110's Board and lender
+  circulation hold; the F-5 covenant bar (no quarterly CFADS or intra-year DSCR figure
+  supports a lender representation); and the `v15.6.1` release hold. Detail in the compiled
+  fragment.
 - **Capex price dates reach the per-technology capex (15.28.0, #1578).** A declared
   `capex.price_basis` now escalates each `generation.technologies.<name>.capex_usd` by the
   factor `capex.usd_total` takes (ruling of 2026-11-15), and records the stated amounts under

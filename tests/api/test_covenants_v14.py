@@ -91,9 +91,11 @@ def _base_financing_block() -> Dict[str, Any]:
     that exercise the v14 debt logic (construction, IDC, amortisation).
     """
     return {
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
         "Financing_Terms": {
             # Construction structure
             "construction_periods": 2,
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
             "construction_schedule": [40.0, 60.0],
             "debt_drawdown_pct": [0.5, 0.5],
             "grace_years": 0,
@@ -114,7 +116,7 @@ def _base_financing_block() -> Dict[str, Any]:
                 "usd_nominal": 0.08,  # 8% USD
                 "dfi_nominal": 0.06,  # 6% DFI
             },
-        }
+        },
     }
 
 

@@ -209,6 +209,7 @@ Counts: pipeline 133, emitter 41, report 1, web 16, script 49, unreached 43, ret
 | `app.reports.dbpl.style` | script | `scripts.generate_solar_assessment_report` |  |
 | `app.reports.grid_screening_emit` | emitter | `app.reports.grid_screening_emit` |  |
 | `app.reports.interaction_grid_emit` | emitter | `app.reports.interaction_grid_emit` |  |
+| `app.reports.module_ledger` | unreached | tests only (1 test file) |  |
 | `app.reports.renderer` | emitter | `app.reports.capital_risk_emit` |  |
 | `app.reports.report_config` | emitter | `app.reports.capital_risk_emit` |  |
 | `app.reports.report_model` | emitter | `app.reports.capital_risk_emit` |  |

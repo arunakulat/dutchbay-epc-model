@@ -1,0 +1,1697 @@
+# DutchBay EPC Model — Config-first Module Role Registry (W1-1, CCCDIR / CESSPIT)
+#
+# Single source of truth mapping every mapped model, analytics, resource, finance,
+# and delivery module (plus app.reports.module_ledger and run_full_pipeline_v14)
+# to its pipeline stage, architectural role, Excel workbook representation kind,
+# declared optional dependency extras, and extra availability mode.
+#
+# Validated strictly by app.reports.module_ledger.load_module_role_registry().
+
+schema_version: "1.0"
+
+stages:
+  - governance
+  - site_gis
+  - resource_yield
+  - tech_hybrid_bess
+  - grid_qsts
+  - cost_levies_epc
+  - core_finance
+  - risk_sensitivity_opt
+  - reporting_delivery
+
+modules:
+  - module_path: analytics.aep_provenance
+    pipeline_stage: governance
+    role_description: Enforces AEP source-provenance verification for financed pipeline runs.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.aep_reconciliation
+    pipeline_stage: governance
+    role_description: Reconciles declared annual energy production against scenario capacity factor.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.capital_risk_layer_v14
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Facade orchestrating lender-grade Monte Carlo capital-risk analytics and refusal checks.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.capital_structure_optimizer_v14
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Optimizes debt-tranche mix and capex-contingency allocations under covenant constraints.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.casper.casper_payload
+    pipeline_stage: reporting_delivery
+    role_description: Translates scenario, Monte Carlo, and sensitivity outputs into versioned CASPER JSON payloads.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.casper.casper_v14
+    pipeline_stage: reporting_delivery
+    role_description: Thin CASPER orchestrator wrapping evaluation_v14 and serializing CasperResult payloads.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.cli.cli_capital_structure_optimize_hydra
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Hydra CLI entrypoint for opt-in capital-structure and contingency optimization runs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.cli.cli_monte_carlo_hydra
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Hydra CLI entrypoint for standalone Monte Carlo uncertainty analysis runs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.cli.cli_sensitivity
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Deprecated legacy sensitivity CLI wrapper superseded by cli_sensitivity_hydra.
+    excel_representation: non_model_adapter
+    notes: Deprecated entrypoint kept for backward compatibility.
+
+  - module_path: analytics.cli.cli_sensitivity_hydra
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Hydra CLI entrypoint for standalone sensitivity analysis runs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.conditions_precedent
+    pipeline_stage: governance
+    role_description: Validates first-drawdown and financial-close conditions-precedent checklists against config taxonomy.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.config_schema
+    pipeline_stage: governance
+    role_description: Central registry of RequiredFieldSpec definitions and config schema metadata.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.contracts_v14
+    pipeline_stage: governance
+    role_description: Canonical frozen result contracts for scenarios, Monte Carlo, sensitivity, CASPER, and grid studies.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.core.covenant_breach
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Computes noise-tolerant DSCR covenant-breach probability primitives across trial arrays.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.core.epc_helper
+    pipeline_stage: cost_levies_epc
+    role_description: Compatibility shim re-exporting EPC breakdown helpers from finance.epc_helper_v14.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.core.exceedance
+    pipeline_stage: resource_yield
+    role_description: Dependency-free normal exceedance z-score table and P50/P75/P90 calculation primitives.
+    excel_representation: formula
+
+  - module_path: analytics.core.metrics
+    pipeline_stage: core_finance
+    role_description: Computes canonical scenario KPI summaries and delegates NPV/IRR math to finance.irr.
+    excel_representation: formula
+
+  - module_path: analytics.core.parameter_solvers
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Root-finding solvers for tariff breakeven and target financial KPI thresholds.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.core.returns
+    pipeline_stage: core_finance
+    role_description: Computes project and equity NPV, IRR, and MIRR return metrics over cashflow series.
+    excel_representation: formula
+
+  - module_path: analytics.core.risk_metrics
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Calculates VaR, CVaR, percentile bands, downside risk, and covenant breach summaries.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.core.sensitivity_runner
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Runs configured one-way sensitivity sweeps from scenario paths via the evaluation gateway.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.cost.benchmark
+    pipeline_stage: cost_levies_epc
+    role_description: Compares project CAPEX and OPEX unit costs against external published benchmarks.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.cost.contingency
+    pipeline_stage: cost_levies_epc
+    role_description: Evaluates quantitative CAPEX contingency requirements aligned with AACE RP 119R-21.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.cost.cost_basis
+    pipeline_stage: cost_levies_epc
+    role_description: Resolves and validates the single anchored USD cost-basis vintage for CAPEX and OPEX.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.cost.estimate_class
+    pipeline_stage: cost_levies_epc
+    role_description: Classifies CAPEX estimate maturity and accuracy bands under AACE estimate classes.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.cost.mc_capex
+    pipeline_stage: cost_levies_epc
+    role_description: Propagates probabilistic CAPEX cost-component distributions through the finance engine.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.dashboard.streamlit_app
+    pipeline_stage: reporting_delivery
+    role_description: Interactive Streamlit sensitivity and scenario exploration dashboard interface.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - dashboard
+    extra_mode: required
+
+  - module_path: analytics.development_readiness
+    pipeline_stage: governance
+    role_description: Evaluates development-readiness and E&S permit status registers for financial close.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.dfi_workbook.foundation
+    pipeline_stage: reporting_delivery
+    role_description: Builds a macro-free reproducible workbook foundation with provenance, scalar inputs, and execution-status rollup formulas.
+    excel_representation: non_model_adapter
+    notes: Preparatory workbook surface; canonical execution-record projection and financial formula qualification remain separate integration gates.
+
+  - module_path: analytics.dfi_workbook.registry
+    pipeline_stage: reporting_delivery
+    role_description: Allocates validated workbook cell coordinates and resolves formula references without computing financial outcomes.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.dscr_sensitivity
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Runs dual-DSCR sensitivity sweeps across tariff, capacity factor, and financing levers.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.emit_selection
+    pipeline_stage: reporting_delivery
+    role_description: Resolves CLI emitter selection flags controlling optional pipeline report and workbook outputs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.evaluate_scenario
+    pipeline_stage: core_finance
+    role_description: Coordinator entry point loading a scenario config, applying overrides, and running v14 pipeline.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.evaluation_v14
+    pipeline_stage: core_finance
+    role_description: Canonical evaluate_with_overrides gateway routing analytics callers into the v14 finance pipeline.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.evidence_register
+    pipeline_stage: governance
+    role_description: Validates lender/DFI assumption evidence registers and source-provenance coverage.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.evidence_score
+    pipeline_stage: governance
+    role_description: Scores bankability evidence completeness across declared feasibility evidence dimensions.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.executive_workbook
+    pipeline_stage: reporting_delivery
+    role_description: Builds the multi-sheet Excel executive summary workbook and non-reliance banner from pipeline outputs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.export_helpers
+    pipeline_stage: reporting_delivery
+    role_description: Formatting and tabular serialization helpers for v14 scenario analytics exports.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.feasibility_execution
+    pipeline_stage: governance
+    role_description: Held ProjectCase-to-v14 execution boundary translating global input contracts to v14 runs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.feasibility_report_contract.assembly_authority
+    pipeline_stage: governance
+    role_description: Governed D3C-0 assembly-authority selection contract for feasibility-report packages.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.assessment_scope
+    pipeline_stage: governance
+    role_description: Pure assessment-scope and v14 scenario-binding request contracts for feasibility packages.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.context_binding
+    pipeline_stage: governance
+    role_description: Binds D3A, D3B, and D3C facts into non-authoritative report context candidates.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.engine_identity
+    pipeline_stage: governance
+    role_description: Import-safe engine and manifest identity projection for feasibility-report provenance.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.package
+    pipeline_stage: governance
+    role_description: Immutable DBAY-FRC-001 feasibility-report package root enforcing reference and authority checks.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.project_case
+    pipeline_stage: governance
+    role_description: Pure global ProjectCase v1 input contract covering assets, topology, costs, and provenance.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.records
+    pipeline_stage: governance
+    role_description: Typed immutable evidence, claim, review, decision, and reconciliation records for DBAY-FRC-001.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.result_facade
+    pipeline_stage: governance
+    role_description: Strict non-authoritative D3C-1a result-projection facade contracts for feasibility outputs.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.taxonomy_identity
+    pipeline_stage: governance
+    role_description: Import-safe identity and hash projection of the canonical feasibility-section taxonomy.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_report_contract.vocabulary
+    pipeline_stage: governance
+    role_description: Strict frozen vocabulary enums and constrained types for the feasibility-report contract.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_result_projection
+    pipeline_stage: governance
+    role_description: Projects accepted D3B execution results into non-authoritative D3C-1a feasibility views.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.feasibility_sections
+    pipeline_stage: governance
+    role_description: Loads the 20-section feasibility report taxonomy and evaluates scenario coverage compliance.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.finance.blue_whale_fx_tenor_screening
+    pipeline_stage: core_finance
+    role_description: Site-specific configuration adapter delegating to analytics.finance.fx_tenor_screening.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.finance.fx_tenor_screening
+    pipeline_stage: core_finance
+    role_description: Evaluates dual-currency financing, FX depreciation shocks, and debt tenor-tail screening.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.fx.fx_builder
+    pipeline_stage: core_finance
+    role_description: Constructs structured USD/LKR FX curves and volatility blocks for pipeline and Monte Carlo runs.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.fx.fx_calibration
+    pipeline_stage: core_finance
+    role_description: Calibrates USD/LKR FX drift and volatility parameters from historical market observations.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.fx.fx_contracts
+    pipeline_stage: core_finance
+    role_description: Typed contracts defining FX curves, risk profiles, and structured FX scenario blocks.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.fx.fx_fetch
+    pipeline_stage: core_finance
+    role_description: Config-driven USD/LKR FX-rate fetcher, pin resolver, and spot drift validator.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.fx.fx_history
+    pipeline_stage: core_finance
+    role_description: Provenance-tracked historical USD/LKR exchange-rate series loader for FX calibration.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.fx.fx_integration
+    pipeline_stage: core_finance
+    role_description: Integrates structured FX curves and calibration blocks into v14 pipeline execution configs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.fx_sensitivity_real
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Runs real FX depreciation and rate-shock sensitivity sweeps across scenario KPIs.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.gis.boundary_clip
+    pipeline_stage: site_gis
+    role_description: Clips wind-speed and AEP GeoTIFF rasters to a project site boundary polygon.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - gis
+    extra_mode: required
+
+  - module_path: analytics.gis.dem_ingest
+    pipeline_stage: site_gis
+    role_description: Ingests digital elevation model rasters and derives slope and aspect terrain layers.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: required
+    notes: load_dem and run_dem_ingest require [gis] (rasterio); slope_aspect_hillshade and derive_terrain_layers run on base NumPy.
+
+  - module_path: analytics.gis.exclusion_mask
+    pipeline_stage: site_gis
+    role_description: Buffers setback constraints and rasterizes buildable-area exclusion masks for siting.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: required
+
+  - module_path: analytics.gis.geotiff_export
+    pipeline_stage: site_gis
+    role_description: Exports geospatial wind, capacity-factor, and AEP raster grids as GeoTIFFs with manifest.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - gis
+    extra_mode: required
+
+  - module_path: analytics.gis.gis_export
+    pipeline_stage: site_gis
+    role_description: Orchestrates coarse and fine geospatial wind and AEP GeoTIFF generation for QGIS export.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - gis
+      - wind
+    extra_mode: required
+    notes: GeoTIFF export always requires [gis] (rasterio); default_era5_source requires [wind] unless an explicit CellSource is injected.
+
+  - module_path: analytics.gis.gwa_ingest
+    pipeline_stage: site_gis
+    role_description: Ingests Global Wind Atlas 250 m GeoTIFF layers as an external wind reference surface.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: required
+
+  - module_path: analytics.gis.landcover_roughness
+    pipeline_stage: site_gis
+    role_description: Maps ESA WorldCover land-cover rasters to aerodynamic roughness-length z0 grids.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: required
+    notes: export_roughness_raster requires [gis] (rasterio); reclass_landcover_to_z0 runs on base NumPy.
+
+  - module_path: analytics.gis.mcdm_suitability
+    pipeline_stage: site_gis
+    role_description: Builds GIS multi-criteria wind-siting suitability surfaces using AHP weighted linear combination.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: casper_fallback
+    notes: Core AHP, normalisation, and WLC surface math runs on base NumPy; GeoTIFF export uses [gis] (rasterio).
+
+  - module_path: analytics.gis.pv_array_layout
+    pipeline_stage: site_gis
+    role_description: Sizes fixed-tilt PV tables, row pitch, BESS pad, and site polygon packing geometry.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+      - solar
+    extra_mode: required
+    notes: Uses [gis] (shapely, pyproj) for site geometry/setbacks and [solar] (pvlib) for solar-position row-pitch calculations.
+
+  - module_path: analytics.gis.rix
+    pipeline_stage: site_gis
+    role_description: Computes ruggedness index (RIX and delta-RIX) terrain complexity diagnostics from DEM grids.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+    extra_mode: casper_fallback
+    notes: Core point and array RIX diagnostics run on base NumPy; optional GeoTIFF export uses [gis] (rasterio).
+
+  - module_path: analytics.gis.shadow_flicker
+    pipeline_stage: site_gis
+    role_description: Evaluates coastal turbine setback placement, tip-height setbacks, and receptor shadow-flicker hours.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - gis
+      - solar
+    extra_mode: required
+    notes: Uses [gis] (pyproj, shapely) for local TM projection/setbacks and [solar] (pvlib) for sun-position calculations.
+
+  - module_path: analytics.grid._pandapower_worker
+    pipeline_stage: grid_qsts
+    role_description: Isolated subprocess worker running single-request pandapower short-circuit and load-flow screens.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: required
+
+  - module_path: analytics.grid.capabilities.bess
+    pipeline_stage: grid_qsts
+    role_description: Design-stage BESS PCS fault-current and SoH-degraded reactive capability screen at POC.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.grid.capabilities.bess_soc
+    pipeline_stage: grid_qsts
+    role_description: Shared BESS state-of-charge tracking and frequency/arbitrage reserve-split accounting model.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.grid.capabilities.solar
+    pipeline_stage: grid_qsts
+    role_description: Design-stage solar PV inverter fault-current, reactive PQ, and ride-through capability screen.
+    excel_representation: engine_table_plus_rollup
+    optional_extras: []
+    extra_mode: none
+
+  - module_path: analytics.grid.capabilities.wind
+    pipeline_stage: grid_qsts
+    role_description: Design-stage wind turbine converter fault-current, reactive PQ, and ride-through capability screen.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Static PQ envelope and default run_dynamics=False run on base dependencies; run_dynamics=True uses [grid] (andes) via analytics.grid.ride_through.
+
+  - module_path: analytics.grid.curtailment_qsts
+    pipeline_stage: grid_qsts
+    role_description: OpenDSSDirect QSTS annual feeder curtailment engine splitting deemed and self curtailment.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: required
+
+  - module_path: analytics.grid.evaluate_grid
+    pipeline_stage: grid_qsts
+    role_description: Single evaluation gateway orchestrating design-stage grid SCR and reactive screening studies.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Invokes [grid] pandapower screens when available and falls back to closed-form screens under CASPER.
+
+  - module_path: analytics.grid.frequency_response
+    pipeline_stage: grid_qsts
+    role_description: Computes design-stage primary frequency-response de-load and droop headroom sizing.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.grid.grid_interface_schema
+    pipeline_stage: grid_qsts
+    role_description: Validates grid interconnection study configuration schemas and registers required grid fields.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.grid.harmonics
+    pipeline_stage: grid_qsts
+    role_description: Performs SCR-coupled harmonic distortion and flicker power-quality screening at the POC.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) Zbus scan when available and falls back to closed-form inductive impedance under CASPER.
+
+  - module_path: analytics.grid.hybrid.frequency_response
+    pipeline_stage: grid_qsts
+    role_description: Models combined multi-technology hybrid plant frequency-droop coordination at the POC.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Closed-form group droop split and SOC accounting run on base dependencies; opt-in run_dynamics=True degrades gracefully when [grid] (andes) is absent.
+
+  - module_path: analytics.grid.hybrid.poc_aggregation
+    pipeline_stage: grid_qsts
+    role_description: Aggregates wind, solar, and BESS electrical capability ratings onto a shared POC bus.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.grid.pandapower_screening
+    pipeline_stage: grid_qsts
+    role_description: Process-isolated launcher managing pandapower grid screen execution and version policy checks.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: required
+
+  - module_path: analytics.grid.qsts_evidence
+    pipeline_stage: grid_qsts
+    role_description: Fail-closed verifier for real/site QSTS evidence packages, checksums, and telemetry hashes.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.grid.reactive_screen
+    pipeline_stage: grid_qsts
+    role_description: Evaluates steady-state reactive power capability and voltage compliance at the POC.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) AC load-flow when available and falls back to closed-form reactive gap screening under CASPER.
+
+  - module_path: analytics.grid.ride_through
+    pipeline_stage: grid_qsts
+    role_description: Shared ANDES RMS dynamic LVRT/HVRT and frequency ride-through simulation core.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Envelope parsing and default run_dynamics=False run on base dependencies; dynamic RMS solve requires [grid] (andes).
+
+  - module_path: analytics.grid.ride_through_poc
+    pipeline_stage: grid_qsts
+    role_description: Compatibility shim forwarding legacy LVRT ride-through calls to analytics.grid.ride_through.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: required
+
+  - module_path: analytics.grid.short_circuit
+    pipeline_stage: grid_qsts
+    role_description: Evaluates short-circuit ratio (SCR) and fault levels at the point of connection.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Uses [grid] (pandapower) IEC 60909 when available and falls back to closed-form Thevenin screening under CASPER.
+
+  - module_path: analytics.grid.synthetic_aep_qsts_output_records
+    pipeline_stage: grid_qsts
+    role_description: Executes and validates governed synthetic AEP and QSTS output-record handoff packages.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.grid.synthetic_feeder_placeholder
+    pipeline_stage: grid_qsts
+    role_description: Deterministic synthetic OpenDSS feeder model package for counterfactual QSTS study testing.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - grid
+    extra_mode: required
+    notes: Production compile verification requires [grid] (opendssdirect); test-only compile-disabled mode runs on base dependencies.
+
+  - module_path: analytics.grid.synthetic_feeder_qsts_adapter
+    pipeline_stage: grid_qsts
+    role_description: Adapts a verified synthetic feeder QSTS package into a finance-safe curtailment overlay.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: required
+    notes: Runtime verification requires a detached OpenDSS compile check via verify_synthetic_feeder_package ([grid]).
+
+  - module_path: analytics.grid.synthetic_input_records
+    pipeline_stage: grid_qsts
+    role_description: Generates and validates deterministic synthetic input-record packages for QSTS workflows.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.infeasibility_diagnostics
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Captures structured constraint infeasibility diagnostics and optimization audit logs.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.irr_bridge
+    pipeline_stage: core_finance
+    role_description: Decomposes project IRR to equity IRR across tax, interest, leverage, and timing drivers.
+    excel_representation: formula
+
+  - module_path: analytics.jurisdiction_packs.schema
+    pipeline_stage: cost_levies_epc
+    role_description: Strict schema and loader for versioned, sourced, effective-dated jurisdiction rule packs (statutory tax and levy parameters).
+    excel_representation: governance_metadata
+    notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
+
+  - module_path: analytics.loader.aep_loader
+    pipeline_stage: resource_yield
+    role_description: Loads approved EPC annual energy production summaries with manifest provenance validation.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.mc.aggregate
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Aggregates Monte Carlo trial outcomes into percentiles, mean/std stats, and fallback counts.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.convergence
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Evaluates Monte Carlo sample convergence and order-statistic confidence intervals.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.correlation
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Validates PSD correlation matrices and applies Iman-Conover rank correlation to LHS draws.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.covenant
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Resolves canonical DSCR covenant-floor precedence shared by Monte Carlo and CASPER payloads.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.mc.degradation
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Applies optional degradation overrides into Monte Carlo trial parameter dictionaries.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.engine
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Executes seeded Monte Carlo risk simulations across correlated scenario parameters.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.exports
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Builds lender risk summary tables, DSCR breach metrics, and CASPER risk blocks from MC runs.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.mc.samplers
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Generates seeded Latin Hypercube and Sobol low-discrepancy samples for Monte Carlo trials.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.monte_carlo_v14
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Deprecated compatibility shim re-exporting Monte Carlo APIs from analytics.mc.engine.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.operational.aep
+    pipeline_stage: resource_yield
+    role_description: Computes deterministic post-COD operational energy accounting without altering canonical KPIs.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.operational.contracts
+    pipeline_stage: governance
+    role_description: Frozen post-COD operational-evidence envelope contracts and telemetry validation rules.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.operational.eya_bridge
+    pipeline_stage: resource_yield
+    role_description: Reconciles pre-COD energy-yield assessment expectations against post-COD actual generation.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.operational.normalization
+    pipeline_stage: governance
+    role_description: Normalizes operational generation tables and produces deterministic QA verification receipts.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.optimization_v14
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Parameter optimization facade evaluating candidate designs through evaluate_with_overrides.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.output_paths
+    pipeline_stage: governance
+    role_description: Config-first output directory and artifact filename resolver for v14 pipeline CLI runs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.pipeline_analytics_v14
+    pipeline_stage: core_finance
+    role_description: Extended analytics pipeline wrapper combining v14 finance evaluation with risk summaries.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.pipeline_v14_enhanced
+    pipeline_stage: core_finance
+    role_description: Production v14 finance orchestrator running cashflow, debt sizing, equity, tax, and WACC engines.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.portfolio.generation_aggregator
+    pipeline_stage: tech_hybrid_bess
+    role_description: Aggregates multi-technology generation streams and blended capacity factors for hybrid runs.
+    excel_representation: formula
+
+  - module_path: analytics.portfolio.multi_tech_tornado
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Computes per-technology one-way tornado sensitivity sweeps for hybrid project scenarios.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.portfolio.poi_curtailment
+    pipeline_stage: grid_qsts
+    role_description: Models shared point-of-interconnection export-cap curtailment across hybrid generation units.
+    excel_representation: formula
+
+  - module_path: analytics.portfolio.tech_wbs
+    pipeline_stage: tech_hybrid_bess
+    role_description: Builds per-technology CAPEX, OPEX, generation, and return work-breakdown structures.
+    excel_representation: formula
+
+  - module_path: analytics.power_curves.oem_parser
+    pipeline_stage: resource_yield
+    role_description: Parses OEM wind turbine power-curve YAML/CSV definitions into validated tabular curves.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.pysam_sandbox.pysam_runner
+    pipeline_stage: resource_yield
+    role_description: Sandbox wrapper executing offline PySAM annual generation profile extractions.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.reproducible_workbook
+    pipeline_stage: reporting_delivery
+    role_description: Normalizes openpyxl ZIP metadata and timestamps for byte-reproducible Excel artifacts.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.resource_contracts
+    pipeline_stage: governance
+    role_description: Frozen resource-assessment export contracts shared across wind and solar adapters.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.run_manifest
+    pipeline_stage: governance
+    role_description: Builds auditable run manifests binding pipeline outputs to scenario hashes, inputs, and git SHA.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.run_modes
+    pipeline_stage: governance
+    role_description: Defines screening, developer, lender, and IC run-mode honesty policies and trial floors.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.scenario_analytics
+    pipeline_stage: core_finance
+    role_description: Batch scenario analytics orchestrator executing multiple v14 cashflow and debt evaluations.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.scenario_loader
+    pipeline_stage: governance
+    role_description: Universal scenario configuration loader normalizing v13 and v14 YAML/JSON scenario files.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.schema_guard
+    pipeline_stage: governance
+    role_description: Pre-flight schema validator checking required scenario fields and run-mode declarations.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.sensitivity.adapters
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Adapts SensitivityRequest contracts to engine sensitivity sweeps and TornadoResult models.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.sensitivity.dashboard_demo
+    pipeline_stage: reporting_delivery
+    role_description: Exploratory example script demonstrating sensitivity suite tabular and chart formatting.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.sensitivity.docstrings
+    pipeline_stage: governance
+    role_description: Reference docstrings and parameter documentation definitions for v14 sensitivity modules.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.sensitivity.dscr
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Evaluates one-way sensitivity of minimum and average DSCR to key model parameters.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.sensitivity.engine
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Executes coherent one-way parameter sensitivity sweeps via evaluate_with_overrides.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.sensitivity.export
+    pipeline_stage: reporting_delivery
+    role_description: Serializes SensitivitySuite results into structured record lists and summary tables.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.sensitivity.global_sa
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Runs Morris screening and Sobol variance-based global sensitivity analysis with SALib.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - feasibility
+    extra_mode: required
+    notes: Uses SALib from [feasibility] (also included in [dev]); build_problem runs on base deps while run_sobol/run_morris/run_pawn fail loudly via _require_salib when absent.
+
+  - module_path: analytics.sensitivity.interaction
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Evaluates two-factor parameter interaction grids over scenario KPIs.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.sensitivity.optimizer
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Multi-objective Pareto frontier explorer supporting grid, LHS, and opt-in pymoo NSGA-II search.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - pareto
+    extra_mode: casper_fallback
+    notes: Grid and LHS plans run on base dependencies; plan_kind="pymoo" requires [pareto].
+
+  - module_path: analytics.sensitivity.tail_risk
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Enriches sensitivity suites with Monte Carlo tail-risk percentile and CVaR snapshots.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.sensitivity.tax
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Evaluates one-way sensitivity of project returns to corporate tax and holiday parameters.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.sensitivity.validation
+    pipeline_stage: governance
+    role_description: QA validator verifying parameter-range configurations for v14 sensitivity pipelines.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.sensitivity_pareto
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Legacy compatibility shim re-exporting multi-objective Pareto optimization utilities.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.sensitivity_v14
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Deprecated compatibility shim forwarding legacy imports to analytics.sensitivity.engine.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.simulation.monte_carlo_aep
+    pipeline_stage: resource_yield
+    role_description: Runs Monte Carlo uncertainty simulation over annual energy production input distributions.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.site_analysis_blocks
+    pipeline_stage: governance
+    role_description: Resolves and validates optional scenario-level site analysis configuration blocks.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.storage_dispatch
+    pipeline_stage: tech_hybrid_bess
+    role_description: Evaluates default-off hourly BESS charge/discharge instruction feasibility against ratings.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.storage_dispatch_contracts
+    pipeline_stage: tech_hybrid_bess
+    role_description: Strict immutable hourly battery-dispatch ledger input contracts and physical receipts.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.storage_sizing
+    pipeline_stage: tech_hybrid_bess
+    role_description: Validates immutable YAML battery power, energy, and round-trip ratings for finance and dispatch.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.synthetic_qsts_finance_counterfactual
+    pipeline_stage: grid_qsts
+    role_description: Evaluates authenticated synthetic-QSTS finance counterfactual cases with explicit caveats.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.three_statement
+    pipeline_stage: core_finance
+    role_description: Constructs integrated P&L, cash flow, and balance sheet schedules with balance tie-out checks.
+    excel_representation: formula
+
+  - module_path: analytics.wacc_sensitivity
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Evaluates cost-of-equity band sensitivities on build-up WACC and discounted project metrics.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.what_if_cases
+    pipeline_stage: risk_sensitivity_opt
+    role_description: Runs declared non-canonical what-if scenario override cases against a named base scenario.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.aep_summary_builder
+    pipeline_stage: resource_yield
+    role_description: Compatibility re-export shim pointing to wind_resource.aep_summary builders.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.wind.aep_tornado
+    pipeline_stage: resource_yield
+    role_description: Computes one-way tornado sensitivities across wind speed, shear, losses, and power curves.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.blue_whale_equipment_parity
+    pipeline_stage: cost_levies_epc
+    role_description: Single-site configuration adapter delegating to analytics.wind.equipment_parity.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.wind.crossval_interface_schema
+    pipeline_stage: resource_yield
+    role_description: Validates opt-in resource.crossval schema for second-source wind-resource comparison.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.wind.equipment_parity
+    pipeline_stage: cost_levies_epc
+    role_description: Evaluates turbine equipment-cost parity benchmarks and unpriced landed cost buildups.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.era5_interface_schema
+    pipeline_stage: resource_yield
+    role_description: Validates opt-in resource.era5 ARCO single-point wind retrieval configuration schemas.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.wind.losses_model
+    pipeline_stage: resource_yield
+    role_description: Computes explicit multiplicative gross-to-net wind AEP loss stacks from scenario inputs.
+    excel_representation: formula
+
+  - module_path: analytics.wind.mc_aep_weibull
+    pipeline_stage: resource_yield
+    role_description: Simulates Monte Carlo wind AEP distributions from fitted Weibull wind-speed parameters.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.met_mast_transfer
+    pipeline_stage: resource_yield
+    role_description: Performs sector-wise Measure-Correlate-Predict transfer for short on-site met-mast records.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.pipeline_aep_v14
+    pipeline_stage: resource_yield
+    role_description: Bridges wind AEP assessment payloads into v14 financial pipeline scenario inputs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.wind.siting_metadata
+    pipeline_stage: site_gis
+    role_description: Builds diagnostic coastal and complex-terrain wind-siting metadata blocks without moving KPIs.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.wind.wind_bess_options
+    pipeline_stage: tech_hybrid_bess
+    role_description: Evaluates co-located wind-plus-BESS dispatch, tariff basis, and finance mapping options.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: analytics.wind.wind_bess_options_runner
+    pipeline_stage: tech_hybrid_bess
+    role_description: Executes configured wind-plus-BESS option cases and summarizes comparative economics.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.wind.wind_integration
+    pipeline_stage: resource_yield
+    role_description: High-level bridge injecting wind AEP summaries and uncertainty runs into v14 configs.
+    excel_representation: non_model_adapter
+
+  - module_path: analytics.wind.wind_interface_schema
+    pipeline_stage: site_gis
+    role_description: Validates GIS-to-EPC wind siting and resource interface payload schemas.
+    excel_representation: governance_metadata
+
+  - module_path: analytics.wind.wind_rose
+    pipeline_stage: resource_yield
+    role_description: Builds directional wind-rose display and provenance summaries from wind-sector data.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: app.api.auth
+    pipeline_stage: reporting_delivery
+    role_description: Token and session authentication guards for the FastAPI wizard web surface.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+    extra_mode: required
+
+  - module_path: app.api.config
+    pipeline_stage: reporting_delivery
+    role_description: Environment-overridable operational configuration defaults for synchronous web routes.
+    excel_representation: non_model_adapter
+
+  - module_path: app.api.jobs_router
+    pipeline_stage: reporting_delivery
+    role_description: FastAPI HTTP router exposing asynchronous live-ERA5 and analysis job endpoints.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+      - jobs
+    extra_mode: conditional
+    dependency_paths:
+      - {name: memory, required_extras: [api]}
+      - {name: redis, required_extras: [api, jobs]}
+    notes: Requires [api] (fastapi) at import time; default memory backend runs without [jobs], while JOBS_BACKEND=redis requires [jobs] (arq, redis).
+
+  - module_path: app.api.main
+    pipeline_stage: reporting_delivery
+    role_description: Unified FastAPI application wiring API routes, HTMX wizard routes, and health endpoints.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+      - report
+    extra_mode: conditional
+    dependency_paths:
+      - {name: base, required_extras: [api]}
+      - {name: pdf_report, required_extras: [api, report]}
+    notes: The base API includes health and HTML routes. The PDF route also requires WeasyPrint from [report] and returns HTTP 503 if the backend is unavailable.
+
+  - module_path: app.api.responses
+    pipeline_stage: reporting_delivery
+    role_description: Typed Pydantic response models (CaseResult, KPIs) at the web and report boundary.
+    excel_representation: non_model_adapter
+
+  - module_path: app.api.security
+    pipeline_stage: reporting_delivery
+    role_description: HTTP security-header middleware and hardening utilities for the FastAPI web surface.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+    extra_mode: required
+
+  - module_path: app.api.surface
+    pipeline_stage: reporting_delivery
+    role_description: Typed result-surfacing response models consumed by the wizard frontend client.
+    excel_representation: non_model_adapter
+
+  - module_path: app.jobs.analysis_runner
+    pipeline_stage: reporting_delivery
+    role_description: Executes asynchronous bounded Monte Carlo, sensitivity, and global-SA analysis jobs.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - feasibility
+    extra_mode: casper_fallback
+    notes: mc and tornado modes run on base dependencies; morris mode invokes analytics.sensitivity.global_sa (SALib from [feasibility]/[dev]).
+
+  - module_path: app.jobs.config
+    pipeline_stage: reporting_delivery
+    role_description: Environment-overridable configuration knobs for asynchronous job storage and execution.
+    excel_representation: non_model_adapter
+
+  - module_path: app.jobs.models
+    pipeline_stage: reporting_delivery
+    role_description: Domain request and status models for asynchronous wind and analysis background jobs.
+    excel_representation: non_model_adapter
+
+  - module_path: app.jobs.redis_store
+    pipeline_stage: reporting_delivery
+    role_description: Cross-process Redis-backed JobStore implementation for durable worker job state.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - jobs
+    extra_mode: required
+    notes: Duck-typed RedisLike protocol allows fake clients in tests without importing redis; production Redis backend requires [jobs].
+
+  - module_path: app.jobs.runner
+    pipeline_stage: reporting_delivery
+    role_description: Orchestrates asynchronous ERA5 wind assessment followed by v14 finance evaluation.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: run_wind_job accepts an injectable assessment_fn on base dependencies; default_assessment requires [wind] via wind_pipeline and era5_retrieval.
+
+  - module_path: app.jobs.sse
+    pipeline_stage: reporting_delivery
+    role_description: Streams Server-Sent Events progress updates for asynchronous background jobs.
+    excel_representation: non_model_adapter
+
+  - module_path: app.jobs.store
+    pipeline_stage: reporting_delivery
+    role_description: Defines the JobStore protocol and default in-memory store for job records.
+    excel_representation: non_model_adapter
+
+  - module_path: app.jobs.worker
+    pipeline_stage: reporting_delivery
+    role_description: Optional arq plus Redis worker entrypoint for production-scale async job execution.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - jobs
+    extra_mode: required
+
+  - module_path: app.models.inputs
+    pipeline_stage: reporting_delivery
+    role_description: Customer-facing wizard input Pydantic model bridging form parameters to v14 scenarios.
+    excel_representation: non_model_adapter
+
+  - module_path: app.ops.extras
+    pipeline_stage: governance
+    role_description: CASPER optional-extra availability and pin-compliance probe read from pyproject metadata.
+    excel_representation: governance_metadata
+
+  - module_path: app.reports.capital_risk_emit
+    pipeline_stage: reporting_delivery
+    role_description: Opt-in emitter appending Monte Carlo capital-risk analysis blocks to lender outputs.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.climate_risk_disclosure
+    pipeline_stage: reporting_delivery
+    role_description: Bounded TCFD-aligned climate-risk disclosure contract and standalone Jinja2 partial renderer.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.dbpl.fonts
+    pipeline_stage: reporting_delivery
+    role_description: Local-first DBPL font provisioning and substitution-provenance tracker for PDF output.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.dbpl.print_core
+    pipeline_stage: reporting_delivery
+    role_description: Strict DBPL print contract enforcing complete [report] stack and un-suppressible furniture.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: required
+
+  - module_path: app.reports.dbpl.style
+    pipeline_stage: reporting_delivery
+    role_description: Canonical DBPL visual design tokens and CSS stylesheet generator for print documents.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.grid_screening_emit
+    pipeline_stage: reporting_delivery
+    role_description: Opt-in emitter rendering design-stage grid-screening diagnostics and dependency provenance.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - grid
+    extra_mode: casper_fallback
+    notes: Falls back to closed-form or envelope screens and surfaces explicit degradation notes when [grid] packages are absent.
+
+  - module_path: app.reports.interaction_grid_emit
+    pipeline_stage: reporting_delivery
+    role_description: Opt-in emitter formatting two-factor parameter interaction grids into report deliverables.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.module_ledger
+    pipeline_stage: governance
+    role_description: Strict Pydantic contracts and YAML loader for module role registries and execution ledgers.
+    excel_representation: governance_metadata
+
+  - module_path: app.reports.renderer
+    pipeline_stage: reporting_delivery
+    role_description: Renders ReportContext payloads to HTML via Jinja2 and best-effort PDF via WeasyPrint.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: conditional
+    dependency_paths:
+      - {name: html, required_extras: []}
+      - {name: pdf_report, required_extras: [report]}
+    notes: HTML rendering uses core Jinja2; PDF rendering requires [report] (weasyprint) and raises ReportDependencyError when absent.
+
+  - module_path: app.reports.report_config
+    pipeline_stage: reporting_delivery
+    role_description: Loads config/report_defaults.yaml branding, covenants, KPI specs, risks, and limitations.
+    excel_representation: governance_metadata
+
+  - module_path: app.reports.report_model
+    pipeline_stage: reporting_delivery
+    role_description: Pure presentation model projecting CaseResult and manifest facts into ReportContext.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.report_orchestration
+    pipeline_stage: reporting_delivery
+    role_description: Typed orchestration seams separating finance evaluation, report sensitivity, and context assembly.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.solar_assessment
+    pipeline_stage: reporting_delivery
+    role_description: Builds and renders model-derived screening solar PV site assessment PDF reports (not a lender representation).
+    excel_representation: non_model_adapter
+    optional_extras:
+      - solar
+      - report
+      - gis
+    extra_mode: casper_fallback
+    notes: Records failed/missing [solar], [gis], and contextily steps via CASPER fallback in run_assessment/make_maps; write_report requires [report] (DBPL PDF).
+
+  - module_path: app.reports.synthetic_qsts_finance_report
+    pipeline_stage: reporting_delivery
+    role_description: Renders and verifies governed synthetic QSTS finance counterfactual provenance reports.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+      - ingestion
+    extra_mode: required
+    notes: Uses [report] (weasyprint) for PDF generation and [ingestion] (pdfplumber) for warning-page verification.
+
+  - module_path: app.reports.tech_comparison_emit
+    pipeline_stage: reporting_delivery
+    role_description: Opt-in emitter rendering cross-technology headline KPI comparison reports.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.tender_gap_dossier_emit
+    pipeline_stage: reporting_delivery
+    role_description: Vendor-neutral OEM tender gap dossier builder tracking extraction provenance and caveats.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.wind_rose_plot
+    pipeline_stage: reporting_delivery
+    role_description: Renders polar wind-rose plots for inclusion in lender assessment reports.
+    excel_representation: non_model_adapter
+
+  - module_path: app.services.pipeline_service
+    pipeline_stage: reporting_delivery
+    role_description: Framework-agnostic service seam running canonical v14 cases and hybrid resource patches.
+    excel_representation: non_model_adapter
+
+  - module_path: app.services.report_global_sa
+    pipeline_stage: reporting_delivery
+    role_description: Computes bounded Morris and PAWN global sensitivity blocks for lender report annexes.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - feasibility
+    extra_mode: casper_fallback
+    notes: Invokes SALib via analytics.sensitivity.global_sa ([feasibility]/[dev]) and returns None on missing dependency or flagged metrics.
+
+  - module_path: app.services.report_tornado
+    pipeline_stage: reporting_delivery
+    role_description: Computes bounded one-way tornado sensitivity blocks for lender report annexes.
+    excel_representation: non_model_adapter
+
+  - module_path: app.web.auth_cookie
+    pipeline_stage: reporting_delivery
+    role_description: Signed cookie-based session gate for the HTMX web wizard routes.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+    extra_mode: required
+
+  - module_path: app.web.routes
+    pipeline_stage: reporting_delivery
+    role_description: HTMX backend-for-frontend web wizard routes mounted on the FastAPI application.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - api
+      - report
+    extra_mode: conditional
+    dependency_paths:
+      - {name: base, required_extras: [api]}
+      - {name: pdf_report, required_extras: [api, report]}
+    notes: The wizard PDF route delegates to app.api.main.run_case_report_pdf and propagates its HTTP 503 when the [report] backend is unavailable.
+
+  - module_path: finance.bess_lcos
+    pipeline_stage: tech_hybrid_bess
+    role_description: Computes read-only Levelised Cost of Storage (LCOS) metrics for battery storage systems.
+    excel_representation: formula
+
+  - module_path: finance.bess_project_economics
+    pipeline_stage: tech_hybrid_bess
+    role_description: Evaluates standalone BESS project economics including landed CAPEX, IRR, NPV, and LCOS.
+    excel_representation: formula
+
+  - module_path: finance.bess_revenue
+    pipeline_stage: tech_hybrid_bess
+    role_description: Calculates annual BESS capacity-tolling revenue and augmentation CAPEX cashflows.
+    excel_representation: formula
+
+  - module_path: finance.capex_price_basis
+    pipeline_stage: cost_levies_epc
+    role_description: Escalates CAPEX from its declared price-basis date to construction drawdown timing.
+    excel_representation: formula
+
+  - module_path: finance.cashflow_v14
+    pipeline_stage: core_finance
+    role_description: Core v14 annual project cashflow engine computing revenue, OPEX, tax, CFADS, and returns.
+    excel_representation: formula
+
+  - module_path: finance.cashflow_v14_contracts
+    pipeline_stage: core_finance
+    role_description: Immutable dataclasses defining CashflowParams and resolved FxHedge cashflow contracts.
+    excel_representation: governance_metadata
+
+  - module_path: finance.cashflow_v14_fx
+    pipeline_stage: core_finance
+    role_description: Builds annual FX curves, financial-close spot anchors, and CIP-hedged USD conversions.
+    excel_representation: formula
+
+  - module_path: finance.cashflow_v14_params
+    pipeline_stage: core_finance
+    role_description: Resolves and validates scenario parameters into canonical CashflowParams inputs.
+    excel_representation: governance_metadata
+
+  - module_path: finance.cashflow_v14_production
+    pipeline_stage: core_finance
+    role_description: Computes annual net generation, statutory deductions, OPEX, and revenue in LKR.
+    excel_representation: formula
+
+  - module_path: finance.cashflow_v14_tax
+    pipeline_stage: core_finance
+    role_description: Computes corporate tax, tax holidays, depreciation allowances, and tax-loss carryforwards.
+    excel_representation: formula
+
+  - module_path: finance.cashflow_v14_utils
+    pipeline_stage: core_finance
+    role_description: Fail-loud numeric coercion, nested lookup, and percentage scaling helpers for cashflows.
+    excel_representation: non_model_adapter
+
+  - module_path: finance.cost_input_currency
+    pipeline_stage: cost_levies_epc
+    role_description: Validates CAPEX and OPEX currency blocks and rejects unsupported cost-currency keys.
+    excel_representation: governance_metadata
+
+  - module_path: finance.debt.balloon
+    pipeline_stage: core_finance
+    role_description: Resolves debt balloon maturity, bullet share, and post-maturity refinancing streams.
+    excel_representation: formula
+
+  - module_path: finance.debt.capex
+    pipeline_stage: core_finance
+    role_description: Extracts financed project CAPEX for debt sizing with strict placeholder fallback guards.
+    excel_representation: formula
+
+  - module_path: finance.debt.constants
+    pipeline_stage: core_finance
+    role_description: Defines numerical tolerances and structural constants for the multi-tranche debt engine.
+    excel_representation: governance_metadata
+
+  - module_path: finance.debt.construction
+    pipeline_stage: core_finance
+    role_description: Models construction-period debt drawdowns and interest during construction (IDC).
+    excel_representation: formula
+
+  - module_path: finance.debt.dscr_contract
+    pipeline_stage: core_finance
+    role_description: Public DSCR series contract and operating-period minimum DSCR calculation.
+    excel_representation: formula
+
+  - module_path: finance.debt.funding
+    pipeline_stage: core_finance
+    role_description: Computes sources and uses of funds across debt tranches, sponsor equity, and DSRA.
+    excel_representation: formula
+
+  - module_path: finance.debt.helpers
+    pipeline_stage: core_finance
+    role_description: Annuity, discounting, currency lookup, and coercion utilities for the debt engine.
+    excel_representation: formula
+
+  - module_path: finance.debt.layer
+    pipeline_stage: core_finance
+    role_description: Computes per-period debt balances, debt service, fees, and coverage ratios across tranches.
+    excel_representation: formula
+
+  - module_path: finance.debt.placeholders
+    pipeline_stage: core_finance
+    role_description: Tracks placeholder warn-once diagnostics and enforces run-mode toy-capex ceilings.
+    excel_representation: governance_metadata
+
+  - module_path: finance.debt.plan
+    pipeline_stage: core_finance
+    role_description: Debt engine orchestrator producing sculpted or annuity multi-tranche debt plans.
+    excel_representation: formula
+
+  - module_path: finance.debt.schedules
+    pipeline_stage: core_finance
+    role_description: Builds tranche currency mixes and annuity or DSCR-sculpted amortization schedules.
+    excel_representation: formula
+
+  - module_path: finance.debt.schema
+    pipeline_stage: core_finance
+    role_description: Registers required debt configuration fields into the central analytics schema guard.
+    excel_representation: governance_metadata
+
+  - module_path: finance.debt.sizing
+    pipeline_stage: core_finance
+    role_description: Solves dual-DSCR sculpted debt capacity and maximum gearing limits.
+    excel_representation: formula
+
+  - module_path: finance.debt.terms
+    pipeline_stage: core_finance
+    role_description: Resolves debt tranche financing terms, construction windows, and period taxonomies.
+    excel_representation: governance_metadata
+
+  - module_path: finance.debt_v14
+    pipeline_stage: core_finance
+    role_description: Public v14 debt-planning facade re-exporting and driving the modular debt engine.
+    excel_representation: formula
+
+  - module_path: finance.epc_helper_v14
+    pipeline_stage: cost_levies_epc
+    role_description: Centralizes EPC cost breakout, LKR conversion, and EPC schema-field registration.
+    excel_representation: formula
+
+  - module_path: finance.epc_margin
+    pipeline_stage: cost_levies_epc
+    role_description: Evaluates EPC contractor construction-margin economics for scenarios declaring an epc block.
+    excel_representation: formula
+
+  - module_path: finance.equity_distribution_v14_hydra
+    pipeline_stage: core_finance
+    role_description: Computes cash-sweep, DSRA-release, and dividend-distribution equity waterfall schedules.
+    excel_representation: formula
+
+  - module_path: finance.equity_v14
+    pipeline_stage: core_finance
+    role_description: Calculates equity-investor performance metrics including equity IRR, NPV, and MOIC.
+    excel_representation: formula
+
+  - module_path: finance.event_calendar_v14
+    pipeline_stage: core_finance
+    role_description: Builds the within-year sub-annual debt and operating event calendar grid.
+    excel_representation: formula
+
+  - module_path: finance.grid.grid_types
+    pipeline_stage: grid_qsts
+    role_description: Single source of truth for grid interconnection type discriminators across the repo.
+    excel_representation: governance_metadata
+
+  - module_path: finance.import_levies
+    pipeline_stage: cost_levies_epc
+    role_description: Computes Sri Lankan import duty, PAL, CESS, SSCL, and VAT cascades for CAPEX and OPEX.
+    excel_representation: formula
+
+  - module_path: finance.irr
+    pipeline_stage: core_finance
+    role_description: Single canonical source of truth for investment-grade IRR, XIRR, and NPV functions.
+    excel_representation: formula
+
+  - module_path: finance.irr_config
+    pipeline_stage: core_finance
+    role_description: Extracts configured IRR search bounds from scenario YAML configurations.
+    excel_representation: governance_metadata
+
+  - module_path: finance.native_cost_inputs
+    pipeline_stage: cost_levies_epc
+    role_description: Converts opt-in native-currency CAPEX lines to USD with auditable FX provenance.
+    excel_representation: formula
+
+  - module_path: finance.period_grid_v14
+    pipeline_stage: core_finance
+    role_description: Resolves the canonical operating-period resolution grid for annual or sub-annual cashflows.
+    excel_representation: formula
+
+  - module_path: finance.self_curtailment_v14
+    pipeline_stage: grid_qsts
+    role_description: Composes QSTS self-curtailment fractions into cashflow curtailment loss keys when enabled.
+    excel_representation: formula
+
+  - module_path: finance.subannual_rows_v14
+    pipeline_stage: core_finance
+    role_description: Allocates annual cashflow lines onto sub-annual quarterly or semi-annual operating periods.
+    excel_representation: formula
+
+  - module_path: finance.subperiod_coverage_v14
+    pipeline_stage: core_finance
+    role_description: Computes non-canonical sub-period CFADS, debt service, and DSCR coverage views.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: finance.tariff_indexation
+    pipeline_stage: core_finance
+    role_description: Computes annual indexation of escalable O&M tariff components under regulated PPAs.
+    excel_representation: formula
+
+  - module_path: finance.tech_types
+    pipeline_stage: tech_hybrid_bess
+    role_description: Single source of truth for wind, solar, and storage technology type discriminators.
+    excel_representation: governance_metadata
+
+  - module_path: finance.utils
+    pipeline_stage: core_finance
+    role_description: Shared nested-dictionary lookup and safe scalar coercion utilities for finance modules.
+    excel_representation: non_model_adapter
+
+  - module_path: finance.wacc_v14
+    pipeline_stage: core_finance
+    role_description: Calculates pre-tax and after-tax project WACC discount rates from capital-structure inputs.
+    excel_representation: formula
+
+  - module_path: run_full_pipeline_v14
+    pipeline_stage: core_finance
+    role_description: Canonical Hydra CLI orchestrating resource adapters, v14 finance runs, MC, and optional emitters.
+    excel_representation: non_model_adapter
+    optional_extras: [wind]
+    extra_mode: conditional
+    dependency_paths:
+      - {name: frozen, required_extras: []}
+      - {name: auto_wind, required_extras: [wind]}
+    notes: Opt-in wind/solar/grid paths consume frozen exports or optional extras when explicitly enabled.
+
+  - module_path: solar_resource.bifacial_guard
+    pipeline_stage: resource_yield
+    role_description: Enforces bifacial albedo and rear-side gain consistency across solar yield configurations.
+    excel_representation: governance_metadata
+
+  - module_path: solar_resource.blue_whale_site_inputs
+    pipeline_stage: cost_levies_epc
+    role_description: Calculates landed wind and BESS equipment CAPEX and stepped solar yield inputs using pvlib.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+    extra_mode: casper_fallback
+    notes: Capex blend and isotropic_poa_w_m2 run on base dependencies; solar_resource_summary requires [solar] (pvlib).
+
+  - module_path: solar_resource.cashflow_adapter
+    pipeline_stage: resource_yield
+    role_description: Injects frozen solar AEP assessment JSON exports into v14 cashflow scenarios without pvlib.
+    excel_representation: non_model_adapter
+
+  - module_path: solar_resource.exceedance
+    pipeline_stage: resource_yield
+    role_description: Computes solar PV P50/P75/P90 energy exceedance values using shared uncertainty build-up.
+    excel_representation: formula
+
+  - module_path: solar_resource.long_term_trend
+    pipeline_stage: resource_yield
+    role_description: Evaluates long-term solar GHI trend and inter-annual variability diagnostics.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: solar_resource.loss_model
+    pipeline_stage: resource_yield
+    role_description: Computes itemized IEC 61724-1 / PVsyst DC-to-AC solar energy loss chains from config.
+    excel_representation: formula
+
+  - module_path: solar_resource.pv_array_turbine_shading
+    pipeline_stage: resource_yield
+    role_description: Computes hourly wind-turbine tower and rotor shadow losses across a laid-out PV array.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+    extra_mode: required
+
+  - module_path: solar_resource.pv_bess_dispatch
+    pipeline_stage: tech_hybrid_bess
+    role_description: Simulates hourly pvlib solar generation and PV-charged battery dispatch schedules.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+    extra_mode: required
+
+  - module_path: solar_resource.pv_bess_sizing
+    pipeline_stage: tech_hybrid_bess
+    role_description: Performs seeded Monte Carlo sizing of co-located solar PV and BESS capacity combinations.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+      - gis
+    extra_mode: required
+    notes: Uses [solar] (pvlib) via pv_bess_dispatch/pv_array_turbine_shading and [gis] (shapely, pyproj) via analytics.gis layout/siting helpers.
+
+  - module_path: solar_resource.pv_bess_sizing_runner
+    pipeline_stage: tech_hybrid_bess
+    role_description: Orchestrates Monte Carlo solar-plus-BESS sizing runs and formats structured summaries.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - solar
+      - gis
+    extra_mode: required
+    notes: Drives solar_resource.pv_bess_sizing and site_context, requiring [solar] and [gis] for end-to-end sizing runs.
+
+  - module_path: solar_resource.pv_producer
+    pipeline_stage: resource_yield
+    role_description: Executes pvlib irradiance-to-AC simulation producing frozen solar AEP exports.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+    extra_mode: required
+
+  - module_path: solar_resource.soiling_profile
+    pipeline_stage: resource_yield
+    role_description: Computes optional time-varying monthly solar PV soiling loss adjustments.
+    excel_representation: formula
+
+  - module_path: solar_resource.source_quality
+    pipeline_stage: resource_yield
+    role_description: Grades solar irradiance data source quality and provenance metadata without changing KPIs.
+    excel_representation: governance_metadata
+
+  - module_path: solar_resource.turbine_shading
+    pipeline_stage: resource_yield
+    role_description: Estimates annual optical wind-turbine shadow losses on a co-located PV ground grid.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - solar
+    extra_mode: required
+
+  - module_path: wind_resource.aep_integral
+    pipeline_stage: resource_yield
+    role_description: Integrates Weibull wind-speed distributions over turbine power curves for analytic gross AEP.
+    excel_representation: formula
+
+  - module_path: wind_resource.aep_summary
+    pipeline_stage: resource_yield
+    role_description: Validates turbine curve selection and builds reproducible analytic wind AEP summaries.
+    excel_representation: engine_table_plus_rollup
+    optional_extras: [wind]
+    extra_mode: conditional
+    dependency_paths:
+      - {name: frozen, required_extras: []}
+      - {name: live_wake, required_extras: [wind]}
+
+  - module_path: wind_resource.arco_assessment
+    pipeline_stage: resource_yield
+    role_description: Validates declared wind Weibull baselines against single-point ARCO ERA5 reanalysis series.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: build_arco_assessment and era5_config_from_scenario run on base dependencies; assess() requires [wind] (cdsapi, xarray).
+
+  - module_path: wind_resource.bankable_aep
+    pipeline_stage: resource_yield
+    role_description: Lender-grade bankable wind AEP engine using PyWake wake models and exceedance build-up.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Air-density correction, Weibull gross AEP, and exceedance build-up run on base NumPy; model_wake_loss requires [wind] (py-wake).
+
+  - module_path: wind_resource.cashflow_adapter
+    pipeline_stage: resource_yield
+    role_description: Injects frozen wind AEP assessment JSON exports into v14 cashflow scenarios without wind deps.
+    excel_representation: non_model_adapter
+
+  - module_path: wind_resource.crossval
+    pipeline_stage: resource_yield
+    role_description: Cross-validates declared ERA5 wind baselines against independent MERRA-2 reference series.
+    excel_representation: engine_table_plus_rollup
+    optional_extras: []
+    extra_mode: none
+    notes: Uses base dependencies and lazy requests import for optional NASA POWER HTTP fetch.
+
+  - module_path: wind_resource.energy_calculator
+    pipeline_stage: resource_yield
+    role_description: Calculates wind farm gross/net energy production and baseline revenue estimates.
+    excel_representation: formula
+
+  - module_path: wind_resource.era5_fetcher
+    pipeline_stage: resource_yield
+    role_description: Fetches historical ERA5 wind reanalysis datasets through the Copernicus CDS API.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: required
+
+  - module_path: wind_resource.era5_grid
+    pipeline_stage: resource_yield
+    role_description: Computes gridded ERA5 wind-speed, capacity-factor, and AEP surfaces for GIS export.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Grid assembly, bilinear downscaling, and representativeness diagnostics run on base NumPy/SciPy; fetch_cell_results requires [wind] (cdsapi, xarray).
+
+  - module_path: wind_resource.era5_retrieval
+    pipeline_stage: resource_yield
+    role_description: Config-driven ERA5 retrieval, hub-height extrapolation, and site AEP estimation workflow.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - wind
+    extra_mode: required
+
+  - module_path: wind_resource.layout_optimizer
+    pipeline_stage: site_gis
+    role_description: Proposes boundary- and spacing-constrained wind turbine layouts using TopFarm over PyWake.
+    excel_representation: engine_table_plus_rollup
+    optional_extras:
+      - micrositing
+      - wind
+    extra_mode: required
+    notes: Requires [micrositing] (topfarm) and [wind] (py-wake) together to build and optimize wake-coupled wind turbine layouts.
+
+  - module_path: wind_resource.long_term_trend
+    pipeline_stage: resource_yield
+    role_description: Evaluates long-term historical wind-speed trend and inter-annual variability diagnostics.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: wind_resource.mcp
+    pipeline_stage: resource_yield
+    role_description: Runs Measure-Correlate-Predict (MCP) regression linking short mast campaigns to ERA5.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: wind_resource.power_curve_sourcing
+    pipeline_stage: resource_yield
+    role_description: Sources open turbine power curves from windpowerlib and NREL reference libraries.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: casper_fallback
+    notes: Manual/OEM .wtg/.csv curve parsing and store persistence run on base dependencies; OEDB/NREL fetch paths require [wind] (windpowerlib, turbine-models).
+
+  - module_path: wind_resource.resource_assurance
+    pipeline_stage: governance
+    role_description: Resource-assurance contracts, external evidence requests, and labelled synthetic fixture guards.
+    excel_representation: governance_metadata
+
+  - module_path: wind_resource.synthetic_mcp_measurement
+    pipeline_stage: resource_yield
+    role_description: Generates explicitly labelled synthetic met-mast MCP series for non-bankable pipeline testing.
+    excel_representation: governance_metadata
+
+  - module_path: wind_resource.weibull_fit
+    pipeline_stage: resource_yield
+    role_description: Fits 2-parameter Weibull wind distributions and checks drift against declared baselines.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: wind_resource.wind_analyzer
+    pipeline_stage: resource_yield
+    role_description: Performs statistical wind-speed, shear, turbulence, and directional wind-rose analysis.
+    excel_representation: engine_table_plus_rollup
+
+  - module_path: wind_resource.wind_pipeline
+    pipeline_stage: resource_yield
+    role_description: Orchestrates end-to-end wind resource retrieval, Weibull analysis, and AEP summary export.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - wind
+    extra_mode: required
+    notes: Instantiates ERA5Fetcher on initialization, requiring [wind] (cdsapi, xarray).

@@ -126,7 +126,12 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
     # was the canonical equity IRR, re-baselined by #1397 (-7.85% -> -9.99%). #1503 and
     # #1504 (2026-10-31) move it to -10.03%: the swept balloon accrues interest, which
     # the sweep was already taking every dollar for, and the fee falls with the balance.
-    assert sweep == pytest.approx(-0.1003, abs=0.003)
+    # #1736 (one cash basis) moves it to -11.84%: the sweep now reads the cash the
+    # equity waterfall holds, so the reserve released at maturity (USD 1.90M) and the
+    # cash the fee's tax deduction leaves (about USD 0.12M a year) go to the balloon
+    # instead of to equity while the balloon is unpaid; the residual falls from USD
+    # 18.92M to 14.89M.
+    assert sweep == pytest.approx(-0.1184, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
