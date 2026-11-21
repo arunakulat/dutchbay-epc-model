@@ -582,7 +582,9 @@ def test_autosolve_dual_dscr_detail_none_on_value_error() -> None:
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
             "mix": {"usd_commercial_min": 1.0},
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
         },
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
     }
     result = plan_debt(annual_rows=_rows(10.0), config=config)
     assert result["dual_dscr"] is None
@@ -601,7 +603,9 @@ def test_autosolve_dual_dscr_detail_present_when_active() -> None:
             "construction_periods": 1,
             "rates": {"usd_nominal": 0.08},
             "mix": {"usd_commercial_min": 1.0},
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
         },
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
     }
     result = plan_debt(annual_rows=_rows(20.0, n=8), config=config)
     detail = result["dual_dscr"]
