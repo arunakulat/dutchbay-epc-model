@@ -2726,8 +2726,8 @@ def technology_subtitle(
     The model is universal, so the printed subtitle follows the scenario rather than always
     naming wind. The technologies come from ``generation.technologies`` in declared order:
     an explicit known ``type`` wins, else the block's name (``finance.tech_types``). A
-    scenario with no such block is a single-technology wind case when it declares a
-    ``wind_resource`` block, the shape the wind lender case and the API wizard use. A
+    scenario with no such block runs the engine's single-technology path, which is wind:
+    it reads "Wind", or the scenario's own ``project.technology`` when it declares one. A
     subtitle without the placeholder is returned unchanged.
 
     Args:
@@ -2749,10 +2749,15 @@ def technology_subtitle(
                 if label not in labels:
                     labels.append(label)
     if not labels:
-        has_wind = scenario_config is None or isinstance(
-            scenario_config.get("wind_resource"), Mapping
-        )
-        labels = ["Wind" if has_wind else "Renewable Energy"]
+        # #1844 domain D2: no generation.technologies is the engine's legacy
+        # single-technology wind path, so the fallback is "Wind", not a generic label.
+        project = (scenario_config or {}).get("project")
+        declared = project.get("technology") if isinstance(project, Mapping) else None
+        if isinstance(declared, str) and declared.strip():
+            key = declared.strip().lower()
+            labels = [_TECHNOLOGY_LABELS.get(key, key.replace("_", " ").title())]
+        else:
+            labels = ["Wind"]
     return subtitle.replace("{technology}", " + ".join(labels))
 
 
