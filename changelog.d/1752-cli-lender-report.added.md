@@ -7,4 +7,8 @@
   listed on the report with its reason, the cover carries the F-5 notice, and the PDF is printed
   through the DBPL base template and print core: document ID on every page, a document-control
   block with revision history, the F-5 caveat band under every section heading (capital-risk
-  pages included) and the font and print provenance. The API report is unchanged. No KPI moves (#1752).
+  pages included), a documentary source note under every table naming the model run and the
+  section, numeric columns right-aligned, and the font and print provenance. The report
+  subtitle now names the scenario's own technologies (for example "Wind + Battery Storage")
+  instead of always "Wind"; a wind scenario's report, the API report included, reads as before.
+  No KPI moves (#1752).

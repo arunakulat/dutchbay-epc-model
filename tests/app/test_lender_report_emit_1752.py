@@ -30,6 +30,7 @@ from app.reports.lender_report_emit import (
     to_dbpl_print_html,
 )
 from app.reports.renderer import render_report_html
+from app.reports.report_model import technology_subtitle
 from app.reports.report_orchestration import (
     ORDINARY_REPORT_SENSITIVITY_PROFILE,
     ReportSensitivityBundle,
@@ -372,7 +373,12 @@ def test_dbpl_print_html_drops_the_screen_style_and_adds_house_classes() -> None
     assert '<table class="dbpl heatmap">' in printed
     assert '<table class="dbpl">' in printed
     assert '<div class="dbpl-banner">A &amp; B</div>' in printed
-    assert "DBAY-LR-TEST-20261121" in printed.split('class="dbpl-docline"', 1)[1]
+    # The running doc-line itself carries the document ID (DBPL-01 furniture), not only the
+    # control table further down the page.
+    assert (
+        '<div class="dbpl-docline">DBAY-LR-TEST-20261121 | v1 | 2026-11-21 | Draft</div>'
+        in printed
+    )
     assert '<html lang="en">' in printed  # PDF/UA needs lang on <html>
 
 
@@ -416,6 +422,39 @@ def test_the_furniture_names_the_document_and_its_status(api_case: Any) -> None:
     labels = dict(furniture.control)
     assert labels["Document ID"] == furniture.document_id
     assert labels["Status / Reason for issue"] == DOCUMENT_STATUS
+    assert [r["status"] for r in furniture.revisions] == [DOCUMENT_STATUS]
+    assert furniture.document_id in furniture.table_source
+    assert "run_full_pipeline_v14" in furniture.table_source
+
+
+def test_every_table_carries_a_source_note_naming_its_section() -> None:
+    printed = to_dbpl_print_html(
+        _SCREEN_HTML, _furniture(table_source="DBAY-LR-TEST-20261121, model output")
+    )
+    body = printed.split('<h2 class="dbpl-section">Section</h2>', 1)[1]
+    ends = [m.end() for m in re.finditer(r"</table>", body)]
+    assert len(ends) == 2
+    for end in ends:
+        assert (
+            body[end:]
+            .lstrip()
+            .startswith(
+                '<div class="dbpl-tablenotes"><div class="dbpl-source">'
+                '<span class="dbpl-label">Source:</span> DBAY-LR-TEST-20261121, model output'
+            )
+        )
+    assert "model output; section: Sub.</div>" in body
+    assert "model output; section: Capital Risk.</div>" in body
+
+
+def test_numeric_cells_keep_their_right_alignment_in_print() -> None:
+    html = _SCREEN_HTML.replace(
+        "<td>y</td>", '<th class="num">h</th><td class="num warn">1.0</td>'
+    )
+    printed = to_dbpl_print_html(html, _furniture())
+    assert '<th class="num dbpl-num">h</th>' in printed
+    assert '<td class="num warn dbpl-num">1.0</td>' in printed
+    assert "<td>x</td>" in printed  # a text cell is left alone
 
 
 def test_dbpl_print_html_refuses_a_document_without_a_body() -> None:
@@ -454,6 +493,11 @@ def test_the_pdf_is_printed_through_the_dbpl_core(
     html_h2 = len(_h2s(out.html_path.read_text(encoding="utf-8")))
     # Headline caveat plus one band under every section heading.
     assert text.count(caveat_head) >= html_h2 + 1
+    # DBPL-01: a documentary source under every table (the revision history has its own).
+    html_tables = out.html_path.read_text(encoding="utf-8").count("</table>")
+    match = re.search(r"DBAY-LR-[A-Z0-9-]+", text)
+    assert match is not None
+    assert text.count(f"Source: {match.group(0)}, model output") >= html_tables
 
 
 def _missing_stack(*_args: Any, **_kwargs: Any) -> Any:
@@ -588,3 +632,53 @@ def test_cli_switched_on_by_name_requires_the_pdf(
     capsys.readouterr()
     assert calls["require_pdf"] is True
     assert calls["capital_risk"] is None  # the capital-risk emitter did not run
+
+
+# ── a technology-neutral subtitle (A-4) ───────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "scenario, expected",
+    [
+        (None, "Wind"),
+        ({"wind_resource": {"weibull_a": 8.0}}, "Wind"),
+        ({}, "Renewable Energy"),
+        (
+            {"generation": {"technologies": {"solar": {"capacity_factor": 0.2}}}},
+            "Solar",
+        ),
+        (
+            {"generation": {"technologies": {"bess_unit": {"type": "bess"}}}},
+            "Battery Storage",
+        ),
+        (
+            {
+                "generation": {
+                    "technologies": {
+                        "wind": {"type": "wind"},
+                        "battery": {"type": "bess"},
+                        "wind_b": {"type": "wind"},
+                    }
+                }
+            },
+            "Wind + Battery Storage",
+        ),
+        ({"generation": {"technologies": {"run_of_river": {}}}}, "Run Of River"),
+    ],
+)
+def test_the_subtitle_follows_the_scenario_technology(
+    scenario: Any, expected: str
+) -> None:
+    subtitle = "Utility-Scale {technology} — Project-Finance Summary"
+    assert technology_subtitle(subtitle, scenario) == (
+        f"Utility-Scale {expected} — Project-Finance Summary"
+    )
+    assert technology_subtitle("Fixed subtitle", scenario) == "Fixed subtitle"
+
+
+def test_the_wind_reports_keep_their_subtitle(api_case: Any) -> None:
+    html = render_report_html(
+        build_report_context_from_case(api_case, _bundle(api_case.scenario_config))
+    )
+    assert "Utility-Scale Wind — Project-Finance Summary" in html
+    assert "{technology}" not in html
