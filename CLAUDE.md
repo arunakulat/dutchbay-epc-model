@@ -61,8 +61,9 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPAT
     `scripts/ci/check_pr_receipts.py`.
   - *Commits*: `R18`.
   - *Changelog*: one fragment per change, named `changelog.d/<id>.<category>.md`
-    (`scripts/compile_changelog.py`). Changes to committed financial behaviour also need
-    `VERSION` and `CHANGELOG.md` (`RELEASING.md`).
+    (`scripts/compile_changelog.py`). Under `DOC-02`, a change that can affect IRR, DSCR,
+    NPV or covenant logic also bumps `VERSION` in the same PR. It never edits
+    `CHANGELOG.md`: release cuts compile the fragments into it (`RELEASING.md`).
   - *Handover records* (`PERSIST-01`): `docs/SESSION_HANDOVER_*` and `docs/H<n>_*`, ordered by
     `scripts/list_session_handover_records.py`.
   - *Review, lease and delegation records* (`RECRUIT-01`): the four modules in
