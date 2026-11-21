@@ -9,7 +9,10 @@ canonical analytics contracts:
 * :func:`compute_report_sensitivity` performs the optional tornado, Morris, and
   PAWN work and records its evaluation profile; and
 * :func:`build_report_context_from_case` is pure assembly from already-computed
-  inputs.
+  inputs; and
+* :func:`report_case_from_pipeline_result` wraps a finance result the batch CLI already
+  computed, so the command-line lender report (#1752) reuses this seam rather than a second
+  orchestrator.
 
 Production retains the historical Morris and PAWN settings.  The smaller
 ordinary profile is an explicit test/contract option; no production route
@@ -19,13 +22,18 @@ selects it implicitly.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Mapping, Optional
+from typing import Any, Callable, Literal, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
-from app.reports.report_model import ReportContext, build_report_context
+from app.reports.report_model import (
+    ReportContext,
+    SectionNotRun,
+    build_report_context,
+)
 from app.services.pipeline_service import run_finance_case
 from app.services.report_global_sa import (
     GlobalSABlock,
@@ -47,9 +55,13 @@ class ReportCaseData:
 
     ``generated_at`` is supplied by the caller so this seam is deterministic in
     tests; the API stamps its production timestamp at the request boundary.
+    ``inputs`` is the wizard submission on the API route and ``None`` on the batch CLI
+    route (#1752), which starts from a scenario file. The assumptions register is built
+    from the wizard inputs, so on the CLI route it is empty (``_build_assumptions``
+    returns no rows for ``None``) and the report prints no register.
     """
 
-    inputs: WindFarmInputs
+    inputs: Optional[WindFarmInputs]
     scenario_config: Mapping[str, Any]
     run_result: Mapping[str, Any]
     case_result: CaseResult
@@ -168,7 +180,30 @@ def run_report_case(
     )
 
 
-def _global_sa_driver_count(scenario_config: Mapping[str, Any]) -> int:
+def report_case_from_pipeline_result(
+    run_result: Mapping[str, Any],
+    *,
+    scenario_config: Mapping[str, Any],
+    scenario_variant: str,
+    generated_at: str,
+) -> ReportCaseData:
+    """Wrap a finance result the batch CLI already computed (#1752).
+
+    The CLI has run the canonical pipeline on the scenario file before any emitter runs, so
+    the report reuses that result rather than running the case a second time.
+    """
+    return ReportCaseData(
+        inputs=None,
+        scenario_config=scenario_config,
+        run_result=run_result,
+        case_result=CaseResult.from_pipeline_result(
+            run_result, scenario_variant=scenario_variant
+        ),
+        generated_at=generated_at,
+    )
+
+
+def global_sa_driver_count(scenario_config: Mapping[str, Any]) -> int:
     """Count sweepable authored global-SA drivers for evaluation accounting."""
     monte_carlo = scenario_config.get("monte_carlo") or scenario_config.get(
         "Monte_Carlo"
@@ -247,7 +282,7 @@ def compute_report_sensitivity(
     else:
         tornado_outcome = "completed"
 
-    driver_count = _global_sa_driver_count(scenario_config)
+    driver_count = global_sa_driver_count(scenario_config)
     morris_requested = profile.morris_trajectories * (driver_count + 1)
     morris_effective = (
         int(morris.n_runs) if morris is not None and morris.n_runs is not None else None
@@ -299,10 +334,17 @@ def compute_report_sensitivity(
 def build_report_context_from_case(
     report_case: ReportCaseData,
     sensitivity: ReportSensitivityBundle,
+    *,
+    capital_risk: Optional[CapitalRiskReport] = None,
+    sections_not_run: Sequence[SectionNotRun] = (),
 ) -> ReportContext:
-    """Assemble a render-ready context from already-computed typed inputs."""
+    """Assemble a render-ready context from already-computed typed inputs.
+
+    ``capital_risk`` and ``sections_not_run`` are supplied only by the batch CLI's lender
+    report (#1752); the API route passes neither, so its context is unchanged.
+    """
     result = report_case.run_result
-    return build_report_context(
+    context = build_report_context(
         report_case.case_result,
         generated_at=report_case.generated_at,
         inputs=report_case.inputs,
@@ -312,5 +354,11 @@ def build_report_context_from_case(
         tornado=sensitivity.tornado,
         global_sa=sensitivity.morris,
         global_sa_pawn=sensitivity.pawn,
+        capital_risk=capital_risk,
         run_result=result,
     )
+    if sections_not_run:
+        context = context.model_copy(
+            update={"sections_not_run": list(sections_not_run)}
+        )
+    return context

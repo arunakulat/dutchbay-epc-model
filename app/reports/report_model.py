@@ -905,6 +905,15 @@ class YieldReconciliationBlock(BaseModel):
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
 
 
+class SectionNotRun(BaseModel):
+    """One report section that was not rendered, and why (#1752)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    section: str
+    reason: str
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -1044,6 +1053,10 @@ class ReportContext(BaseModel):
     #: report a run that writes its figures now writes by default and the release asset
     #: ships; None (the default) omits it, so every other report stays byte-identical.
     f5_notice: Optional[str] = None
+    #: Sections the report builder left out, each with its reason (#1752). The command-line
+    #: lender report fills it, so a reader can tell "no sensitivity" from "sensitivity not
+    #: run". Empty (the default) omits the list, so every other report stays byte-identical.
+    sections_not_run: List[SectionNotRun] = Field(default_factory=list)
 
 
 def _build_kpi_rows(
@@ -2698,6 +2711,61 @@ def _irr_bridge_block(
     )
 
 
+#: How a technology type reads in the report subtitle (A-4 of the #1844 assurance lane).
+_TECHNOLOGY_LABELS = {"wind": "Wind", "solar": "Solar", "bess": "Battery Storage"}
+
+
+def _technology_label(name: str, block: Mapping[str, Any]) -> str:
+    from finance.tech_types import is_known_type
+
+    declared = block.get("type")
+    key = str(declared if is_known_type(declared) else name).strip().lower()
+    return _TECHNOLOGY_LABELS.get(key, key.replace("_", " ").title())
+
+
+def technology_subtitle(
+    subtitle: str, scenario_config: Optional[Mapping[str, Any]]
+) -> str:
+    """Fill the report subtitle's ``{technology}`` from the scenario's own technologies.
+
+    The model is universal, so the printed subtitle follows the scenario rather than always
+    naming wind. The technologies come from ``generation.technologies`` in declared order:
+    an explicit known ``type`` wins, else the block's name (``finance.tech_types``). A
+    scenario with no such block runs the engine's single-technology path, which is wind:
+    it reads "Wind", or the scenario's own ``project.technology`` when it declares one. A
+    subtitle without the placeholder is returned unchanged.
+
+    Args:
+        subtitle: The configured subtitle (``report.subtitle`` in the report defaults).
+        scenario_config: The scenario the report describes, or ``None``.
+
+    Returns:
+        The subtitle with ``{technology}`` filled in.
+    """
+    if "{technology}" not in subtitle:
+        return subtitle
+    labels: List[str] = []
+    generation = (scenario_config or {}).get("generation")
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if isinstance(techs, Mapping):
+        for name, block in techs.items():
+            if isinstance(block, Mapping):
+                label = _technology_label(str(name), block)
+                if label not in labels:
+                    labels.append(label)
+    if not labels:
+        # #1844 domain D2: no generation.technologies is the engine's legacy
+        # single-technology wind path, so the fallback is "Wind", not a generic label.
+        project = (scenario_config or {}).get("project")
+        declared = project.get("technology") if isinstance(project, Mapping) else None
+        if isinstance(declared, str) and declared.strip():
+            key = declared.strip().lower()
+            labels = [_TECHNOLOGY_LABELS.get(key, key.replace("_", " ").title())]
+        else:
+            labels = ["Wind"]
+    return subtitle.replace("{technology}", " + ".join(labels))
+
+
 def _resolve_report_grade(
     scenario_config: Optional[Mapping[str, Any]],
 ) -> Optional[str]:
@@ -2955,7 +3023,11 @@ def build_report_context(
     # waterfall blocks derive from it (one engine-output source, no second pass).
     ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
     return ReportContext(
-        meta=cfg.report,
+        meta=cfg.report.model_copy(
+            update={
+                "subtitle": technology_subtitle(cfg.report.subtitle, scenario_config)
+            }
+        ),
         covenants=covenants,
         generated_at=generated_at,
         report_grade=_resolve_report_grade(scenario_config),

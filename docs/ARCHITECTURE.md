@@ -84,6 +84,7 @@ flowchart LR
     api --> finance
     app --> analytics
     app --> api
+    app --> finance
     app --> solar_resource
     app --> wind_resource
     finance --> analytics
