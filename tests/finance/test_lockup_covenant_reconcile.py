@@ -60,11 +60,24 @@ def test_reconcile_locks_only_the_year_1_fold_on_the_sculpted_canonical() -> Non
 
     The point of the guard is unchanged: the reconcile must not lock years it has no
     reason to. The companion test below proves it still engages on a genuine breach.
+
+    #1779: the refinanced balloon tranche's three years now lock on its own coverage
+    (below the threshold in each), so the case locks four years in all, and the
+    scheduled test still only the year-1 fold.
     """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
-    kpis = evaluate_with_overrides(str(LENDER), overrides={})
-    assert kpis["equity_covenant_locked_years"] == 1
+    full = evaluate_with_overrides(str(LENDER), overrides={}, return_full_result=True)
+    kpis = full["kpis"]
+    # #1779: the lock-up also tests the refinanced balloon tranche, whose coverage is below
+    # the threshold in all three of its years (15 to 17). The scheduled test still locks
+    # only the year-1 fold, so the phase-bug guard reads the scheduled locks alone.
+    rows = full["equity_distribution"]["annual_distributions"]
+    locked = [int(r["year"]) for r in rows if r["covenant_locked"]]
+    tranche = [int(r["year"]) for r in rows if r["refinance_tranche_locked"]]
+    assert locked == [1, 15, 16, 17]
+    assert tranche == [15, 16, 17]
+    assert kpis["equity_covenant_locked_years"] == len(locked)
     assert kpis["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 
