@@ -1116,6 +1116,14 @@ modules:
     role_description: Opt-in emitter formatting two-factor parameter interaction grids into report deliverables.
     excel_representation: non_model_adapter
 
+  - module_path: app.reports.lender_report_emit
+    pipeline_stage: reporting_delivery
+    role_description: Emitter writing the combined command-line lender report as HTML and a DBPL-01 PDF.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: casper_fallback
+
   - module_path: app.reports.module_ledger
     pipeline_stage: governance
     role_description: Strict Pydantic contracts and YAML loader for module role registries and execution ledgers.
