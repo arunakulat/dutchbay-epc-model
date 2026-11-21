@@ -443,6 +443,24 @@ def _validate_debt_sizing_terms(
         errors.append(str(exc))
 
 
+def _validate_debt_covenant_terms(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse a scenario that omits its balloon limit or DSRA months (#1429, D08 and D09).
+
+    ``constraints.max_balloon_pct`` and the DSRA target months have no code default (they
+    used to fall back to 0.10 and 6). Delegates to the debt engine's own resolvers, so
+    pre-flight and the engine cannot disagree.
+    """
+    from finance.debt_v14 import resolve_dsra_target_months, resolve_max_balloon_pct
+
+    for resolve in (resolve_max_balloon_pct, resolve_dsra_target_months):
+        try:
+            resolve(raw_config)
+        except ValueError as exc:
+            errors.append(str(exc))
+
+
 def _validate_bridge_period_treatment(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -747,6 +765,7 @@ def validate_config_for_v14(
     # run validates "debt".
     if "debt" in module_list:
         _validate_debt_sizing_terms(raw_config, errors)
+        _validate_debt_covenant_terms(raw_config, errors)
 
     # 3. Collect and validate registered specs for requested modules
     specs: list[Any] = []
