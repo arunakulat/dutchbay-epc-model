@@ -330,10 +330,19 @@ def test_realised_gearing_is_read_against_the_financed_capex(
 
 def test_the_financed_capex_carries_the_price_basis_escalation() -> None:
     from analytics.scenario_loader import load_scenario_config
+    from analytics.storage_headline import apply_headline_storage_option
+    from finance.native_cost_inputs import normalize_native_capex
 
     scenario = load_scenario_config("scenarios/blue_whale_wind_lot5b_2026.yaml")
-    stated = float(scenario["capex"]["usd_total"])
-    assert css._financed_capex(scenario) == pytest.approx(stated * 1.05, rel=1e-9)
+    # The price-year capex the engine escalates: the stated total plus the headline
+    # battery the scenario holds (#1823), before the 5% price-basis escalation (#1569).
+    price_year = float(
+        apply_headline_storage_option(normalize_native_capex(scenario))["capex"][
+            "usd_total"
+        ]
+    )
+    assert price_year > float(scenario["capex"]["usd_total"])
+    assert css._financed_capex(scenario) == pytest.approx(price_year * 1.05, rel=1e-9)
 
 
 def test_the_financed_capex_carries_the_capitalised_import_levies() -> None:
