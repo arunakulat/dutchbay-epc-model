@@ -45,6 +45,16 @@ and [AGENTS.md](AGENTS.md).
 
 ## Architecture overview
 
+### Versions: product 15.x and the v14 contracts
+
+`VERSION` holds the **product version** of `main` (15.x). The latest **published release** is
+the `v15.6.1` tag; #1110's Board and lender circulation `HOLD` and the F-5 bar apply to it and
+to every later version on `main`. The `v14` in names such as `run_full_pipeline_v14.py` and
+`run_v14_pipeline` is the **contract and pipeline generation**, not a release number: the 15.x
+product runs on the v14 contracts, and those names are not renamed without a migration case.
+[docs/VERSIONS_AND_ENTRYPOINTS.md](docs/VERSIONS_AND_ENTRYPOINTS.md) explains both numbers and
+lists the supported entrypoints.
+
 The canonical, hardened execution path is v14. It provides:
 
 - A validated scenario loader with strict YAML/JSON parsing and a schema guard.
@@ -232,6 +242,8 @@ Install `[grid]` under the constraints file to protect the core numeric pins:
   — prose-first, controlled authoring architecture for the exact 20-section global report
   skeleton; contains no project facts or assurance claim
 - [Deployment Runbook](docs/deploy/DEPLOY.md) — Docker Compose and Fly.io
+- [Versions and Entrypoints](docs/VERSIONS_AND_ENTRYPOINTS.md) — product 15.x versus the v14
+  contracts, and the supported entrypoints
 - [Architecture](docs/PIPELINE_ARCHITECTURE.md) — pipeline and technical design
 - [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) — analytics module details
 - [CASPER / Monte Carlo](docs/CASPER_MC_INTEGRATION.md) — tail-risk and MC integration
