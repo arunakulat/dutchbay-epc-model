@@ -424,7 +424,31 @@ def test_a_veto_on_any_car_blocks_the_train() -> None:
 
 def test_a_train_with_no_car_subjects_fails_closed() -> None:
     """A train branch whose commits name no car cannot be judged per car."""
-    assert _verdict(_pair(), commits=COMMITS, head_ref=TRAIN_REF)[0] == 1
+    unnumbered = [{"commit": {"message": "docs: a car with no number"}}]
+    code, message = _verdict(_pair(), commits=unnumbered, head_ref=TRAIN_REF)
+    assert code == 1 and "cannot be judged per car" in message
+
+
+def test_one_unnumbered_car_fails_the_whole_train() -> None:
+    """A car without a number cannot ride on the other cars' pairs."""
+    commits = [*TRAIN_COMMITS, {"commit": {"message": "fix: car c, no number"}}]
+    comments = _car_pair("10", 1) + _car_pair("11", 3)
+    code, message = _verdict(comments, commits=commits, head_ref=TRAIN_REF)
+    assert code == 1 and "cannot be judged per car" in message
+
+
+def test_a_car_subject_ending_in_a_number_list_names_its_last_number() -> None:
+    """`(#1578, #1800)` is car #1800, so car #1800 needs its own pair."""
+    commits = [
+        *TRAIN_COMMITS,
+        {"commit": {"message": "feat: x (15.28.0) (#1578, #1800)"}},
+    ]
+    assert check.train_cars(TRAIN_REF, commits) == ["10", "11", "1800"]
+    comments = _car_pair("10", 1) + _car_pair("11", 3)
+    code, message = _verdict(comments, commits=commits, head_ref=TRAIN_REF)
+    assert code == 1 and "car #1800" in message
+    comments += _car_pair("1800", 5)
+    assert _verdict(comments, commits=commits, head_ref=TRAIN_REF)[0] == 0
 
 
 def test_a_car_field_off_a_train_does_not_count() -> None:

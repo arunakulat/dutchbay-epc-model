@@ -21,7 +21,10 @@
 # request, from the `ready_for_review` run onward. A record posted after a run is read by
 # re-running this job; editing the body or pushing also re-runs it.
 #
-# Making the check required is a repository-ruleset change the owner makes (recorded on #1713).
+# Owner settings (recorded on #1713), in this order or together: GitHub blocks
+# `pull_request_target` in public repositories from 2 December 2026 unless an Actions event
+# policy allows it, so first allow it for this workflow file; then add 'Independent review
+# (RECRUIT-01)' to the main ruleset's required checks, bound to GitHub Actions.
 name: PR Review Pair
 
 on:

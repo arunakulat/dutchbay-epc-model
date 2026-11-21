@@ -40,12 +40,16 @@ read as ``R2`` because ``REVIEW-01`` classes dependency bumps as ``R2``. ``R0`` 
 no pair here (``R1`` takes one lane under ``REVIEW-01``, which this check does not enforce).
 
 Trains (``TRAIN-01``). On a ``train/`` branch, each commit subject ends with its car's
-pull-request number. Each car needs its own pair: its lanes post their module 3 section 8
+pull-request number (the last number when the subject ends with a list, such as
+``(#1578, #1800)``); a commit with no number fails the check. Each car needs its own pair: its lanes post their module 3 section 8
 carry-forward records on the train pull request, bound to the train head, with ``Car: #<car>``.
 
 Where it runs. The workflow triggers on ``pull_request_target``, so GitHub runs the workflow
 file from ``main``, and it checks out the base commit, so the script is ``main``'s too: a pull
-request cannot edit the check that judges it. No pull-request code is executed. Under
+request cannot edit the check that judges it. No pull-request code is executed. GitHub blocks
+``pull_request_target`` in public repositories from 2 December 2026 unless an Actions event
+policy allows it, so the owner must allow it for this workflow before (or with) making the
+check required. Under
 ``REVIEW-01`` the lanes bind to the draft head before the pull request is marked ready, so the
 job is deferred on a draft and runs on ``ready_for_review``. A record posted after the run is
 read by re-running the job.
@@ -80,7 +84,7 @@ _MARKER = re.compile(r"^[ \t]*8<[^\n]*$", re.MULTILINE)
 _DIGEST = re.compile(r"(?<![0-9a-fA-F])([0-9a-f]{64})(?![0-9a-fA-F])")
 _SESSION_TRAILER = re.compile(r"^Claude-Session:[ \t]*(\S+)[ \t]*$", re.MULTILINE)
 _SESSION_ID = re.compile(r"session_([A-Za-z0-9]+)", re.IGNORECASE)
-_CAR_SUBJECT = re.compile(r"\(#(\d+)\)[ \t]*$")
+_CAR_SUBJECT = re.compile(r"#(\d+)\)?[ \t]*$")
 _CAR_FIELD = re.compile(r"#?(\d+)")
 
 
@@ -116,17 +120,25 @@ def declared_class(body: str, author: str = "") -> str | None:
     return level
 
 
-def train_cars(head_ref: str, commits: list[dict[str, Any]]) -> list[str]:
-    """Return the car numbers of a ``TRAIN-01`` train, or ``[]`` for any other branch."""
+def train_cars(head_ref: str, commits: list[dict[str, Any]]) -> list[str] | None:
+    """Return the car numbers of a ``TRAIN-01`` train, ``[]`` off a train branch.
+
+    A car commit's subject ends with its car's pull-request number (``TRAIN-01``), as
+    ``(#N)`` or as the last number of a list such as ``(#1578, #1800)``. Returns ``None``
+    when any commit on a train branch names no car, so an unnumbered car cannot slip
+    through unreviewed.
+    """
     if not head_ref.startswith(TRAIN_BRANCH_PREFIX):
         return []
     cars: list[str] = []
     for commit in commits:
         message = ((commit.get("commit") or {}).get("message")) or ""
-        found = _CAR_SUBJECT.search(message.split("\n", 1)[0])
-        if found and found.group(1) not in cars:
+        found = _CAR_SUBJECT.search(message.split("\n", 1)[0].rstrip())
+        if not found:
+            return None
+        if found.group(1) not in cars:
             cars.append(found.group(1))
-    return cars
+    return cars or None
 
 
 def writer_sessions(commits: list[dict[str, Any]]) -> set[str]:
@@ -224,12 +236,14 @@ def evaluate(
             f"RECRUIT-01 (#1486): {level} declared; no review pair is required here.",
         )
     writers = writer_sessions(commits)
-    cars = train_cars(head_ref, commits)
-    if head_ref.startswith(TRAIN_BRANCH_PREFIX) and not cars:
+    found_cars = train_cars(head_ref, commits)
+    if found_cars is None:
         return 1, (
-            "RECRUIT-01 (#1486): a train branch whose commit subjects name no car "
-            "'(#<number>)' cannot be judged per car."
+            "RECRUIT-01 (#1486): every commit on a train branch must end its subject "
+            "with its car's pull-request number, '(#<number>)'; one does not, so the "
+            "train cannot be judged per car."
         )
+    cars = found_cars
     # (car, role, reviewer) -> (position, record, where); the latest record wins.
     latest: dict[tuple[str, str, str], tuple[int, dict[str, str], str]] = {}
     notes: list[str] = []

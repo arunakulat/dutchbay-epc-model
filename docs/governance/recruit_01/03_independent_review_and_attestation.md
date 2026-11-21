@@ -107,7 +107,9 @@ two records must name two different reviewers.
 reviewer's latest record at the current head, so a lane can correct its own record. If any such
 latest record does not accept (`REJECT`, `CHANGES-REQUESTED`, a conditional acceptance, or any
 other value), the check fails, whatever accepting records sit beside it. A record bound to an
-older head is not a veto at the new head.
+older head is not a veto at the new head. The check cannot tell who posted a later record, so a
+later accepting record that names the vetoing lane's session lifts the veto; the coordinator
+confirms that any such superseding record came from the vetoing lane itself.
 
 **What the check cannot see.** Every agent posts as the owner's account, so the check compares the
 session a record *declares* with the sessions in the commits' `Claude-Session:` trailers. It
@@ -126,9 +128,16 @@ needs them again.
 
 **Where it runs.** The workflow triggers on `pull_request_target`, so GitHub takes the workflow
 file from `main`, and it checks out the base commit, so the script is `main`'s too. A pull request
-cannot edit the check that judges it, and no pull-request code runs.
+cannot edit the check that judges it, and no pull-request code runs. From 2 December 2026 GitHub
+blocks `pull_request_target` in public repositories unless an Actions event policy allows it, so
+the owner's settings work (#1713) has two steps, in this order or together: allow
+`pull_request_target` for `.github/workflows/pr-review-pair.yml` in the Actions event policy, then
+add `Independent review (RECRUIT-01)` to the `main` ruleset's required checks, bound to GitHub
+Actions. Before the second step, the first ready `R2` pull request after landing should show the
+check on its head SHA.
 
-**Trains.** On a `train/` branch the check reads each car's number from its commit subject and
+**Trains.** On a `train/` branch the check reads each car's number from the end of its commit
+subject (the last number of a list such as `(#1578, #1800)`; a commit with none fails) and
 requires one accepting pair per car, from §8 carry-forward records posted on the train pull request,
 bound to the train head, each with `Car: #<car>`; a veto for any car blocks the train.
 
