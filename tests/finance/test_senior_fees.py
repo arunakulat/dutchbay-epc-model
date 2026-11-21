@@ -61,8 +61,14 @@ FEE_RATE = 0.0075 + 0.01
 # #1577 (2026-11-08) re-measured all five: DutchBay drops to 14 turbines (148.9 MW, P50
 # 433.2 GWh, pre-levy capex 151.4072M). Project IRR 1.099% -> 0.900%, equity IRR -6.19%
 # -> -6.37%, NPV -78.60M -> -76.05M, CFADS 176.29M -> 164.29M, facility 63.04M -> 58.67M.
+#
+# #1779 (2026-11-21) re-measured the equity pin alone (-6.37% -> -6.26%): the lock-up now
+# tests the refinanced balloon tranche, and without the fees this variant has cash to
+# trap in the tranche's sub-covenant years, which then meets the later refinance
+# shortfalls instead of a sponsor call. The tranche sits below CFADS, so the other four
+# pins are untouched.
 PRE_737_PROJECT_IRR = 0.008996955120966568
-PRE_737_EQUITY_IRR = -0.06371847819016674
+PRE_737_EQUITY_IRR = -0.0626369920941755
 PRE_737_PROJECT_NPV = -76053345.56834905
 PRE_737_TOTAL_CFADS = 164292211.42458466
 PRE_737_DEBT_TOTAL = 58670290.0
