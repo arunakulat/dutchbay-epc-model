@@ -904,6 +904,15 @@ class YieldReconciliationBlock(BaseModel):
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
 
 
+class SectionNotRun(BaseModel):
+    """One report section that was not rendered, and why (#1752)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    section: str
+    reason: str
+
+
 class ReportContext(BaseModel):
     """Everything the Jinja2 template needs to render the report."""
 
@@ -1039,6 +1048,10 @@ class ReportContext(BaseModel):
     #: report a run that writes its figures now writes by default and the release asset
     #: ships; None (the default) omits it, so every other report stays byte-identical.
     f5_notice: Optional[str] = None
+    #: Sections the report builder left out, each with its reason (#1752). The command-line
+    #: lender report fills it, so a reader can tell "no sensitivity" from "sensitivity not
+    #: run". Empty (the default) omits the list, so every other report stays byte-identical.
+    sections_not_run: List[SectionNotRun] = Field(default_factory=list)
 
 
 def _build_kpi_rows(

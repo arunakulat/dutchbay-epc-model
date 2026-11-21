@@ -149,6 +149,19 @@
     {%- if ctx.capex_price_basis_note %}
     <p class="fx-warning"><strong>Capex price-date notice:</strong> {{ ctx.capex_price_basis_note }}</p>
     {%- endif %}
+    {#- Sections not run (#1752): the command-line lender report names each section it left
+        out and why. Render-when-present, whitespace-trimmed so other reports are
+        byte-identical. -#}
+    {%- if ctx.sections_not_run %}
+    <h3>Sections not run</h3>
+    <p class="muted">These sections are not in this report. Each is listed with the reason,
+      so a missing section is not read as a clean result.</p>
+    <ul class="notes sections-not-run">
+      {% for s in ctx.sections_not_run %}
+      <li><strong>{{ s.section }}</strong>: {{ s.reason }}</li>
+      {% endfor %}
+    </ul>
+    {%- endif %}
   </section>
 
   {# 3. Executive summary #}

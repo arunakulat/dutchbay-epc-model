@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 EMIT_FLAGS: Tuple[str, ...] = (
     "emit_executive_workbook",
     "emit_capital_risk_report",
+    "emit_lender_report",
     "emit_interaction_grid",
     "emit_tech_comparison",
     "emit_grid_screen",
@@ -198,6 +199,9 @@ def _always(scenario: Mapping[str, Any], cfg: Any) -> Optional[str]:
 APPLICABILITY: Dict[str, Callable[[Mapping[str, Any], Any], Optional[str]]] = {
     "emit_executive_workbook": _always,
     "emit_capital_risk_report": _needs_monte_carlo_parameters,
+    # The combined lender report (#1752) lists any section it cannot build, with its reason,
+    # so it applies to every run with figures.
+    "emit_lender_report": _always,
     "emit_interaction_grid": _needs_interaction_grid,
     "emit_tech_comparison": _needs_tech_comparison_scenarios,
     "emit_grid_screen": _needs_enabled_grid_study,
