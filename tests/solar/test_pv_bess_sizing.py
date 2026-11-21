@@ -863,8 +863,6 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
     assert any(rel.startswith("scenarios/") for rel in inputs)
     for rel, digest in inputs.items():
         current = hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest()
-        assert current == digest, (
-            f"{rel} changed since {summary} was generated: regenerate it"
-        )
+        assert current == digest, f"{rel} changed since {summary} ran: regenerate it"
     if "inputs_digest" in spec:
         assert spec["inputs_digest"] == inputs_digest(spec)
