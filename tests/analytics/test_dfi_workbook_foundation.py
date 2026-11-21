@@ -210,6 +210,94 @@ def test_supported_numeric_boundaries_survive_xml_and_readback(tmp_path: Path) -
     workbook.close()
 
 
+_TEMPORAL_INPUT_CASES = (
+    (2958465, "yyyy-mm-dd"),
+    (2958466, "yyyy-mm-dd"),
+    (3000000, "yyyy-mm-dd"),
+    (59, "yyyy-mm-dd"),
+    (60, "yyyy-mm-dd"),
+    (0.5, "hh:mm:ss"),
+    (1e-9, "[h]:mm:ss"),
+)
+
+
+@pytest.mark.parametrize(("value", "number_format"), _TEMPORAL_INPUT_CASES)
+def test_numeric_temporal_format_is_refused_at_construction(
+    value: int | float, number_format: str
+) -> None:
+    payload = _sample_inputs()[0].model_dump()
+    payload.update(value=value, number_format=number_format)
+    with pytest.raises(ValueError, match="temporal number_format"):
+        WorkbookInputItem.model_validate(payload)
+
+
+@pytest.mark.parametrize(("value", "number_format"), _TEMPORAL_INPUT_CASES)
+def test_builder_refuses_numeric_temporal_format_before_touching_destination(
+    tmp_path: Path, value: int | float, number_format: str
+) -> None:
+    destination = tmp_path / "new_parent" / "temporal.xlsx"
+    # Pydantic copies can bypass construction validators.
+    item = _sample_inputs()[0].model_copy(
+        update={"value": value, "number_format": number_format}
+    )
+    with pytest.raises(ValueError, match="temporal number_format"):
+        build_dfi_workbook_foundation(
+            destination,
+            metadata=_sample_metadata(),
+            inputs=(item,),
+            ledger_entries=(),
+        )
+    assert not destination.parent.exists()
+
+
+def test_supported_scalar_formats_preserve_value_and_type(tmp_path: Path) -> None:
+    cases = (
+        (3000000, "General", "n"),
+        (0.125, "0.0%", "n"),
+        (-1250.75, "$#,##0.00", "n"),
+        (4, '0 "days"', "n"),
+        ("1900-02-28", "yyyy-mm-dd", "s"),
+        (True, "hh:mm:ss", "b"),
+        ("Archive record NUM-04", "@", "s"),
+    )
+    items = tuple(
+        WorkbookInputItem.model_validate(
+            _sample_inputs()[0].model_dump()
+            | {"key": f"source_{index}", "value": value, "number_format": number_format}
+        )
+        for index, (value, number_format, _) in enumerate(cases)
+    )
+    destination, registry = build_dfi_workbook_foundation(
+        tmp_path / "supported_formats.xlsx",
+        metadata=_sample_metadata(),
+        inputs=items,
+        ledger_entries=(),
+    )
+    workbook = openpyxl.load_workbook(destination)
+    for item, (value, number_format, data_type) in zip(items, cases, strict=True):
+        ref = registry.get(item.key)
+        cell = workbook[ref.sheet][f"{ref.column}{ref.row}"]
+        assert cell.value == value
+        assert type(cell.value) is type(value)
+        assert cell.data_type == data_type
+        assert cell.number_format == number_format
+    workbook.close()
+
+
+@pytest.mark.parametrize("value", (-(10**15), -1.234567890123456, -sys.float_info.max))
+def test_unsupported_signed_sources_direct_callers_to_external_provenance(
+    value: int | float,
+) -> None:
+    payload = _sample_inputs()[0].model_dump()
+    with pytest.raises(
+        ValueError,
+        match="Preserve the original source externally and supply a supported textual reference",
+    ):
+        WorkbookInputItem.model_validate(payload | {"value": value})
+    with pytest.raises(ValueError, match="forbidden formula-injection character"):
+        WorkbookInputItem.model_validate(payload | {"value": str(value)})
+
+
 def _sample_inputs() -> tuple[WorkbookInputItem, ...]:
     return (
         WorkbookInputItem(
