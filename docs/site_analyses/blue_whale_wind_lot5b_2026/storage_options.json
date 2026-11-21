@@ -122,7 +122,7 @@
   },
   "hold": "SCREENING ONLY, not lender-grade. A wind + BESS revenue basis built from a solar + BESS tariff formula is a working assumption, not a published tariff. The hourly shape is a generic Cp-limited curve on a reanalysis, calibrated to the scenario's committed yield, which keeps its own resource holds. F-5 (no quarterly CFADS or intra-year DSCR figure supports a lender representation), #1110 and v15.6.1 stand.",
   "method_sha256": "5a1ca9505c1745ee2389e457b75ed8fd56e5190448003c8dd6b70c033cf0ca1e",
-  "model_version": "15.28.0",
+  "model_version": "15.29.0",
   "monte_carlo_base_basis": {
     "cycled_0_5_2|B": {
       "delta_project_npv_vs_wind_only": {
@@ -1045,11 +1045,11 @@
         "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
         "conf/wind_bess_options.yaml": "8168ddd6c39ee8d28efa091687c01cf3954c6fa35bcff6cedc1456cc0965f1f7",
         "docs/blue_whale/met_mast_transfer_summary.json": "2deb3836798d88938400705ef45b8572fee65108fcd4289aa8f0f5970ea09e22",
-        "scenarios/blue_whale_wind_lot5b_2026.yaml": "c04be584e2be43d3b5d45ec33728473e6a791f5e4c8152bddb92b7c1a0f74b23"
+        "scenarios/blue_whale_wind_lot5b_2026.yaml": "7d454a9a7e641225810cbd342e80345418b4b3fc60781a08d50a89620969895c"
       },
-      "tree": "eedfe6dcec29509f687b5f291fcb9b5d4c0ee694c28445ee20909ad0d4bd115e"
+      "tree": "0d2cdaceeb823a8e0062bb9f4febfbc7205a4017740d423971dcd9e77f1b83da"
     },
-    "model_version": "15.28.0",
+    "model_version": "15.29.0",
     "schema": "dutchbay.site_analysis_provenance.v1"
   },
   "recommended_option_reading_A": "held_0_5_0_5",
@@ -1143,7 +1143,7 @@
     }
   },
   "scenario": "scenarios/blue_whale_wind_lot5b_2026.yaml",
-  "scenario_sha256": "c04be584e2be43d3b5d45ec33728473e6a791f5e4c8152bddb92b7c1a0f74b23",
+  "scenario_sha256": "7d454a9a7e641225810cbd342e80345418b4b3fc60781a08d50a89620969895c",
   "schema": "dutchbay.wind_bess_options.v1",
   "site": {
     "location": "DutchBay T2 position, Kalpitiya peninsula, Puttalam District",

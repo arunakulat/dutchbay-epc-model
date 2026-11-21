@@ -78,6 +78,7 @@ flowchart LR
     solar_resource[solar_resource]
     wind_resource[wind_resource]
     analytics --> finance
+    analytics --> solar_resource
     analytics --> wind_resource
     api --> analytics
     api --> finance
