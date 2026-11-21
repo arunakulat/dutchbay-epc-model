@@ -16,6 +16,7 @@ from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from app.models.inputs import WindFarmInputs
 from app.reports import lender_report_emit as lre
 from app.reports.capital_risk_emit import build_capital_risk_report_for_scenario
+from app.reports.capital_structure_section import SECTION_CAPITAL_STRUCTURE
 from app.reports.dbpl import DbplDependencyError
 from app.reports.lender_report_emit import (
     DOCUMENT_STATUS,
@@ -149,7 +150,11 @@ def test_cli_report_has_the_api_report_sections(
     assert _h2s(cli_html) == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
-    assert [s.section for s in out.sections_not_run] == [SECTION_CAPITAL_RISK]
+    # The capital-structure screening (#1825 slice i) is opt-in and off by default.
+    assert [s.section for s in out.sections_not_run] == [
+        SECTION_CAPITAL_STRUCTURE,
+        SECTION_CAPITAL_RISK,
+    ]
 
 
 def test_the_cli_report_runs_the_production_profile(
@@ -203,12 +208,14 @@ def test_every_section_left_out_is_listed_with_its_reason(
     )
     listed = {s.section: s.reason for s in out.sections_not_run}
     assert list(listed) == [
+        SECTION_CAPITAL_STRUCTURE,
         SECTION_TORNADO,
         SECTION_MORRIS,
         SECTION_PAWN,
         SECTION_CAPITAL_RISK,
     ]
     assert "outcome: degraded" in listed[SECTION_TORNADO]
+    assert "switched off" in listed[SECTION_CAPITAL_STRUCTURE]
     # The scenario declares no Monte Carlo block, so neither screening nor the
     # capital-risk Monte Carlo has anything to sample (and the builder is never called).
     assert "monte_carlo.parameters" in listed[SECTION_MORRIS]
@@ -321,10 +328,10 @@ def test_a_shared_capital_risk_report_is_used_as_is(
         sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
         capital_risk_builder=_not_called,
     )
-    assert out.sections_not_run == ()
+    # Only the opt-in capital-structure screening (#1825 slice i, off by default) is left out.
+    assert [s.section for s in out.sections_not_run] == [SECTION_CAPITAL_STRUCTURE]
     html = out.html_path.read_text(encoding="utf-8")
     assert f"{shared.n_trials}" in html
-    assert "Sections not run" not in html
 
 
 # ── the DBPL print ────────────────────────────────────────────────────────────

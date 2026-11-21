@@ -417,6 +417,69 @@
   </section>
   {% endif %}
 
+  {# 4d-ii. Capital-structure screening (#1825 slice i): debt mix, contingency and gearing
+     searches around the committed case, held to the scenario's covenants. Opt-in; never
+     replaces the committed structure. #}
+  {% if ctx.capital_structure %}
+  {% set cs = ctx.capital_structure %}
+  <section class="page capital-structure">
+    <h2>Capital Structure Screening</h2>
+    <p class="muted"><strong>Screening of alternatives, not the committed structure.</strong>
+      Each candidate re-runs the model with one financing choice changed and is ranked on
+      equity NPV; the committed case and every figure elsewhere in this report are unchanged.
+      Covenants held: {{ cs.covenants | join(", ") }}. Committed case: equity NPV
+      {{ fmt_usd(cs.committed_objective) }}, minimum period DSCR {{ fmt_x(cs.committed_dscr) }}.</p>
+    {% if cs.covenants_not_screened %}
+    <p class="muted">Declared covenants not screened on:</p>
+    <ul class="notes capital-structure-not-screened">
+      {% for line in cs.covenants_not_screened %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% for search in cs.searches %}
+    <h3>{{ search.kind }}</h3>
+    <p class="muted">Searched: {{ search.searched }}.
+      {%- if search.current %} Committed: {{ search.current }}.{% endif %}
+      {{ search.n_feasible }} of {{ search.n_evaluated }} candidates clear every covenant.
+      {%- if search.best_label %} Named: <strong>{{ search.best_label }}</strong>
+      {%- if search.best_objective is not none %} (equity NPV {{ fmt_usd(search.best_objective) }}){% endif %}.{% endif %}</p>
+    {% if search.note %}<p class="muted capital-structure-note">{{ search.note }}</p>{% endif %}
+    {% if search.infeasibility %}
+    <ul class="notes capital-structure-infeasible">
+      {% for line in search.infeasibility %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th style="text-align:right;">Equity NPV</th>
+          {% for key in cs.covenant_keys %}<th style="text-align:right;">{{ key }}</th>{% endfor %}
+          <th>Covenants</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in search.candidates %}
+        <tr{% if c.best %} class="named"{% endif %}>
+          <td>{% if c.best %}<strong>{{ c.label }}</strong>{% else %}{{ c.label }}{% endif %}</td>
+          <td class="num">{{ fmt_usd(c.objective) }}</td>
+          {% for key in cs.covenant_keys %}<td class="num">{% if c.constraints.get(key) is not none %}{{ "%.3f" | format(c.constraints.get(key)) }}{% else %}&ndash;{% endif %}</td>{% endfor %}
+          <td>{% if c.feasible %}clear{% else %}fail: {{ c.binding | join(", ") }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if cs.searches_not_run %}
+    <ul class="notes capital-structure-not-run">
+      {% for line in cs.searches_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">

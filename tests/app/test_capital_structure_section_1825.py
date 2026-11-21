@@ -1,0 +1,403 @@
+"""Capital-structure screening in the lender report (#1825 slice i).
+
+The three optimizers are replaced by fakes through their own modules, so these tests check the
+section's wiring and wording, not the optimizers (which have their own tests).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Dict, List, Mapping, Optional, Sequence
+
+import pytest
+
+import analytics.capital_structure_optimizer_v14 as cso
+import analytics.optimization_v14 as opt
+from app.models.inputs import WindFarmInputs
+from app.reports.capital_structure_section import (
+    DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
+    OBJECTIVE_KEY,
+    SECTION_CAPITAL_STRUCTURE,
+    CapitalStructureSettings,
+    build_capital_structure_section,
+    settings_from_config,
+)
+from app.reports.lender_report_emit import sections_not_run
+from app.reports.renderer import render_report_html
+from app.reports.report_model import CapitalStructureBlock
+from app.reports.report_orchestration import (
+    ORDINARY_REPORT_SENSITIVITY_PROFILE,
+    build_report_context_from_case,
+    compute_report_sensitivity,
+    run_report_case,
+)
+
+ON = CapitalStructureSettings(enabled=True)
+CAPEX = 150_000_000.0
+LINE = 3_000_000.0
+
+
+def _scenario(**constraints: Any) -> Dict[str, Any]:
+    block: Dict[str, Any] = {"min_dscr_covenant": 1.3, "max_balloon_pct": 0.5}
+    block.update(constraints)
+    return {
+        "constraints": {k: v for k, v in block.items() if v is not None},
+        "capex": {"usd_total": CAPEX, "breakdown": {"contingency_usd": LINE}},
+        "Financing_Terms": {
+            "debt_ratio": 0.7,
+            "mix": {"lkr_max": 0.45, "dfi_max": 0.1},
+        },
+    }
+
+
+def _point(value: Any, objective: float, feasible: bool = True, **kpis: float) -> Any:
+    return SimpleNamespace(
+        value=value,
+        objective=objective,
+        constraints=kpis or {"min_dscr_period": 1.3},
+        feasible=feasible,
+        binding_constraints=() if feasible else tuple(kpis),
+    )
+
+
+class _Fakes:
+    """Records what each optimizer was asked, and answers with a fixed curve."""
+
+    def __init__(self) -> None:
+        self.calls: Dict[str, Dict[str, Any]] = {}
+        self.mix_feasible = True
+        self.contingency_feasible_to = 0.10
+        self.ceiling_binds_to: Optional[float] = 0.40
+        self.base: Dict[str, float] = {
+            OBJECTIVE_KEY: -90e6,
+            "min_dscr_period": 1.3,
+            "balloon_pct": 0.39,
+            "llcr": 1.5,
+        }
+
+    def debt_mix(self, path: str, **kw: Any) -> Any:
+        self.calls["mix"] = kw
+        curve = [
+            _point((0.0, 0.4), -74e6, self.mix_feasible),
+            _point((0.6, 0.0), -95e6, self.mix_feasible),
+        ]
+        violation = SimpleNamespace(
+            key="min_dscr_period",
+            bound_kind="minimum",
+            required=1.3,
+            achieved=1.21,
+            shortfall=0.09,
+            candidates_violating=2,
+            candidates_total=2,
+        )
+        return SimpleNamespace(
+            best=curve[0] if self.mix_feasible else None,
+            curve=curve,
+            feasible=self.mix_feasible,
+            infeasible_reason=None if self.mix_feasible else "min_dscr_period binds",
+            diagnostics=(
+                None
+                if self.mix_feasible
+                else SimpleNamespace(binding_summary="dscr", violations=(violation,))
+            ),
+        )
+
+    def contingency(self, path: str, **kw: Any) -> Any:
+        self.calls["contingency"] = kw
+        curve = [
+            _point((f,), -90e6 - f * 1e8, f <= self.contingency_feasible_to + 1e-9)
+            for f in (0.0, 0.05, 0.10, 0.15, 0.20)
+        ]
+        return SimpleNamespace(
+            best=curve[0], curve=curve, feasible=True, diagnostics=None
+        )
+
+    def parameter(self, path: str, **kw: Any) -> Any:
+        self.calls["gearing"] = kw
+        curve = [
+            SimpleNamespace(
+                value=v, objective=self._equity_value(v), constraint=1.3, feasible=True
+            )
+            for v in (0.30, 0.40, 0.50, 0.60)
+        ]
+        return SimpleNamespace(best=curve[1], curve=curve, diagnostics=None)
+
+    def _gearing(self, ceiling: float) -> float:
+        cap = self.ceiling_binds_to
+        return 0.389 if cap is None else min(ceiling, cap) * 0.97
+
+    def _equity_value(self, ceiling: float) -> float:
+        return -90e6 - (0.40 - min(ceiling, 0.40)) * 1e8
+
+    def evaluate(self, path: str, overrides: Mapping[str, Any]) -> Mapping[str, Any]:
+        if not overrides:
+            return dict(self.base)
+        ceiling = float(overrides["Financing_Terms.debt_ratio"])
+        return {
+            OBJECTIVE_KEY: self._equity_value(ceiling),
+            "min_dscr_period": 1.3,
+            "balloon_pct": 0.39,
+            "llcr": 1.5,
+            "max_debt_usd": self._gearing(ceiling) * CAPEX,
+        }
+
+
+@pytest.fixture()
+def fakes(monkeypatch: pytest.MonkeyPatch) -> _Fakes:
+    f = _Fakes()
+    monkeypatch.setattr(cso, "optimize_debt_mix", f.debt_mix)
+    monkeypatch.setattr(cso, "optimize_capex_contingency", f.contingency)
+    monkeypatch.setattr(opt, "optimize_parameter", f.parameter)
+    return f
+
+
+def _build(fakes: _Fakes, scenario: Mapping[str, Any], settings: Any = ON) -> Any:
+    return build_capital_structure_section(
+        "scenario.yaml", scenario, settings, evaluate=fakes.evaluate
+    )
+
+
+def _empty_bundle(scenario: Mapping[str, Any]) -> Any:
+    return compute_report_sensitivity(
+        scenario,
+        profile=ORDINARY_REPORT_SENSITIVITY_PROFILE,
+        tornado_computer=lambda _s: None,
+        morris_computer=lambda _s, *, n_trajectories: None,
+        pawn_computer=lambda _s, *, n, s: None,
+    )
+
+
+def _keys(constraints: Sequence[Any]) -> List[str]:
+    return [c.key for c in constraints]
+
+
+# ── settings ──────────────────────────────────────────────────────────────────
+
+
+def test_the_section_is_off_by_default() -> None:
+    assert settings_from_config(None) == DEFAULT_CAPITAL_STRUCTURE_SETTINGS
+    assert settings_from_config({}).enabled is False
+
+
+def test_settings_are_read_from_the_run_configuration() -> None:
+    s = settings_from_config(
+        {"enabled": True, "lkr_bounds": [0.1, 0.5], "gearing_steps": 5}
+    )
+    assert (s.enabled, s.lkr_bounds, s.gearing_steps) == (True, (0.1, 0.5), 5)
+    assert s.dfi_bounds == DEFAULT_CAPITAL_STRUCTURE_SETTINGS.dfi_bounds
+
+
+def test_a_malformed_bound_fails_loud() -> None:
+    with pytest.raises(ValueError, match="lkr_bounds"):
+        settings_from_config({"lkr_bounds": [0.1]})
+
+
+# ── not run ───────────────────────────────────────────────────────────────────
+
+
+def test_switched_off_is_a_stated_reason_and_runs_nothing(fakes: _Fakes) -> None:
+    out = _build(fakes, _scenario(), DEFAULT_CAPITAL_STRUCTURE_SETTINGS)
+    assert isinstance(out, str) and out.startswith("not run: switched off")
+    assert fakes.calls == {}
+
+
+@pytest.mark.parametrize(
+    "scenario, missing",
+    [
+        ({"capex": {}}, "constraints block"),
+        (_scenario(min_dscr_covenant=None), "min_dscr_covenant"),
+        (_scenario(min_dscr_covenant=0), "min_dscr_covenant"),
+    ],
+)
+def test_a_scenario_without_a_dscr_covenant_is_not_screened(
+    fakes: _Fakes, scenario: Dict[str, Any], missing: str
+) -> None:
+    out = _build(fakes, scenario)
+    assert isinstance(out, str) and out.startswith("not run:") and missing in out
+    assert fakes.calls == {}
+
+
+def test_a_committed_case_that_fails_every_covenant_is_not_screened(
+    fakes: _Fakes,
+) -> None:
+    fakes.base["min_dscr_period"] = 1.1
+    out = _build(fakes, _scenario(max_balloon_pct=0.1))
+    assert isinstance(out, str) and "fails every declared covenant" in out
+    assert "mix" not in fakes.calls
+
+
+def test_the_not_run_list_names_the_section_first() -> None:
+    listed = sections_not_run(
+        _empty_bundle({}),
+        {},
+        capital_risk_not_run=None,
+        capital_structure_not_run="not run: switched off",
+    )
+    assert listed[0].section == SECTION_CAPITAL_STRUCTURE
+    assert listed[0].reason == "not run: switched off"
+
+
+# ── the three searches ────────────────────────────────────────────────────────
+
+
+def test_every_search_holds_the_scenario_covenants(fakes: _Fakes) -> None:
+    block = _build(fakes, _scenario(min_llcr_covenant=1.2))
+    assert isinstance(block, CapitalStructureBlock)
+    assert _keys(fakes.calls["mix"]["constraints"]) == [
+        "min_dscr_period",
+        "llcr",
+        "balloon_pct",
+    ]
+    assert fakes.calls["mix"]["objective_key"] == OBJECTIVE_KEY == "equity_npv"
+    assert fakes.calls["contingency"]["base_capex_usd"] == CAPEX - LINE
+    assert fakes.calls["gearing"]["constraint_min"] == 1.3
+    assert block.covenants == [
+        "min_dscr_period >= 1.3",
+        "llcr >= 1.2",
+        "balloon_pct <= 0.5",
+    ]
+    assert [s.kind for s in block.searches] == [
+        "Debt tranche mix",
+        "Capex contingency",
+        "Gearing ceiling",
+    ]
+
+
+def test_a_covenant_the_committed_case_fails_is_shown_not_screened(
+    fakes: _Fakes,
+) -> None:
+    block = _build(fakes, _scenario(max_balloon_pct=0.1))
+    assert isinstance(block, CapitalStructureBlock)
+    assert _keys(fakes.calls["mix"]["constraints"]) == ["min_dscr_period"]
+    assert block.covenant_keys == ["min_dscr_period"]
+    assert len(block.covenants_not_screened) == 1
+    assert block.covenants_not_screened[0].startswith("balloon_pct <= 0.1")
+    assert "0.39" in block.covenants_not_screened[0]
+
+
+def test_the_mix_search_names_its_best_feasible_candidate(fakes: _Fakes) -> None:
+    block = _build(fakes, _scenario())
+    mix = block.searches[0]
+    assert mix.best_label == "LKR 0% / DFI 40% / USD 60%"
+    assert mix.current == "LKR 45% / DFI 10% / USD commercial 45%"
+    assert [c.best for c in mix.candidates] == [True, False]
+    assert mix.infeasibility == []
+
+
+def test_an_infeasible_mix_shows_the_infeasibility_register(fakes: _Fakes) -> None:
+    fakes.mix_feasible = False
+    mix = _build(fakes, _scenario()).searches[0]
+    assert mix.best_label is None and mix.n_feasible == 0
+    assert mix.infeasibility == [
+        "min_dscr_period >= 1.3: closest candidate reached 1.21, short by 0.09; "
+        "violated by 2 of 2 candidates"
+    ]
+
+
+def test_the_contingency_search_reports_covenant_headroom(fakes: _Fakes) -> None:
+    search = _build(fakes, _scenario()).searches[1]
+    assert search.best_label == "10.0% (covenant headroom)"
+    assert search.best_objective is None
+    assert [c.best for c in search.candidates] == [False, False, True, False, False]
+    assert search.note is not None and "above that a covenant fails" in search.note
+    assert f"{LINE / (CAPEX - LINE):.1%}" in search.note
+
+
+def test_contingency_headroom_at_the_top_of_the_range_says_so(fakes: _Fakes) -> None:
+    fakes.contingency_feasible_to = 0.20
+    search = _build(fakes, _scenario()).searches[1]
+    assert search.note is not None and "the top of the searched range" in search.note
+
+
+def test_a_missing_contingency_line_is_listed_not_guessed(fakes: _Fakes) -> None:
+    scenario = _scenario()
+    scenario["capex"] = {"usd_total": CAPEX}
+    block = _build(fakes, scenario)
+    assert [s.kind for s in block.searches] == ["Debt tranche mix", "Gearing ceiling"]
+    assert block.searches_not_run == [
+        "Capex contingency: not run: the scenario declares no "
+        "capex.breakdown.contingency_usd line"
+    ]
+
+
+def test_the_gearing_search_shows_realised_gearing_and_the_plateau(
+    fakes: _Fakes,
+) -> None:
+    search = _build(fakes, _scenario()).searches[2]
+    assert [c.label for c in search.candidates] == [
+        "ceiling 30%, realised 29.1%",
+        "ceiling 40%, realised 38.8%",
+        "ceiling 50%, realised 38.8%",
+        "ceiling 60%, realised 38.8%",
+    ]
+    # First of equal objectives, as the optimizer breaks ties.
+    assert search.best_label == "ceiling 40%, realised 38.8%"
+    assert search.note is not None and "tops out at 38.8%" in search.note
+
+
+def test_a_ceiling_that_binds_nowhere_names_no_optimum(fakes: _Fakes) -> None:
+    fakes.ceiling_binds_to = None
+    search = _build(fakes, _scenario()).searches[2]
+    assert search.best_label is None and search.best_objective is None
+    assert not any(c.best for c in search.candidates)
+    assert search.note is not None and "does not bind anywhere" in search.note
+
+
+def test_the_gearing_search_holds_every_covenant_not_only_dscr(
+    fakes: _Fakes,
+) -> None:
+    fakes.base["balloon_pct"] = 0.2
+    block = _build(fakes, _scenario(max_balloon_pct=0.3))
+    search = block.searches[2]
+    # Every ceiling point reads back a 0.39 balloon: over the 0.3 cap the committed case
+    # clears, so none is feasible though optimize_parameter (DSCR only) passed them all.
+    assert search.n_feasible == 0 and search.best_label is None
+    assert all(c.binding == ["balloon_pct"] for c in search.candidates)
+    assert search.infeasibility
+
+
+# ── rendering ─────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def api_case() -> Any:
+    inputs = WindFarmInputs(
+        site_name="Report seam",
+        capacity_mw=148.9,
+        capacity_factor=0.332,
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=20.30,
+        ppa_term_years=20,
+        capex_total_usd=159_600_000.0,
+        opex_annual_usd=5_000_000.0,
+        fx_start_lkr_per_usd=333.79,
+    )
+    return run_report_case(inputs, generated_at="2026-11-21T00:00:00+00:00")
+
+
+def _render(case: Any, block: Optional[CapitalStructureBlock]) -> str:
+    bundle = _empty_bundle(case.scenario_config)
+    return render_report_html(
+        build_report_context_from_case(case, bundle, capital_structure=block)
+    )
+
+
+def test_the_section_renders_with_its_f5_caption(
+    fakes: _Fakes, api_case: Any, tmp_path: Path
+) -> None:
+    block = _build(fakes, _scenario(max_balloon_pct=0.1))
+    html = _render(api_case, block)
+    section = html.split("<h2>Capital Structure Screening</h2>", 1)[1].split(
+        "</section>", 1
+    )[0]
+    assert "Screening of alternatives, not the committed structure." in section
+    assert section.count("<h3>") == 3
+    assert "Declared covenants not screened on" in section
+    assert '<th style="text-align:right;">min_dscr_period</th>' in section
+    assert "<strong>LKR 0% / DFI 40% / USD 60%</strong>" in section
+    assert "F-5:" in section
+
+
+def test_without_the_block_the_report_has_no_such_section(api_case: Any) -> None:
+    assert "Capital Structure Screening" not in _render(api_case, None)
