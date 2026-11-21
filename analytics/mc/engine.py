@@ -412,6 +412,7 @@ class MonteCarloEngine:
         self._refuse_native_capex_conflicts(
             self._base_config, self._param_names, self._param_kinds
         )
+        self._refuse_bare_capex_on_full_scenario(self._base_config, self._param_names)
         # Opt-in per parameter (#1762): a swept capex.usd_total on a derive_from_breakdown
         # scenario scales the breakdown line items pro rata so the two stay reconciled.
         self._breakdown_reconciliation: Dict[str, str] = (
@@ -712,6 +713,38 @@ class MonteCarloEngine:
                     "scenario (capex.input): every trial would refuse it. Sweep "
                     "capex.input.amount for CAPEX; FX sweeps with native CAPEX are not "
                     "supported yet (#1629)."
+                )
+
+    @staticmethod
+    def _refuse_bare_capex_on_full_scenario(
+        cfg: Mapping[str, Any], names: Sequence[str]
+    ) -> None:
+        """Refuse a bare ``capex`` parameter on a scenario that carries a capex section (#1793).
+
+        A parameter named ``capex`` (any case or padding) overrides the whole capex section
+        with one number. On a full scenario every trial then refuses it (a cost section that
+        is not a mapping, #1767), so the run could only report toy KPIs or fail late. The
+        native-CAPEX guard already refuses the name on ``capex.input`` scenarios; this covers
+        the USD ones. A config with no capex mapping in any spelling is the minimal smoke
+        config, whose toy metric reads ``capex`` directly, so the name stays accepted there.
+        """
+        if not isinstance(cfg, Mapping):
+            return
+        if not any(
+            isinstance(key, str)
+            and key.strip().lower() == "capex"
+            and isinstance(value, Mapping)
+            for key, value in cfg.items()
+        ):
+            return
+        for name in names:
+            if name.strip().lower() == "capex":
+                raise MonteCarloConfigError(
+                    f"monte_carlo parameter {name!r} is refused before sampling (#1793): it "
+                    "overrides the whole capex section with one number, which every trial "
+                    "of a full scenario refuses (the #1629 trial-path check). Sweep "
+                    "capex.usd_total on a USD scenario, or capex.input.amount on a "
+                    "native-CAPEX scenario."
                 )
 
     @staticmethod
