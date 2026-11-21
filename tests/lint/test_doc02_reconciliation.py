@@ -93,6 +93,19 @@ STALE_GATEWAY_WORDING = (
 )
 
 
+# Files that restate DOC-02 in passing rather than as a gateway: they need not repeat the
+# whole rule, but must not carry the pre-#1826 wording that a PR updates both files.
+PASSING_MENTIONS = (
+    ".claude/skills/steward/SKILL.md",
+    ".agents/skills/steward/SKILL.md",
+    "docs/dutchbay-epc-model-brief.md",
+)
+STALE_PASSING_WORDING = (
+    "impact disclosure, `VERSION` and `CHANGELOG.md`",
+    "`VERSION` and the changelog move when",
+)
+
+
 def _flat(text: str) -> str:
     """Collapse whitespace so a wrapped line reads as one sentence."""
     return " ".join(text.split())
@@ -159,3 +172,24 @@ def test_gateway_check_fires_on_drift() -> None:
     assert any("release cuts" in p for p in gateway_problems(no_cut, description))
     option_a = description.replace("bump VERSION in the same PR, ", "")
     assert any("CSV:" in p for p in gateway_problems(texts, option_a))
+
+
+def stale_passing_mentions(texts: dict[str, str]) -> list[str]:
+    """Return one message per passing mention that still says a PR edits CHANGELOG.md."""
+    return [
+        f"{name}: still carries the pre-#1826 wording {stale!r}"
+        for name, text in texts.items()
+        for stale in STALE_PASSING_WORDING
+        if _flat(stale) in _flat(text)
+    ]
+
+
+def test_passing_mentions_drop_the_pre_1826_wording() -> None:
+    """The steward skill (both copies) and the brief no longer say a PR edits both files."""
+    texts = {
+        name: (REPO_ROOT / name).read_text(encoding="utf-8")
+        for name in PASSING_MENTIONS
+    }
+    assert stale_passing_mentions(texts) == []
+    for stale in STALE_PASSING_WORDING:
+        assert stale_passing_mentions({"probe": f"x {stale} y"}), stale
