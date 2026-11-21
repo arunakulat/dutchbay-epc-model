@@ -674,7 +674,7 @@ its placement in the independence section, and its resistance to an exception ad
   by pinning the former rate as fixture input; their expected values are unchanged. The
   canonical lender case is unchanged.
 
-- **Blue Whale wind carries its held battery in the headline KPIs (15.29.0, #1823).** A
+- **Blue Whale wind carries its held battery in the headline KPIs (15.30.0, #1823).** A
   scenario's `storage_options.headline_option` names one held battery option, and the
   evaluation adds it to the project (capex and O&M only) exactly as the wind battery options
   analysis builds it. `scenarios/blue_whale_wind_lot5b_2026.yaml` (v0.7) names the recommended
