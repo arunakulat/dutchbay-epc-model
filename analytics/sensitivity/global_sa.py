@@ -368,10 +368,22 @@ def build_problem(
 
 
 def _engine_evaluate_fn(config_path: str) -> EvaluateFn:
-    """The default evaluator: the canonical ARCH-04 gateway, keyed by dotted-path overrides."""
+    """The default evaluator: the canonical ARCH-04 gateway, keyed by dotted-path overrides.
+
+    Each sampled point goes through the tornado's :func:`coherent_overrides` (#1817), so a
+    ``project.capacity_factor`` draw also scales the per-technology capacity factors, and
+    a ``capex.usd_total`` draw scales ``capex.breakdown`` pro rata when the scenario
+    declares ``reconcile_breakdown: pro_rata``. Without either coupling the overrides
+    pass unchanged.
+    """
+    from analytics.sensitivity.engine import coherent_overrides
+
+    base_cfg = load_scenario_config(config_path)
 
     def _fn(overrides: Mapping[str, float]) -> Mapping[str, Any]:
-        return evaluate_with_overrides(config_path, overrides=dict(overrides))
+        return evaluate_with_overrides(
+            config_path, overrides=coherent_overrides(base_cfg, dict(overrides))
+        )
 
     return _fn
 
