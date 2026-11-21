@@ -36,6 +36,7 @@ from analytics.export_helpers import DSCR_HIGHLIGHT_THRESHOLD
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
+from analytics.storage_headline import apply_headline_storage_option
 from finance.bess_lcos import compute_lcos_suite
 from finance.capex_price_basis import apply_capex_price_basis, automatic_escalation
 from finance.cashflow_v14 import build_annual_rows
@@ -283,7 +284,9 @@ class ScenarioAnalytics:
 
             # #1569: escalate capex from its declared price date to the construction
             # draws, as the canonical pipeline does. No capex.price_basis -> unchanged.
-            config = apply_capex_price_basis(config)
+            # #1823: a declared headline battery joins the project first, as in the
+            # canonical pipeline. No storage_options.headline_option -> unchanged.
+            config = apply_capex_price_basis(apply_headline_storage_option(config))
             capex_price_basis = automatic_escalation(config)
 
             # Determine discount rate (scenario, config, global)
