@@ -6,39 +6,76 @@ from typing import Any, Dict, Mapping, Tuple
 
 from finance.debt.capex import _extract_capex_base_usd, _extract_capex_usd
 from finance.debt.constants import DSRA_TARGET_BASIS
-from finance.debt.helpers import _as_float, _section_case_insensitive, _truthy_flag
+from finance.debt.helpers import (
+    _as_float,
+    _required_number,
+    _section_case_insensitive,
+    _truthy_flag,
+)
+from finance.debt.terms import _financing_key_prefix
 from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
-from finance.utils import as_float
 
 
 def _resolve_dsra_target_months(
     dsra_cfg: Mapping[str, Any],
     fin: Mapping[str, Any],
     reserves: Mapping[str, Any],
+    prefix: str = "Financing_Terms.",
 ) -> Tuple[float, str]:
-    """Return the DSRA target months and the key that set them, in one walk (#920).
+    """Return the DSRA target months and the key that set them, in one walk (#920, #1429).
 
-    Precedence: ``Financing_Terms.dsra.target_months``, then ``Financing_Terms.dsra_months``,
-    then ``Financing_Terms.reserves.dsra_months``, then the engine's 6 months. A key that is
-    present shadows the rungs below it even when its value is null, as the nested
-    ``dict.get`` read always did. When the winning value is null or not a number, the
-    months are the 6-month fallback and the source is ``code_default``, so a source name is
-    never shown beside a figure that key did not set.
+    Precedence, within the financing section ``prefix`` names: ``dsra.target_months``, then
+    ``dsra_months``, then ``reserves.dsra_months``. A key that is present shadows the rungs
+    below it, as the nested ``dict.get`` read always did, so a present key whose value is
+    null or not a number is refused naming that key.
+
+    There is no code default (#1429, inventory group D08): the engine used to fill absent
+    months with 6, a Dutch Bay figure, labelled ``code_default``. The owner's #920 ruling
+    keeps 6 months as a labelled assumption until a term sheet sets it; the figure now comes
+    from the scenario YAML, and ``dsra_target_basis`` still labels it an assumption.
+
+    Raises:
+        ValueError: If no key declares the months, or the winning key is not a number.
     """
-    raw: Any = None
-    source = "code_default"
     for mapping, key, path in (
-        (dsra_cfg, "target_months", "Financing_Terms.dsra.target_months"),
-        (fin, "dsra_months", "Financing_Terms.dsra_months"),
-        (reserves, "dsra_months", "Financing_Terms.reserves.dsra_months"),
+        (dsra_cfg, "target_months", f"{prefix}dsra.target_months"),
+        (fin, "dsra_months", f"{prefix}dsra_months"),
+        (reserves, "dsra_months", f"{prefix}reserves.dsra_months"),
     ):
         if key in mapping:
-            raw, source = mapping[key], path
-            break
-    # The same coercion _as_float applies: None here means it fell back to 6.0.
-    if as_float(raw, None) is None:
-        source = "code_default"
-    return _as_float(raw, 6.0), source
+            return _required_number(mapping[key], path), path
+    # Name the path scenarios author: nested under ``reserves`` in the canonical
+    # ``Financing_Terms`` schema, flat in the simple ``financing``/``debt`` schemas.
+    leaf = "reserves.dsra_months" if prefix == "Financing_Terms." else "dsra_months"
+    path = f"{prefix}{leaf}"
+    return _required_number(None, path), path
+
+
+def _mapping_at(section: Mapping[str, Any], key: str) -> Mapping[str, Any]:
+    value = section.get(key)
+    return value if isinstance(value, Mapping) else {}
+
+
+def resolve_dsra_target_months(config: Mapping[str, Any]) -> Tuple[float, str]:
+    """The DSRA target months and their key, read as :func:`_build_funding` reads them.
+
+    The months are read from the section the debt layer reads its terms from
+    (``Financing_Terms``, else ``financing``, else ``debt``, else the top level), as the
+    #1429 sizing terms are, so a scenario on the simple ``debt:`` schema declares them
+    without switching schema. Under ``Financing_Terms`` the keys and their precedence are
+    unchanged.
+    Strict pre-flight calls this so it refuses exactly what the debt engine refuses.
+    """
+    prefix = _financing_key_prefix(config)
+    section: Mapping[str, Any] = (
+        (_section_case_insensitive(config, prefix[:-1]) or {}) if prefix else config
+    )
+    return _resolve_dsra_target_months(
+        _mapping_at(section, "dsra"),
+        section,
+        _mapping_at(section, "reserves"),
+        prefix,
+    )
 
 
 def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, Any]:
@@ -59,13 +96,9 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     dsra_cfg: Mapping[str, Any] = _dsra if isinstance(_dsra, Mapping) else {}
     fund_at_close = _truthy_flag(dsra_cfg.get("fund_at_close"))
     # DSRA months precedence: dsra.target_months -> Financing_Terms.dsra_months ->
-    # Financing_Terms.reserves.dsra_months -> 6.0. The canonical nests it under `reserves`
-    # (the path scenarios actually author); the prior resolver missed that nesting and only
-    # matched the 6.0 default by coincidence, so a scenario setting reserves.dsra_months != 6
-    # was silently ignored.
-    _reserves = fin.get("reserves")
-    reserves: Mapping[str, Any] = _reserves if isinstance(_reserves, Mapping) else {}
-    target_months, target_source = _resolve_dsra_target_months(dsra_cfg, fin, reserves)
+    # Financing_Terms.reserves.dsra_months, with no code default (#1429). The canonical
+    # nests it under `reserves` (the path scenarios actually author).
+    target_months, target_source = resolve_dsra_target_months(config)
 
     construction_periods = int(_as_float(core.get("construction_periods"), 0))
     ds = core.get("debt_service_total", []) or []

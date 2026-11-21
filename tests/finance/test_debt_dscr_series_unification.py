@@ -368,12 +368,14 @@ def _hostile_negative_year_one_config() -> Dict[str, Any]:
     return {
         "project": {"capacity_mw": 100.0, "life_years": 15},
         "capex": {"usd_total": 100_000_000.0},
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
         "Financing_Terms": {
             "debt_ratio": 0.7,
             "target_dscr": 1.3,
             "interest_only_years": 1,
             "amortization_style": "annuity",
             "construction_periods": 2,
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
             "tenor_years": 10,
             "mix": {"lkr": 0.0, "usd": 1.0, "dfi": 0.0},
             "rates": {"lkr_nominal": 0.12, "usd_nominal": 0.07, "dfi_nominal": 0.05},

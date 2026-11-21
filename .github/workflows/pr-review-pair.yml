@@ -1,0 +1,67 @@
+# Independent review pair (#1486, owner decision 2026-11-21).
+#
+# MERGE-01 says a mandatory review belongs in the required-check set, never as an unwritten gate
+# a green pull request is held against. This job is that check: an R2 or R3 pull request is not
+# green until a domain record and an assurance record, each bound to its exact current head and
+# neither from the head's writer, are on it, and no counted reviewer's latest record at that head
+# withholds acceptance. scripts/ci/check_pr_review_pair.py holds the rule;
+# tests/lint/test_pr_review_pair_policy.py pins it and this workflow.
+#
+# Where it runs: `pull_request_target`, so GitHub takes this workflow file from `main`, not from
+# the pull request, and the checkout below is the base commit, so the script is main's as well.
+# A pull request therefore cannot edit the check that judges it. No pull-request code is checked
+# out or executed: the body, number, author, head SHA and head branch reach the script only
+# through `env`, the token is read-only and is not persisted. A change to this workflow or the
+# script takes effect only once it is on main; the pull request that adds this file is never
+# judged by it.
+#
+# Drafts: REVIEW-01 binds the lanes to the draft head before the pull request is marked ready,
+# so on a draft the job reports under a different name and passes without reading anything. The
+# required name, 'Independent review (RECRUIT-01)', therefore reports only on a ready pull
+# request, from the `ready_for_review` run onward. A record posted after a run is read by
+# re-running this job; editing the body or pushing also re-runs it.
+#
+# Owner settings (recorded on #1713), in this order or together: GitHub blocks
+# `pull_request_target` in public repositories from 2 December 2026 unless an Actions event
+# policy allows it, so first allow it for this workflow file; then add 'Independent review
+# (RECRUIT-01)' to the main ruleset's required checks, bound to GitHub Actions.
+name: PR Review Pair
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: pr-review-pair-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-pair:
+    name: "${{ github.event.pull_request.draft && 'Independent review (draft: deferred)' || 'Independent review (RECRUIT-01)' }}"
+    runs-on: ubuntu-latest
+    steps:
+      # The BASE commit, never the pull request's head or merge ref.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Check the independent review pair
+        if: ${{ !github.event.pull_request.draft }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/ci/check_pr_review_pair.py

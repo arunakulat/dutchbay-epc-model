@@ -50,8 +50,8 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
-    # Re-pinned for 15.30.0 (#1779 refinanced-tranche lock-up: only VERSION moved;
-    # the pinned 15-turbine lender scenario did not).
+    # Re-pinned for 15.30.0 (#1823 held battery in the Blue Whale headline KPIs: only VERSION
+    # moved; the pinned 15-turbine lender scenario did not).
     # Re-pinned for 15.29.0 (#1736 one cash basis for the sweep: only VERSION moved;
     # the pinned 15-turbine lender scenario did not).
     # Re-pinned for 15.28.0 (#1578 per-technology capex price basis: only VERSION moved;

@@ -1201,7 +1201,9 @@ def _build_debt_covenant_snapshot(
             notes += f", {treatment}"
         notes += ")"
         if bool(debt_result.get("balloon_covenant_breach")):
-            max_pct = float(debt_result.get("max_balloon_pct") or 0.10)
+            # #1429 D09: the limit is the scenario's own; the engine publishes it with
+            # every breach, so there is no 10% fallback to print.
+            max_pct = float(debt_result["max_balloon_pct"])
             notes += f" — BREACHES max_balloon_pct {max_pct:.0%}"
 
     return DebtCovenantSnapshot(
@@ -1333,6 +1335,13 @@ def run_v14_pipeline_enhanced(
         from finance.native_cost_inputs import normalize_native_capex
 
         cfg = normalize_native_capex(cfg)
+        # #1823: a scenario whose storage_options block names a held headline_option carries
+        # that battery in its own figures (capex, O&M, debt sizing, KPIs), built exactly as
+        # the wind battery options analysis builds it. Once per evaluation; a scenario
+        # without the declaration is returned unchanged.
+        from analytics.storage_headline import apply_headline_storage_option
+
+        cfg = apply_headline_storage_option(cfg)
         config_path_label = (
             str(config) if isinstance(config, (str, Path)) else "<inline>"
         )
