@@ -522,7 +522,7 @@ def _financed_capex(scenario: Mapping[str, Any]) -> Optional[float]:
     made a binding ceiling read as breached (30% showing 31.5% under a 5% escalation).
     """
     from analytics.evaluation_v14 import evaluated_scenario_config
-    from finance.debt.capex import _extract_capex_usd
+    from finance.debt_v14 import _extract_capex_usd
 
     return _number(_extract_capex_usd(evaluated_scenario_config(scenario)))
 
