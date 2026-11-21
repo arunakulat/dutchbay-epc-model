@@ -25,6 +25,7 @@ import pytest
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import config_sha256
 from analytics.scenario_loader import load_scenario_config
+from analytics.storage_headline import apply_headline_storage_option
 from analytics.three_statement import build_three_statement_from_run
 from app.api.responses import CaseResult
 from app.reports.report_model import ReportContext, build_report_context
@@ -86,7 +87,9 @@ def test_paid_in_equity_carries_the_escalation(
 ) -> None:
     """Against the stated capex, year-1 paid-in equity and PP&E rise by stated x (1.05**n - 1)."""
     run = runs[path]
-    reloaded = dict(load_scenario_config(str(path)))
+    # #1823: the engine finances a declared headline battery too, so the statements are
+    # compared on the scenario carrying it.
+    reloaded = apply_headline_storage_option(load_scenario_config(str(path)))
     stated = float(reloaded["capex"]["usd_total"])
     expected_delta = stated * (1.05**years - 1.0)
 
@@ -126,7 +129,10 @@ def test_fx_methodology_is_not_withheld_for_a_dated_scenario(
     assert (
         config_sha256(reloaded) != manifest_hash
     )  # why the report used to withhold it
-    assert config_sha256(apply_capex_price_basis(reloaded)) == manifest_hash
+    assert (
+        config_sha256(apply_capex_price_basis(apply_headline_storage_option(reloaded)))
+        == manifest_hash
+    )
 
     context = _context(run, reloaded)
     assert not any(

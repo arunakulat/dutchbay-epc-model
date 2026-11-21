@@ -357,9 +357,14 @@ def evaluated_scenario_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     configuration the engine financed. Idempotent; a configuration without the block is
     returned as a copy.
     """
+    from analytics.storage_headline import apply_headline_storage_option
     from finance.native_cost_inputs import normalize_native_capex
 
-    return apply_capex_price_basis(normalize_native_capex(config))
+    # #1823: the gateway also carries a declared headline battery, once, before the price
+    # basis; a configuration that already carries it is returned unchanged.
+    return apply_capex_price_basis(
+        apply_headline_storage_option(normalize_native_capex(config))
+    )
 
 
 def evaluate_scenario_from_dict(
