@@ -47,6 +47,14 @@ Financing_Terms:
     usd_commercial_min: 1.0
   rates:
     usd_nominal: 0.07
+  # Required since #1429: no code default for the DSRA target. 6 months is the figure
+  # this scenario always ran with (the #920 labelled assumption).
+  reserves:
+    dsra_months: 6
+constraints:
+  # Required since #1429: no code default for the balloon limit. 10% is the limit this
+  # scenario was always checked against.
+  max_balloon_pct: 0.10
 returns:
   # Required since #1429: the engine has no code default for the project discount
   # rate. 0.10 is the rate this scenario was always discounted at.
