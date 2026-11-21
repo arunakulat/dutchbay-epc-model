@@ -688,6 +688,12 @@ def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:
     ):
         assert code["files"][rel] == _file_sha256(REPO_ROOT / rel), rel
     assert not any(r.startswith((".", "tests/")) for r in code["files"])
+    # A summary names its inputs by content and does not stamp the release number, so a
+    # VERSION bump alone never makes a committed summary stale.
+    from solar_resource.pv_bess_sizing_runner import inputs_digest
+
+    assert "model_version" not in out["spec"]
+    assert out["spec"]["inputs_digest"] == inputs_digest(out["spec"])
     assert out["spec"]["effective_evaluations"] == 3 <= _hard_cap()
     assert out["spec"]["seed"] == 20261101
     assert len(out["points"]) == 1 and math.isfinite(
@@ -830,11 +836,16 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
     """A regenerated sizing summary names its code by content (MRM-02, #1568 addendum).
 
     The run started from a clean tree, the listing reproduces ``tree``, and the sizing
-    module and the CLI are in it. The digests are not required to match today's files: a
-    later engine change makes a summary stale without making it false, and the digests are
-    what show which code it came from.
+    module and the CLI are in it. The code digests are not required to match today's files:
+    a later engine change makes a summary stale without making it false, and the digests
+    are what show which code it came from. The config and scenario files the run read must
+    still be the committed ones: this check fails when one of them changes, and not when
+    ``VERSION`` moves. A summary's ``model_version``, where an older run stamped one, is
+    the release it ran at, a historical record that is not compared with ``VERSION``.
     """
     import hashlib
+
+    from solar_resource.pv_bess_sizing_runner import inputs_digest
 
     spec = json.loads((REPO_ROOT / "docs" / "blue_whale" / summary).read_text())["spec"]
     code = spec["code_sha256"]
@@ -848,4 +859,10 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
         "finance/cashflow_v14.py",
     ):
         assert len(files[rel]) == 64, rel
-    assert spec["model_version"] == (REPO_ROOT / "VERSION").read_text().strip()
+    inputs = spec["inputs_sha256"]
+    assert any(rel.startswith("scenarios/") for rel in inputs)
+    for rel, digest in inputs.items():
+        current = hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest()
+        assert current == digest, f"{rel} changed since {summary} ran: regenerate it"
+    if "inputs_digest" in spec:
+        assert spec["inputs_digest"] == inputs_digest(spec)

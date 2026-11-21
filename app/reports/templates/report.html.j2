@@ -424,8 +424,9 @@
     <p class="muted">One-at-a-time sensitivity of the {{ ctx.tornado.metric_label }} to each
       driver (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered
       by swing magnitude, widest first
-      {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | list %}, and drivers whose
-      swing is undefined last{% endif %}.</p>
+      {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | selectattr("not_computed", "none") | list %}, and drivers whose
+      swing is undefined last{% endif %}
+      {%- if ctx.tornado.not_computed_rows %}, then drivers not computed{% endif %}.</p>
     <table>
       <thead>
         <tr>
@@ -439,9 +440,13 @@
         {% for r in ctx.tornado.rows %}
         <tr>
           <td>{{ r.label }}</td>
+          {% if r.not_computed %}
+          <td class="num" colspan="3">not computed</td>
+          {% else %}
           <td class="num">{{ fmt_ratio_pct_or_undefined(r.low_case) }}</td>
           <td class="num">{{ fmt_ratio_pct_or_undefined(r.high_case) }}</td>
           <td class="num">{{ fmt_ratio_pct_or_undefined(r.impact_abs) }}</td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -453,6 +458,11 @@
       {%- if ctx.tornado.undefined_points %} Undefined points: {{ ctx.tornado.undefined_points }}.{% endif %}
       {%- if ctx.tornado.undefined_drivers %} Drivers with an undefined point:
       {{ ctx.tornado.undefined_drivers | join(", ") }}.{% endif %}</p>
+    {% endif %}
+    {% if ctx.tornado.not_computed_rows %}
+    <p class="muted tornado-not-computed-note">&ldquo;not computed&rdquo; marks a driver
+      whose shock the model refused, so it has no bar; the other drivers are unaffected.
+      {% for r in ctx.tornado.not_computed_rows %}{{ r.label }}: not computed: {{ r.not_computed }}.{% if not loop.last %} {% endif %}{% endfor %}</p>
     {% endif %}
     {% if ctx.f5_notice %}
     {# #1818: the F-5 non-reliance line beside the sensitivities. #}

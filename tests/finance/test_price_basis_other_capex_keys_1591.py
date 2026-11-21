@@ -26,6 +26,7 @@ import yaml
 
 from analytics.core.metrics import _derive_capex_usd
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
+from analytics.storage_headline import strip_headline_option
 from finance.capex_price_basis import (
     APPLIED_KEY,
     AUTO_KEY,
@@ -225,7 +226,8 @@ def test_a_block_with_no_capex_amount_is_refused() -> None:
 
 
 def _wind() -> Dict[str, Any]:
-    data = yaml.safe_load(WIND.read_text(encoding="utf-8"))
+    # Capex-key plumbing on the wind-only case; the headline battery is #1823's subject.
+    data = strip_headline_option(yaml.safe_load(WIND.read_text(encoding="utf-8")))
     assert isinstance(data, dict)
     return data
 

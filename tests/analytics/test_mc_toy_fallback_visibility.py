@@ -40,7 +40,9 @@ def test_degenerate_all_toy_run_is_detectable() -> None:
     minimal = {
         "capex": {"usd_total": 100.0},
         "monte_carlo": {
-            "parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}]
+            "parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}],
+            # Off by default since #962: this smoke config opts in to the toy path.
+            "allow_toy_fallback": True,
         },
     }
     result = run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
@@ -65,9 +67,10 @@ def test_allow_toy_fallback_false_raises_on_failed_trial() -> None:
         run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
 
 
-def test_allow_toy_fallback_defaults_true_and_is_surfaced() -> None:
-    """Absent the flag the engine keeps the back-compatible fallback AND records the resolved
-    value in metadata so a consumer can see which mode produced the result."""
+def test_allow_toy_fallback_defaults_false_and_is_surfaced() -> None:
+    """Absent the flag the fallback is off (#962, owner decision 2026-11-21), and the resolved
+    value is recorded in metadata so a consumer can see which mode produced the result.
+    """
     base = yaml.safe_load(LENDER.read_text(encoding="utf-8"))
     # The lender case declares the fallback off (#962 item 1); drop the key to test the
     # engine's own default.
@@ -75,10 +78,23 @@ def test_allow_toy_fallback_defaults_true_and_is_surfaced() -> None:
         k: v for k, v in base["monte_carlo"].items() if k != "allow_toy_fallback"
     }
     result = run_monte_carlo_analysis(base_config=base, n_trials=8, seed=42)
-    assert result.metadata["allow_toy_fallback"] is True
+    assert result.metadata["allow_toy_fallback"] is False
     assert (
         result.metadata["toy_fallback_count"] == 0
     )  # canonical run uses no fallback anyway
+
+
+def test_an_undeclared_config_with_a_failing_trial_now_refuses() -> None:
+    """Negative control (#962): the config of the all-toy test above, without the opt-in,
+    stops at the first failed trial instead of reporting toy KPIs."""
+    minimal = {
+        "capex": {"usd_total": 100.0},
+        "monte_carlo": {
+            "parameters": [{"name": "capex.usd_total", "low": 80, "high": 120}]
+        },
+    }
+    with pytest.raises(RuntimeError, match="toy-metric fallback is disabled"):
+        run_monte_carlo_analysis(base_config=minimal, n_trials=8, seed=1)
 
 
 def test_allow_toy_fallback_false_is_a_noop_when_no_trial_fails() -> None:
