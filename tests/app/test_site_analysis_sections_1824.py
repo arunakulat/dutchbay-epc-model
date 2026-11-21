@@ -63,7 +63,9 @@ def test_screening_labels_are_carried() -> None:
     options = _by_key(block, "storage_options")
     assert any(label.startswith("No lender P90.") for label in transfer.labels)
     assert any(label.startswith("No lender P90.") for label in options.labels)
-    assert any(label.startswith("Tariff working assumption.") for label in options.labels)
+    assert any(
+        label.startswith("Tariff working assumption.") for label in options.labels
+    )
     assert any(
         label.startswith("Contiguous-location limit.") and "10 MW" in label
         for label in options.labels
@@ -84,7 +86,9 @@ def test_the_committed_summary_is_shown_with_its_provenance() -> None:
     )
     assert options.provenance and options.provenance.startswith("committed summary;")
     parity = _by_key(block, "equipment_cost_parity")
-    assert parity.provenance and parity.provenance.startswith("run live in this report;")
+    assert parity.provenance and parity.provenance.startswith(
+        "run live in this report;"
+    )
     names = [name for name, _ in options.figures]
     assert "Wind only: project IRR" in names
     (table,) = options.tables
@@ -134,10 +138,14 @@ def test_a_missing_summary_is_not_run_with_the_command_to_write_it(
     assert block is not None
     options = _by_key(block, "storage_options")
     assert options.status == "not_run"
-    assert options.reason and (
-        "scripts/run_site_analysis_v14.py analysis=storage_options "
-        f"scenario={WIND.as_posix()} write=true"
-    ) in options.reason
+    assert (
+        options.reason
+        and (
+            "scripts/run_site_analysis_v14.py analysis=storage_options "
+            f"scenario={WIND.as_posix()} write=true"
+        )
+        in options.reason
+    )
     assert options.labels == [] and options.figures == []
 
 

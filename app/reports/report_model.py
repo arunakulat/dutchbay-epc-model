@@ -58,7 +58,7 @@ from app.reports.report_config import (
     RiskItem,
     load_report_config,
 )
-from app.reports.site_analysis_sections import SiteAnalysesBlock
+from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.services.report_global_sa import GlobalSABlock
 from app.services.report_tornado import TornadoBlock
 

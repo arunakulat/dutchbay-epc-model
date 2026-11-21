@@ -42,9 +42,9 @@ def test_at_least_one_summary_is_checked() -> None:
 def test_summary_is_current(path: Path) -> None:
     block = path.stem
     assert block in SITE_ANALYSIS_RUNS, f"{path.name}: not a site analysis"
-    assert SITE_ANALYSIS_RUNS[block].mode == MODE_SUMMARY, (
-        f"{block} runs live in reports; a committed summary would never be read"
-    )
+    assert (
+        SITE_ANALYSIS_RUNS[block].mode == MODE_SUMMARY
+    ), f"{block} runs live in reports; a committed summary would never be read"
     scenario_path = ROOT / "scenarios" / f"{path.parent.name}.yaml"
     assert scenario_path.is_file(), f"no scenario {scenario_path.name} for {path}"
     scenario = yaml.safe_load(scenario_path.read_text(encoding="utf-8"))
