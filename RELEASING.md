@@ -112,6 +112,8 @@ git push origin "v${VERSION}"                        # push the TAG, not main
 
 - `VERSION` is the single source of truth for the release number; keep
   `pyproject.toml [project].version` in sync with it.
+- Runtime/CI installs use the pinned `requirements.txt` lock (the single lock file).
+- Dev installs use `-e ".[dev]"` (the toolchain extra) so local and CI behave the same.
 - A `VERSION` bump does not require regenerating the solar + BESS sizing summary
   (`docs/blue_whale/solar_bess_project_sizing_summary.json`, a run of about 70 minutes).
   The summary names what it was computed from by content (`spec.code_sha256`,
@@ -120,5 +122,3 @@ git push origin "v${VERSION}"                        # push the TAG, not main
   scenario file it read has changed. Regenerate it when that check fails, or when a code
   change moves its figures; its `model_version`, where present, records the release it
   ran at and is not compared with `VERSION`.
-- Runtime/CI installs use the pinned `requirements.txt` lock (the single lock file).
-- Dev installs use `-e ".[dev]"` (the toolchain extra) so local and CI behave the same.
