@@ -15,6 +15,10 @@ sensitivity sections out. This module gives the batch CLI the same report:
   :func:`~app.reports.capital_risk_emit.build_capital_risk_report_for_scenario`, so the lender
   guards apply either way: the toy fallback is forced off and the run has at least
   :data:`~app.reports.capital_risk_emit.LENDER_GRADE_MIN_TRIALS` trials;
+* the scenario's site analyses get one section each (#1824), built by
+  :func:`~app.reports.site_analysis_sections.build_site_analyses_block` on the run's effective
+  scenario; an analysis that fails is listed inside that block, and a builder that cannot run
+  at all is listed with the other sections left out;
 * every section left out is listed on the report with its reason (``sections_not_run``);
 * the HTML is written, then printed to PDF through
   :func:`app.reports.dbpl.print_core.render_dbpl_pdf` with the house stylesheet (``DBPL-01``).
@@ -43,6 +47,7 @@ from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
 from app.reports.renderer import render_report_html
 from app.reports.report_model import ReportContext, SectionNotRun
+from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.reports.report_orchestration import (
     PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     ReportSensitivityBundle,
@@ -78,11 +83,13 @@ SECTION_TORNADO = "Sensitivity tornado"
 SECTION_MORRIS = "Global sensitivity: Morris screening"
 SECTION_PAWN = "Global sensitivity: PAWN"
 SECTION_CAPITAL_RISK = "Capital risk: Monte Carlo distribution"
+SECTION_SITE_ANALYSES = "Site analyses (screening)"
 
 NO_MONTE_CARLO_PARAMETERS = "the scenario declares no monte_carlo.parameters to sample"
 
 SensitivityComputer = Callable[..., ReportSensitivityBundle]
 CapitalRiskBuilder = Callable[..., CapitalRiskReport]
+SiteAnalysesBuilder = Callable[..., Optional[SiteAnalysesBlock]]
 
 
 @dataclass(frozen=True)
@@ -434,6 +441,30 @@ def _render_pdf(context: ReportContext, html: str, pdf_path: Path) -> tuple[str,
     return result.provenance_lines()
 
 
+def _site_analyses_for(
+    scenario: Mapping[str, Any],
+    scenario_path: Path,
+    builder: Optional[SiteAnalysesBuilder],
+) -> tuple[Optional[SiteAnalysesBlock], Optional[str]]:
+    """Build the scenario's site-analysis sections, or say why they could not be built.
+
+    Each analysis's own failure is listed inside the block it returns. Only a failure of the
+    builder itself (a malformed sections config, say) leaves the whole block out, and it is
+    then listed with the other sections not run (FRAMEWORK-02).
+    """
+    if builder is None:
+        from app.reports.site_analysis_sections import build_site_analyses_block
+
+        builder = build_site_analyses_block
+    try:
+        return builder(scenario, scenario_path), None
+    except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+        return None, (
+            "not run: the site-analysis sections could not be built "
+            f"({type(exc).__name__}: {exc})"
+        )
+
+
 def emit_lender_report_from_pipeline(
     result: Mapping[str, Any],
     scenario_config_path: str | Path,
@@ -451,6 +482,7 @@ def emit_lender_report_from_pipeline(
     profile: ReportSensitivityProfile = PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     sensitivity_computer: SensitivityComputer = compute_report_sensitivity,
     capital_risk_builder: Optional[CapitalRiskBuilder] = None,
+    site_analyses_builder: Optional[SiteAnalysesBuilder] = None,
 ) -> LenderReportOutput:
     """Write the combined lender report for a finance run, as HTML and a DBPL PDF (#1752).
 
@@ -476,6 +508,8 @@ def emit_lender_report_from_pipeline(
             :func:`~app.reports.report_orchestration.compute_report_sensitivity`.
         capital_risk_builder: Seam for tests; production uses
             :func:`~app.reports.capital_risk_emit.build_capital_risk_report_for_scenario`.
+        site_analyses_builder: Seam for tests; production uses
+            :func:`~app.reports.site_analysis_sections.build_site_analyses_block`.
 
     Returns:
         The paths written, the sections left out, and the PDF's print provenance.
@@ -525,6 +559,13 @@ def emit_lender_report_from_pipeline(
     left_out = sections_not_run(
         sensitivity, scenario, capital_risk_not_run=capital_risk_not_run
     )
+    site_analyses, site_analyses_not_run = _site_analyses_for(
+        scenario, Path(str(scenario_config_path)), site_analyses_builder
+    )
+    if site_analyses_not_run is not None:
+        left_out.append(
+            SectionNotRun(section=SECTION_SITE_ANALYSES, reason=site_analyses_not_run)
+        )
     case = report_case_from_pipeline_result(
         result,
         scenario_config=scenario,
@@ -537,7 +578,12 @@ def emit_lender_report_from_pipeline(
         sensitivity,
         capital_risk=capital_risk,
         sections_not_run=left_out,
-    ).model_copy(update={"f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT})
+    ).model_copy(
+        update={
+            "f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT,
+            "site_analyses": site_analyses,
+        }
+    )
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.write_text(html, encoding="utf-8")

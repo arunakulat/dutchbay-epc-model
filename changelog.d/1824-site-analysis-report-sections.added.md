@@ -6,5 +6,5 @@
   and where its figures came from. `scripts/run_site_analysis_v14.py` runs any analysis for
   any scenario and writes a summary stamped with its code and config digests; a report marks
   that summary stale once either digest no longer matches, and a lint test keeps every
-  committed summary current. A report whose caller passes no sections is byte-identical. No
+  committed summary current. The command-line lender report (`emit_lender_report`, #1752) builds these sections for the run's effective scenario; a builder that cannot run is listed under the sections not run. A report whose caller passes no sections is byte-identical. No
   KPI moves. HOLD union unchanged: F-5, #1110, v15.6.1 (#1824).
