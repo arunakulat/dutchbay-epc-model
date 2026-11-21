@@ -15,6 +15,7 @@ import run_full_pipeline_v14 as rfp
 from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from app.models.inputs import WindFarmInputs
 from app.reports import lender_report_emit as lre
+from app.reports.aep_resource_sensitivity import SECTION_AEP_RESOURCE
 from app.reports.capital_risk_emit import build_capital_risk_report_for_scenario
 from app.reports.dbpl import DbplDependencyError
 from app.reports.lender_report_emit import (
@@ -146,7 +147,13 @@ def test_cli_report_has_the_api_report_sections(
     )
     cli_html = out.html_path.read_text(encoding="utf-8")
 
-    assert _h2s(cli_html) == _h2s(api_html)
+    # The CLI report is the API report plus the wind-resource AEP sensitivity, which only
+    # the CLI builds (#1615 step B).
+    cli_h2s = _h2s(cli_html)
+    assert any(h.startswith("Wind Resource Sensitivity") for h in cli_h2s)
+    assert [
+        h for h in cli_h2s if not h.startswith("Wind Resource Sensitivity")
+    ] == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
     assert [s.section for s in out.sections_not_run] == [SECTION_CAPITAL_RISK]
@@ -204,6 +211,7 @@ def test_every_section_left_out_is_listed_with_its_reason(
     listed = {s.section: s.reason for s in out.sections_not_run}
     assert list(listed) == [
         SECTION_TORNADO,
+        SECTION_AEP_RESOURCE,
         SECTION_MORRIS,
         SECTION_PAWN,
         SECTION_CAPITAL_RISK,
@@ -213,6 +221,7 @@ def test_every_section_left_out_is_listed_with_its_reason(
     # capital-risk Monte Carlo has anything to sample (and the builder is never called).
     assert "monte_carlo.parameters" in listed[SECTION_MORRIS]
     assert "monte_carlo.parameters" in listed[SECTION_CAPITAL_RISK]
+    assert "monte_carlo.weibull_uncertainty_pct" in listed[SECTION_AEP_RESOURCE]
     html = out.html_path.read_text(encoding="utf-8")
     block = html.split("<h3>Sections not run</h3>", 1)[1].split("</ul>", 1)[0]
     for section in listed:
