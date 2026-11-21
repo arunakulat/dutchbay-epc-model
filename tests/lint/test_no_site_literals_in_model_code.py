@@ -123,11 +123,6 @@ _BLUE_WHALE_RUNNER = (
     "blocks and generic names with U2 to U6 of the #1754 plan"
 )
 
-_QUESTIONNAIRE = (
-    "financing questionnaire (#1783): it builds its two packs from two fixed Blue Whale "
-    "scenario paths; #1783 takes both packs from the scenarios named on the command line"
-)
-
 #: Files waived whole, each with its pinned count of site literals and the reason they stay.
 #: The count is exact, so a new site literal in a waived file fails and a removed one must
 #: lower the pin: the waiver only shrinks.
@@ -140,8 +135,6 @@ ALLOWED_FILES: Dict[str, Tuple[int, str]] = {
     "scripts/run_blue_whale_solar_bess_v14.py": (7, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_bess_options_v14.py": (5, _BLUE_WHALE_RUNNER),
     "scripts/run_blue_whale_wind_siting_v14.py": (5, _BLUE_WHALE_RUNNER),
-    "scripts/generate_financing_questionnaire.py": (1, _QUESTIONNAIRE),
-    "analysis_tools/financing_questionnaire.py": (4, _QUESTIONNAIRE),
     "analytics/wind/blue_whale_equipment_parity.py": (
         17,
         "single-site adapter kept by #1755 for its byte-identical legacy output; since U2 "

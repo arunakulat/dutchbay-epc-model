@@ -12,31 +12,39 @@ import yaml
 
 from analysis_tools.financing_questionnaire import (
     ROOT,
-    SCENARIOS,
     QuestionnaireError,
     build_questionnaire,
     export_questionnaire,
+    scenario_path,
 )
+
+# Test fixtures only: the module itself names no scenario (#1783). These two declare every
+# field the questionnaire reads; any other scenario that does is exported the same way.
+WIND = "scenarios/blue_whale_wind_lot5b_2026.yaml"
+SOLAR_BESS = "scenarios/blue_whale_solar_bess_lot5b_2026.yaml"
+# A scenario of another site that lacks only the CAPEX price year.
+OTHER_SITE = "scenarios/kalpitiya_lendercase_160m_fitted.yaml"
 
 
 def config() -> dict[str, Any]:
     """Read the declarative exporter fields without Hydra controls."""
-    data = yaml.safe_load(
-        (ROOT / "conf/blue_whale_financing_questionnaire.yaml").read_text()
-    )
+    data = yaml.safe_load((ROOT / "conf/financing_questionnaire.yaml").read_text())
     data.pop("defaults")
     data.pop("hydra")
+    assert data["scenario"] == "???" and data["output_name"] == "???"
+    data["scenario"] = WIND
+    data["output_name"] = "questionnaire"
     return data
 
 
-@pytest.mark.parametrize("project", ["wind", "solar_bess"])
+@pytest.mark.parametrize("scenario", [WIND, SOLAR_BESS])
 def test_each_reference_matches_independent_yaml_and_preserves_source(
-    project: str,
+    scenario: str,
 ) -> None:
     """Compare every model cell to a separately parsed source and raw bytes."""
     cfg = config()
-    cfg["project"] = project
-    raw = (ROOT / SCENARIOS[project]).read_bytes()
+    cfg["scenario"] = scenario
+    raw = (ROOT / scenario).read_bytes()
     oracle = yaml.safe_load(raw)
     result = build_questionnaire(cfg, raw)
     assert base64.b64decode(result["source"]["raw_yaml_base64"]) == raw
@@ -50,6 +58,7 @@ def test_each_reference_matches_independent_yaml_and_preserves_source(
         assert ref["value"] == value
         assert ref["source_field_path"] == field["path"]
         assert ref["source_kind"] == "model_assumption"
+        assert ref["source_model_path"] == scenario
         assert question["answer_status"] == "unknown"
         assert all(
             question[f"answer_{key}"] is None
@@ -60,7 +69,7 @@ def test_each_reference_matches_independent_yaml_and_preserves_source(
 def test_perturbed_rate_dsra_fee_provenance() -> None:
     """Perturbed assumptions retain their roles and exact source identity."""
     cfg = config()
-    raw = (ROOT / SCENARIOS["wind"]).read_bytes()
+    raw = (ROOT / WIND).read_bytes()
     source = yaml.safe_load(raw)
     source["Financing_Terms"]["interest_rate_nominal"] = 0.1234567
     source["Financing_Terms"]["reserves"]["dsra_months"] = 9
@@ -94,12 +103,16 @@ def test_perturbed_rate_dsra_fee_provenance() -> None:
         "nan",
         "bool",
         "duplicate",
+        "unset_scenario",
+        "absolute_scenario",
+        "escaping_scenario",
+        "non_yaml_scenario",
     ],
 )
 def test_refusals(mutation: str) -> None:
     """Reject malformed inputs and attempts to preconfirm the model reference."""
     cfg = config()
-    raw = (ROOT / SCENARIOS["wind"]).read_bytes()
+    raw = (ROOT / WIND).read_bytes()
     if mutation == "unknown":
         cfg["extra"] = 1
     if mutation == "status":
@@ -111,7 +124,15 @@ def test_refusals(mutation: str) -> None:
     if mutation == "missing":
         cfg["fields"].pop()
     if mutation == "unhashable":
-        cfg["project"] = []
+        cfg["scenario"] = []
+    if mutation == "unset_scenario":
+        cfg["scenario"] = "???"
+    if mutation == "absolute_scenario":
+        cfg["scenario"] = "/" + WIND
+    if mutation == "escaping_scenario":
+        cfg["scenario"] = "scenarios/../conf/financing_questionnaire.yaml"
+    if mutation == "non_yaml_scenario":
+        cfg["scenario"] = "scenarios/notes.txt"
     if mutation in ("nan", "bool"):
         source = yaml.safe_load(raw)
         source["Financing_Terms"]["interest_rate_nominal"] = (
@@ -128,9 +149,9 @@ def test_workbook_roundtrip_and_no_clobber(tmp_path: Path) -> None:
     """Keep numeric references, literal text, blank answers and visible limits."""
     cfg = config()
     cfg["fields"][0]["label"] = '=HYPERLINK("danger")'
-    path = tmp_path / SCENARIOS["wind"]
+    path = tmp_path / WIND
     path.parent.mkdir()
-    path.write_bytes((ROOT / SCENARIOS["wind"]).read_bytes())
+    path.write_bytes((ROOT / WIND).read_bytes())
     receipt = export_questionnaire(cfg, tmp_path)
     data = json.loads((tmp_path / receipt["json"]).read_text())
     ws = openpyxl.load_workbook(tmp_path / receipt["xlsx"], data_only=False).active
@@ -155,9 +176,9 @@ def test_second_write_failure_rolls_back_new_pair(
 ) -> None:
     """A failed workbook write removes only the two newly created artifacts."""
     cfg = config()
-    path = tmp_path / SCENARIOS["wind"]
+    path = tmp_path / WIND
     path.parent.mkdir()
-    path.write_bytes((ROOT / SCENARIOS["wind"]).read_bytes())
+    path.write_bytes((ROOT / WIND).read_bytes())
 
     def fail_save(*args: Any, **kwargs: Any) -> None:
         raise OSError("simulated workbook failure")
@@ -171,12 +192,63 @@ def test_second_write_failure_rolls_back_new_pair(
 def test_outputs_symlink_rejected(tmp_path: Path) -> None:
     """Prevent writing through an outputs link to another directory."""
     cfg = config()
-    path = tmp_path / SCENARIOS["wind"]
+    path = tmp_path / WIND
     path.parent.mkdir()
-    path.write_bytes((ROOT / SCENARIOS["wind"]).read_bytes())
+    path.write_bytes((ROOT / WIND).read_bytes())
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     (tmp_path / "outputs").symlink_to(elsewhere, target_is_directory=True)
     with pytest.raises(QuestionnaireError):
         export_questionnaire(cfg, tmp_path)
     assert list(elsewhere.iterdir()) == []
+
+
+def test_any_scenario_declaring_the_fields_is_exported(tmp_path: Path) -> None:
+    """#1783: a scenario of another site runs once it declares every field read.
+
+    The negative control comes first: unchanged, that scenario lacks one field and is
+    refused with the path it lacks, so nothing is filled in for it.
+    """
+    source = yaml.safe_load((ROOT / OTHER_SITE).read_bytes())
+    (tmp_path / "scenarios").mkdir()
+    target = tmp_path / "scenarios" / "another_site.yaml"
+    target.write_bytes((ROOT / OTHER_SITE).read_bytes())
+    cfg = config()
+    cfg["scenario"] = "scenarios/another_site.yaml"
+    with pytest.raises(QuestionnaireError, match="capex.price_basis.price_year"):
+        export_questionnaire(cfg, tmp_path)
+    source["capex"].setdefault("price_basis", {})["price_year"] = 2026
+    target.write_text(yaml.safe_dump(source), encoding="utf-8")
+    receipt = export_questionnaire(cfg, tmp_path)
+    data = json.loads((tmp_path / receipt["json"]).read_text())
+    assert data["scenario"] == "scenarios/another_site.yaml"
+    assert data["source"]["path"] == "scenarios/another_site.yaml"
+    rows = {r["id"]: r for r in data["questions"]}
+    assert rows["capex_year"]["model_reference"]["value"] == 2026
+    gearing = source["Financing_Terms"]["debt_ratio"]
+    assert rows["gearing"]["model_reference"]["value"] == gearing
+
+
+def test_scenario_must_be_a_file_inside_scenarios(tmp_path: Path) -> None:
+    """Refuse a missing file and a link that leads out of scenarios/."""
+    cfg = config()
+    (tmp_path / "scenarios").mkdir()
+    cfg["scenario"] = "scenarios/absent.yaml"
+    with pytest.raises(QuestionnaireError, match="not found"):
+        export_questionnaire(cfg, tmp_path)
+    outside = tmp_path / "outside.yaml"
+    outside.write_bytes((ROOT / WIND).read_bytes())
+    (tmp_path / "scenarios" / "linked.yaml").symlink_to(outside)
+    cfg["scenario"] = "scenarios/linked.yaml"
+    with pytest.raises(QuestionnaireError, match="not found"):
+        export_questionnaire(cfg, tmp_path)
+    assert not (tmp_path / "outputs").exists()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [WIND, SOLAR_BESS, "scenarios/sub/dir/case.yml"],
+)
+def test_scenario_path_accepts_plain_paths(value: str) -> None:
+    """The shape check accepts plain relative paths under scenarios/."""
+    assert scenario_path(value) == value
