@@ -3,8 +3,12 @@ defaults:
   - override hydra/hydra_logging: disabled
   - _self_
 
-project: wind
-output_name: wind_financing_questionnaire
+# The scenario and output stem are named on the command line (#1783); neither has a
+# default, so no scenario is fixed here. Any scenario that declares every field path
+# below can be exported:
+#   python scripts/generate_financing_questionnaire.py scenario=scenarios/<name>.yaml output_name=<stem>
+scenario: ???
+output_name: ???
 fields:
   - {id: capacity_rate, path: Financing_Terms.interest_rate_nominal, unit: fraction_per_year, label: Capacity discount rate, note: Discounts dual-DSCR capacity detail; not the repayment schedule rate.}
   - {id: lkr_rate, path: Financing_Terms.rates.lkr_nominal, unit: fraction_per_year, label: LKR repayment rate, note: Per-tranche schedule rate; model assumption only.}

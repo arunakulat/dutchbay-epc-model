@@ -224,12 +224,13 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # taxable income to shield). The 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
     # data-derived BIS 2005-2026 LKR depreciation) deepened it further as the flat-LKR
     # revenue erodes faster in USD terms. F5-01 then aligns the first operating row to
-    # COD after construction: current projIRR -8.16%, eqIRR -18.59%.
+    # COD after construction: current projIRR -8.16%, eqIRR -18.59%. #1736 then pays
+    # the post-maturity balloon from the cash the SPV holds before equity: -20.61%.
     assert kpis["project_irr"] == pytest.approx(-0.0816, abs=0.005)
     assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.1859, abs=0.01
-    )  # PR-B UIP LKR rate deepens it
+        -0.2061, abs=0.01
+    )  # PR-B UIP LKR rate deepens it; #1736 deepens it again
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0
     assert kpis["min_dscr"] == pytest.approx(
