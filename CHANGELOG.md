@@ -674,6 +674,16 @@ its placement in the independence section, and its resistance to an exception ad
   by pinning the former rate as fixture input; their expected values are unchanged. The
   canonical lender case is unchanged.
 
+- **Blue Whale wind carries its held battery in the headline KPIs (15.29.0, #1823).** A
+  scenario's `storage_options.headline_option` names one held battery option, and the
+  evaluation adds it to the project (capex and O&M only) exactly as the wind battery options
+  analysis builds it. `scenarios/blue_whale_wind_lot5b_2026.yaml` (v0.7) names the recommended
+  held 0.5 MW / 0.5 MWh option: project IRR 12.41% -> 12.31%, equity IRR 10.55% -> 10.42%,
+  project NPV USD 1,398,803 -> 1,319,305, min DSCR 0.8671 -> 0.8678. No other committed
+  scenario moves. Tariff basis, a working assumption: no storage tariff (PUCSL's BESS tariff
+  names solar PV only). HOLDs that survive: the met-mast HOLD; the F-5 covenant bar (no
+  quarterly CFADS or intra-year DSCR figure supports a lender representation); #1110's Board
+  and lender circulation hold; and the `v15.6.1` release hold. Detail in the compiled fragment.
 - **Capex price dates reach the per-technology capex (15.28.0, #1578).** A declared
   `capex.price_basis` now escalates each `generation.technologies.<name>.capex_usd` by the
   factor `capex.usd_total` takes (ruling of 2026-11-15), and records the stated amounts under
