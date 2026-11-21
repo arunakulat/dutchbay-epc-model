@@ -38113,7 +38113,7 @@
     "analytics/feasibility_report_contract/__init__.py": "e17c5dd8fb6c7c9cb89c71487164200b6d399f62cfe6eaaac4adad5e41c10f6b",
     "analytics/feasibility_report_contract/assembly_authority.py": "05e0e6c3101603e71afa9baeb7b310512a9337d5e9ecda21a05e0855b547683e",
     "analytics/feasibility_report_contract/assessment_scope.py": "707a1e5d22d9b831e65e42d87690e6b951d77cceab172c43c1f7909c3c4e36a6",
-    "analytics/feasibility_report_contract/engine_identity.py": "02b21cd81c249ac98626ad556eb405b01dadcf70de583a94aa7bbda8f253889a",
+    "analytics/feasibility_report_contract/engine_identity.py": "c304f5fcee027e5bbbbc58f91a937485adeb09cde51f7809d1971565220fb7e8",
     "analytics/feasibility_report_contract/package.py": "f4fef3b85a061cff5bb8ecf74d21fc2782a73a009226ddee1fa3d8adfa233454",
     "analytics/feasibility_report_contract/project_case.py": "6d1ea97befe758a3c9f34bb74eee84b65b3650f621ac6f379f3c0dbeafcd6e7e",
     "analytics/feasibility_report_contract/records.py": "d130d63d8d165ea5d74db0a87a8bc453d2e51c9306ade65a3618218cc104d2e0",
@@ -38170,7 +38170,7 @@
     "finance/debt/helpers.py": "8772984e65c85da2586cff82db3b7f2011d75785d2d7f293dbc66d7dc138c614",
     "finance/debt/layer.py": "b35d081e292947727aaa80ade5540491a25c86dde870e4d1bdddc4d34cb1f2e9",
     "finance/debt/placeholders.py": "5d64b3705cfb16a9279bea3b2974a1222dc25616225c8b16bb413414ac01c9c4",
-    "finance/debt/plan.py": "892af027c49d33fb26291f856ad2ac12d0136e92a28b9e369ec4fff48afcfe0d",
+    "finance/debt/plan.py": "b4b2f197b5d44052b42b16f80bb1e000990a6c9e332dd5d804e0a392418c89c2",
     "finance/debt/schedules.py": "dd86d43b9cf854d62b8b69144ef4293664aaddacf019a1b8ade2f1c3641b6d07",
     "finance/debt/schema.py": "8939abb5ffeb97a3fd76a074ec91ab4c81622fa097dde7627dea7295a375e672",
     "finance/debt/sizing.py": "32c73e22d55120b2e2b7594981633f8ee51f1fa7006829b88285d1c17713ca00",
@@ -38178,7 +38178,7 @@
     "finance/debt_v14.py": "2762b0c721605639267024a924d7b0bc3ff3fd42682de659fd4e018ee04fab25",
     "finance/epc_helper_v14.py": "5e9c2309a873c89ab4f5bc67baa6450daec065656a08acb77cc0342df2df8e2a",
     "finance/epc_margin.py": "ce5cd2e65cbe2481e1fc52f2e80a86ea4663050dc5bfff350ef0bc9a7128a61a",
-    "finance/equity_distribution_v14_hydra.py": "52f4b731f75379853efb948a5a19a5367135942071e27f6c0f109d69d8943a76",
+    "finance/equity_distribution_v14_hydra.py": "de66de8512139ab27e7a8414aa852595fa95756b058eaf4956663b4f49394984",
     "finance/equity_v14.py": "ef3dad302e243b51974e64c3a6451d3ffe098a6b1203aebb0d4cf21db7aba722",
     "finance/event_calendar_v14.py": "91c58598e0374501efb7b3f06fe8507d3b8f93200362d4d4e8ab0a531d3fd8ea",
     "finance/import_levies.py": "4432260b29741b05506ce263d5c71667afd5a1b85f45c46866f903f692747629",
@@ -38206,7 +38206,7 @@
     "solar_resource/source_quality.py": "215f79cca0198bdfdac41360dcba88c826b4ebdb0be6257bc52f2141a3a0d8bb",
     "solar_resource/turbine_shading.py": "1a8e33bb324f9e07afdc63da106b14cadfb3d9421c4610065337c2c0f507fe21"
    },
-   "tree": "f910289c191bf726d81f30f4ea58fa5a435d452700560c9c7d1d60f4d54698f7",
+   "tree": "d97cfa48e6a039015e6a9ae18781fd7dc00eb6eb701fae1ee031b565dfc0a4fe",
    "uncommitted": []
   },
   "common_random_numbers": true,
@@ -38228,7 +38228,7 @@
   ],
   "effective_evaluations": 151328,
   "export_limit_mw": 10.0,
-  "git_sha": "56e9d0366603667d4be6c31819b3984ed37c4fda",
+  "git_sha": "27ab1e8113072c1cd985f1d042acfbd1042ab95d",
   "grid_points": 514,
   "grid_points_evaluated": 514,
   "inputs_sha256": {
@@ -38268,7 +38268,7 @@
    "The BESS container footprint is a 6 h product's (power-bound at 4 h), so the land maximum is conservative for large batteries."
   ],
   "losses_on_charge": true,
-  "model_version": "15.29.0",
+  "model_version": "15.30.0",
   "objective": {
    "metric": "project_npv",
    "statistic": "p50"
@@ -38298,8 +38298,8 @@
    "source": "scenario.opex.currency_split.components"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "2911bb5d9cc99a74bac39e1d012be4d5eda1605939caefd56af91ce4c50133ed",
-  "runtime_s": 3529.2,
+  "result_sha256": "6685eb1c2d3bed4e57b455a6e18d7248aff48b2c97154b452669742e00530b99",
+  "runtime_s": 4838.8,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 20,
