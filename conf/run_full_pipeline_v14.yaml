@@ -203,3 +203,18 @@ capital_risk_report:
   # '<export_dir>/capital_risk_report.html'. The written path is echoed back
   # under result['capital_risk_report_path'].
   path: null
+
+# #1752: the combined lender report, HTML and a DBPL-01 PDF. Follows emit_all
+# (null), so it is written for every run with figures; set false for a faster
+# run. It carries the same sections as POST /v1/cases/report.pdf (tornado,
+# Morris, PAWN under the production profile) plus the capital-risk section, and
+# lists every section it left out with the reason. The Monte Carlo is the
+# capital-risk emitter's own when that ran; otherwise it runs here under the
+# same lender guards and the capital_risk_report settings above. Under emit_all
+# a missing [report] extra leaves the HTML and records why there is no PDF;
+# switched on by name, a missing extra fails loud (DBPL-01).
+emit_lender_report: null
+lender_report:
+  # Target .html path. When null, defaults to '<export_dir>/lender_report.html'.
+  # The PDF is written beside it with a .pdf suffix.
+  path: null
