@@ -298,6 +298,207 @@ def test_unsupported_signed_sources_direct_callers_to_external_provenance(
         WorkbookInputItem.model_validate(payload | {"value": str(value)})
 
 
+@pytest.mark.parametrize("copied", (False, True), ids=("mapping", "typed-copy"))
+@pytest.mark.parametrize(
+    ("value", "number_format"),
+    (
+        (59, '";"yyyy-mm-dd'),
+        (60, '";"yyyy-mm-dd'),
+        (59, r"\;yyyy-mm-dd"),
+        (60, r"\;yyyy-mm-dd"),
+        (1e-9, '";"[h]:mm:ss'),
+        (1e-9, r"\;[h]:mm:ss"),
+        (0.5, "A/P"),
+        (0.5, "[>=1]0.00;hh:mm:ss"),
+        (59, "[<1]0.00;yyyy-mm-dd"),
+        (59, '0 "days;months"'),
+        (59, "0;[Red]0;0;@;0"),
+        (59, "0[Unknown]"),
+        (59, "0;"),
+        (59, '0 "unclosed'),
+        (59, "0\\"),
+    ),
+)
+def test_builder_refuses_unsupported_numeric_formats(
+    tmp_path: Path, copied: bool, value: int | float, number_format: str
+) -> None:
+    source = _sample_inputs()[0]
+    update = {"value": value, "number_format": number_format}
+    item = source.model_copy(update=update) if copied else source.model_dump() | update
+    destination = tmp_path / "new_parent" / "invalid_format.xlsx"
+    with pytest.raises(ValidationError, match="number_format"):
+        build_dfi_workbook_foundation(
+            destination, metadata=_sample_metadata(), inputs=(item,), ledger_entries=()
+        )
+    assert not destination.parent.exists()
+
+
+@pytest.mark.parametrize("copied", (False, True), ids=("mapping", "typed-copy"))
+@pytest.mark.parametrize(
+    ("surface", "field", "value"),
+    (
+        ("inputs", "value", 9007199254740993),
+        ("inputs", "value", sys.float_info.max),
+        ("inputs", "value", math.inf),
+        ("inputs", "value", 1.234567890123456),
+        ("inputs", "value", "source\ufffe"),
+        ("inputs", "value", "x" * 32768),
+        ("inputs", "value", ""),
+        ("inputs", "value", "  =1"),
+        ("inputs", "key", "x" * 32768),
+        ("inputs", "number_format", "0\uffff"),
+        ("inputs", "number_format", "=0"),
+        ("metadata", "project_name", "source\ufffe"),
+        ("metadata", "project_name", "x" * 32768),
+        ("metadata", "project_name", ""),
+        ("metadata", "project_name", "=1"),
+        ("metadata", "generated_at", "reference"),
+        ("metadata", "non_reliance_notice", "Other notice"),
+        ("ledger_entries", "reason", "source\ufffe"),
+        ("ledger_entries", "reason", "x" * 32768),
+        ("ledger_entries", "reason", "-1"),
+        ("ledger_entries", "role_description", ""),
+        ("ledger_entries", "status", "guard*"),
+    ),
+    ids=(
+        "integer-range",
+        "float-range",
+        "nonfinite",
+        "precision",
+        "input-xml",
+        "value-length",
+        "blank-value",
+        "value-prefix",
+        "key-length",
+        "format-xml",
+        "format-prefix",
+        "metadata-xml",
+        "metadata-length",
+        "metadata-blank",
+        "metadata-prefix",
+        "metadata-timestamp",
+        "metadata-f5",
+        "ledger-xml",
+        "ledger-length",
+        "ledger-prefix",
+        "ledger-blank",
+        "ledger-status",
+    ),
+)
+def test_builder_revalidates_all_emission_records(
+    tmp_path: Path, copied: bool, surface: str, field: str, value: object
+) -> None:
+    metadata = _sample_metadata()
+    input_item = _sample_inputs()[0]
+    ledger = _sample_ledger()[0]
+    sources = {"metadata": metadata, "inputs": input_item, "ledger_entries": ledger}
+    source = sources[surface]
+    update = {field: value}
+    invalid = (
+        source.model_copy(update=update) if copied else source.model_dump() | update
+    )
+    records: dict[str, Any] = {
+        "metadata": metadata,
+        "inputs": (input_item,),
+        "ledger_entries": (ledger,),
+    }
+    records[surface] = invalid if surface == "metadata" else (invalid,)
+    destination = tmp_path / "new_parent" / "invalid_record.xlsx"
+    with pytest.raises(ValidationError) as error:
+        build_dfi_workbook_foundation(destination, **records)
+    assert error.value.errors()[0]["loc"] == (field,)
+    assert not destination.parent.exists()
+
+
+def test_supported_numeric_grammar_round_trips_in_both_readers(tmp_path: Path) -> None:
+    calamine = pytest.importorskip("python_calamine")
+    cases = (
+        (59, "General", "n"),
+        (60, "General", "n"),
+        (0.375, "0.00%", "n"),
+        (-1290.25, "$#,##0.00", "n"),
+        (0.000125, "0.00E+00", "n"),
+        (61, '";"0.0', "n"),
+        (62, r"0.0\;", "n"),
+        (2, '0 ";" "days"', "n"),
+        (0.5, "[>=1]0.00;[Red]0.0%", "n"),
+        (-4, '[Blue]0.00;[Red](0.00);0.00;"Ref "@', "n"),
+        (0.5, '0.00 "A/P"', "n"),
+        ("Archive reference F04", "@", "s"),
+        (True, "General", "b"),
+    )
+    source = _sample_inputs()[0]
+    items = []
+    for index, (value, number_format, _) in enumerate(cases):
+        update = {
+            "key": f"source_{index}",
+            "value": value,
+            "number_format": number_format,
+        }
+        items.append(
+            source.model_copy(update=update)
+            if index % 2
+            else source.model_dump() | update
+        )
+    ledger = _sample_ledger()[0]
+    destination, registry = build_dfi_workbook_foundation(
+        tmp_path / "supported_grammar.xlsx",
+        metadata=_sample_metadata().model_copy(
+            update={"project_name": "Verified project"}
+        ),
+        inputs=items,
+        ledger_entries=(ledger.model_dump() | {"reason": "Verified evidence"},),
+    )
+    with zipfile.ZipFile(destination) as archive:
+        xml = {
+            name: ET.fromstring(archive.read(name))
+            for name in archive.namelist()
+            if name.endswith((".xml", ".rels"))
+        }
+    input_xml = xml["xl/worksheets/sheet2.xml"]
+    styles_xml = xml["xl/styles.xml"]
+    formats = {
+        int(element.attrib["numFmtId"]): element.attrib["formatCode"]
+        for element in styles_xml.findall("./{*}numFmts/{*}numFmt")
+    }
+    styles = styles_xml.findall("./{*}cellXfs/{*}xf")
+    workbook = openpyxl.load_workbook(destination)
+    with calamine.CalamineWorkbook.from_path(destination) as reader:
+        reopened = reader.get_sheet_by_name("Inputs").to_python()
+        for index, (value, number_format, data_type) in enumerate(cases):
+            ref = registry.get(f"source_{index}")
+            coordinate = f"{ref.column}{ref.row}"
+            cell = workbook[ref.sheet][coordinate]
+            assert (cell.value, cell.number_format, cell.data_type) == (
+                value,
+                number_format,
+                data_type,
+            )
+            assert type(cell.value) is type(value)
+            row = reopened[ref.row - 1]
+            assert row[0] == f"source_{index}"
+            assert row[3] == value
+            assert type(row[3]) in (
+                (int, float) if data_type == "n" else (type(value),)
+            )
+            element = input_xml.find(f'.//{{*}}c[@r="{coordinate}"]')
+            assert element is not None
+            if data_type == "n":
+                raw = element.findtext("{*}v")
+                assert element.attrib["t"] == "n"
+                assert raw is not None and Decimal(raw) == Decimal(str(value))
+            format_id = int(
+                styles[int(element.attrib.get("s", "0"))].attrib["numFmtId"]
+            )
+            assert (
+                formats.get(
+                    format_id, openpyxl.styles.numbers.BUILTIN_FORMATS.get(format_id)
+                )
+                == number_format
+            )
+    workbook.close()
+
+
 def _sample_inputs() -> tuple[WorkbookInputItem, ...]:
     return (
         WorkbookInputItem(

@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Union
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Self, Sequence, Union
 
 from pydantic import (
     BaseModel,
@@ -65,6 +65,30 @@ _LEDGER_STATUS_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_DATETIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+
+# An allowlist for the entire format. Only an unquoted, unescaped semicolon
+# separates sections. Literal tokens consume their delimiters as a unit.
+_FORMAT_LITERAL = r'(?: "[^"\\]*" | \\[ ;:,.%$€£¥()+-] | [ $€£¥()+-] )'
+_NUMERIC_FORMAT_SECTION = rf"""
+    (?: \[(?:Black|Blue|Cyan|Green|Magenta|Red|White|Yellow)\] )?
+    (?: \[(?:<=|>=|<>|=|<|>)[+-]?[0-9]+(?:\.[0-9]+)?\] )?
+    {_FORMAT_LITERAL}*+
+    (?: General
+        | [0#?]++(?:,[0#?]++)*+(?:\.[0#?]++)?,*+(?:E[+-]0++)?(?:[ ]*%)?
+    )
+    {_FORMAT_LITERAL}*+
+"""
+_SUPPORTED_NUMERIC_FORMAT_RE = re.compile(
+    rf"""
+    {_NUMERIC_FORMAT_SECTION}
+    (?: ; {_NUMERIC_FORMAT_SECTION}
+        (?: ; {_NUMERIC_FORMAT_SECTION}
+            (?: ; {_FORMAT_LITERAL}*+ @ {_FORMAT_LITERAL}*+ )?
+        )?
+    )?
+    """,
+    re.VERBOSE | re.IGNORECASE | re.ASCII,
+)
 
 _INPUT_HEADERS: tuple[str, ...] = (
     "Key",
@@ -191,13 +215,23 @@ class WorkbookInputItem(BaseModel):
 
     Integers are limited to +/-999999999999999. Nonzero floats must be within
     Excel's documented input range and round-trip through 15 significant decimal
-    digits to the same Python float. Numeric values require a non-temporal number
-    format as classified by openpyxl. Preserve unsupported sources externally and
-    supply a supported textual reference as the input value. Text must satisfy
-    the literal-text contract, including its formula-prefix restriction.
+    digits to the same Python float. Numeric formats allow one to three sections
+    using General or digit placeholders, grouping, decimals, scaling commas,
+    percentages and signed scientific exponents. Each numeric section may have
+    one of the eight standard named colors and a decimal comparison, in that
+    order when both are present. Affixes may use spaces, signs, parentheses,
+    currency symbols ($, €, £, ¥), quoted literals without backslashes, or
+    backslash-escaped punctuation from the allowlist. An optional fourth section
+    after three numeric sections accepts a single @ with literal affixes.
+    Formats that openpyxl would reopen as a date, time, or duration are also
+    refused. Preserve unsupported sources externally and supply a supported
+    textual reference as the input value. Text must satisfy the literal-text
+    contract, including its formula-prefix restriction.
     """
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, revalidate_instances="always"
+    )
 
     key: str
     section: str
@@ -284,22 +318,28 @@ class WorkbookInputItem(BaseModel):
     def _validate_scalar_format(self) -> Self:
         if isinstance(self.value, (str, bool)) or self.number_format == "General":
             return self
-        formats = _require_openpyxl().styles.numbers
-        if formats.is_date_format(self.number_format) or formats.is_timedelta_format(
-            self.number_format
-        ):
-            raise ValueError(
-                f"WorkbookInputItem {self.key!r} has temporal number_format "
-                f"{self.number_format!r} for a numeric scalar. Use a non-temporal "
-                "number format such as 'General'."
-            )
-        return self
+        if _SUPPORTED_NUMERIC_FORMAT_RE.fullmatch(self.number_format):
+            # The reader may misinterpret even a supported literal (e.g. a
+            # quoted semicolon after date letters). Check the emitted spelling.
+            formats = _require_openpyxl().styles.numbers
+            if not (
+                formats.is_date_format(self.number_format)
+                or formats.is_timedelta_format(self.number_format)
+            ):
+                return self
+        raise ValueError(
+            f"WorkbookInputItem {self.key!r} has an unsupported or temporal "
+            f"number_format {self.number_format!r} for a numeric scalar. Use "
+            "'General' or a supported non-temporal numeric format."
+        )
 
 
 class ModuleLedgerEntry(BaseModel):
     """Typed contract for one module execution/representation ledger entry."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, revalidate_instances="always"
+    )
 
     module_path: str
     pipeline_stage: str
@@ -351,7 +391,9 @@ class ModuleLedgerEntry(BaseModel):
 class DfiWorkbookMetadata(BaseModel):
     """Strict provenance and governance metadata for ``Control_Provenance``."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, revalidate_instances="always"
+    )
 
     project_name: str
     scenario_name: str
@@ -694,18 +736,12 @@ def _populate_module_ledger_sheet(
     _apply_column_widths(ws, widths)
 
 
-def _coerce_ledger_entry(entry: object) -> ModuleLedgerEntry:
-    if isinstance(entry, ModuleLedgerEntry):
-        return entry
-    return ModuleLedgerEntry.model_validate(entry)
-
-
 def build_dfi_workbook_foundation(
     output_path: PathLike,
     *,
-    metadata: DfiWorkbookMetadata,
-    inputs: Sequence[WorkbookInputItem],
-    ledger_entries: Sequence[ModuleLedgerEntry],
+    metadata: DfiWorkbookMetadata | Mapping[str, object],
+    inputs: Sequence[WorkbookInputItem | Mapping[str, object]],
+    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
 ) -> tuple[Path, CellRegistry]:
     """Build the macro-free, byte-reproducible DFI workbook foundation.
 
@@ -721,31 +757,28 @@ def build_dfi_workbook_foundation(
 
     Args:
         output_path: Destination ``.xlsx`` path (parent directories created).
-        metadata: Validated :class:`DfiWorkbookMetadata` record.
-        inputs: Non-empty sequence of :class:`WorkbookInputItem` entries.
-        ledger_entries: Sequence of :class:`ModuleLedgerEntry` records.
+        metadata: A :class:`DfiWorkbookMetadata` record or equivalent mapping.
+        inputs: Non-empty sequence of :class:`WorkbookInputItem` records or mappings.
+        ledger_entries: Sequence of :class:`ModuleLedgerEntry` records or mappings.
 
     Returns:
         Tuple of ``(resolved_output_path, populated_cell_registry)``.
 
     Raises:
-        ValueError: If ``inputs`` is empty, duplicate keys occur, metadata
-            validation fails, a numeric scalar uses a temporal number format,
-            or the output path does not use ``.xlsx``.
+        ValueError: If any record fails validation, ``inputs`` is empty,
+            duplicate keys occur, or the output path does not use ``.xlsx``.
     """
-    validated_metadata = (
-        metadata
-        if isinstance(metadata, DfiWorkbookMetadata)
-        else DfiWorkbookMetadata.model_validate(metadata)
-    )
-    # Run the cross-field validator even for unvalidated Pydantic copies.
+    # Revalidate typed records as well as mappings before touching the destination.
+    validated_metadata = DfiWorkbookMetadata.model_validate(metadata)
     validated_inputs = [WorkbookInputItem.model_validate(item) for item in inputs]
     if not validated_inputs:
         raise ValueError(
             "inputs must contain at least one WorkbookInputItem; cannot build "
             "an Inputs sheet without registered scalar parameters."
         )
-    validated_ledger = [_coerce_ledger_entry(entry) for entry in ledger_entries]
+    validated_ledger = [
+        ModuleLedgerEntry.model_validate(entry) for entry in ledger_entries
+    ]
 
     out_path = Path(output_path).expanduser().resolve()
     if out_path.suffix.lower() != ".xlsx":
