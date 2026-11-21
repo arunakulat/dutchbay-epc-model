@@ -10,6 +10,7 @@ import yaml
 from analytics.evaluation_v14 import evaluate_with_overrides, evaluated_scenario_config
 from analytics.pipeline_v14_enhanced import PipelineValidationError
 from analytics.run_manifest import build_run_manifest, config_sha256
+from analytics.storage_headline import strip_headline_option
 from finance.native_cost_inputs import normalize_native_capex
 
 
@@ -19,7 +20,8 @@ def cases() -> tuple[dict[str, Any], dict[str, Any]]:
         Path(__file__).resolve().parents[2]
         / "scenarios/blue_whale_wind_lot5b_2026.yaml"
     )
-    usd = yaml.safe_load(path.read_text())
+    # The flat wind case: the headline battery (#1823) is a separate test's subject.
+    usd = strip_headline_option(yaml.safe_load(path.read_text()))
     amount = usd["capex"]["usd_total"]
     rate = usd["fx"]["start_lkr_per_usd"]
     native = copy.deepcopy(usd)

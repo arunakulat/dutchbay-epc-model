@@ -49,7 +49,7 @@ source:
     sha256: fb9298b4d4e319b84da5a2725277d6f70567dd124f289f9e5eedfcc22cd1718b
   version_file:
     path: VERSION
-    sha256: da16179453a758cafe675d1765d576e8a8336d25e20a9c7e03cb8bed0fbcf341
+    sha256: e12b90d5db5be48083be5db370868096778d0b36b388be06ed8bad63c0d34994
 
 profile:
   # 2021 supplies a non-leap 8,760-hour UTC timestamp shape only. The values are

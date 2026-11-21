@@ -768,6 +768,36 @@ def test_cli_switched_on_by_name_requires_the_pdf(
     assert calls["capital_risk"] is None  # the capital-risk emitter did not run
 
 
+def test_cli_passes_the_capital_structure_settings_to_the_lender_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1859 review F-B: lender_report.capital_structure reaches the report unchanged."""
+    calls = _run_cli(
+        tmp_path,
+        monkeypatch,
+        lender_report={
+            "capital_structure": {
+                "enabled": True,
+                "gearing_bounds": [0.4, 0.7],
+                "gearing_steps": 4,
+            }
+        },
+    )
+    capsys.readouterr()
+    settings = calls["capital_structure"]
+    assert settings.enabled is True
+    assert settings.gearing_bounds == (0.4, 0.7)
+    assert settings.gearing_steps == 4
+
+
+def test_cli_leaves_the_capital_structure_section_off_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _run_cli(tmp_path, monkeypatch)
+    capsys.readouterr()
+    assert calls["capital_structure"].enabled is False
+
+
 # ── a technology-neutral subtitle (A-4) ───────────────────────────────────────
 
 

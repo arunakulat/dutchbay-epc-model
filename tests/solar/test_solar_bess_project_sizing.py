@@ -132,10 +132,14 @@ SOLAR_BESS_PINS = {
 # 2027 draw; opex and the PUCSL O&M index escalated from 2026, two years before the 2028 COD).
 # Before, at 15.24.0 (v0.5): project IRR 0.13126573271197758, equity IRR 0.11548743505017844,
 # min DSCR 0.8668689564723109.
+# Re-pinned for #1823 (wind v0.7: the held 0.5 MW / 0.5 MWh battery joins the headline KPIs,
+# capex and O&M only, built as the wind battery options analysis builds it; these equal that
+# analysis's figures for the held_0_5_0_5 option). Before (v0.6): project IRR
+# 0.12408437995891264, equity IRR 0.10545894876814677, min DSCR 0.8671021075351333.
 WIND_PINS = {
-    "project_irr": 0.12408437995891264,
-    "equity_irr": 0.10545894876814677,
-    "min_dscr": 0.8671021075351333,
+    "project_irr": 0.12313073791413345,
+    "equity_irr": 0.10415918282280123,
+    "min_dscr": 0.8678182687044798,
 }
 
 

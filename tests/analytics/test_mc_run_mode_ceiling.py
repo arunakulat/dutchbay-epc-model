@@ -50,7 +50,9 @@ def test_permissive_modes_preserve_the_explicit_engine_setting(
     config = _broken_config("run" if mode else "", mode)
     if fallback is not None:
         config["monte_carlo"]["allow_toy_fallback"] = fallback
-    if fallback is False:
+    # Off unless declared (#962): a permissive mode keeps the engine setting, which is
+    # off when the config is silent.
+    if not fallback:
         with pytest.raises(RuntimeError, match="toy-metric fallback is disabled"):
             run_monte_carlo_analysis(base_config=config, n_trials=2, seed=1)
     else:

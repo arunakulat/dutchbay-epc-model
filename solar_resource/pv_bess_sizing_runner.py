@@ -101,6 +101,26 @@ def code_sha256(files: Iterable[Path], root: Path = REPO_ROOT) -> Dict[str, Any]
     }
 
 
+def inputs_digest(spec: Mapping[str, Any]) -> str:
+    """One content digest of everything a sizing run was computed from.
+
+    It covers the code that ran (``code_sha256.tree``), the config and scenario files the
+    run read (``inputs_sha256``: unit, pricing, scenario and, for a project, regulatory)
+    and the sizing config itself (``sizing_config_sha256``). It is the SHA-256 of their
+    canonical JSON, so it can be recomputed from a committed summary's own spec fields.
+    ``VERSION`` is deliberately not an input: a release number changes no figure, so a
+    version bump does not make a summary stale.
+    """
+    record = {
+        "code_tree": spec["code_sha256"]["tree"],
+        "inputs_sha256": dict(spec["inputs_sha256"]),
+        "sizing_config_sha256": spec["sizing_config_sha256"],
+    }
+    return hashlib.sha256(
+        json.dumps(record, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 def loaded_repo_modules(root: Path = REPO_ROOT) -> list[Path]:
     """The source files of every imported module that lives in this repository.
 
@@ -205,7 +225,9 @@ def run(
     ).hexdigest()
     spec["git_sha"] = _git_head()
     spec["code_sha256"] = code_sha256([*loaded_repo_modules(), Path(script)])
-    spec["model_version"] = (REPO_ROOT / "VERSION").read_text().strip()
+    # The summary names what it was computed from by content, not by release number: a
+    # VERSION bump that moves none of these inputs leaves a committed summary current.
+    spec["inputs_digest"] = inputs_digest(spec)
     spec["limitations"] = list(limitations)
     if project:
         spec["limitations"] += list(project_limitations)
@@ -510,6 +532,7 @@ __all__ = [
     "REPO_ROOT",
     "code_sha256",
     "concise_project_summary",
+    "inputs_digest",
     "loaded_repo_modules",
     "run",
 ]
