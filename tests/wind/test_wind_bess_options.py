@@ -36,6 +36,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.storage_headline import strip_headline_option
 from analytics.wind import wind_bess_options as wbo
 
 REPO = Path(__file__).resolve().parents[2]
@@ -52,7 +53,10 @@ def _cfg() -> Dict[str, Any]:
 
 
 def _scenario() -> Dict[str, Any]:
-    scenario: Dict[str, Any] = yaml.safe_load((REPO / _cfg()["scenario"]).read_text())
+    """The options analysis's wind-only case: the scenario without its headline battery."""
+    scenario: Dict[str, Any] = strip_headline_option(
+        yaml.safe_load((REPO / _cfg()["scenario"]).read_text())
+    )
     return scenario
 
 

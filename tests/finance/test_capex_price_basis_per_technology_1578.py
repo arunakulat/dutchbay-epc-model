@@ -28,6 +28,7 @@ import yaml
 
 from analytics.evaluation_v14 import evaluate_with_casper_tail_risk
 from analytics.scenario_analytics import ScenarioAnalytics
+from analytics.storage_headline import apply_headline_storage_option
 from finance.bess_lcos import compute_lcos_suite
 from finance.capex_price_basis import (
     APPLIED_KEY,
@@ -219,8 +220,10 @@ def test_gateway_work_breakdown_reconciles_to_the_dated_total(path: Path) -> Non
     factor = _factor(raw)
     wbs = evaluate_with_casper_tail_risk(config_path=str(path)).multi_tech_wbs
     assert wbs is not None
+    # #1823: the financed total includes a declared headline battery's capex.
     assert wbs.financed_capex_usd == pytest.approx(
-        float(raw["capex"]["usd_total"]) * factor, rel=1e-12
+        float(apply_headline_storage_option(raw)["capex"]["usd_total"]) * factor,
+        rel=1e-12,
     )
     stated = {
         name: float(block["capex_usd"])
