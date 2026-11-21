@@ -1687,15 +1687,16 @@ def cli(cfg: DictConfig) -> None:
                     "emit_capital_risk_report"
                 )
                 cr_not_run = None
-                if (
-                    not shared_capital_risk
-                    and isinstance(cr_entry, dict)
-                    and cr_entry.get("status") == STATUS_FAILED
-                ):
-                    cr_not_run = (
-                        "not run: the capital-risk Monte Carlo failed in this run ("
-                        f"{cr_entry.get('reason')})"
-                    )
+                if not shared_capital_risk and isinstance(cr_entry, dict):
+                    # Never re-attempt a Monte Carlo this run already declined or failed:
+                    # list the capital-risk emitter's own reason instead.
+                    if cr_entry.get("status") == STATUS_FAILED:
+                        cr_not_run = (
+                            "not run: the capital-risk Monte Carlo failed in this run ("
+                            f"{cr_entry.get('reason')})"
+                        )
+                    elif cr_entry.get("status") == STATUS_NOT_RUN:
+                        cr_not_run = f"not run: {cr_entry.get('reason')}"
                 cr_seed_raw = capital_risk_report_cfg.get("seed", None)
                 cr_trials_raw = capital_risk_report_cfg.get("n_trials", None)
                 written = emit_lender_report_from_pipeline(
@@ -1721,6 +1722,9 @@ def cli(cfg: DictConfig) -> None:
                     logger.warning(
                         "Lender report PDF not written: %s", written.pdf_not_written
                     )
+                    lr_entry = (result.get("emitters") or {}).get("emit_lender_report")
+                    if isinstance(lr_entry, dict):
+                        lr_entry["pdf_not_written"] = written.pdf_not_written
 
             _run_emitter("emit_lender_report", _emit_lender_report)
 

@@ -12,6 +12,7 @@ import yaml
 from omegaconf import OmegaConf
 
 import run_full_pipeline_v14 as rfp
+from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from app.models.inputs import WindFarmInputs
 from app.reports import lender_report_emit as lre
 from app.reports.capital_risk_emit import build_capital_risk_report_for_scenario
@@ -21,6 +22,9 @@ from app.reports.lender_report_emit import (
     SECTION_MORRIS,
     SECTION_PAWN,
     SECTION_TORNADO,
+    DOCUMENT_STATUS,
+    DbplFurniture,
+    dbpl_furniture_for,
     emit_lender_report_from_pipeline,
     to_dbpl_print_html,
 )
@@ -294,7 +298,7 @@ def test_a_monte_carlo_that_fails_the_guards_is_listed_not_rendered(
         capital_risk_builder=_refuse,
     )
     reason = {s.section: s.reason for s in out.sections_not_run}[SECTION_CAPITAL_RISK]
-    assert "did not meet the lender guards" in reason
+    assert "could not run under the lender guards" in reason
     assert "1000 trials" in reason
     assert not any(
         "Capital Risk" in h for h in _h2s(out.html_path.read_text(encoding="utf-8"))
@@ -325,29 +329,90 @@ def test_a_shared_capital_risk_report_is_used_as_is(
 # ── the DBPL print ────────────────────────────────────────────────────────────
 
 
-def test_dbpl_print_html_drops_the_screen_style_and_adds_house_classes() -> None:
-    html = (
-        '<!DOCTYPE html><html lang="en"><head><title>t</title>'
-        "<style>body { color: #1c2733; }</style></head><body>"
-        '<h1>Title</h1><h2>Section</h2><h3>Sub</h3><table class="heatmap">'
-        "<tr><td>x</td></tr></table><table><tr><td>y</td></tr></table></body></html>"
+def _furniture(**overrides: Any) -> DbplFurniture:
+    fields: Dict[str, Any] = dict(
+        document_id="DBAY-LR-TEST-20261121",
+        version="v1",
+        issue_date="2026-11-21",
+        status="Draft",
+        banner="A & B",
+        title="Lender report",
+        caveat=EXECUTIVE_WORKBOOK_F5_CAVEAT,
+        control=(("Document ID", "DBAY-LR-TEST-20261121"),),
+        revisions=({"rev": "P01", "date": "2026-11-21", "status": DOCUMENT_STATUS},),
     )
-    printed = to_dbpl_print_html(html, banner="A & B", docline="<id>")
-    assert "<style" not in printed and "#1c2733" not in printed
-    assert '<h1 class="dbpl-title">Title</h1>' in printed
+    fields.update(overrides)
+    return DbplFurniture(**fields)
+
+
+_SCREEN_HTML = (
+    '<!DOCTYPE html><html lang="en"><head><title>t</title>'
+    "<style>body { color: #1c2733; }</style></head><body>"
+    '<h1>Title</h1><h2>Section</h2><h3>Sub</h3><table class="heatmap">'
+    "<tr><td>x</td></tr></table><h2>Capital Risk</h2>"
+    "<table><tr><td>y</td></tr></table></body></html>"
+)
+
+
+def test_dbpl_print_html_drops_the_screen_style_and_adds_house_classes() -> None:
+    printed = to_dbpl_print_html(_SCREEN_HTML, _furniture())
+    assert "#1c2733" not in printed
+    assert ">Title</h1>" not in printed  # the base prints the title, once
+    assert '<h1 class="dbpl-title">Lender report</h1>' in printed
     assert '<h2 class="dbpl-section">Section</h2>' in printed
     assert '<h3 class="dbpl-subsection">Sub</h3>' in printed
     assert '<table class="dbpl heatmap">' in printed
     assert '<table class="dbpl">' in printed
-    body = printed.split("<body>", 1)[1]
-    assert body.startswith('\n<div class="dbpl-banner">A &amp; B</div>')
-    assert '<div class="dbpl-docline">&lt;id&gt;</div>' in body
+    assert '<div class="dbpl-banner">A &amp; B</div>' in printed
+    assert "DBAY-LR-TEST-20261121" in printed.split('class="dbpl-docline"', 1)[1]
     assert '<html lang="en">' in printed  # PDF/UA needs lang on <html>
+
+
+def test_every_section_heading_carries_the_f5_caveat_band() -> None:
+    printed = to_dbpl_print_html(_SCREEN_HTML, _furniture())
+    body = printed.split('<h2 class="dbpl-section">Section</h2>', 1)[1]
+    h2_count = len(re.findall(r"</h2>", body)) + 1
+    bands = re.findall(r'</h2>\s*<div class="dbpl-caveat">', printed)
+    assert len(bands) >= h2_count == 2
+    assert (
+        '<h2 class="dbpl-section">Capital Risk</h2>\n<div class="dbpl-caveat">'
+        in printed
+    )
+
+
+def test_the_document_control_block_and_provenance_are_printed() -> None:
+    printed = to_dbpl_print_html(
+        _SCREEN_HTML, _furniture(provenance_lines=("DBPL print core 1", "pdf/ua-1"))
+    )
+    assert "Document control" in printed
+    assert "Revision history" in printed
+    assert DOCUMENT_STATUS in printed
+    for role in ("Prepared", "Checked", "Reviewed", "Approved"):
+        assert role in printed
+    provenance = printed.split('<div class="dbpl-provenance">', 1)[1]
+    assert "DBPL print core 1" in provenance and "pdf/ua-1" in provenance
+    # The report body sits between the control block and the provenance.
+    assert printed.index("Document control") < printed.index(">Section</h2>")
+    assert printed.index(">Capital Risk</h2>") < printed.index(
+        'class="dbpl-provenance"'
+    )
+
+
+def test_the_furniture_names_the_document_and_its_status(api_case: Any) -> None:
+    context = build_report_context_from_case(
+        api_case, _bundle(api_case.scenario_config)
+    )
+    furniture = dbpl_furniture_for(context)
+    assert furniture.document_id.startswith("DBAY-LR-")
+    assert furniture.caveat == EXECUTIVE_WORKBOOK_F5_CAVEAT
+    labels = dict(furniture.control)
+    assert labels["Document ID"] == furniture.document_id
+    assert labels["Status / Reason for issue"] == DOCUMENT_STATUS
 
 
 def test_dbpl_print_html_refuses_a_document_without_a_body() -> None:
     with pytest.raises(ValueError, match="no <body>"):
-        to_dbpl_print_html("<html></html>", banner="b", docline="d")
+        to_dbpl_print_html("<html></html>", _furniture())
 
 
 def test_the_pdf_is_printed_through_the_dbpl_core(
@@ -366,6 +431,21 @@ def test_the_pdf_is_printed_through_the_dbpl_core(
     assert out.pdf_not_written is None
     assert any(line.startswith("DBPL print core") for line in out.pdf_provenance)
     assert any("pdf/ua-1" in line for line in out.pdf_provenance)
+
+    # DBPL-01 furniture, read back from the printed PDF's text.
+    from pdfminer.high_level import extract_text
+
+    text = " ".join(extract_text(str(out.pdf_path)).split())
+    assert "Document control" in text
+    assert "Revision history" in text
+    assert "DBAY-LR-" in text
+    assert "Status / Reason for issue" in text
+    assert "DBPL print core" in text
+    assert "pdf/ua-1" in text
+    caveat_head = " ".join(EXECUTIVE_WORKBOOK_F5_CAVEAT.split())[:60]
+    html_h2 = len(_h2s(out.html_path.read_text(encoding="utf-8")))
+    # Headline caveat plus one band under every section heading.
+    assert text.count(caveat_head) >= html_h2 + 1
 
 
 def _missing_stack(*_args: Any, **_kwargs: Any) -> Any:
@@ -411,7 +491,10 @@ def test_a_missing_print_stack_is_recorded_when_not_required(
 
 
 def _run_cli(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **overrides: Any
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: Mapping[str, Any] | None = None,
+    **overrides: Any,
 ) -> Dict[str, Any]:
     """Run the CLI with the finance engine and both Monte Carlo emitters stubbed."""
     import app.reports.capital_risk_emit as cr
@@ -439,17 +522,12 @@ def _run_cli(
     monkeypatch.setattr(cr, "emit_capital_risk_report_from_pipeline", _capital_risk)
     monkeypatch.setattr(lre, "emit_lender_report_from_pipeline", _lender)
     path = tmp_path / "scenario.yaml"
-    path.write_text(
-        yaml.safe_dump(
-            {
-                "scenario_name": "t",
-                "monte_carlo": {
-                    "parameters": [{"name": "capex", "low": 0.9, "high": 1.1}]
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+    if scenario is None:
+        scenario = {
+            "scenario_name": "t",
+            "monte_carlo": {"parameters": [{"name": "capex", "low": 0.9, "high": 1.1}]},
+        }
+    path.write_text(yaml.safe_dump(dict(scenario)), encoding="utf-8")
     base: Dict[str, Any] = {
         "config": str(path),
         "validation_mode": "off",
@@ -478,8 +556,21 @@ def test_cli_hands_the_capital_risk_report_to_the_lender_report(
     assert out["emitters"]["emit_lender_report"] == {
         "status": "run",
         "source": "emit_all",
+        "pdf_not_written": "stub",  # a PDF left unwritten is noted on the emitter entry
     }
     assert out["lender_report"]["html_path"].endswith("lender_report.html")
+
+
+def test_cli_reuses_the_capital_risk_not_run_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls = _run_cli(tmp_path, monkeypatch, scenario={"scenario_name": "t"})
+    out = json.loads(capsys.readouterr().out)
+    cr_entry = out["emitters"]["emit_capital_risk_report"]
+    assert cr_entry["status"] == "not_run"
+    assert calls["capital_risk"] is None
+    # The lender report does not attempt the Monte Carlo the run declined: it lists why.
+    assert calls["capital_risk_not_run"] == f"not run: {cr_entry['reason']}"
 
 
 def test_cli_switched_on_by_name_requires_the_pdf(
