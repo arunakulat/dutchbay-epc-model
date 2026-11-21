@@ -54,6 +54,10 @@ Key-by-key notes:
   `equity_performance` blocks when attached to the `ScenarioResult`. Full
   `config` / `annual_rows` are deliberately NOT shipped. When the producer only
   has a scenario name string, the descriptor is `{"scenario_name": <str>}`.
+  `equity_performance` carries `equity_irr_caveat` (#1688, additive): the
+  #1456 ranking caveat as one sentence when the equity metadata's
+  `equity_irr_ranks_reliably` is `False`, and `None` otherwise, including when
+  the flag is absent. `equity_npv` sits beside it in the same block.
 - **`baseline_kpis`** — numeric scalars only, filtered from
   `ScenarioResult.kpis` (non-numeric entries such as `scenario_name`,
   `wacc_label`, `dscr_series` are skipped; `bool` is excluded).

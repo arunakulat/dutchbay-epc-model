@@ -214,6 +214,7 @@ def with_capex_factor(cfg: Mapping[str, Any], factor: float) -> Dict[str, Any]:
 
 def kpis(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     """Run the deterministic pipeline once and keep the figures the report quotes."""
+    from analytics.equity_irr_caveat import equity_irr_caveat_from_summary
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
     res = run_v14_pipeline(config=copy.deepcopy(dict(cfg)))
@@ -224,6 +225,8 @@ def kpis(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     out["equity_discount_rate_used"] = (eq.get("metadata") or {}).get("discount_rate")
     out["lockup_threshold"] = summary.get("min_dscr_threshold")
     out["equity_sign_changes"] = summary.get("equity_cashflow_sign_changes")
+    # #1688: the #1456 ranking caveat the deterministic finance table prints.
+    out["equity_irr_caveat"] = equity_irr_caveat_from_summary(summary)
     return out
 
 
@@ -1088,6 +1091,9 @@ def as_dbpl_document(
                         ],
                     ],
                     caption="The scenario as written",
+                    notes=[base["equity_irr_caveat"]]
+                    if base.get("equity_irr_caveat")
+                    else None,
                     source="analytics.pipeline_v14_enhanced.run_v14_pipeline.",
                 ),
             }

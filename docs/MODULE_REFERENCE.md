@@ -771,8 +771,9 @@ examined in full in the separately delivered deep-research credibility report.
   Actual reserve and support terms await an authenticated term sheet (#920).
 - **Major-maintenance reserve and distribution lock-up.** No major-maintenance reserve is
   modelled; the debt service reserve is the only reserve account. The distribution lock-up is
-  one test, each period's DSCR against the scenario's lock-up covenant, with no forward-looking
-  test and no multi-tier (cash sweep or default) structure. Both await transaction terms
+  one test, each period's DSCR against the scenario's lock-up covenant (or the model's default
+  threshold where the scenario declares none), with no forward-looking test and no multi-tier
+  (cash sweep or default) structure. Both await transaction terms
   (#1400), and the `model_limitations` block discloses the absence in every report.
 - **Statutory and structural levers.** Several levers (dividend withholding, interest
   withholding gross-up, senior credit-support fees, import levies, P90 debt binding, FX

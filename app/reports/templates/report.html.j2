@@ -157,6 +157,11 @@
       <tbody>
         <tr><td>Project IRR</td><td class="num">{{ fmt_ratio_pct(ctx.finance.kpis.project_irr) }}</td></tr>
         <tr><td>Equity IRR</td><td class="num">{{ fmt_ratio_pct(ctx.finance.kpis.equity_irr) }}</td></tr>
+        {% if ctx.equity_irr_caveat %}
+        {# #1688: the #1456 ranking caveat, with equity NPV beside equity IRR. #}
+        <tr><td>Equity NPV</td><td class="num">{{ fmt_usd(ctx.finance.kpis.equity_npv_usd) }}</td></tr>
+        <tr class="equity-irr-caveat"><td colspan="2"><em>{{ ctx.equity_irr_caveat }}</em></td></tr>
+        {% endif %}
         <tr><td>Project NPV</td><td class="num">{{ fmt_usd(ctx.finance.kpis.project_npv_usd) }}</td></tr>
         <tr><td>Minimum DSCR</td><td class="num">{{ fmt_x(ctx.finance.kpis.min_dscr) }}</td></tr>
         <tr><td>LLCR / PLCR</td><td class="num">{{ fmt_x(ctx.finance.kpis.llcr) }} / {{ fmt_x(ctx.finance.kpis.plcr) }}</td></tr>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+from html import unescape
 from types import ModuleType
 from typing import Any, Dict
 
@@ -257,6 +258,11 @@ def test_html_discloses_no_major_maintenance_reserve_or_multi_tier_lockup() -> N
         "no forward-looking (projected) DSCR test and no multi-tier structure" in html
     )
     assert "Nothing in this report covers either mechanism." in html
+    # #1750 review L-1: a scenario that declares no covenant locks up at the model default.
+    assert (
+        "(the scenario's lock-up covenant, or the model's default threshold where the "
+        "scenario declares none)" in unescape(html)
+    )
 
 
 def test_html_omits_model_limitations_when_config_has_none() -> None:

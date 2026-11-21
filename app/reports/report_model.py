@@ -26,6 +26,7 @@ from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteractionGrid
 from analytics.development_readiness import build_readiness_report
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
@@ -983,6 +984,11 @@ class ReportContext(BaseModel):
     #: ``debt_result['refinance']`` is present; ``None`` otherwise (non-refinance cases stay
     #: byte-identical).
     refinance_coverage: Optional[RefinanceCoverageBlock] = None
+    #: The #1456 equity IRR ranking caveat (#1688), from the run's equity summary. Set only
+    #: when the waterfall marks the equity IRR as unable to rank the case; the Executive
+    #: Summary then shows equity NPV beside equity IRR, with this note. ``None`` otherwise,
+    #: and for a caller that passes no run result.
+    equity_irr_caveat: Optional[str] = None
     manifest: Dict[str, Any]
     #: F-5 non-reliance notice shown on the cover (#1760). Set by the capital-risk emitter, whose
     #: report a run that writes its figures now writes by default and the release asset
@@ -2846,5 +2852,6 @@ def build_report_context(
         fx_warning=_build_fx_warning(run_result),
         fx_fallback_note=_build_fx_fallback_note(run_result),
         refinance_coverage=_build_refinance_coverage(debt_result, run_result),
+        equity_irr_caveat=equity_irr_caveat_from_run(run_result),
         manifest=dict(case_result.run_manifest or {}),
     )
