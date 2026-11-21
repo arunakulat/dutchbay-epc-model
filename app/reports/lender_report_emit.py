@@ -32,6 +32,7 @@ GWTF:
 from __future__ import annotations
 
 import dataclasses
+import html as _html
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -415,7 +416,9 @@ def _add_table_sources(body: str, source: str) -> str:
     last = 0
     for m in _TABLE_ANCHOR.finditer(body):
         if m.group(1):
-            text = " ".join(_TAGS.sub(" ", m.group(2)).split())
+            # The heading comes from rendered HTML, so its entities are already escaped;
+            # unescape it here so the note below is escaped exactly once.
+            text = " ".join(_html.unescape(_TAGS.sub(" ", m.group(2))).split())
             section = text
             continue
         out.append(body[last : m.end()])
