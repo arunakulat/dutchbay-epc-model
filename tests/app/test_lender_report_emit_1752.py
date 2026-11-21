@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from html import unescape as _html_unescape
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
@@ -439,6 +440,25 @@ def test_every_table_carries_a_source_note_naming_its_section() -> None:
     assert "model output; section: Capital Risk.</div>" in body
 
 
+def test_a_heading_with_an_entity_is_escaped_once_in_its_source_note() -> None:
+    html = _SCREEN_HTML.replace(
+        "<h3>Sub</h3>",
+        "<h3>Debt Structure &amp; DSCR Profile &mdash; Base &lt;case&gt;</h3>",
+    )
+    assert html != _SCREEN_HTML
+    printed = to_dbpl_print_html(html, _furniture(table_source="DOC, model output"))
+    notes = re.findall(r'<div class="dbpl-source">(.*?)</div>', printed)
+    sub = [n for n in notes if "Debt Structure" in n]
+    assert sub, notes
+    for note in notes:
+        # Escaped once: the browser shows the text, never a literal entity.
+        shown = _html_unescape(note)
+        assert not re.search(r"&(?:[a-zA-Z]+|#[0-9]+|#x[0-9a-fA-F]+);", shown), note
+    assert _html_unescape(sub[0]).endswith(
+        "section: Debt Structure & DSCR Profile \u2014 Base <case>."
+    )
+
+
 def test_numeric_cells_keep_their_right_alignment_in_print() -> None:
     html = _SCREEN_HTML.replace(
         "<td>y</td>", '<th class="num">h</th><td class="num warn">1.0</td>'
@@ -490,6 +510,8 @@ def test_the_pdf_is_printed_through_the_dbpl_core(
     match = re.search(r"DBAY-LR-[A-Z0-9-]+", text)
     assert match is not None
     assert text.count(f"Source: {match.group(0)}, model output") >= html_tables
+    # No note prints a literal HTML entity (the heading text is escaped once).
+    assert not re.search(r"&(?:amp|mdash|lt|gt|quot|#[0-9]+);", text)
 
 
 def _missing_stack(*_args: Any, **_kwargs: Any) -> Any:
