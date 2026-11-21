@@ -78,6 +78,8 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
+# #1779's refinanced-tranche lock-up (15.31.0): only the engine identity moved (main's
+# engine with only the VERSION bump gives the same digest). Before that by
 # #1823's held battery in the Blue Whale headline KPIs (15.30.0): only the engine identity
 # moved (main's engine with only the VERSION bump gives the same digest). Before that by
 # #1429's covenant-terms step (D08, D09), whose D3B fixture now declares debt.dsra_months 6
@@ -118,7 +120,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "d66c0d7295a6f5c12875bbd49f573f3e30e53e74dfc6d5086af22660a4eabdce"
+    "4e82daae5cb879f526cda30e7aed3d2161dec8abd4deb7f1c10b782074f7cf87"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
