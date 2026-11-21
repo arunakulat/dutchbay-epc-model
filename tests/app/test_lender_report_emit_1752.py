@@ -335,6 +335,34 @@ def test_a_shared_capital_risk_report_is_used_as_is(
     assert f"{shared.n_trials}" in html
 
 
+def test_a_capital_structure_builder_failure_is_listed_not_raised(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1859 domain D-4: an opt-in section that raises never sinks the report."""
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+
+    def _raises(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("breakdown mismatch")
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        capital_structure_builder=_raises,
+    )
+    listed = {s.section: s.reason for s in out.sections_not_run}
+    assert listed[SECTION_CAPITAL_STRUCTURE] == (
+        "not run: could not be built (RuntimeError: breakdown mismatch)"
+    )
+    assert out.html_path.exists()
+
+
 # ── the DBPL print ────────────────────────────────────────────────────────────
 
 

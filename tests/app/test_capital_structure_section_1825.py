@@ -72,12 +72,19 @@ class _Fakes:
         self.base: Dict[str, float] = {
             OBJECTIVE_KEY: -90e6,
             "min_dscr_period": 1.3,
+            "min_dscr": 1.22,
+            "max_debt_usd": 58e6,
             "balloon_pct": 0.39,
             "llcr": 1.5,
         }
+        self.shown_balloon = 0.39
+        self.evaluated: List[Dict[str, Any]] = []
+        self.mix_raises = False
 
     def debt_mix(self, path: str, **kw: Any) -> Any:
         self.calls["mix"] = kw
+        if self.mix_raises:
+            raise RuntimeError("engine refused the mix")
         curve = [
             _point((0.0, 0.4), -74e6, self.mix_feasible),
             _point((0.6, 0.0), -95e6, self.mix_feasible),
@@ -131,13 +138,25 @@ class _Fakes:
         return -90e6 - (0.40 - min(ceiling, 0.40)) * 1e8
 
     def evaluate(self, path: str, overrides: Mapping[str, Any]) -> Mapping[str, Any]:
+        self.evaluated.append(dict(overrides))
         if not overrides:
             return dict(self.base)
+        if "Financing_Terms.debt_ratio" not in overrides:
+            # A mix or contingency candidate read back for its shown KPIs: the headline
+            # DSCR and sized debt follow the first override so each row is distinct.
+            first = float(next(iter(overrides.values())))
+            return {
+                **self.base,
+                "min_dscr": 1.2 + first / 10,
+                "max_debt_usd": 50e6 + first * 1e6,
+                "balloon_pct": self.shown_balloon,
+            }
         ceiling = float(overrides["Financing_Terms.debt_ratio"])
         return {
             OBJECTIVE_KEY: self._equity_value(ceiling),
             "min_dscr_period": 1.3,
-            "balloon_pct": 0.39,
+            "min_dscr": 1.22,
+            "balloon_pct": 0.0 if ceiling < 0.35 else 0.39,
             "llcr": 1.5,
             "max_debt_usd": self._gearing(ceiling) * CAPEX,
         }
@@ -253,10 +272,13 @@ def test_every_search_holds_the_scenario_covenants(fakes: _Fakes) -> None:
     assert fakes.calls["contingency"]["base_capex_usd"] == CAPEX - LINE
     assert fakes.calls["gearing"]["constraint_min"] == 1.3
     assert block.covenants == [
-        "min_dscr_period >= 1.3",
-        "llcr >= 1.2",
-        "balloon_pct <= 0.5",
+        "min_dscr_period >= 1.3 (constraints.min_dscr_covenant)",
+        "llcr >= 1.2 (constraints.min_llcr_covenant)",
+        "balloon_pct <= 0.5 (constraints.max_balloon_pct)",
     ]
+    # Shown beside the covenants, never screened on (#1859 domain D-1).
+    assert block.shown_keys == ["min_dscr", "max_debt_usd"]
+    assert block.committed_headline_dscr == 1.22
     assert [s.kind for s in block.searches] == [
         "Debt tranche mix",
         "Capex contingency",
@@ -272,8 +294,13 @@ def test_a_covenant_the_committed_case_fails_is_shown_not_screened(
     assert _keys(fakes.calls["mix"]["constraints"]) == ["min_dscr_period"]
     assert block.covenant_keys == ["min_dscr_period"]
     assert len(block.covenants_not_screened) == 1
-    assert block.covenants_not_screened[0].startswith("balloon_pct <= 0.1")
-    assert "0.39" in block.covenants_not_screened[0]
+    line = block.covenants_not_screened[0]
+    assert line.startswith("balloon_pct <= 0.1 (constraints.max_balloon_pct)")
+    assert "0.39" in line
+    # #1859 domain D-3: the old premise ("would name no candidate") is gone.
+    assert "name no candidate" not in line
+    assert "a candidate that also clears it is marked" in line
+    assert block.shown_keys == ["min_dscr", "max_debt_usd", "balloon_pct"]
 
 
 def test_the_mix_search_names_its_best_feasible_candidate(fakes: _Fakes) -> None:
@@ -295,13 +322,122 @@ def test_an_infeasible_mix_shows_the_infeasibility_register(fakes: _Fakes) -> No
     ]
 
 
-def test_the_contingency_search_reports_covenant_headroom(fakes: _Fakes) -> None:
+def test_the_contingency_search_names_nothing_and_says_the_debt_is_resized(
+    fakes: _Fakes,
+) -> None:
     search = _build(fakes, _scenario()).searches[1]
-    assert search.best_label == "10.0% (covenant headroom)"
-    assert search.best_objective is None
-    assert [c.best for c in search.candidates] == [False, False, True, False, False]
+    # #1859 domain D-1 b: no "covenant headroom" candidate is named.
+    assert search.best_label is None and search.best_objective is None
+    assert not any(c.best for c in search.candidates)
     assert search.note is not None and "above that a covenant fails" in search.note
+    assert "equity absorbs the overrun" in search.note
+    assert "headroom" not in search.note
     assert f"{LINE / (CAPEX - LINE):.1%}" in search.note
+    # The shown KPIs are read back at each candidate's own capex.
+    base = CAPEX - LINE
+    assert {"capex.usd_total": base * 1.2} in fakes.evaluated
+    assert search.candidates[-1].constraints["max_debt_usd"] == pytest.approx(
+        50e6 + base * 1.2 * 1e6
+    )
+
+
+def test_a_scenario_that_derives_capex_from_its_breakdown_gets_no_contingency_search(
+    fakes: _Fakes,
+) -> None:
+    scenario = _scenario()
+    scenario["capex"]["derive_from_breakdown"] = True
+    block = _build(fakes, scenario)
+    assert "contingency" not in fakes.calls
+    assert block.searches_not_run == [
+        "Capex contingency: not run: the scenario derives capex from its breakdown "
+        "(capex.derive_from_breakdown is true), and the contingency search moves "
+        "capex.usd_total, which the engine then refuses as a breakdown mismatch"
+    ]
+
+
+def test_a_search_that_raises_is_listed_and_the_others_still_run(
+    fakes: _Fakes,
+) -> None:
+    fakes.mix_raises = True
+    block = _build(fakes, _scenario())
+    assert [s.kind for s in block.searches] == ["Capex contingency", "Gearing ceiling"]
+    assert block.searches_not_run == [
+        "Debt tranche mix: not run: the search raised RuntimeError: engine refused the "
+        "mix"
+    ]
+
+
+def test_the_refinancing_cap_is_screened_on_the_balloon(fakes: _Fakes) -> None:
+    scenario = _scenario(
+        max_balloon_pct=0.1,
+        refinancing={"enabled": True, "max_refinance_pct": 0.5},
+    )
+    block = _build(fakes, scenario)
+    assert _keys(fakes.calls["mix"]["constraints"]) == [
+        "min_dscr_period",
+        "balloon_pct",
+    ]
+    assert fakes.calls["mix"]["constraints"][1].maximum == 0.5
+    assert block.covenants[1] == (
+        "balloon_pct <= 0.5 (constraints.refinancing.max_refinance_pct, the "
+        "refinancing cap)"
+    )
+    assert block.covenants_not_screened[0].startswith(
+        "balloon_pct <= 0.1 (constraints.max_balloon_pct)"
+    )
+    # The balloon is screened, so it is not repeated among the shown columns.
+    assert block.shown_keys == ["min_dscr", "max_debt_usd"]
+
+
+def test_a_disabled_refinancing_block_adds_no_cap(fakes: _Fakes) -> None:
+    scenario = _scenario(refinancing={"enabled": False, "max_refinance_pct": 0.5})
+    _build(fakes, scenario)
+    assert _keys(fakes.calls["mix"]["constraints"]) == [
+        "min_dscr_period",
+        "balloon_pct",
+    ]
+    assert fakes.calls["mix"]["constraints"][1].maximum == 0.5  # max_balloon_pct only
+
+
+def test_a_candidate_that_also_clears_a_not_screened_covenant_is_marked(
+    fakes: _Fakes,
+) -> None:
+    block = _build(fakes, _scenario(max_balloon_pct=0.1))
+    gearing = block.searches[2]
+    # The 30% ceiling reads back no balloon, so it also clears the 0.1 cap.
+    assert [c.also_clears for c in gearing.candidates] == [
+        ["balloon_pct <= 0.1"],
+        [],
+        [],
+        [],
+    ]
+
+
+def test_a_dscr_held_by_construction_is_said_so(fakes: _Fakes) -> None:
+    scenario = _scenario()
+    scenario["Financing_Terms"]["debt_sizing"] = "dual_dscr"
+    block = _build(fakes, scenario)
+    assert block.dscr_held_note is not None
+    assert block.dscr_held_note.startswith(
+        "The minimum period DSCR is 1.30 on every candidate"
+    )
+    assert "(Financing_Terms.debt_sizing: dual_dscr)" in block.dscr_held_note
+    assert "cannot fail here" in block.dscr_held_note
+
+
+def test_a_dscr_that_varies_gets_no_held_note(
+    fakes: _Fakes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _mix(path: str, **kw: Any) -> Any:
+        curve = [
+            _point((0.0, 0.4), -74e6, True, min_dscr_period=1.35),
+            _point((0.6, 0.0), -95e6, True, min_dscr_period=1.3),
+        ]
+        return SimpleNamespace(best=curve[0], curve=curve, feasible=True)
+
+    monkeypatch.setattr(cso, "optimize_debt_mix", _mix)
+    block = _build(fakes, _scenario())
+    assert block.dscr_held_note is None
 
 
 def test_contingency_headroom_at_the_top_of_the_range_says_so(fakes: _Fakes) -> None:
@@ -344,17 +480,27 @@ def test_a_ceiling_that_binds_nowhere_names_no_optimum(fakes: _Fakes) -> None:
     assert search.note is not None and "does not bind anywhere" in search.note
 
 
+def test_a_ceiling_that_binds_throughout_says_so(fakes: _Fakes) -> None:
+    """#1859 domain D-5: no DSCR-sculpt claim when gearing still rises at the top."""
+    fakes.ceiling_binds_to = 1.0
+    search = _build(fakes, _scenario()).searches[2]
+    assert search.note is not None
+    assert search.note.startswith("The gearing ceiling binds throughout")
+    assert "DSCR sculpt" not in search.note
+
+
 def test_the_gearing_search_holds_every_covenant_not_only_dscr(
     fakes: _Fakes,
 ) -> None:
     fakes.base["balloon_pct"] = 0.2
     block = _build(fakes, _scenario(max_balloon_pct=0.3))
     search = block.searches[2]
-    # Every ceiling point reads back a 0.39 balloon: over the 0.3 cap the committed case
-    # clears, so none is feasible though optimize_parameter (DSCR only) passed them all.
-    assert search.n_feasible == 0 and search.best_label is None
-    assert all(c.binding == ["balloon_pct"] for c in search.candidates)
-    assert search.infeasibility
+    # Every ceiling from 40% up reads back a 0.39 balloon: over the 0.3 cap the committed
+    # case clears, so they fail though optimize_parameter (DSCR only) passed them all. The
+    # 30% ceiling reads back no balloon and is the only feasible point.
+    assert search.n_feasible == 1
+    assert search.best_label == "ceiling 30%, realised 29.1%"
+    assert [c.binding for c in search.candidates] == [[]] + [["balloon_pct"]] * 3
 
 
 # ── rendering ─────────────────────────────────────────────────────────────────
@@ -392,6 +538,9 @@ def test_the_section_renders_with_its_f5_caption(
         "</section>", 1
     )[0]
     assert "Screening of alternatives, not the committed structure." in section
+    assert "headline minimum DSCR 1.22x" in section
+    assert '<th style="text-align:right;">min_dscr (shown)</th>' in section
+    assert "also within balloon_pct &lt;= 0.1" in section
     assert section.count("<h3>") == 3
     assert "Declared covenants not screened on" in section
     assert '<th style="text-align:right;">min_dscr_period</th>' in section

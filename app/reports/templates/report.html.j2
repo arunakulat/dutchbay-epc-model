@@ -427,8 +427,10 @@
     <p class="muted"><strong>Screening of alternatives, not the committed structure.</strong>
       Each candidate re-runs the model with one financing choice changed and is ranked on
       equity NPV; the committed case and every figure elsewhere in this report are unchanged.
-      Covenants held: {{ cs.covenants | join(", ") }}. Committed case: equity NPV
-      {{ fmt_usd(cs.committed_objective) }}, minimum period DSCR {{ fmt_x(cs.committed_dscr) }}.</p>
+      Covenants held: {{ cs.covenants | join("; ") }}. Committed case: equity NPV
+      {{ fmt_usd(cs.committed_objective) }}, minimum period DSCR {{ fmt_x(cs.committed_dscr) }},
+      headline minimum DSCR {{ fmt_x(cs.committed_headline_dscr) }}.</p>
+    {% if cs.dscr_held_note %}<p class="muted capital-structure-dscr-held">{{ cs.dscr_held_note }}</p>{% endif %}
     {% if cs.covenants_not_screened %}
     <p class="muted">Declared covenants not screened on:</p>
     <ul class="notes capital-structure-not-screened">
@@ -454,6 +456,7 @@
           <th>Candidate</th>
           <th style="text-align:right;">Equity NPV</th>
           {% for key in cs.covenant_keys %}<th style="text-align:right;">{{ key }}</th>{% endfor %}
+          {% for key in cs.shown_keys %}<th style="text-align:right;">{{ key }} (shown)</th>{% endfor %}
           <th>Covenants</th>
         </tr>
       </thead>
@@ -463,7 +466,8 @@
           <td>{% if c.best %}<strong>{{ c.label }}</strong>{% else %}{{ c.label }}{% endif %}</td>
           <td class="num">{{ fmt_usd(c.objective) }}</td>
           {% for key in cs.covenant_keys %}<td class="num">{% if c.constraints.get(key) is not none %}{{ "%.3f" | format(c.constraints.get(key)) }}{% else %}&ndash;{% endif %}</td>{% endfor %}
-          <td>{% if c.feasible %}clear{% else %}fail: {{ c.binding | join(", ") }}{% endif %}</td>
+          {% for key in cs.shown_keys %}<td class="num">{% if c.constraints.get(key) is none %}&ndash;{% elif key.endswith("_usd") %}{{ fmt_usd(c.constraints.get(key)) }}{% else %}{{ "%.3f" | format(c.constraints.get(key)) }}{% endif %}</td>{% endfor %}
+          <td>{% if c.feasible %}clear{% else %}fail: {{ c.binding | join(", ") }}{% endif %}{% if c.also_clears %}; also within {{ c.also_clears | join(", ") }}{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

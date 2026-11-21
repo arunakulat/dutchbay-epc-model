@@ -914,9 +914,11 @@ class CapitalStructureCandidate(BaseModel):
     constraints: Dict[str, float] = Field(default_factory=dict)
     feasible: bool
     binding: List[str] = Field(default_factory=list)
-    #: The candidate the search names: the best feasible one, or for the contingency search
-    #: the covenant headroom.
+    #: The candidate the search names: the best feasible one.
     best: bool = False
+    #: Declared covenants the committed case fails (not screened on) that this candidate
+    #: nevertheless clears.
+    also_clears: List[str] = Field(default_factory=list)
 
 
 class CapitalStructureSearch(BaseModel):
@@ -949,11 +951,17 @@ class CapitalStructureBlock(BaseModel):
     objective_key: str
     committed_objective: Optional[float] = None
     committed_dscr: Optional[float] = None
+    #: The committed case's headline minimum DSCR (min_dscr, #790).
+    committed_headline_dscr: Optional[float] = None
     covenants: List[str]
     #: The KPI keys of the held covenants, in column order for the candidate tables.
     covenant_keys: List[str] = Field(default_factory=list)
+    #: KPIs shown beside the held covenants for every candidate, never screened on.
+    shown_keys: List[str] = Field(default_factory=list)
     #: Declared covenants the committed case itself fails, shown and not screened on.
     covenants_not_screened: List[str] = Field(default_factory=list)
+    #: Set when the screened DSCR is held by construction on every candidate.
+    dscr_held_note: Optional[str] = None
     searches: List[CapitalStructureSearch]
     searches_not_run: List[str] = Field(default_factory=list)
 

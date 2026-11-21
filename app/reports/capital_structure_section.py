@@ -23,6 +23,10 @@ What the section is, and is not:
   section listed under "Sections not run" with the missing key named.
 * Ranked on equity NPV (#1456): equity IRR can rank options backwards when equity cash flows
   change sign more than once.
+* Honest about what a screen can show. A declared covenant the committed case itself fails
+  is not screened on; it is shown per candidate, and a candidate that also clears it is
+  marked. When debt is re-sized to the DSCR target at every point, the section says the DSCR
+  screen cannot fail and shows the headline minimum DSCR beside it (#1859 domain D-1 to D-3).
 
 GWTF:
     - FRAMEWORK-03: one seam; the report model holds the typed block, this module fills it.
@@ -65,6 +69,18 @@ _DSCR_KEY = "min_dscr_period"
 
 #: Config paths the searches perturb.
 _GEARING_PATH = "Financing_Terms.debt_ratio"
+
+#: KPIs every candidate table shows beside the screened covenants: the headline minimum DSCR
+#: (the report's KPI, the per-year covenant table, #790) and the sized debt.
+_SHOWN_KEYS: Tuple[str, ...] = ("min_dscr", "max_debt_usd")
+
+
+@dataclass(frozen=True)
+class _Covenant:
+    """A covenant bound and the scenario key it comes from."""
+
+    constraint: Any
+    source: str
 
 
 @dataclass(frozen=True)
@@ -126,8 +142,13 @@ def _number(value: Any) -> Optional[float]:
     return out if out is not None and math.isfinite(out) else None
 
 
-def _covenants(scenario: Mapping[str, Any]) -> Union[List[Any], str]:
-    """The lender covenants from ``constraints``, as optimizer constraints, or a reason."""
+def _covenants(scenario: Mapping[str, Any]) -> Union[List[_Covenant], str]:
+    """The lender covenants from ``constraints``, with their sources, or a reason.
+
+    The refinancing cap (``constraints.refinancing.max_refinance_pct``, #1396) bounds the
+    share of principal refinanced at maturity, that is the balloon, so it is screened on
+    ``balloon_pct`` when the scenario enables refinancing.
+    """
     from analytics.contracts_v14 import CovenantConstraint
 
     block = scenario.get("constraints")
@@ -138,67 +159,157 @@ def _covenants(scenario: Mapping[str, Any]) -> Union[List[Any], str]:
         return (
             "not run: the scenario declares no positive constraints.min_dscr_covenant"
         )
-    out = [CovenantConstraint(key=_DSCR_KEY, minimum=dscr, maximum=None)]
+    out = [
+        _Covenant(
+            CovenantConstraint(key=_DSCR_KEY, minimum=dscr, maximum=None),
+            "constraints.min_dscr_covenant",
+        )
+    ]
     llcr = _number(block.get("min_llcr_covenant"))
     if llcr is not None:
-        out.append(CovenantConstraint(key="llcr", minimum=llcr, maximum=None))
+        out.append(
+            _Covenant(
+                CovenantConstraint(key="llcr", minimum=llcr, maximum=None),
+                "constraints.min_llcr_covenant",
+            )
+        )
     balloon = _number(block.get("max_balloon_pct"))
     if balloon is not None:
-        out.append(CovenantConstraint(key="balloon_pct", minimum=None, maximum=balloon))
+        out.append(
+            _Covenant(
+                CovenantConstraint(key="balloon_pct", minimum=None, maximum=balloon),
+                "constraints.max_balloon_pct",
+            )
+        )
+    refi = block.get("refinancing")
+    cap = (
+        _number(refi.get("max_refinance_pct"))
+        if isinstance(refi, Mapping) and refi.get("enabled")
+        else None
+    )
+    if cap is not None:
+        out.append(
+            _Covenant(
+                CovenantConstraint(key="balloon_pct", minimum=None, maximum=cap),
+                "constraints.refinancing.max_refinance_pct, the refinancing cap",
+            )
+        )
     return out
 
 
 def _split_on_committed(
-    base: Mapping[str, Any], constraints: Sequence[Any]
-) -> Tuple[List[Any], List[str]]:
+    base: Mapping[str, Any], covenants: Sequence[_Covenant]
+) -> Tuple[List[_Covenant], List[_Covenant]]:
     """Split the covenants into those the committed case clears and those it already fails.
 
-    A screen against a bound the committed case itself fails names no candidate, so such a
-    covenant is shown with the committed value and not screened on (the lender case, for
-    one, carries a balloon above its declared cap and refinances it, #1396). A covenant whose
-    KPI the evaluation does not publish is kept: the optimizer then fails loud on it.
+    The searches rank within the covenants the committed case clears. A covenant it already
+    fails (the lender case carries a balloon above its declared cap and refinances it, #1396)
+    is not screened on: it is shown per candidate, and a candidate that also clears it is
+    marked, so a reader can see which alternatives would clear it. A covenant whose KPI the
+    evaluation does not publish is kept: the optimizer then fails loud on it.
     """
     from analytics.capital_structure_optimizer_v14 import _apply_constraints
 
-    held: List[Any] = []
-    not_screened: List[str] = []
-    for c in constraints:
+    held: List[_Covenant] = []
+    not_screened: List[_Covenant] = []
+    for cov in covenants:
+        c = cov.constraint
         value = _number(base.get(c.key))
         if value is None:
-            held.append(c)
+            held.append(cov)
             continue
         _, ok, _ = _apply_constraints({c.key: value}, [c])
-        if ok:
-            held.append(c)
-        else:
-            text = _constraint_text([c])[0]
-            not_screened.append(
-                f"{text}: the committed case itself reaches {value:.4g}, so the searches "
-                "do not screen on it"
-            )
+        (held if ok else not_screened).append(cov)
     return held, not_screened
 
 
-def _constraint_text(constraints: Sequence[Any]) -> List[str]:
-    lines = []
-    for c in constraints:
-        if c.minimum is not None:
-            lines.append(f"{c.key} >= {c.minimum:g}")
-        if c.maximum is not None:
-            lines.append(f"{c.key} <= {c.maximum:g}")
-    return lines
+def _bound_text(c: Any) -> str:
+    parts = []
+    if c.minimum is not None:
+        parts.append(f"{c.key} >= {c.minimum:g}")
+    if c.maximum is not None:
+        parts.append(f"{c.key} <= {c.maximum:g}")
+    return " and ".join(parts)
 
 
-def _candidate(point: Any, label: str, *, best: bool) -> CapitalStructureCandidate:
+def _covenant_text(cov: _Covenant) -> str:
+    return f"{_bound_text(cov.constraint)} ({cov.source})"
+
+
+def _not_screened_text(cov: _Covenant, base: Mapping[str, Any]) -> str:
+    value = _number(base.get(cov.constraint.key))
+    reached = "" if value is None else f" reaches {value:.4g}"
+    return (
+        f"{_covenant_text(cov)}: the committed case itself{reached}, so the searches rank "
+        "within the covenants it clears and show this one per candidate; a candidate "
+        "that also clears it is marked"
+    )
+
+
+def _display_keys(
+    held: Sequence[_Covenant], not_screened: Sequence[_Covenant]
+) -> List[str]:
+    """KPIs shown per candidate beside the held covenants, never screened on."""
+    held_keys = {cov.constraint.key for cov in held}
+    keys = [k for k in _SHOWN_KEYS if k not in held_keys]
+    for cov in not_screened:
+        if cov.constraint.key not in held_keys and cov.constraint.key not in keys:
+            keys.append(cov.constraint.key)
+    return keys
+
+
+def _shown_values(
+    evaluate: Callable[[str, Mapping[str, Any]], Mapping[str, Any]],
+    config_path: str,
+    overrides: Mapping[str, Any],
+    keys: Sequence[str],
+) -> Dict[str, float]:
+    """Read the shown KPIs back for one candidate through the same gateway."""
+    kpis = evaluate(config_path, overrides)
+    out: Dict[str, float] = {}
+    for k in keys:
+        v = _number(kpis.get(k))
+        if v is not None:
+            out[k] = v
+    return out
+
+
+def _also_clears(
+    values: Mapping[str, Any], not_screened: Sequence[_Covenant]
+) -> List[str]:
+    """The not-screened covenants a candidate's read-back values also clear."""
+    from analytics.capital_structure_optimizer_v14 import _apply_constraints
+
+    out = []
+    for cov in not_screened:
+        value = _number(values.get(cov.constraint.key))
+        if value is None:
+            continue
+        _, ok, _ = _apply_constraints({cov.constraint.key: value}, [cov.constraint])
+        if ok:
+            out.append(_bound_text(cov.constraint))
+    return out
+
+
+def _candidate(
+    point: Any,
+    label: str,
+    *,
+    best: bool,
+    not_screened: Sequence[_Covenant] = (),
+    shown: Optional[Mapping[str, float]] = None,
+) -> CapitalStructureCandidate:
+    values = {k: v for k, v in point.constraints.items() if _number(v) is not None}
+    for k, v in (shown or {}).items():
+        values.setdefault(k, v)
     return CapitalStructureCandidate(
         label=label,
         objective=_number(point.objective),
-        constraints={
-            k: v for k, v in point.constraints.items() if _number(v) is not None
-        },
+        constraints=values,
         feasible=bool(point.feasible),
         binding=list(point.binding_constraints),
         best=best,
+        also_clears=_also_clears(values, not_screened),
     )
 
 
@@ -229,16 +340,22 @@ def _mix_label(value: Sequence[float]) -> str:
 def _mix_search(
     config_path: str,
     scenario: Mapping[str, Any],
-    constraints: Sequence[Any],
+    held: Sequence[_Covenant],
+    not_screened: Sequence[_Covenant],
     settings: CapitalStructureSettings,
+    evaluate: Callable[[str, Mapping[str, Any]], Mapping[str, Any]],
 ) -> CapitalStructureSearch:
-    from analytics.capital_structure_optimizer_v14 import optimize_debt_mix
+    from analytics.capital_structure_optimizer_v14 import (
+        _MIX_DFI_PATH,
+        _MIX_LKR_PATH,
+        optimize_debt_mix,
+    )
 
     result = optimize_debt_mix(
         config_path,
         objective_key=OBJECTIVE_KEY,
         direction="max",
-        constraints=constraints,
+        constraints=[c.constraint for c in held],
         lkr_bounds=settings.lkr_bounds,
         dfi_bounds=settings.dfi_bounds,
         n_steps=settings.mix_steps,
@@ -254,7 +371,22 @@ def _mix_search(
                 f"{max(0.0, 1 - lkr - dfi):.0%}"
             )
     best = result.best
-    rows = [_candidate(p, _mix_label(p.value), best=p is best) for p in result.curve]
+    keys = _display_keys(held, not_screened)
+    rows = [
+        _candidate(
+            p,
+            _mix_label(p.value),
+            best=p is best,
+            not_screened=not_screened,
+            shown=_shown_values(
+                evaluate,
+                config_path,
+                {_MIX_LKR_PATH: float(p.value[0]), _MIX_DFI_PATH: float(p.value[1])},
+                keys,
+            ),
+        )
+        for p in result.curve
+    ]
     return CapitalStructureSearch(
         kind="Debt tranche mix",
         searched=(
@@ -280,12 +412,22 @@ def _mix_search(
 def _contingency_search(
     config_path: str,
     scenario: Mapping[str, Any],
-    constraints: Sequence[Any],
+    held: Sequence[_Covenant],
+    not_screened: Sequence[_Covenant],
     settings: CapitalStructureSettings,
+    evaluate: Callable[[str, Mapping[str, Any]], Mapping[str, Any]],
 ) -> Union[CapitalStructureSearch, str]:
     from analytics.capital_structure_optimizer_v14 import optimize_capex_contingency
 
     capex = scenario.get("capex")
+    if isinstance(capex, Mapping) and capex.get("derive_from_breakdown"):
+        # #1859 domain D-4: the engine sums capex.breakdown for this scenario, so a
+        # capex.usd_total override outside the 0.5% reconciliation tolerance is refused.
+        return (
+            "not run: the scenario derives capex from its breakdown "
+            "(capex.derive_from_breakdown is true), and the contingency search moves "
+            "capex.usd_total, which the engine then refuses as a breakdown mismatch"
+        )
     total = _number(capex.get("usd_total")) if isinstance(capex, Mapping) else None
     breakdown = capex.get("breakdown") if isinstance(capex, Mapping) else None
     line = (
@@ -303,44 +445,56 @@ def _contingency_search(
         base_capex_usd=base,
         objective_key=OBJECTIVE_KEY,
         direction="max",
-        constraints=constraints,
+        constraints=[c.constraint for c in held],
         contingency_bounds=settings.contingency_bounds,
         n_steps=settings.contingency_steps,
     )
+    keys = _display_keys(held, not_screened)
     rows = [
         _candidate(
             p,
             f"{p.value[0]:.1%} (capex ${base * (1 + p.value[0]) / 1e6:,.1f}M)",
             best=False,
+            not_screened=not_screened,
+            # The search sets capex.usd_total = base * (1 + f); read the shown KPIs back
+            # at the same point.
+            shown=_shown_values(
+                evaluate,
+                config_path,
+                {"capex.usd_total": base * (1 + float(p.value[0]))},
+                keys,
+            ),
         )
         for p in result.curve
     ]
     feasible_fracs = [float(p.value[0]) for p in result.curve if p.feasible]
-    # Return-maximising is always the smallest contingency, so the section reports the
-    # covenant headroom instead: the largest contingency every covenant still clears.
-    headroom = max(feasible_fracs) if feasible_fracs else None
-    rows = [
-        (
-            r.model_copy(update={"best": True})
-            if headroom is not None and float(p.value[0]) == headroom
-            else r
-        )
-        for r, p in zip(rows, result.curve, strict=True)
-    ]
+    # Return-maximising is always the smallest contingency, so no candidate is named. The
+    # note says what the search shows: how the debt and the covenants respond to an
+    # overrun (#1859 domain D-1 b).
     top = settings.contingency_bounds[1]
-    note = (
-        None
-        if headroom is None
-        else (
-            f"Every covenant holds up to {headroom:.1%} contingency"
+    clears_to = max(feasible_fracs) if feasible_fracs else None
+    debts = [_number(r.constraints.get("max_debt_usd")) for r in rows]
+    finite_debts = [d for d in debts if d is not None]
+    parts: List[str] = [f"The scenario carries {line / base:.1%}."]
+    if finite_debts and rows:
+        lo_capex = base * (1 + float(result.curve[0].value[0]))
+        hi_capex = base * (1 + float(result.curve[-1].value[0]))
+        parts.append(
+            f"Across capex ${lo_capex / 1e6:,.1f}M to ${hi_capex / 1e6:,.1f}M the sized "
+            f"debt stays between ${min(finite_debts) / 1e6:,.2f}M and "
+            f"${max(finite_debts) / 1e6:,.2f}M: the debt is re-sized at each point, so "
+            "equity absorbs the overrun."
+        )
+    if clears_to is not None:
+        parts.append(
+            f"Every held covenant clears up to {clears_to:.1%} contingency"
             + (
                 ", the top of the searched range."
-                if math.isclose(headroom, top)
+                if math.isclose(clears_to, top)
                 else "; above that a covenant fails."
             )
-            + f" The scenario carries {line / base:.1%}."
         )
-    )
+    note = " ".join(parts)
     return CapitalStructureSearch(
         kind="Capex contingency",
         searched=(
@@ -349,7 +503,7 @@ def _contingency_search(
             f"{settings.contingency_steps} steps"
         ),
         current=f"{line / base:.1%} (${line / 1e6:,.2f}M)",
-        best_label=None if headroom is None else f"{headroom:.1%} (covenant headroom)",
+        best_label=None,
         best_objective=None,
         candidates=rows,
         n_evaluated=len(rows),
@@ -362,7 +516,8 @@ def _contingency_search(
 def _gearing_search(
     config_path: str,
     scenario: Mapping[str, Any],
-    constraints: Sequence[Any],
+    held: Sequence[_Covenant],
+    not_screened: Sequence[_Covenant],
     settings: CapitalStructureSettings,
     evaluate: Callable[[str, Mapping[str, Any]], Mapping[str, Any]],
 ) -> Union[CapitalStructureSearch, str]:
@@ -377,6 +532,8 @@ def _gearing_search(
         return "not run: the scenario declares no positive capex.usd_total"
     if current is None:
         return "not run: the scenario declares no Financing_Terms.debt_ratio"
+    constraints = [c.constraint for c in held]
+    keys = _display_keys(held, not_screened)
     dscr = next((c for c in constraints if c.key == _DSCR_KEY), None)
     result = optimize_parameter(
         config_path,
@@ -400,6 +557,10 @@ def _gearing_search(
         # read back from the same evaluation with the debt-mix optimizer's own test, so the
         # three searches screen against the same covenants.
         values, feasible, binding = _apply_constraints(kpis, constraints)
+        for k in keys:
+            v = _number(kpis.get(k))
+            if v is not None:
+                values.setdefault(k, v)
         feasible = feasible and bool(p.feasible)
         rows.append(
             CapitalStructureCandidate(
@@ -412,6 +573,7 @@ def _gearing_search(
                 feasible=feasible,
                 binding=list(binding) or ([] if p.feasible else [_DSCR_KEY]),
                 best=False,
+                also_clears=_also_clears(values, not_screened),
             )
         )
     finite = [g for g in realised if g is not None]
@@ -437,11 +599,18 @@ def _gearing_search(
             for p, g in zip(result.curve, realised, strict=True)
             if g is not None and math.isclose(g, top, abs_tol=1e-6)
         )
-        note = (
-            f"Realised gearing tops out at {top:.1%}: from a {first_top:.0%} ceiling up, "
-            "the debt is sized by the DSCR sculpt, not the ceiling, and every point raises "
-            "the same debt."
-        )
+        if first_top == result.curve[-1].value:
+            # #1859 domain D-5: realised gearing still rises at the top of the range.
+            note = (
+                "The gearing ceiling binds throughout the searched range: realised "
+                f"gearing rises with it, to {top:.1%} at the top."
+            )
+        else:
+            note = (
+                f"Realised gearing tops out at {top:.1%}: from a {first_top:.0%} ceiling "
+                "up, the debt is sized by the DSCR sculpt, not the ceiling, and every "
+                "point raises the same debt."
+            )
         if feasible_rows:
             # First of equal objectives in lattice order, as the optimizer breaks ties.
             i = max(feasible_rows, key=lambda j: (rows[j].objective or 0.0, -j))
@@ -509,34 +678,88 @@ def build_capital_structure_section(
     if not held:
         return (
             "not run: the committed case itself fails every declared covenant ("
-            + "; ".join(not_screened)
-            + "), so no screen against them can name a candidate"
+            + "; ".join(_not_screened_text(c, base) for c in not_screened)
+            + "), so there is no covenant set to rank within"
         )
-    searches: List[CapitalStructureSearch] = [
-        _mix_search(path, scenario, held, settings)
-    ]
+    searches: List[CapitalStructureSearch] = []
     not_run: List[str] = []
-    for kind, built in (
+    builders: Tuple[Tuple[str, Callable[[], Any]], ...] = (
+        (
+            "Debt tranche mix",
+            lambda: _mix_search(path, scenario, held, not_screened, settings, evaluate),
+        ),
         (
             "Capex contingency",
-            _contingency_search(path, scenario, held, settings),
+            lambda: _contingency_search(
+                path, scenario, held, not_screened, settings, evaluate
+            ),
         ),
         (
             "Gearing ceiling",
-            _gearing_search(path, scenario, held, settings, evaluate),
+            lambda: _gearing_search(
+                path, scenario, held, not_screened, settings, evaluate
+            ),
         ),
-    ):
+    )
+    for kind, build in builders:
+        try:
+            built = build()
+        except Exception as exc:  # noqa: BLE001 - one search must not sink the others
+            built = f"not run: the search raised {type(exc).__name__}: {exc}"
         if isinstance(built, str):
             not_run.append(f"{kind}: {built}")
         else:
             searches.append(built)
+    held_keys: List[str] = []
+    for cov in held:
+        if cov.constraint.key not in held_keys:
+            held_keys.append(cov.constraint.key)
+    shown_keys = _display_keys(held, not_screened)
     return CapitalStructureBlock(
         objective_key=OBJECTIVE_KEY,
         committed_objective=_number(base.get(OBJECTIVE_KEY)),
         committed_dscr=_number(base.get(_DSCR_KEY)),
-        covenants=_constraint_text(held),
-        covenant_keys=[c.key for c in held],
-        covenants_not_screened=not_screened,
+        committed_headline_dscr=_number(base.get("min_dscr")),
+        covenants=[_covenant_text(c) for c in held],
+        covenant_keys=held_keys,
+        shown_keys=shown_keys,
+        covenants_not_screened=[_not_screened_text(c, base) for c in not_screened],
+        dscr_held_note=_dscr_held_note(scenario, held, searches),
         searches=searches,
         searches_not_run=not_run,
+    )
+
+
+def _dscr_held_note(
+    scenario: Mapping[str, Any],
+    held: Sequence[_Covenant],
+    searches: Sequence[CapitalStructureSearch],
+) -> Optional[str]:
+    """Say so when the screened DSCR is held by construction (#1859 domain D-1 a).
+
+    Under sculpted sizing the debt is re-sized to the DSCR target at every point, so the
+    per-period floor is the same on every candidate and the DSCR screen cannot fail. The
+    note is data-driven: it is written only when every candidate reads back the same value.
+    """
+    if not any(c.constraint.key == _DSCR_KEY for c in held):
+        return None
+    values = [
+        _number(c.constraints.get(_DSCR_KEY))
+        for s in searches
+        for c in s.candidates
+    ]
+    finite = [v for v in values if v is not None]
+    if len(finite) < 2 or len(finite) != len(values):
+        return None
+    if max(finite) - min(finite) > 1e-6:
+        return None
+    terms = scenario.get("Financing_Terms")
+    sizing = terms.get("debt_sizing") if isinstance(terms, Mapping) else None
+    how = f" (Financing_Terms.debt_sizing: {sizing})" if sizing else ""
+    return (
+        f"The minimum period DSCR is {finite[0]:.2f} on every candidate: the debt is "
+        f"re-sized to the DSCR target at each point{how}, so the DSCR screen cannot fail "
+        "here and \"clear\" on it says only that the debt was re-sized. The headline "
+        "minimum DSCR (min_dscr, the report's KPI and per-year covenant table, #790) is "
+        "shown beside it for each candidate."
     )

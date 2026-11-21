@@ -32,6 +32,7 @@ GWTF:
 from __future__ import annotations
 
 import dataclasses
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -66,6 +67,8 @@ from app.reports.report_orchestration import (
     report_case_from_pipeline_result,
     tornado_not_computed_reason,
 )
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "LENDER_REPORT_FILES_DIR",
@@ -544,9 +547,15 @@ def emit_lender_report_from_pipeline(
                 )
 
     sensitivity = sensitivity_computer(scenario, profile=profile)
-    cs_built = capital_structure_builder(
-        scenario_config_path, scenario, capital_structure
-    )
+    try:
+        cs_built: Union[CapitalStructureBlock, str] = capital_structure_builder(
+            scenario_config_path, scenario, capital_structure
+        )
+    except Exception as exc:  # noqa: BLE001 - an opt-in section never sinks the report
+        # #1859 domain D-4: listed under "Sections not run", as the capital-risk builder's
+        # failures are.
+        logger.exception("Capital-structure screening could not be built")
+        cs_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
     cs_block = cs_built if isinstance(cs_built, CapitalStructureBlock) else None
     left_out = sections_not_run(
         sensitivity,
