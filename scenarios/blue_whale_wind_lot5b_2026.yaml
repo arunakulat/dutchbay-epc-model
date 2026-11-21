@@ -298,6 +298,60 @@ wacc:
   prudential_spread_bps: 100
   description: "Build-up WACC drives the project discount rate."
 
+# Monte Carlo (#1822): the capital-risk report and the P10/P50/P90 IRR for this scenario.
+# Every band below comes from this scenario's own inputs or the summaries it cites; none is
+# invented, and a test re-derives each one from its source. Drivers with no declared band
+# are not swept. NOT LENDER-GRADE: the met-mast HOLD above stands, so the yield band is a
+# screening uncertainty and no P90 drawn from this block is a lender P90. Most inputs are
+# placeholders (docs/blue_whale/INPUTS_REQUIRED.md, #1629); each band says which.
+#   Not swept: the tariff (a fixed PUCSL Annex 2 rate, no declared band); curtailment (no
+#   declared band; 2% sits inside the yield losses); the B26 2.0M grid, civils and
+#   development line and the 0.15M insurance, land and SPV line (placeholders with no band,
+#   held at their values inside the capex and opex bands).
+#   No correlation block: no pairwise dependence is declared for these inputs.
+monte_carlo:
+  sampler: lhs
+  seed: 42
+  # Lender runs never substitute toy KPIs for a failed trial (#962 item 1): a trial whose
+  # full evaluation raises stops the run. The capital-risk report forces this off as well.
+  allow_toy_fallback: false
+  # Each trial's CFADS is also tested against the debt service committed at financial close
+  # (#962 item 4), on constraints.min_dscr_covenant. Internal metadata only; F-5 HOLD applies.
+  fixed_debt_stress: true
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles: [10, 25, 50, 75, 90]
+  parameters:
+    # Yield. Normal; low/high are the 95% interval, base x (1 -/+ 1.96 x 12.80%). 12.80% is
+    # the 20-year (lifetime) 1-sigma energy uncertainty, uncertainty.sigma_life_pct in
+    # docs/blue_whale/met_mast_transfer_summary.json: one draw holds for the whole life, so
+    # the lifetime sigma applies, not the 1-year 13.16%. Screening only (HOLD above). The
+    # engine scales generation.technologies.wind.capacity_factor with it.
+    - name: project.capacity_factor
+      low: 0.365214
+      high: 0.609906
+      distribution: normal
+    # Capex. Triangular over the blend's three cases (docs/blue_whale/capex_blend_summary.json
+    # wind_usd_per_kw all_in: low 728.16, mode 936.84, high 1,341.16 USD/kW) x 9,500 kW, plus
+    # the B26 2.0M line held at its placeholder value; the peak is the base usd_total.
+    - name: capex.usd_total
+      low: 8917520.92
+      high: 14741024.63
+      distribution: triangular
+    # Opex. PLACEHOLDER (B10, B28). Uniform over the wind O&M benchmark band the wind_om
+    # line cites, 3% to 4% of the 8,899,980 turbine capex, plus the 0.15M insurance, land
+    # and SPV line held at its placeholder value.
+    - name: opex.usd_per_year
+      low: 416999.4
+      high: 505999.2
+      distribution: uniform
+    # FX. Uniform over fx.start_lkr_per_usd x (1 -/+ fx.uncertainty_pct), the scenario's own
+    # declared 5% FX move. annual_depr stays 0 (fully LKR funded, owner 2026-10-28).
+    - name: fx.start_lkr_per_usd
+      low: 317.1005
+      high: 350.4795
+      distribution: uniform
+
 metadata:
   version: '0.7'
   last_updated: '2026-11-21'

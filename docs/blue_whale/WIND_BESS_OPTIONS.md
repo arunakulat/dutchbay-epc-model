@@ -11,6 +11,9 @@ stand.
 - CLI: `scripts/run_blue_whale_wind_bess_options_v14.py` (Hydra, one JSON object on stdout).
 - Committed output: `docs/blue_whale/wind_bess_options_summary.json`. It pins the config and
   scenario SHA-256; model 15.29.0; scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.7.
+  Regenerated for `#1822`, which adds the scenario's `monte_carlo` block, and again for
+  `#1823`, which names the held headline battery: each time only `scenario_sha256` and
+  `model_version` changed; every figure is the same.
 - Every KPI comes from `analytics.evaluation_v14.evaluate_with_overrides` (ARCH-04).
 
 > **Addendum (`#1578` U2, 17 November 2026):** The options now run for any scenario that

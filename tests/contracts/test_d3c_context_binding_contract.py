@@ -78,8 +78,9 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
-# #1823's held battery in the Blue Whale headline KPIs (15.29.0): only the engine identity
-# moved (main's engine with only the VERSION bump gives the same digest). Before that by
+# #1736's one cash basis for the post-maturity sweep (15.29.0): only the engine identity
+# moved (this branch at 15.28.0 gives the previous digest; the lender case is a refinance
+# and does not reach the sweep). Before that by
 # #1578's per-technology capex price basis (15.28.0): only the engine identity moved (main's
 # engine with only the VERSION bump gives the same digest). Before that by
 # #1429's debt-fallback step, whose D3B fixture now declares debt.debt_ratio 0.70 (the
