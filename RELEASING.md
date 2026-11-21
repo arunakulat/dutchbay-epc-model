@@ -112,5 +112,9 @@ git push origin "v${VERSION}"                        # push the TAG, not main
 
 - `VERSION` is the single source of truth for the release number; keep
   `pyproject.toml [project].version` in sync with it.
+- Between releases, `VERSION` already moves: under `DOC-02`, a change that can affect IRR,
+  DSCR, NPV or covenant logic bumps `VERSION` in the same PR, because pinned summaries record
+  `model_version`. It never edits `CHANGELOG.md`: release cuts compile the fragments into it
+  (step 0 sets the release number, which may equal the `VERSION` already on `main`).
 - Runtime/CI installs use the pinned `requirements.txt` lock (the single lock file).
 - Dev installs use `-e ".[dev]"` (the toolchain extra) so local and CI behave the same.
