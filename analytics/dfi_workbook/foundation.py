@@ -7,9 +7,15 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Union
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from analytics.dfi_workbook.registry import CellRegistry, _reject_control_chars
 from analytics.reproducible_workbook import (
@@ -83,6 +89,24 @@ _LEDGER_HEADERS: tuple[str, ...] = (
 
 # Conservative cell-text capacity, measured in UTF-16 code units.
 _MAX_CELL_TEXT_UNITS = 32767
+# Conservative numeric input domain from Microsoft's Excel specifications:
+# https://support.microsoft.com/en-us/excel/excel-specifications-and-limits
+# Reject rather than round source values that exceed 15 significant digits.
+_MAX_EXACT_INPUT_INTEGER = 999_999_999_999_999
+_MIN_INPUT_FLOAT_MAGNITUDE = 2.2251e-308
+_MAX_INPUT_FLOAT_MAGNITUDE = 9.99999999999999e307
+_NUMERIC_SOURCE_RECOVERY = (
+    "Preserve the original source externally and supply a supported textual reference "
+    "as the workbook input value, for example 'Archive record NUM-04'."
+)
+
+
+def _validate_xml_characters(value: str, field_name: str) -> None:
+    """Refuse Unicode characters that cannot appear in an XML 1.0 document."""
+    if any(
+        0xD800 <= ord(char) <= 0xDFFF or ord(char) in (0xFFFE, 0xFFFF) for char in value
+    ):
+        raise ValueError(f"{field_name} must contain valid Unicode XML 1.0 text.")
 
 
 def _validate_literal_text(
@@ -95,6 +119,7 @@ def _validate_literal_text(
     if not isinstance(value, str):
         raise ValueError(f"{field_name} must be a string, got {type(value).__name__}.")
     _reject_control_chars(value, field_name)
+    _validate_xml_characters(value, field_name)
     try:
         units = len(value.encode("utf-16-le")) // 2
     except UnicodeEncodeError as exc:
@@ -155,14 +180,22 @@ def _require_openpyxl() -> Any:
         import openpyxl
     except ImportError as exc:  # pragma: no cover - optional-guard safety
         raise ImportError(
-            "openpyxl is required to build DFI workbooks; install runtime "
-            "dependencies (e.g. `pip install openpyxl>=3.1`)."
+            "openpyxl is required to validate numeric input formats and build DFI "
+            "workbooks. Install runtime dependencies (e.g. `pip install openpyxl>=3.1`)."
         ) from exc
     return openpyxl
 
 
 class WorkbookInputItem(BaseModel):
-    """Typed scalar input; empty source strings are refused rather than emitted blank."""
+    """Scalar source that can be represented without implicit rounding.
+
+    Integers are limited to +/-999999999999999. Nonzero floats must be within
+    Excel's documented input range and round-trip through 15 significant decimal
+    digits to the same Python float. Numeric values require a non-temporal number
+    format as classified by openpyxl. Preserve unsupported sources externally and
+    supply a supported textual reference as the input value. Text must satisfy
+    the literal-text contract, including its formula-prefix restriction.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -196,6 +229,7 @@ class WorkbookInputItem(BaseModel):
         if not isinstance(value, str) or not value.strip():
             raise ValueError("number_format must be a non-empty string.")
         _reject_control_chars(value, "number_format")
+        _validate_xml_characters(value, "number_format")
         if value.strip().startswith("="):
             raise ValueError(f"number_format {value!r} must not start with '='.")
         return value
@@ -218,15 +252,48 @@ class WorkbookInputItem(BaseModel):
                 raise ValueError(
                     f"WorkbookInputItem.value must be finite, got {value!r}."
                 )
+            if value != 0.0 and not (
+                _MIN_INPUT_FLOAT_MAGNITUDE <= abs(value) <= _MAX_INPUT_FLOAT_MAGNITUDE
+            ):
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds the supported Excel numeric "
+                    "input range (nonzero magnitude 2.2251e-308 through "
+                    f"9.99999999999999e307). {_NUMERIC_SOURCE_RECOVERY}"
+                )
+            if float(format(value, ".15g")) != value:
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds supported Excel numeric "
+                    f"precision (15 significant digits). {_NUMERIC_SOURCE_RECOVERY}"
+                )
             return value
         if isinstance(value, str):
             return _validate_literal_text(value, "value", allow_empty=False)
         if isinstance(value, (bool, int)):
+            if not isinstance(value, bool) and abs(value) > _MAX_EXACT_INPUT_INTEGER:
+                raise ValueError(
+                    "WorkbookInputItem.value exceeds the supported Excel numeric "
+                    f"integer range (+/-999999999999999). {_NUMERIC_SOURCE_RECOVERY}"
+                )
             return value
         raise ValueError(  # pragma: no cover - unreachable after type check
             "WorkbookInputItem.value must be strict Python bool, int, float, "
             f"or str; got {type(value).__name__}."
         )
+
+    @model_validator(mode="after")
+    def _validate_scalar_format(self) -> Self:
+        if isinstance(self.value, (str, bool)) or self.number_format == "General":
+            return self
+        formats = _require_openpyxl().styles.numbers
+        if formats.is_date_format(self.number_format) or formats.is_timedelta_format(
+            self.number_format
+        ):
+            raise ValueError(
+                f"WorkbookInputItem {self.key!r} has temporal number_format "
+                f"{self.number_format!r} for a numeric scalar. Use a non-temporal "
+                "number format such as 'General'."
+            )
+        return self
 
 
 class ModuleLedgerEntry(BaseModel):
@@ -627,12 +694,6 @@ def _populate_module_ledger_sheet(
     _apply_column_widths(ws, widths)
 
 
-def _coerce_input_item(item: object) -> WorkbookInputItem:
-    if isinstance(item, WorkbookInputItem):
-        return item
-    return WorkbookInputItem.model_validate(item)
-
-
 def _coerce_ledger_entry(entry: object) -> ModuleLedgerEntry:
     if isinstance(entry, ModuleLedgerEntry):
         return entry
@@ -669,14 +730,16 @@ def build_dfi_workbook_foundation(
 
     Raises:
         ValueError: If ``inputs`` is empty, duplicate keys occur, metadata
-            validation fails, or the output path does not use ``.xlsx``.
+            validation fails, a numeric scalar uses a temporal number format,
+            or the output path does not use ``.xlsx``.
     """
     validated_metadata = (
         metadata
         if isinstance(metadata, DfiWorkbookMetadata)
         else DfiWorkbookMetadata.model_validate(metadata)
     )
-    validated_inputs = [_coerce_input_item(item) for item in inputs]
+    # Run the cross-field validator even for unvalidated Pydantic copies.
+    validated_inputs = [WorkbookInputItem.model_validate(item) for item in inputs]
     if not validated_inputs:
         raise ValueError(
             "inputs must contain at least one WorkbookInputItem; cannot build "
