@@ -278,27 +278,34 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
     assert [c["period"] for c in refi["coverage_by_period"]] == periods
     assert len(periods) == refi["tenor_years"]
 
-    # Independent source for the cash available: the cash-sweep branch pays out all of
-    # a period's post-fee cash while the balloon is larger than it, which holds in each
-    # of these periods. Since #1504 each treatment's fee is charged on its OWN balance
-    # outstanding, so the sweep's payment plus its fee is the period's pre-fee cash,
-    # and the refinance's cash available is that less the fee on the refinanced balance.
-    # #1505: the levered tax now deducts each treatment's OWN balloon interest paid, so
-    # the two treatments' pre-fee cash differs by the tax that interest saves. The
-    # recompute therefore runs both with the balloon deduction off
-    # (`tax.balloon_interest_tax_basis: none`), where the pre-fee cash is the same
-    # for both; the deduction's own effect on the coverage is checked below.
-    def _debt(overrides: Dict[str, Any]) -> Dict[str, Any]:
+    # Independent source for the cash available: the sizing-basis CFADS the facility
+    # was sized on, which the run publishes on each row as `cfads_coverage_usd` and the
+    # refinance disclosure reads per period. Since #1504 each treatment's fee is charged
+    # on its OWN balance outstanding, so the refinance's cash available is that pre-fee
+    # cash less the fee on the refinanced balance. (Before #1736 this read the pre-fee
+    # cash off a cash-sweep run, which paid out all of it; the sweep now reads the cash
+    # the equity waterfall holds instead.) #1505: the levered tax deducts the balloon
+    # interest paid, which raises the sizing CFADS after maturity; the recompute runs
+    # with that deduction off (`tax.balloon_interest_tax_basis: none`), and the
+    # deduction's own effect on the coverage is checked below.
+    def _full(overrides: Dict[str, Any]) -> Dict[str, Any]:
         return cast(
             Dict[str, Any],
             evaluate_with_overrides(
                 str(LENDER_CONFIG), overrides=overrides, return_full_result=True
             ),
-        )["debt_result"]
+        )
 
     no_deduction = {"tax.balloon_interest_tax_basis": "none"}
-    sweep = _debt({**no_deduction, "Financing_Terms.balloon_treatment": "cash_sweep"})
-    undeducted = _debt(no_deduction)
+    sweep = _full({**no_deduction, "Financing_Terms.balloon_treatment": "cash_sweep"})[
+        "debt_result"
+    ]
+    undeducted_full = _full(no_deduction)
+    undeducted = undeducted_full["debt_result"]
+    row_of_period = {
+        int(m["debt_period"]): int(m["annual_row_index"])
+        for m in undeducted["annual_row_debt_period_map"]
+    }
     fee_rate = undeducted["senior_fee_rate"]
     assert fee_rate > 0.0
     # The refinanced balance, rebuilt from the annuity by hand: it opens at the balloon
@@ -320,7 +327,9 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
         assert lender_debt["senior_fee_usd"][p] == pytest.approx(
             fee_rate * opening, rel=1e-12
         )
-        pre_fee_cash = sweep["balloon_resolution"][p] + sweep["senior_fee_usd"][p]
+        pre_fee_cash = undeducted_full["annual_rows"][row_of_period[p]][
+            "cfads_coverage_usd"
+        ]
         assert sweep["senior_fee_usd"][p] == pytest.approx(
             fee_rate * sweep["debt_outstanding"][p], rel=1e-12
         )

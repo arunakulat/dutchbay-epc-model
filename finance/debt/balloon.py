@@ -108,6 +108,23 @@ def resolve_refinance_terms(config: Mapping[str, Any]) -> Optional[Tuple[int, fl
     return int(float(tenor_raw)), float(premium_raw)
 
 
+def _sweep_cash_at(
+    period: int,
+    cfads_ext: Sequence[float],
+    sweep_cash: Optional[Sequence[Optional[float]]],
+) -> float:
+    """The cash a cash sweep has in ``period``: the supplied basis, else ``cfads_ext``.
+
+    ``sweep_cash`` is period-indexed like ``cfads_ext``; a ``None`` entry, or a period
+    past its end, falls back to ``cfads_ext`` (#1736).
+    """
+    if sweep_cash is not None and period < len(sweep_cash):
+        supplied = sweep_cash[period]
+        if supplied is not None:
+            return float(supplied)
+    return _as_float(cfads_ext[period], 0.0) if period < len(cfads_ext) else 0.0
+
+
 def _balloon_resolution_path(
     *,
     treatment: str,
@@ -120,6 +137,7 @@ def _balloon_resolution_path(
     refi_tenor_years: int,
     refi_rate_premium: float,
     senior_fee_rate: float = 0.0,
+    sweep_cash: Optional[Sequence[Optional[float]]] = None,
 ) -> Dict[str, Any]:
     """How the balloon is carried and retired after maturity, period by period.
 
@@ -164,10 +182,12 @@ def _balloon_resolution_path(
       carried forward as the first claim on later cash (owner ruling on #1539,
       2026-11-15). ASSUMPTION: the deferred fee bears no interest; the ruling does not
       say, and the owner may change it. Before #1539 the full fee was charged even when
-      it exceeded the period's cash. The cash here is the sizing-basis ``cfads_ext``,
-      which can be lower than the cash the equity waterfall holds, so the waterfall
-      also settles the deferred balance from its own cash ahead of any distribution
-      (``finance.equity_distribution_v14_hydra``).
+      it exceeded the period's cash. The period's cash is ``sweep_cash[p]`` where the
+      caller supplies one, else the sizing-basis ``cfads_ext[p]``. The pipeline supplies
+      the cash the equity waterfall holds for the sweep (owner ruling on #1736,
+      2026-11-15: one cash basis decides both the sweep and the fee deferral), so the
+      engine and the waterfall agree on it; ``cfads_ext`` is the basis for a direct
+      caller that supplies none.
     - ``bullet``: the balloon and one period's interest are repaid in the maturity
       period, which may exceed the period's cash (a sponsor cash call).
     - ``refinance``: a level annuity over ``refi_tenor_years`` at ``avg_rate`` plus
@@ -276,7 +296,7 @@ def _balloon_resolution_path(
     # ASSUMPTION; see the docstring).
     deferred_fee = 0.0
     for p in range(maturity, n):
-        available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
+        available = _sweep_cash_at(p, cfads_ext, sweep_cash)
         fee_due = fee_rate * remaining + deferred_fee
         fee_paid = min(fee_due, max(0.0, available))
         deferred_fee = fee_due - fee_paid
