@@ -65,7 +65,9 @@ def equity_irr_caveat_from_summary(summary: Any) -> Optional[str]:
     )
 
 
-def equity_irr_caveat_from_run(run_result: Optional[Mapping[str, Any]]) -> Optional[str]:
+def equity_irr_caveat_from_run(
+    run_result: Optional[Mapping[str, Any]],
+) -> Optional[str]:
     """Return the caveat from a ``run_v14_pipeline`` result, or None when it carries no flag."""
     if not isinstance(run_result, Mapping):
         return None

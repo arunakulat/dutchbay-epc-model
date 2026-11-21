@@ -1079,9 +1079,11 @@ def as_dbpl_document(
                         ],
                     ],
                     caption="The scenario as written",
-                    notes=[base["equity_irr_caveat"]]
-                    if base.get("equity_irr_caveat")
-                    else None,
+                    notes=(
+                        [base["equity_irr_caveat"]]
+                        if base.get("equity_irr_caveat")
+                        else None
+                    ),
                     source="analytics.pipeline_v14_enhanced.run_v14_pipeline.",
                 ),
             }

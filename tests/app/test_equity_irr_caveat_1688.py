@@ -69,11 +69,18 @@ def test_no_caveat_unless_the_flag_is_exactly_false() -> None:
 @pytest.mark.parametrize(
     ("sign_changes", "reason"),
     [
-        (3, "its equity cash flows change sign 3 times, so more than one rate, or none, "),
-        (2, "its equity cash flows change sign 2 times, so more than one rate, or none, "),
+        (
+            3,
+            "its equity cash flows change sign 3 times, so more than one rate, or none, ",
+        ),
+        (
+            2,
+            "its equity cash flows change sign 2 times, so more than one rate, or none, ",
+        ),
         (0, "its equity cash flows never change sign, so no rate solves them."),
         (None, "its equity cash flows do not change sign exactly once."),
         (True, "its equity cash flows do not change sign exactly once."),
+        (False, "its equity cash flows do not change sign exactly once."),
         (-1, "its equity cash flows do not change sign exactly once."),
     ],
 )
@@ -247,11 +254,18 @@ def test_the_casper_payload_reads_a_mapping_equity_block() -> None:
 
 def _finance_table(base: Dict[str, Any]) -> Dict[str, Any]:
     doc = solar_assessment.as_dbpl_document(
-        {"scenario_name": "Any", "scenario_path": "x.yaml", "not_run": [], "base": base},
+        {
+            "scenario_name": "Any",
+            "scenario_path": "x.yaml",
+            "not_run": [],
+            "base": base,
+        },
         {},
         issue_date="2026-11-17",
     )
-    section = next(s for s in doc["sections"] if s["heading"] == "Deterministic finance")
+    section = next(
+        s for s in doc["sections"] if s["heading"] == "Deterministic finance"
+    )
     table: Dict[str, Any] = section["table"]
     return table
 
