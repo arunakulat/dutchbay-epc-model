@@ -505,6 +505,26 @@ def _extract_dscr(
     return None
 
 
+def _refinance_coverage_for_row(
+    index: int,
+    row_period_map: Sequence[Any],
+    coverage_by_period: Mapping[int, float],
+) -> Optional[float]:
+    """The refinanced tranche's coverage in the debt period this annual row maps to (#1779).
+
+    ``None`` when the row maps to no debt period or the tranche is not serviced in it.
+    """
+    if not coverage_by_period or index >= len(row_period_map):
+        return None
+    entry = row_period_map[index]
+    if not isinstance(entry, Mapping):
+        return None
+    period = _as_float(entry.get("debt_period"))
+    if period is None:
+        return None
+    return coverage_by_period.get(int(period))
+
+
 def build_equity_distribution_schedule(
     *,
     annual_rows: Sequence[Mapping[str, Any]],
@@ -561,7 +581,24 @@ def build_equity_distribution_schedule(
     # waterfall holds (see `waterfall_sweep_cash`), the cash the SPV holds for the
     # sponsor included. So the waterfall funds that sweep from the SPV-held cash before
     # it asks the sponsor for any. Other treatments keep their cash call.
-    funds_sweep_from_spv_cash = debt_result.get("balloon_treatment") == "cash_sweep"
+    is_cash_sweep = debt_result.get("balloon_treatment") == "cash_sweep"
+    funds_sweep_from_spv_cash = debt_result.get("balloon_treatment") in (
+        "cash_sweep",
+        # #1779: a refinanced tranche's service is met from cash the SPV holds for the
+        # sponsor (cash a lock-up trapped, then retentions) before any new sponsor call,
+        # so cash trapped while the tranche's coverage was below the covenant meets it.
+        "refinance",
+    )
+    # #1779: the refinanced balloon tranche's published coverage per debt period. Balloon
+    # service stays outside the scheduled DSCR (#1396), so the lock-up tests it separately:
+    # a year whose tranche coverage is below the lock-up threshold traps its distribution.
+    refinance_coverage_by_period: Dict[int, float] = {}
+    for item in (debt_result.get("refinance") or {}).get("coverage_by_period") or ():
+        if isinstance(item, Mapping):
+            period_value = _as_float(item.get("period"))
+            coverage_value = _as_float(item.get("coverage"))
+            if period_value is not None and coverage_value is not None:
+                refinance_coverage_by_period[int(period_value)] = coverage_value
 
     for index, row in enumerate(annual_rows):
         year_value = row.get("year", index + 1)
@@ -667,7 +704,8 @@ def build_equity_distribution_schedule(
         cash_for_equity = cash_after_reserve - balloon_resolution
         if cash_for_equity < 0.0 and funds_sweep_from_spv_cash:
             # #1736: the sweep counted the SPV-held cash, so it pays the sweep before
-            # any sponsor cash call: lockup-trapped cash first, then retentions.
+            # any sponsor cash call: lockup-trapped cash first, then retentions. #1779:
+            # a refinanced tranche's service is met the same way before a sponsor call.
             sweep_from_locked = min(-cash_for_equity, locked_cash_balance)
             locked_cash_balance -= sweep_from_locked
             cash_for_equity += sweep_from_locked
@@ -675,7 +713,7 @@ def build_equity_distribution_schedule(
             retained_balance -= sweep_from_retained
             cash_for_equity += sweep_from_retained
             spv_cash_applied += sweep_from_locked + sweep_from_retained
-            if -_SWEEP_CASH_TOL_USD <= cash_for_equity < 0.0:
+            if is_cash_sweep and -_SWEEP_CASH_TOL_USD <= cash_for_equity < 0.0:
                 # The pipeline settles the sweep on this cash to within the tolerance,
                 # so a shortfall below it is that rounding, not a sponsor cash call.
                 cash_for_equity = 0.0
@@ -718,11 +756,24 @@ def build_equity_distribution_schedule(
         # boundary-flip anti-pattern). Subtracting _DSCR_LOCKUP_EPS locks only when DSCR is
         # MATERIALLY below the covenant (a real breach), keeping sculpted-to-floor scenarios
         # byte-identical while still trapping genuine sub-covenant years (stress cases).
-        covenant_locked = bool(
+        scheduled_locked = bool(
             dscr is not None
             and distribution_config.min_dscr_threshold > 0.0
             and dscr < distribution_config.min_dscr_threshold - _DSCR_LOCKUP_EPS
         )
+        # #1779: the refinanced tranche is tested against the same lock-up threshold, with
+        # the same tolerance, in each year it is serviced. Cash it traps is released by the
+        # same cure as any trapped cash: the next year that is not locked.
+        refinance_coverage = _refinance_coverage_for_row(
+            index, row_period_map, refinance_coverage_by_period
+        )
+        refinance_locked = bool(
+            refinance_coverage is not None
+            and distribution_config.min_dscr_threshold > 0.0
+            and refinance_coverage
+            < distribution_config.min_dscr_threshold - _DSCR_LOCKUP_EPS
+        )
+        covenant_locked = scheduled_locked or refinance_locked
 
         # Dividend WHT applies only to positive distributions actually paid to the sponsor
         # (the two non-distributing branches below are a lockup or a cash call -> no WHT).
@@ -790,6 +841,8 @@ def build_equity_distribution_schedule(
                 "senior_fee_arrears_settled_usd": arrears_settled_now,
                 "senior_fee_arrears_usd": arrears_owed,
                 "dscr": dscr,
+                "refinance_coverage": refinance_coverage,
+                "refinance_tranche_locked": refinance_locked,
                 "covenant_locked": covenant_locked,
                 "reserve_required_usd": reserve_required,
                 "reserve_funded_usd": reserve_funded,
