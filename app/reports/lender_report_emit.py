@@ -19,7 +19,8 @@ sensitivity sections out. This module gives the batch CLI the same report:
 * the HTML is written, then printed to PDF through
   :func:`app.reports.dbpl.print_core.render_dbpl_pdf` with the house stylesheet (``DBPL-01``).
 
-The report carries the F-5 non-reliance notice on its cover, as the capital-risk report does.
+The report carries the F-5 non-reliance notice on its cover, as every report built through
+``report_orchestration`` does (#1818).
 
 GWTF:
     - FRAMEWORK-03: one orchestrator and one payload type. This module adds neither: it feeds
@@ -50,6 +51,7 @@ from app.reports.report_orchestration import (
     compute_report_sensitivity,
     global_sa_driver_count,
     report_case_from_pipeline_result,
+    tornado_not_computed_reason,
 )
 
 __all__ = [
@@ -139,17 +141,9 @@ def sections_not_run(
         The left-out sections, in report order.
     """
     out: List[SectionNotRun] = []
-    tornado = sensitivity.tornado
-    if tornado is None or not tornado.rows:
-        out.append(
-            SectionNotRun(
-                section=SECTION_TORNADO,
-                reason=(
-                    "not computed: the one-at-a-time sweep returned no usable driver rows "
-                    f"(outcome: {_outcome(sensitivity, 'tornado')})"
-                ),
-            )
-        )
+    tornado_reason = tornado_not_computed_reason(sensitivity)
+    if tornado_reason is not None:
+        out.append(SectionNotRun(section=SECTION_TORNADO, reason=tornado_reason))
     no_drivers = global_sa_driver_count(scenario_config) == 0
     for section, method, block in (
         (SECTION_MORRIS, "morris", sensitivity.morris),
@@ -478,7 +472,7 @@ def emit_lender_report_from_pipeline(
         sensitivity,
         capital_risk=capital_risk,
         sections_not_run=left_out,
-    ).model_copy(update={"f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT})
+    )
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.write_text(html, encoding="utf-8")

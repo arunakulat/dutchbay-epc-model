@@ -217,7 +217,8 @@ def test_every_section_left_out_is_listed_with_its_reason(
     block = html.split("<h3>Sections not run</h3>", 1)[1].split("</ul>", 1)[0]
     for section in listed:
         assert f"<strong>{section}</strong>" in block
-    assert "Sensitivity Tornado" not in "".join(_h2s(html))
+    # Since #1818 the tornado heading stays, with a "not computed" line and no table.
+    assert "Not computed." in html.split("<h2>Sensitivity Tornado</h2>", 1)[1]
     record = json.loads(json.dumps(out.as_dict()))
     assert [r["section"] for r in record["sections_not_run"]] == list(listed)
 
