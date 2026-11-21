@@ -38,6 +38,8 @@ def minimal_mc_config():
     return {
         "scenario_name": "test_scenario",
         "monte_carlo": {
+            # Off by default since #962: this smoke config opts in to the toy path.
+            "allow_toy_fallback": True,
             "parameters": [
                 {
                     "name": "capex",
@@ -46,7 +48,7 @@ def minimal_mc_config():
                     "distribution": "uniform",
                 },
                 {"name": "tariff", "min": 0.08, "max": 0.12, "distribution": "uniform"},
-            ]
+            ],
         },
     }
 
