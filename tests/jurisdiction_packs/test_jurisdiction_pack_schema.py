@@ -11,6 +11,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from analytics.feasibility_report_contract.vocabulary import PackStatus
 from analytics.jurisdiction_packs import (
     PACKS_ROOT,
     JurisdictionPack,
@@ -18,7 +19,6 @@ from analytics.jurisdiction_packs import (
     load_pack_file,
     load_registered_pack,
 )
-from analytics.feasibility_report_contract.vocabulary import PackStatus
 
 REPO = Path(__file__).resolve().parents[2]
 SCENARIOS = REPO / "scenarios"
