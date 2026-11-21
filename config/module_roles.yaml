@@ -1079,6 +1079,11 @@ modules:
     role_description: Opt-in emitter appending Monte Carlo capital-risk analysis blocks to lender outputs.
     excel_representation: non_model_adapter
 
+  - module_path: app.reports.capital_structure_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in capital-structure screening section from the debt-mix, contingency and gearing optimizers.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.climate_risk_disclosure
     pipeline_stage: reporting_delivery
     role_description: Bounded TCFD-aligned climate-risk disclosure contract and standalone Jinja2 partial renderer.
