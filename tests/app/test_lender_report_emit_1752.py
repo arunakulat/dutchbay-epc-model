@@ -18,11 +18,11 @@ from app.reports import lender_report_emit as lre
 from app.reports.capital_risk_emit import build_capital_risk_report_for_scenario
 from app.reports.dbpl import DbplDependencyError
 from app.reports.lender_report_emit import (
+    DOCUMENT_STATUS,
     SECTION_CAPITAL_RISK,
     SECTION_MORRIS,
     SECTION_PAWN,
     SECTION_TORNADO,
-    DOCUMENT_STATUS,
     DbplFurniture,
     dbpl_furniture_for,
     emit_lender_report_from_pipeline,
