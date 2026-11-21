@@ -98,7 +98,12 @@ def test_emit_all_lists_absent_inputs_as_not_run_with_reasons() -> None:
     plan = plan_emitters({"emit_all": True}, {})
     assert plan["emit_executive_workbook"].status == STATUS_RUN
     not_run = {f: d.reason for f, d in plan.items() if d.status == STATUS_NOT_RUN}
-    assert set(not_run) == set(EMIT_FLAGS) - {"emit_executive_workbook"}
+    # The workbook and the lender report (#1752) apply to every run with figures.
+    assert plan["emit_lender_report"].status == STATUS_RUN
+    assert set(not_run) == set(EMIT_FLAGS) - {
+        "emit_executive_workbook",
+        "emit_lender_report",
+    }
     assert "monte_carlo.parameters" in str(not_run["emit_capital_risk_report"])
     assert "interaction_grid" in str(not_run["emit_interaction_grid"])
     assert "tech_comparison.scenarios" in str(not_run["emit_tech_comparison"])
@@ -254,7 +259,14 @@ def _install_recording_emitters(
     import app.reports.capital_risk_emit as cr
     import app.reports.grid_screening_emit as gs
     import app.reports.interaction_grid_emit as ig
+    import app.reports.lender_report_emit as lr
     import app.reports.tech_comparison_emit as tc
+
+    def lender(result: Any, *args: Any, **kwargs: Any) -> Any:
+        out = make("emit_lender_report")(result, *args, **kwargs)
+        return lr.LenderReportOutput(
+            html_path=out, pdf_path=None, pdf_not_written="stub", sections_not_run=()
+        )
 
     monkeypatch.setattr(rfp, "run_v14_pipeline", _fake_engine)
     monkeypatch.setattr(
@@ -265,6 +277,7 @@ def _install_recording_emitters(
         "emit_capital_risk_report_from_pipeline",
         make("emit_capital_risk_report"),
     )
+    monkeypatch.setattr(lr, "emit_lender_report_from_pipeline", lender)
     monkeypatch.setattr(
         ig, "emit_interaction_grid_report_from_pipeline", make("emit_interaction_grid")
     )
@@ -303,7 +316,11 @@ def test_cli_default_runs_what_applies_and_records_the_plan(
     _install_recording_emitters(monkeypatch, calls)
     _run_cli(tmp_path, {"scenario_name": "t", "grid": {"study_enabled": True}})
     out = json.loads(capsys.readouterr().out)
-    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
+    assert calls == [
+        "emit_executive_workbook",
+        "emit_lender_report",
+        "emit_grid_screen",
+    ]
     assert out["emitters"]["emit_capital_risk_report"]["status"] == STATUS_NOT_RUN
     assert out["kpis"] == _STUB_RESULT["kpis"]
 
@@ -331,7 +348,11 @@ def test_cli_emit_all_runs_what_applies_and_lists_the_rest(
         emit_all=True,
     )
     out = json.loads(capsys.readouterr().out)
-    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
+    assert calls == [
+        "emit_executive_workbook",
+        "emit_lender_report",
+        "emit_grid_screen",
+    ]
     assert out["emitters"]["emit_capital_risk_report"]["status"] == "not_run"
     assert out["emitters"]["emit_interaction_grid"]["status"] == "not_run"
     assert out["emitters"]["emit_tech_comparison"]["status"] == "not_run"
@@ -391,7 +412,11 @@ def test_cli_default_records_a_failed_emitter_and_completes(
     )
     out = json.loads(capsys.readouterr().out)
     # The failure does not stop the emitters after it.
-    assert calls == ["emit_executive_workbook", "emit_grid_screen"]
+    assert calls == [
+        "emit_executive_workbook",
+        "emit_lender_report",
+        "emit_grid_screen",
+    ]
     failed = out["emitters"]["emit_executive_workbook"]
     assert failed == {
         "status": STATUS_FAILED,
@@ -408,7 +433,10 @@ def test_cli_default_records_a_failed_emitter_and_completes(
 @pytest.mark.parametrize(
     ("failing", "expected_calls"),
     [
-        ("emit_grid_screen", ["emit_executive_workbook", "emit_grid_screen"]),
+        (
+            "emit_grid_screen",
+            ["emit_executive_workbook", "emit_lender_report", "emit_grid_screen"],
+        ),
         # The workbook is the one emitter every default run that writes files reaches
         # (assurance F-2, M20): switched on explicitly, its failure still stops the run.
         ("emit_executive_workbook", ["emit_executive_workbook"]),
@@ -522,7 +550,7 @@ def test_cli_default_with_a_null_monte_carlo_bound_writes_figures_and_completes(
         write_artifacts=True,
     )
     out = json.loads(capsys.readouterr().out)
-    assert calls == ["emit_executive_workbook"]
+    assert calls == ["emit_executive_workbook", "emit_lender_report"]
     assert out["emitters"]["emit_capital_risk_report"]["status"] == STATUS_NOT_RUN
     run_dir = tmp_path / "run"
     assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
@@ -542,7 +570,7 @@ def test_cli_default_with_a_malformed_tech_comparison_list_writes_figures_and_co
         tech_comparison={"scenarios": 5},
     )
     out = json.loads(capsys.readouterr().out)
-    assert calls == ["emit_executive_workbook"]
+    assert calls == ["emit_executive_workbook", "emit_lender_report"]
     entry = out["emitters"]["emit_tech_comparison"]
     assert entry["status"] == STATUS_NOT_RUN
     assert entry["reason"].endswith("got int")
@@ -569,7 +597,7 @@ def test_cli_default_with_a_malformed_tech_comparison_block_writes_figures_and_c
         tmp_path, {"scenario_name": "t"}, write_artifacts=True, tech_comparison=block
     )
     out = json.loads(capsys.readouterr().out)
-    assert calls == ["emit_executive_workbook"]
+    assert calls == ["emit_executive_workbook", "emit_lender_report"]
     assert out["emitters"]["emit_tech_comparison"]["status"] == STATUS_NOT_RUN
     run_dir = tmp_path / "run"
     assert json.loads((run_dir / "kpis.json").read_text()) == _STUB_RESULT["kpis"]
@@ -1062,7 +1090,14 @@ _UNREADABLE_KEYS = [
     ("tech_comparison", "path"),
     ("interaction_grid_report", "path"),
     ("grid_screen_report", "path"),
+    ("lender_report", "path"),
 ]
+#: Keys the lender report (#1752) reads itself, inside its emitter: under emit_all it is
+#: recorded as failed and the run goes on.
+_READ_BY_THE_LENDER_REPORT = {
+    ("capital_risk_report", "npv_metric"),
+    ("lender_report", "path"),
+}
 _MODES = {
     "default": {},
     "emit_all_off": {"emit_all": False},
@@ -1101,8 +1136,14 @@ def test_an_unresolvable_emitter_key_never_stops_a_run(
         assert (run_dir / "kpis.json").is_file()
         assert (run_dir / "summary.json").is_file()
     if mode == "default":
-        assert calls == ["emit_executive_workbook"]
+        lender_fails = (block, key) in _READ_BY_THE_LENDER_REPORT
+        assert calls == ["emit_executive_workbook"] + (
+            [] if lender_fails else ["emit_lender_report"]
+        )
         assert out["emitters"]["emit_executive_workbook"]["status"] == STATUS_RUN
+        assert out["emitters"]["emit_lender_report"]["status"] == (
+            STATUS_FAILED if lender_fails else STATUS_RUN
+        )
     if mode == "emit_all_off":
         assert calls == []
 

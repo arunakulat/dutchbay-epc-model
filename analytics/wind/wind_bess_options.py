@@ -25,6 +25,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from analytics.core.returns import calculate_irr, calculate_npv
+from analytics.storage_headline import strip_headline_option
 
 FloatArray = NDArray[np.float64]
 HOURS_PER_YEAR = 8760.0
@@ -501,7 +502,9 @@ def scenario_with_battery(
     """
     if operation not in OPERATIONS:
         raise ValueError(f"operation {operation!r} is not one of {OPERATIONS}")
-    s: Dict[str, Any] = copy.deepcopy(dict(scenario))
+    # #1823: the battery is added to the wind-only case, so a scenario's own headline battery
+    # request is dropped first (one already carried into the figures is refused).
+    s: Dict[str, Any] = copy.deepcopy(strip_headline_option(scenario))
     for key, value in (scenario_overrides or {}).items():
         _set_dotted(s, key, value)
     wind = s["generation"]["technologies"]["wind"]

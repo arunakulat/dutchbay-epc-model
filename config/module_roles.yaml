@@ -847,6 +847,11 @@ modules:
     role_description: Strict immutable hourly battery-dispatch ledger input contracts and physical receipts.
     excel_representation: governance_metadata
 
+  - module_path: analytics.storage_headline
+    pipeline_stage: tech_hybrid_bess
+    role_description: Adds a scenario's declared held wind battery option to capex and O&M before evaluation.
+    excel_representation: formula
+
   - module_path: analytics.storage_sizing
     pipeline_stage: tech_hybrid_bess
     role_description: Validates immutable YAML battery power, energy, and round-trip ratings for finance and dispatch.
@@ -1115,6 +1120,14 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Opt-in emitter formatting two-factor parameter interaction grids into report deliverables.
     excel_representation: non_model_adapter
+
+  - module_path: app.reports.lender_report_emit
+    pipeline_stage: reporting_delivery
+    role_description: Emitter writing the combined command-line lender report as HTML and a DBPL-01 PDF.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: casper_fallback
 
   - module_path: app.reports.module_ledger
     pipeline_stage: governance
