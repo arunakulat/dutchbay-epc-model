@@ -79,6 +79,35 @@ mutation_attestation
 Narrative detail may follow. The structured fields must remain machine-readable enough for a
 focused policy test or future required check.
 
+### 4.1 The header the required check reads (#1486)
+
+Since the owner's decision on #1486 (2026-11-21), an `R2` or `R3` pull request cannot be green
+until the required check `Independent review (RECRUIT-01)` (`scripts/ci/check_pr_review_pair.py`)
+finds an accepting domain record and an accepting assurance record on it. Each lane therefore
+posts its record as one pull-request comment that states the SHA-256 of the record block and
+holds that block between two lines starting `8<`. Inside the block, at line starts:
+
+```text
+Review-Record: 1
+Role: domain            (or: assurance)
+PR: #<number>
+Commit: <40-hex head the lane reviewed>
+Reviewer-Session: <the lane's own session id>
+Disposition: ACCEPT     (or APPROVE or PASS; anything else does not count)
+```
+
+The digest is over the block's bytes with LF line endings and one trailing LF. The check counts a
+record only when its `Commit` is the pull request's current head, its `PR` is that pull request,
+the comment comes from the owner or a collaborator, and its `Reviewer-Session` names no session
+that wrote a commit on the pull request (read from the commits' `Claude-Session:` trailers). The
+two records must name two different reviewers. Every agent posts as the owner's account, so the
+session identity, not the comment author, is what separates a lane from the writer.
+
+Consequences: a head that moves for any reason, including a merge-only base refresh under §7,
+needs both roles bound again at the new head (a light re-bind for each role is enough when §7's
+proofs hold); and a record in an older format does not count until it is re-posted with this
+header.
+
 ## 5. Findings ledger
 
 Every finding receives one explicit state:

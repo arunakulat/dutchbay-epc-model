@@ -1,0 +1,55 @@
+# Independent review pair (#1486, owner decision 2026-11-21).
+#
+# MERGE-01 says a mandatory review belongs in the required-check set, never as an unwritten gate
+# a green pull request is held against. This job is that check: an R2 or R3 pull request is not
+# green until a domain record and an assurance record, each bound to its exact current head and
+# neither from the head's writer, are on it. scripts/ci/check_pr_review_pair.py holds the rule;
+# tests/lint/test_pr_review_pair_policy.py pins it and this workflow.
+#
+# Drafts: REVIEW-01 binds the lanes to the draft head before the pull request is marked ready,
+# so on a draft the job reports under a different name and passes without reading anything. The
+# required name, 'Independent review (RECRUIT-01)', therefore reports only on a ready pull
+# request, from the `ready_for_review` run onward. A record posted after a run is read by
+# re-running this job; editing the body or pushing also re-runs it.
+#
+# Making the check required is a repository-ruleset change the owner makes (recorded on #1713).
+name: PR Review Pair
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: pr-review-pair-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review-pair:
+    name: "${{ github.event.pull_request.draft && 'Independent review (draft: deferred)' || 'Independent review (RECRUIT-01)' }}"
+    runs-on: ubuntu-latest
+    steps:
+      # The check runs from the BASE commit, never the pull request's own bytes, so a pull
+      # request cannot weaken the rule that judges it. A change to the check itself is judged
+      # by the version already on main (the pull request that adds this file is the one
+      # exception: main has no copy yet, so its run fails until it lands).
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Check the independent review pair
+        if: ${{ !github.event.pull_request.draft }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python scripts/ci/check_pr_review_pair.py
