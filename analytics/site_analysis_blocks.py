@@ -5,7 +5,8 @@ options, PV + BESS sizing, FX and tenor screening, equipment cost parity) run fo
 scenario, with the location, sizes and technology taken from the scenario YAML. This module
 is the contract for the four top-level blocks those analyses read:
 
-- ``storage_options``: wind battery options;
+- ``storage_options``: wind battery options (its optional ``headline_option`` names one held
+  option to carry into the scenario's own KPIs, #1823, ``analytics.storage_headline``);
 - ``solar_storage_sizing``: PV + BESS sizing and dispatch;
 - ``financing_screening``: FX and tenor screening;
 - ``equipment_cost_parity``: equipment cost parity.
@@ -372,6 +373,36 @@ def _export_caps(value: Any, path: str, errors: List[str]) -> None:
             _number(gt=0.0)(cap, f"{path}.{name}", errors)
 
 
+def _any_mapping(value: Any, path: str, errors: List[str]) -> None:
+    if not isinstance(value, Mapping):
+        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
+
+
+def _headline_option_is_a_held_option(
+    block: Mapping[str, Any], path: str, errors: List[str]
+) -> None:
+    """``headline_option`` names one ``held`` option of ``sizes.options`` (#1823)."""
+    if "headline_option" in block and "headline_option_applied" in block:
+        errors.append(
+            f"{path}: headline_option and headline_option_applied are exclusive"
+        )
+    name = block.get("headline_option")
+    if name is None:
+        return
+    sizes = block.get("sizes")
+    options = sizes.get("options") if isinstance(sizes, Mapping) else None
+    if not isinstance(options, list):
+        return
+    match = [o for o in options if isinstance(o, Mapping) and o.get("id") == name]
+    if not match:
+        errors.append(f"{path}.headline_option: no option has id {name!r}")
+    elif match[0].get("operation") != "held":
+        errors.append(
+            f"{path}.headline_option: option {name!r} must be held to be carried "
+            "into the headline KPIs"
+        )
+
+
 #: Battery operating modes for a wind battery option: ``cycled`` daily for revenue, or
 #: ``held`` for the black-start function only.
 STORAGE_OPERATIONS: Tuple[str, ...] = ("cycled", "held")
@@ -497,18 +528,18 @@ _STORAGE_OPTIONS = _block(
             _Mapping({"wind_yield_sigma": _req(_number(ge=0.0, lt=1.0))})
         ),
         "pricing_config": _opt(_repo_file),
-    }
+        # #1823: carry one held option into the scenario's headline KPIs
+        # (analytics.storage_headline). The applied form is written by that step only.
+        "headline_option": _opt(_nonempty_str),
+        "headline_option_applied": _opt(_any_mapping),
+    },
+    _headline_option_is_a_held_option,
 )
 
 
 def _sizing_flag(value: Any, path: str, errors: List[str]) -> None:
     if not isinstance(value, bool):
         errors.append(f"{path}: must be true or false (got {value!r})")
-
-
-def _any_mapping(value: Any, path: str, errors: List[str]) -> None:
-    if not isinstance(value, Mapping):
-        errors.append(f"{path}: must be a mapping (got {type(value).__name__})")
 
 
 def _list_of_mappings(value: Any, path: str, errors: List[str]) -> None:
