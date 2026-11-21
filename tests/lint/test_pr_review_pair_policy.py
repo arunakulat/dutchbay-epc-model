@@ -216,7 +216,8 @@ def test_workflow_runs_the_check_from_the_base_commit() -> None:
 def test_workflow_reports_the_required_name_only_when_ready() -> None:
     """A draft reports under another name; ready_for_review re-runs the check."""
     workflow = _workflow()
-    triggers = workflow.get(True) or workflow.get("on")
+    # PyYAML reads the bare key `on` as the boolean True.
+    triggers: dict[Any, Any] = workflow[True] if True in workflow else workflow["on"]
     assert "ready_for_review" in triggers["pull_request"]["types"]
     name = workflow["jobs"]["review-pair"]["name"]
     assert "'Independent review (RECRUIT-01)'" in name
