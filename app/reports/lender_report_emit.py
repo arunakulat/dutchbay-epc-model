@@ -199,6 +199,16 @@ _CLASS_ATTR = re.compile(r"""\bclass\s*=\s*"([^"]*)\"""", re.IGNORECASE)
 _BODY = re.compile(r"<body\b[^>]*>(.*)</body>", re.DOTALL | re.IGNORECASE)
 _FIRST_H1 = re.compile(r"<h1\b[^>]*>.*?</h1>\s*", re.DOTALL | re.IGNORECASE)
 _H2_CLOSE = re.compile(r"</h2>", re.IGNORECASE)
+#: A numeric cell or header: the report's screen rule for ``.num`` is dropped with its
+#: stylesheet, so the house ``dbpl-num`` class carries the right alignment in print.
+_NUM_CELL = re.compile(
+    r'<(td|th)\b([^>]*?)\bclass\s*=\s*"([^"]*\bnum\b[^"]*)"', re.IGNORECASE
+)
+#: The headings a table's source note names, and the table ends it is put after.
+_TABLE_ANCHOR = re.compile(
+    r"<(h2|h3)\b[^>]*>(.*?)</\1>|</table>", re.DOTALL | re.IGNORECASE
+)
+_TAGS = re.compile(r"<[^>]+>")
 _PROVENANCE_OPEN = '<div class="dbpl-provenance">'
 _DBPL_TEMPLATE_DIR = Path(__file__).resolve().parent / "dbpl" / "templates"
 
@@ -229,6 +239,10 @@ class DbplFurniture:
     control: tuple[tuple[str, str], ...]
     revisions: tuple[Mapping[str, str], ...]
     provenance_lines: tuple[str, ...] = ()
+    #: The documentary source printed under every table (``DBPL-01``: "a documentary source
+    #: for every table"): the model run that produced the figures, by commit and scenario
+    #: digest. Each note also names the section the table sits in.
+    table_source: str = ""
 
     def as_doc(self) -> Dict[str, Any]:
         """Return the ``doc`` mapping the DBPL base template reads (no body sections)."""
@@ -282,8 +296,20 @@ def dbpl_furniture_for(context: ReportContext) -> DbplFurniture:
         value = manifest.get(key)
         if value:
             control.append((label, str(value)))
+    run_identity = [f"run_full_pipeline_v14 on scenario {context.scenario_variant}"]
+    if manifest.get("git_sha"):
+        run_identity.append(f"model commit {str(manifest['git_sha'])[:12]}")
+    if manifest.get("config_sha256"):
+        run_identity.append(
+            f"scenario config SHA-256 {str(manifest['config_sha256'])[:16]}"
+        )
+    table_source = (
+        f"{document_id}, model output of {', '.join(run_identity)}; "
+        f"generated {context.generated_at}"
+    )
     return DbplFurniture(
         document_id=document_id,
+        table_source=table_source,
         version=f"v{context.meta.version}",
         issue_date=issue_date,
         status="Draft",
@@ -365,12 +391,42 @@ def to_dbpl_print_html(html: str, furniture: DbplFurniture) -> str:
     band = f'</h2>\n<div class="dbpl-caveat">{_escape(furniture.caveat)}</div>'
     body = _H2_CLOSE.sub(lambda _m: band, body)
     body = _OPEN_TAG.sub(add_class, body)
+    body = _NUM_CELL.sub(
+        lambda m: f'<{m.group(1)}{m.group(2)}class="{m.group(3)} dbpl-num"', body
+    )
+    body = _add_table_sources(body, furniture.table_source)
 
     base = _render_base(furniture)
     at = base.find(_PROVENANCE_OPEN)
     if at < 0:
         at = base.rfind("</body>")
     return base[:at] + body + "\n" + base[at:]
+
+
+def _add_table_sources(body: str, source: str) -> str:
+    """Put a DBPL source note under every table, naming the section it sits in.
+
+    The note uses the house note block (``dbpl-tablenotes`` / ``dbpl-source``), placed
+    immediately below the table as the ADB order requires. The section is the nearest
+    preceding ``<h3>``, or ``<h2>`` when no ``<h3>`` follows it.
+    """
+    section = ""
+    out: List[str] = []
+    last = 0
+    for m in _TABLE_ANCHOR.finditer(body):
+        if m.group(1):
+            text = " ".join(_TAGS.sub(" ", m.group(2)).split())
+            section = text
+            continue
+        out.append(body[last : m.end()])
+        where = f"; section: {section}" if section else ""
+        out.append(
+            '\n<div class="dbpl-tablenotes"><div class="dbpl-source">'
+            f'<span class="dbpl-label">Source:</span> {_escape(source + where)}.</div></div>'
+        )
+        last = m.end()
+    out.append(body[last:])
+    return "".join(out)
 
 
 def _render_pdf(context: ReportContext, html: str, pdf_path: Path) -> tuple[str, ...]:

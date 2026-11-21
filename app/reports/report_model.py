@@ -2754,6 +2754,56 @@ def _irr_bridge_block(
     )
 
 
+#: How a technology type reads in the report subtitle (A-4 of the #1844 assurance lane).
+_TECHNOLOGY_LABELS = {"wind": "Wind", "solar": "Solar", "bess": "Battery Storage"}
+
+
+def _technology_label(name: str, block: Mapping[str, Any]) -> str:
+    from finance.tech_types import is_known_type
+
+    declared = block.get("type")
+    key = str(declared if is_known_type(declared) else name).strip().lower()
+    return _TECHNOLOGY_LABELS.get(key, key.replace("_", " ").title())
+
+
+def technology_subtitle(
+    subtitle: str, scenario_config: Optional[Mapping[str, Any]]
+) -> str:
+    """Fill the report subtitle's ``{technology}`` from the scenario's own technologies.
+
+    The model is universal, so the printed subtitle follows the scenario rather than always
+    naming wind. The technologies come from ``generation.technologies`` in declared order:
+    an explicit known ``type`` wins, else the block's name (``finance.tech_types``). A
+    scenario with no such block is a single-technology wind case when it declares a
+    ``wind_resource`` block, the shape the wind lender case and the API wizard use. A
+    subtitle without the placeholder is returned unchanged.
+
+    Args:
+        subtitle: The configured subtitle (``report.subtitle`` in the report defaults).
+        scenario_config: The scenario the report describes, or ``None``.
+
+    Returns:
+        The subtitle with ``{technology}`` filled in.
+    """
+    if "{technology}" not in subtitle:
+        return subtitle
+    labels: List[str] = []
+    generation = (scenario_config or {}).get("generation")
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if isinstance(techs, Mapping):
+        for name, block in techs.items():
+            if isinstance(block, Mapping):
+                label = _technology_label(str(name), block)
+                if label not in labels:
+                    labels.append(label)
+    if not labels:
+        has_wind = scenario_config is None or isinstance(
+            scenario_config.get("wind_resource"), Mapping
+        )
+        labels = ["Wind" if has_wind else "Renewable Energy"]
+    return subtitle.replace("{technology}", " + ".join(labels))
+
+
 def _resolve_report_grade(
     scenario_config: Optional[Mapping[str, Any]],
 ) -> Optional[str]:
@@ -3008,7 +3058,11 @@ def build_report_context(
     # waterfall blocks derive from it (one engine-output source, no second pass).
     ts_result = _build_three_statement_result(scenario_config, debt_result, annual_rows)
     return ReportContext(
-        meta=cfg.report,
+        meta=cfg.report.model_copy(
+            update={
+                "subtitle": technology_subtitle(cfg.report.subtitle, scenario_config)
+            }
+        ),
         covenants=covenants,
         generated_at=generated_at,
         report_grade=_resolve_report_grade(scenario_config),
