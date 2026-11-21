@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -28,6 +29,10 @@ from finance.debt.terms import (
     _warn_if_decorative_tranches,
 )
 
+# The engine logged as ``finance.debt_v14`` before the split; keep that name so log
+# filters and caplog assertions still see these records.
+logger = logging.getLogger("finance.debt_v14")
+
 
 def plan_debt(
     *,
@@ -35,8 +40,15 @@ def plan_debt(
     config: Dict[str, Any],
     forbid_toy_fallback: bool = False,
     gearing_hints: Optional[Dict[str, Tuple[float, float, float]]] = None,
+    sweep_cash_usd: Optional[Sequence[Optional[float]]] = None,
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
+
+    ``sweep_cash_usd`` (#1736) is the PERIOD-indexed cash a ``cash_sweep`` balloon has
+    after maturity, before the senior fee. The pipeline supplies the cash the equity
+    waterfall holds for the sweep, so that one basis decides both the sweep and the fee
+    deferral (owner ruling 2026-11-15). ``None``, or a ``None`` entry, keeps the
+    sizing-basis CFADS. It changes no period before maturity and no other treatment.
 
     When ``Financing_Terms.debt_sizing`` is ``dual_dscr`` / ``auto_dscr``, the gearing is
     first solved on the real schedule to hit ``target_dscr`` (capped at ``debt_ratio``),
@@ -101,8 +113,7 @@ def plan_debt(
       The unpaid part is deferred (#1539): ``senior_fee_deferred_usd`` is the balance
       carried at the end of each balloon period (``None`` where the balloon path does
       not govern), and ``senior_fee_deferred_residual`` the balance still deferred at
-      the horizon, before the equity waterfall settles what it can (see
-      :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
+      the horizon, unpaid (see :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
       only; the balloon's post-maturity interest is ``balloon_interest`` (accrued)
       and ``balloon_interest_paid`` (settled in cash, capitalised interest first).
     - ``annual_row_debt_period_map`` — ROW-indexed list; each entry maps an
@@ -160,6 +171,7 @@ def plan_debt(
         avg_rate=_as_float(core.get("avg_debt_rate"), 0.0),
         refi_tenor_years=refi_tenor,
         refi_rate_premium=refi_premium,
+        sweep_cash=sweep_cash_usd,
     )
     balloon_resolution = balloon_path["resolution"]
     balloon_residual = balloon_path["residual"]
@@ -167,6 +179,15 @@ def plan_debt(
     balloon_interest_paid = balloon_path["interest_paid"]
     senior_fee_deferred = balloon_path["senior_fee_deferred"]
     senior_fee_deferred_residual = balloon_path["senior_fee_deferred_residual"]
+    if senior_fee_deferred_residual > _BALLOON_TOL:
+        # #1736 item 6: said here, where the figure is made, so a run whose equity
+        # waterfall is disabled or fails still logs it.
+        logger.warning(
+            "Debt engine: senior fee of USD %.2f deferred by the cash sweep is still "
+            "unpaid at the horizon. It is charged to no one, so it raises project NPV, "
+            "equity NPV and PLCR against paying it (#1539, #1736).",
+            senior_fee_deferred_residual,
+        )
 
     # After maturity the engine's own series still hold the STRUCTURAL balloon: the
     # layer amortises scheduled principal only, so it cannot see the sweep, bullet
