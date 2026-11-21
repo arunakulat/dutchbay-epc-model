@@ -587,7 +587,8 @@ def build_capital_risk_report_from_mc_result(
     one of the two must be given.
 
     Fails loud on a **toy-fallback-contaminated** result. When a trial's full v14 evaluation
-    raises, the engine (``monte_carlo.allow_toy_fallback: true``, the default) substitutes a
+    raises, an engine that opted in (``monte_carlo.allow_toy_fallback: true``; off by default
+    since #962) substitutes a
     FABRICATED toy metric that emits the same seven keys and is stored into ``.trials`` — its
     off-floor ``dscr_min`` would poison the lender covenant-breach / VaR-CVaR / NPV numbers
     with no disclosure. A lender-grade report must not be built over fabricated trials, so
