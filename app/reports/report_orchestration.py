@@ -57,8 +57,9 @@ class ReportCaseData:
     ``generated_at`` is supplied by the caller so this seam is deterministic in
     tests; the API stamps its production timestamp at the request boundary.
     ``inputs`` is the wizard submission on the API route and ``None`` on the batch CLI
-    route (#1752), which starts from a scenario file; the assumptions register then
-    reads the scenario alone, as it does for the capital-risk report.
+    route (#1752), which starts from a scenario file. The assumptions register is built
+    from the wizard inputs, so on the CLI route it is empty (``_build_assumptions``
+    returns no rows for ``None``) and the report prints no register.
     """
 
     inputs: Optional[WindFarmInputs]
