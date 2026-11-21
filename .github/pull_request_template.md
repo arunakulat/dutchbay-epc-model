@@ -21,6 +21,12 @@ was opened and naming that exact PR and work item, before follow-up or merge.
 - [ ] KPI impact: **none** / **stated in "Financial impact" below** *(delete one)*
 - [ ] Changelog fragment added under `changelog.d/` (not an edit to `CHANGELOG.md`)
 
+<!-- Declare R0, R1, R2 or R3 (RECRUIT-01 module 1) on the line below, after the colon. R2 and R3
+cannot merge until the `Independent review (RECRUIT-01)` check finds an accepting domain and
+assurance record bound to the head by reviewers who did not write it, and no withheld acceptance
+at that head (#1486; RECRUIT-01 module 3 section 4.1). -->
+Risk class:
+
 ### Verification — receipts, not claims
 
 Paste the command **and its result** for each check. A check you did not run is

@@ -79,6 +79,73 @@ mutation_attestation
 Narrative detail may follow. The structured fields must remain machine-readable enough for a
 focused policy test or future required check.
 
+### 4.1 The header the required check reads (#1486)
+
+Since the owner's decision on #1486 (2026-11-21), an `R2` or `R3` pull request cannot be green
+until the required check `Independent review (RECRUIT-01)` (`scripts/ci/check_pr_review_pair.py`)
+finds an accepting domain record and an accepting assurance record on it. Each lane therefore
+posts its record as one pull-request comment that states the SHA-256 of the record block and
+holds that block between two lines starting `8<`. Inside the block, at line starts:
+
+```text
+Review-Record: 1
+Role: domain            (or: assurance)
+PR: #<number>
+Commit: <40-hex head the lane reviewed>
+Reviewer-Session: <the lane's own session id>
+Disposition: ACCEPT     (or APPROVE or PASS, as the whole value; anything else withholds)
+Car: #<car number>      (train pull requests only; see §8)
+```
+
+The digest is over the block's bytes with LF line endings and one trailing LF. The check counts a
+record only when its `Commit` is the pull request's current head, its `PR` is that pull request,
+the comment comes from the owner or a collaborator, and its `Reviewer-Session` names no session
+that wrote a commit on the pull request (read from the commits' `Claude-Session:` trailers). The
+two records must name two different reviewers.
+
+**One veto blocks acceptance (§1).** For each reviewer and role the check reads only the
+reviewer's latest record at the current head, so a lane can correct its own record. If any such
+latest record does not accept (`REJECT`, `CHANGES-REQUESTED`, a conditional acceptance, or any
+other value), the check fails, whatever accepting records sit beside it. A record bound to an
+older head is not a veto at the new head. The check cannot tell who posted a later record, so a
+later accepting record that names the vetoing lane's session lifts the veto; the coordinator
+confirms that any such superseding record came from the vetoing lane itself.
+
+**What the check cannot see.** Every agent posts as the owner's account, so the check compares the
+session a record *declares* with the sessions in the commits' `Claude-Session:` trailers. It
+refuses a declared identity that matches a trailered writer, which catches the honest mistakes (a
+lane that pushed a commit, a writer that names itself). It cannot authenticate the declared
+identity, so an invented session name passes, and a commit without a trailer (Codex, manual or
+train commits) names no writer to compare against. The check is therefore an anti-accident
+control, not proof of independence: the coordinator still verifies independence under §1 before
+merging.
+
+**Class.** The body declares the class on a line `Risk class: R<n>` (a list item or bold label is
+read too; the template's guidance sits on the line above). An undeclared class fails, except on a
+Dependabot pull request, which is read as `R2` because `REVIEW-01` classes dependency bumps as
+`R2`; its lanes still post records at the Dependabot head, and a recreated Dependabot pull request
+needs them again.
+
+**Where it runs.** The workflow triggers on `pull_request_target`, so GitHub takes the workflow
+file from `main`, and it checks out the base commit, so the script is `main`'s too. A pull request
+cannot edit the check that judges it, and no pull-request code runs. From 2 December 2026 GitHub
+blocks `pull_request_target` in public repositories unless an Actions event policy allows it, so
+the owner's settings work (#1713) has two steps, in this order or together: allow
+`pull_request_target` for `.github/workflows/pr-review-pair.yml` in the Actions event policy, then
+add `Independent review (RECRUIT-01)` to the `main` ruleset's required checks, bound to GitHub
+Actions. Before the second step, the first ready `R2` pull request after landing should show the
+check on its head SHA.
+
+**Trains.** On a `train/` branch the check reads each car's number from the end of its commit
+subject (the last number of a list such as `(#1578, #1800)`; a commit with none fails) and
+requires one accepting pair per car, from §8 carry-forward records posted on the train pull request,
+bound to the train head, each with `Car: #<car>`; a veto for any car blocks the train.
+
+Consequences: a head that moves for any reason, including a merge-only base refresh under §7,
+needs both roles bound again at the new head (a light re-bind for each role is enough when §7's
+proofs hold); and a record in an older format does not count until it is re-posted with this
+header.
+
 ## 5. Findings ledger
 
 Every finding receives one explicit state:
@@ -203,6 +270,14 @@ A side's test selection is the test files it adds or changes, and every test fil
 statements name a module it changes. An empty selection is recorded as empty, and the reference
 search then carries the direction alone. §7's proof 2 for a single pull request's base advance is
 unchanged: this narrower link test applies only to a train.
+
+**Posting the carry-forward.** A car's disposition reaches the train head only as a record: each of
+the car's lanes posts its carry-forward on the train pull request in the §4.1 header, with
+`Commit:` the train head and `Car: #<car>`, and the train body declares the highest class among its
+cars. The required check `Independent review (RECRUIT-01)` then needs one accepting domain and
+assurance pair per car and no withheld acceptance for any car (§4.1). This is how §4.1's rule that
+a moved head needs both roles bound again applies to a train: the binding is this carry-forward, not
+a fresh review.
 
 If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
 to its own head. A judgement that another car cannot matter never substitutes for these artifacts.

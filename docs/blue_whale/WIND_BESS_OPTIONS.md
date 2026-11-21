@@ -10,7 +10,10 @@ stand.
 - Method: `analytics/wind/wind_bess_options.py`.
 - CLI: `scripts/run_blue_whale_wind_bess_options_v14.py` (Hydra, one JSON object on stdout).
 - Committed output: `docs/blue_whale/wind_bess_options_summary.json`. It pins the config and
-  scenario SHA-256; model 15.27.0; scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.6.
+  scenario SHA-256; model 15.30.0; scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.7.
+  Regenerated for `#1822`, which adds the scenario's `monte_carlo` block, and again for
+  `#1823`, which names the held headline battery: each time only `scenario_sha256` and
+  `model_version` changed; every figure is the same.
 - Every KPI comes from `analytics.evaluation_v14.evaluate_with_overrides` (ARCH-04).
 
 > **Addendum (`#1578` U2, 17 November 2026):** The options now run for any scenario that
@@ -26,6 +29,16 @@ stand.
 > The summary was regenerated only because the scenario file gained the block; its
 > `scenario_sha256` is the one value that changed. The same scenario also carries the
 > `equipment_cost_parity` block (`#1755`), which reproduces the single-site parity result.
+>
+> **Addendum (`#1823`, 21 November 2026):** The recommended held 0.5 / 0.5 option is now part
+> of the scenario's own project: `storage_options.headline_option: held_0_5_0_5` (scenario
+> v0.7, model 15.30.0) carries it into the headline KPIs, debt sizing and reports, capex and
+> O&M only, built by the same `scenario_with_battery` this analysis uses
+> (`analytics/storage_headline.py`). The headline KPIs therefore equal this summary's figures
+> for that option (project NPV USD 1,319,305, project IRR 12.31%). This analysis still compares
+> every option with the wind-only case: it reads the scenario without the headline request.
+> The summary was regenerated only because the scenario file and the model version changed.
+> Tariff basis, a working assumption: the held battery earns no storage tariff.
 
 ```bash
 DUTCHBAY_NASA_POWER_DIR=/path/to/power \

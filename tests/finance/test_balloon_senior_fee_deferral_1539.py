@@ -216,8 +216,39 @@ def test_horizon_arrears_take_the_terminal_release_first_and_warn(
     assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx([0.0, 6.0])
     assert schedule[-1]["senior_fee_arrears_usd"] == pytest.approx(4.0)
     assert schedule[-1]["terminal_release_usd"] == 0.0
+    # #1736 item 7 (M13): the reserve the settlement used is not reported as still held.
+    assert schedule[-1]["reserve_balance_usd"] == 0.0
     assert _col(schedule, "equity_distribution_usd") == pytest.approx([8.0, 0.0])
     assert "still unpaid at the horizon" in caplog.text
+
+
+def test_arrears_in_a_cash_call_year_come_from_spv_held_cash_only() -> None:
+    """#1736 item 7 (M14): a year whose cash for equity is negative pays no arrears
+    from that cash; they come from cash the SPV holds, and the cash call stands."""
+    # y1: 50% holdback retains 5. y2: 10 of cash against a 15 balloon payment (a
+    # bullet, so a cash call of 5); 3 owed -> 3 from the 5 retained, 2 left.
+    rows = [
+        {"year": 1, "cf_pre_debt": 10.0, "debt_service_total": 0.0},
+        {
+            "year": 2,
+            "cf_pre_debt": 10.0,
+            "debt_service_total": 0.0,
+            "balloon_resolution": 15.0,
+            "senior_fee_deferred_usd": 3.0,
+        },
+    ]
+    schedule = build_equity_distribution_schedule(
+        annual_rows=rows,
+        debt_result={"balloon_treatment": "bullet"},
+        distribution_config=EquityDistributionConfig(
+            min_reserve_months=0, min_dscr_threshold=0.0, holdback_pct=50.0
+        ),
+    )
+    assert _col(schedule, "senior_fee_arrears_settled_usd") == pytest.approx([0.0, 3.0])
+    assert schedule[-1]["senior_fee_arrears_usd"] == pytest.approx(0.0)
+    # y1 pays 5 out; y2 is a cash call of 5, and the 2 still retained is released at
+    # the horizon into the same year.
+    assert _col(schedule, "equity_distribution_usd") == pytest.approx([5.0, -5.0 + 2.0])
 
 
 def test_no_arrears_leave_the_waterfall_unchanged() -> None:
@@ -256,7 +287,13 @@ def test_plan_debt_publishes_a_real_deferral(stressed_run: Dict[str, Any]) -> No
 
 def test_no_distribution_while_arrears_are_owed(stressed_run: Dict[str, Any]) -> None:
     rows = stressed_run["equity_distribution"]["annual_distributions"]
-    assert sum(row["senior_fee_arrears_settled_usd"] for row in rows) > 0.0
+    # #1736: the engine's sweep reads this waterfall's cash, so the engine defers only
+    # what that cash cannot pay and the waterfall has nothing left to settle (up to the
+    # pipeline's fixed-point tolerance of USD 0.01 a period).
+    assert sum(row["senior_fee_arrears_settled_usd"] for row in rows) == pytest.approx(
+        0.0, abs=0.01 * len(rows)
+    )
+    assert any(row["senior_fee_arrears_usd"] > 1e-6 for row in rows)
     for row in rows:
         if row["senior_fee_arrears_usd"] > 1e-6:
             assert row["equity_distribution_usd"] <= 0.0, row["year"]
@@ -272,4 +309,6 @@ def test_unpaid_fee_is_on_the_kpi_surface(stressed_run: Dict[str, Any]) -> None:
         debt["senior_fee_deferred_residual"]
         - summary["total_senior_fee_arrears_settled_usd"]
     )
+    # #1736 item 5: on one cash basis the KPI and the engine's figure are the same.
+    assert unpaid == pytest.approx(debt["senior_fee_deferred_residual"], abs=0.1)
     assert unpaid > 0.0

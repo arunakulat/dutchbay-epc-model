@@ -466,8 +466,13 @@ def _size_debt_on_levered_cfads(
     *,
     build_annual_rows: Any,
     forbid_toy_fallback: bool,
+    sweep_cash_usd: list[float | None] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
     """Size debt against CFADS bearing the tax the SPV actually pays.
+
+    ``sweep_cash_usd`` is passed to every ``plan_debt`` call: the cash a post-maturity
+    cash sweep reads (see :func:`_settle_sweep_on_waterfall_cash`, #1736). It changes
+    no period before maturity, so it leaves the sizing alone.
 
     Returns the converged ``(debt_result, debt-enriched sizing rows, iteration count)``.
     The sizing rows carry levered tax -- the real per-operating-year debt interest
@@ -502,6 +507,7 @@ def _size_debt_on_levered_cfads(
     balloon_basis = _balloon_interest_tax_basis(cfg)
 
     interest_lkr: list[float] | None = None
+    interest_paid_lkr: list[float] | None = None
     previous_cfads: list[float] | None = None
     # Each pass's solved gearing seeds the next pass's scan (the warm start of
     # _solve_gearing_for_dscr in finance.debt.sizing, re-exported by the
@@ -511,7 +517,11 @@ def _size_debt_on_levered_cfads(
 
     for iteration in range(1, _CFADS_FIXED_POINT_MAX_ITERATIONS + 1):
         rows = _validate_annual_rows_structure(
-            build_annual_rows(cfg, interest_expense_series=interest_lkr)
+            build_annual_rows(
+                cfg,
+                interest_expense_series=interest_lkr,
+                interest_paid_series=interest_paid_lkr,
+            )
         )
         debt_result = _validate_debt_result_structure(
             plan_debt(
@@ -519,6 +529,7 @@ def _size_debt_on_levered_cfads(
                 config=cfg,
                 forbid_toy_fallback=forbid_toy_fallback,
                 gearing_hints=gearing_hints,
+                sweep_cash_usd=sweep_cash_usd,
             )
         )
         enriched = _enrich_annual_rows_with_debt(rows, debt_result, config=cfg)
@@ -551,6 +562,7 @@ def _size_debt_on_levered_cfads(
         interest_lkr = _operating_interest_lkr_series(
             enriched, balloon_basis=balloon_basis
         )
+        interest_paid_lkr = _interest_paid_lkr_series(enriched, balloon_basis)
 
     raise PipelineValidationError(
         "Debt sizing did not converge on a levered-tax CFADS basis within "
@@ -558,6 +570,152 @@ def _size_debt_on_levered_cfads(
         f"movement in the last pass stayed above USD {_CFADS_FIXED_POINT_TOL_USD}. The "
         "schedule is oscillating rather than settling, so no sized facility, DSCR series "
         "or coverage ratio from this run is reportable."
+    )
+
+
+# #1736: passes allowed for the cash sweep to settle on the waterfall's cash. Each pass
+# moves the sweep by the tax on the last pass's change in fee and interest paid (and
+# the interest WHT, when grossed up), so it contracts by about the tax rate per pass.
+_SWEEP_CASH_MAX_PASSES = 100
+
+
+def _settle_sweep_on_waterfall_cash(
+    cfg: dict[str, Any],
+    *,
+    build_annual_rows: Any,
+    forbid_toy_fallback: bool,
+    debt_result: dict[str, Any],
+    sizing_rows: list[dict[str, Any]],
+    fixed_point_iterations: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]], int, int]:
+    """Re-run a post-maturity cash sweep on the cash the equity waterfall holds.
+
+    Owner ruling on #1736 (2026-11-15): one cash basis decides both the balloon sweep
+    and the senior-fee deferral, and the engine and the equity waterfall agree on it.
+    This draft takes the waterfall's cash (``waterfall_sweep_cash``): the cash the SPV
+    actually has after the tax it actually pays and the interest WHT, plus the cash it
+    holds for the sponsor. The sizing basis, ``cfads_ext``, carries no senior fee and
+    no fee deduction, so it misstates that cash in both directions.
+
+    That cash depends on the fee and the interest the sweep pays (through tax and WHT),
+    so the two are iterated to a fixed point: the sweep is re-run on the waterfall's
+    cash until that cash moves by no more than ``_CFADS_FIXED_POINT_TOL_USD`` in any
+    period. Before maturity nothing changes, so the sizing is untouched.
+
+    Returns the inputs unchanged, and ``0`` passes, unless the run has a ``cash_sweep``
+    balloon path that governs a period; so every other run is byte-identical.
+
+    Raises:
+        PipelineValidationError: If the sweep has not settled within
+            ``_SWEEP_CASH_MAX_PASSES`` passes.
+    """
+    # Lazy import: the hydra module imports back into analytics (see the waterfall's
+    # call site in run_v14_pipeline).
+    from finance.equity_distribution_v14_hydra import waterfall_sweep_cash
+
+    sweep_cash: list[float | None] | None = None
+    for passes in range(1, _SWEEP_CASH_MAX_PASSES + 1):
+        senior_fee_lkr_series = _senior_fee_lkr_series(debt_result, sizing_rows)
+        project_rows = _enrich_annual_rows_with_debt(
+            _validate_annual_rows_structure(
+                build_annual_rows(cfg, senior_fee_lkr_series=senior_fee_lkr_series)
+            ),
+            debt_result,
+            config=cfg,
+        )
+        equity_rows = _equity_facing_rows(
+            cfg,
+            project_rows,
+            debt_result,
+            senior_fee_lkr_series,
+            build_annual_rows=build_annual_rows,
+        )
+        settled = waterfall_sweep_cash(
+            config=cfg, annual_rows=equity_rows, debt_result=debt_result
+        )
+        if settled is None:
+            return debt_result, sizing_rows, fixed_point_iterations, 0
+        if sweep_cash is not None and len(settled) == len(sweep_cash):
+            gap = max(
+                (
+                    abs(float(now or 0.0) - float(before or 0.0))
+                    for now, before in zip(settled, sweep_cash, strict=True)
+                ),
+                default=0.0,
+            )
+            if gap <= _CFADS_FIXED_POINT_TOL_USD:
+                logger.info(
+                    "Cash sweep settled on the waterfall's cash in %d pass(es)", passes
+                )
+                return debt_result, sizing_rows, fixed_point_iterations, passes
+        sweep_cash = settled
+        (
+            debt_result,
+            sizing_rows,
+            fixed_point_iterations,
+        ) = _size_debt_on_levered_cfads(
+            cfg,
+            build_annual_rows=build_annual_rows,
+            forbid_toy_fallback=forbid_toy_fallback,
+            sweep_cash_usd=sweep_cash,
+        )
+
+    raise PipelineValidationError(
+        "The post-maturity cash sweep did not settle on the equity waterfall's cash "
+        f"within {_SWEEP_CASH_MAX_PASSES} passes (#1736): the cash moved by more than "
+        f"USD {_CFADS_FIXED_POINT_TOL_USD} between the last two. No balloon sweep, fee "
+        "deferral or equity figure from this run is reportable."
+    )
+
+
+def _equity_facing_rows(
+    cfg: dict[str, Any],
+    annual_rows_enriched: list[dict[str, Any]],
+    debt_result: dict[str, Any],
+    senior_fee_lkr_series: list[float] | None,
+    *,
+    build_annual_rows: Any,
+) -> list[dict[str, Any]]:
+    """The rows the equity waterfall pays from: levered tax, with the shields.
+
+    The unlevered ``annual_rows_enriched`` stay the basis of the project KPIs, DSCR,
+    LLCR and PLCR; the interest shield and the IDC depreciation are confined to the
+    equity path (round-5 #5, #36/#75; see the call site). Default-off configurations
+    return ``annual_rows_enriched`` itself.
+    """
+    tax_block = cfg.get("tax", {}) or {}
+    interest_deductible = bool(tax_block.get("interest_deductibility", True))
+    capitalize_idc = bool(tax_block.get("capitalize_idc_in_depreciable_base", False))
+    idc_usd = float(debt_result.get("total_idc") or 0.0) if capitalize_idc else None
+    if not (interest_deductible or capitalize_idc):
+        return annual_rows_enriched
+    # Scheduled interest plus the balloon's, on the scenario's basis (#1505).
+    op_interest_lkr = (
+        _operating_interest_lkr_series(
+            annual_rows_enriched,
+            balloon_basis=_balloon_interest_tax_basis(cfg),
+        )
+        if interest_deductible
+        else None
+    )
+    return _enrich_annual_rows_with_debt(
+        build_annual_rows(
+            cfg,
+            interest_expense_series=op_interest_lkr,
+            extra_depreciable_usd=idc_usd,
+            # The equity waterfall bears the same senior fee (#737) the project pass
+            # charged; None when no fees are configured.
+            senior_fee_lkr_series=senior_fee_lkr_series,
+            interest_paid_series=(
+                _interest_paid_lkr_series(
+                    annual_rows_enriched, _balloon_interest_tax_basis(cfg)
+                )
+                if interest_deductible
+                else None
+            ),
+        ),
+        debt_result,
+        config=cfg,
     )
 
 
@@ -655,6 +813,21 @@ def _operating_interest_lkr_series(
             interest_usd += float(row.get(balloon_key) or 0.0)
         series.append(interest_usd * float(row.get("fx_rate") or 0.0))
     return series
+
+
+def _interest_paid_lkr_series(
+    annual_rows: Sequence[Mapping[str, Any]], balloon_basis: str
+) -> list[float] | None:
+    """Per-operating-row interest paid in cash (LKR), where it differs from the deduction.
+
+    The base of each row's reported ``wht_on_interest``: withholding tax arises on
+    payment, whatever the income-tax basis (#1539 DOM-4). ``None`` on the default
+    ``paid`` basis, where the deducted interest already is the interest paid, so those
+    rows are byte-identical.
+    """
+    if balloon_basis == "paid":
+        return None
+    return _operating_interest_lkr_series(annual_rows, balloon_basis="paid")
 
 
 def _debt_fee_rate(config: Mapping[str, Any]) -> float:
@@ -1028,7 +1201,9 @@ def _build_debt_covenant_snapshot(
             notes += f", {treatment}"
         notes += ")"
         if bool(debt_result.get("balloon_covenant_breach")):
-            max_pct = float(debt_result.get("max_balloon_pct") or 0.10)
+            # #1429 D09: the limit is the scenario's own; the engine publishes it with
+            # every breach, so there is no 10% fallback to print.
+            max_pct = float(debt_result["max_balloon_pct"])
             notes += f" — BREACHES max_balloon_pct {max_pct:.0%}"
 
     return DebtCovenantSnapshot(
@@ -1083,7 +1258,8 @@ def _update_kpis_with_equity_distribution(
         ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
         ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
         # #1539: the deferred senior fee still unpaid after the waterfall settled what
-        # its cash could. Overwrites the engine-level figure metrics.py published.
+        # its cash could. Overwrites the engine-level figure metrics.py published; since
+        # #1736 the sweep reads the waterfall's cash, so on this path they are equal.
         ("senior_fee_unpaid_at_horizon_usd", "senior_fee_deferred_residual"),
     ):
         value = summary_raw.get(source_key)
@@ -1159,6 +1335,13 @@ def run_v14_pipeline_enhanced(
         from finance.native_cost_inputs import normalize_native_capex
 
         cfg = normalize_native_capex(cfg)
+        # #1823: a scenario whose storage_options block names a held headline_option carries
+        # that battery in its own figures (capex, O&M, debt sizing, KPIs), built exactly as
+        # the wind battery options analysis builds it. Once per evaluation; a scenario
+        # without the declaration is returned unchanged.
+        from analytics.storage_headline import apply_headline_storage_option
+
+        cfg = apply_headline_storage_option(cfg)
         config_path_label = (
             str(config) if isinstance(config, (str, Path)) else "<inline>"
         )
@@ -1262,6 +1445,21 @@ def run_v14_pipeline_enhanced(
             cfg,
             build_annual_rows=build_annual_rows,
             forbid_toy_fallback=_forbid_toy_fallback,
+        )
+        # #1736: a post-maturity cash sweep reads the cash the equity waterfall holds,
+        # so the sweep and the fee deferral share one basis with the waterfall.
+        (
+            debt_result,
+            sizing_rows,
+            fixed_point_iterations,
+            _sweep_cash_passes,
+        ) = _settle_sweep_on_waterfall_cash(
+            cfg,
+            build_annual_rows=build_annual_rows,
+            forbid_toy_fallback=_forbid_toy_fallback,
+            debt_result=debt_result,
+            sizing_rows=sizing_rows,
+            fixed_point_iterations=fixed_point_iterations,
         )
         senior_fee_lkr_series = _senior_fee_lkr_series(debt_result, sizing_rows)
 
@@ -1373,36 +1571,13 @@ def run_v14_pipeline_enhanced(
         # (equity) shield, applied here alongside the interest shield, never to the
         # unlevered project/DSCR pass. Default-off -> byte-identical. total_idc is the
         # USD IDC; build_annual_rows translates it at year-0 FX (same basis as USD capex).
-        tax_block = cfg.get("tax", {}) or {}
-        interest_deductible = bool(tax_block.get("interest_deductibility", True))
-        capitalize_idc = bool(
-            tax_block.get("capitalize_idc_in_depreciable_base", False)
+        equity_rows = _equity_facing_rows(
+            cfg,
+            annual_rows_enriched,
+            debt_result,
+            senior_fee_lkr_series,
+            build_annual_rows=build_annual_rows,
         )
-        idc_usd = float(debt_result.get("total_idc") or 0.0) if capitalize_idc else None
-        if interest_deductible or capitalize_idc:
-            # Scheduled interest plus the balloon's, on the scenario's basis (#1505).
-            op_interest_lkr = (
-                _operating_interest_lkr_series(
-                    annual_rows_enriched,
-                    balloon_basis=_balloon_interest_tax_basis(cfg),
-                )
-                if interest_deductible
-                else None
-            )
-            equity_rows = _enrich_annual_rows_with_debt(
-                build_annual_rows(
-                    cfg,
-                    interest_expense_series=op_interest_lkr,
-                    extra_depreciable_usd=idc_usd,
-                    # The equity waterfall bears the same senior fee (#737) the
-                    # project pass charged; None when no fees are configured.
-                    senior_fee_lkr_series=senior_fee_lkr_series,
-                ),
-                debt_result,
-                config=cfg,
-            )
-        else:
-            equity_rows = annual_rows_enriched
 
         # Lazy import: breaks the analytics<->finance module-load cycle. This
         # module is pulled in by the analytics package init, and the hydra module

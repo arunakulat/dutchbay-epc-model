@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DutchBay wake-gap investigation (#1589)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/analyze_dutchbay_wake_deficit_gap_1589.py. Results:
+# docs/wind/dutchbay_wake_gap_1589_summary.json; write-up:
+# docs/wind/dutchbay_wake_loss_gap_investigation_1589.md.
+#
+# The site inputs (layout, machine, wind resource, frozen value and the synthetic row it
+# cites) come from conf/dutchbay_wake_14_turbines.yaml, composed below, so the
+# investigation runs on exactly the inputs of the lender-basis re-baseline (#1577). This
+# file holds only the sweep grids the investigation adds. It changes no input of any
+# scenario: the lender basis stays wake_loss_14_pct of
+# docs/wind/dutchbay_14_turbine_wake_summary.json.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  - dutchbay_wake_14_turbines
+  - _self_
+
+wake_gap:
+  # Rotor diameters at which the recorded layout is re-read, holding the power and thrust
+  # curves and the hub height. A geometric sensitivity: it shows how the loss moves with
+  # turbine spacing measured in rotor diameters. It is not a model of another machine,
+  # whose curves would differ. The last value is the configured machine's own diameter.
+  rotor_diameter_m: [120.0, 140.0, 160.0, 180.0, 198.0]
+  # Ambient turbulence intensities. The wake-growth rate follows the engine's own closure
+  # (wind_resource.bankable_aep.gaussian_k_star). 0.10 is the configured value.
+  turbulence_intensity: [0.06, 0.08, 0.10, 0.12, 0.14]
+  # Deficit models model_wake_loss offers. bastankhah is the configured one.
+  deficit_models: [bastankhah, turbopark]
+  # The committed inputs the summary pins by SHA-256, so a changed input shows as a stale
+  # summary (tests/wind/test_wake_deficit_gap_1589.py).
+  pinned_inputs:
+    - conf/dutchbay_wake_14_turbines.yaml
+    - conf/dutchbay_wake_gap_1589.yaml
+  # A path writes the summary JSON there as well as printing it.
+  summary_json: null

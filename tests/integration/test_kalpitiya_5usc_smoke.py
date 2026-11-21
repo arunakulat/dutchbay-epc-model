@@ -267,9 +267,11 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     assert kpis["project_irr"] == pytest.approx(-0.0545, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.16438, abs=0.005
+        -0.17589, abs=0.005
     )  # PR-B UIP LKR rate deepens it; #1397's levered-tax sizing deepens it again
-    # (the facility grows 48.24M -> 48.76M and absorbs more than the shield returns)
+    # (the facility grows 48.24M -> 48.76M and absorbs more than the shield returns).
+    # #1736 (-16.44% -> -17.59%): the post-maturity sweep now pays the balloon from the
+    # cash the SPV holds (the reserve and trapped cash) before anything reaches equity.
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(
         -142.31e6, rel=0.05

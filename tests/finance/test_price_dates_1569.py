@@ -25,6 +25,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.storage_headline import apply_headline_storage_option
 from finance.capex_price_basis import (
     APPLIED_KEY,
     apply_capex_price_basis,
@@ -312,7 +313,8 @@ def test_superseded_hybrid_declares_no_price_date() -> None:
 )
 def test_engine_spends_the_escalated_capex(path: Path, years: int) -> None:
     """The engine's capex use is the stated total escalated to the year before COD."""
-    stated = _yaml(path)["capex"]["usd_total"]
+    # #1823: the stated total includes a declared headline battery's capex.
+    stated = apply_headline_storage_option(_yaml(path))["capex"]["usd_total"]
     full = evaluate_with_overrides(str(path), overrides={}, return_full_result=True)
     assert isinstance(full, dict)
     debt = full["debt_result"]
@@ -334,7 +336,8 @@ def test_batch_analytics_runs_the_escalated_config(path: Path) -> None:
     from analytics.scenario_loader import load_scenario_config
 
     stated = load_scenario_config(str(path))
-    escalated = apply_capex_price_basis(stated)
+    # #1823: and a declared headline battery joins first, as in the canonical pipeline.
+    escalated = apply_capex_price_basis(apply_headline_storage_option(stated))
     assert escalated["capex"]["usd_total"] > stated["capex"]["usd_total"]
 
     result = ScenarioAnalytics(scenarios_dir=SCENARIOS)._run_single(path)
