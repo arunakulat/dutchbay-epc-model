@@ -336,6 +336,27 @@ def test_the_financed_capex_carries_the_price_basis_escalation() -> None:
     assert css._financed_capex(scenario) == pytest.approx(stated * 1.05, rel=1e-9)
 
 
+def test_the_financed_capex_carries_the_capitalised_import_levies() -> None:
+    """#1859 review F-A: the lender case's levies are in the gearing denominator.
+
+    The lender case declares ``taxes_indirect`` lines, so the engine sizes debt on the
+    base plus the capitalised import duties and unrecoverable capex VAT (#738). Read
+    against the pre-levy base, its binding 30% ceiling would show 31.5% again.
+    """
+    from analytics.evaluation_v14 import evaluated_scenario_config
+    from analytics.scenario_loader import load_scenario_config
+    from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
+
+    scenario = load_scenario_config("scenarios/dutchbay_lendercase_2025Q4.yaml")
+    evaluated = evaluated_scenario_config(scenario)
+    base = float(evaluated["capex"]["usd_total"])
+    indirect = resolve_indirect_taxes(evaluated)
+    assert indirect is not None and indirect.has_capex_lines
+    uplift = compute_capex_uplift_usd(base, indirect)
+    assert uplift > 0.01 * base  # non-vacuous: the levies move the denominator
+    assert css._financed_capex(scenario) == pytest.approx(base + uplift, rel=1e-9)
+
+
 def test_a_covenant_the_committed_case_fails_is_shown_not_screened(
     fakes: _Fakes,
 ) -> None:
