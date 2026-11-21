@@ -60,7 +60,6 @@ from app.reports.report_config import (
 )
 from app.services.report_global_sa import GlobalSABlock
 from app.services.report_tornado import TornadoBlock
-from finance.debt.constants import _BALLOON_TOL as _ENGINE_BALLOON_TOL_USD
 
 
 def format_kpi_value(value: float, kind: KpiKind) -> str:
@@ -2098,9 +2097,12 @@ _TECH_COMPARISON_KPI_KEYS = (
     "gearing",
 )
 
-#: A balloon at or below this (USD) is treated as none left at maturity in the comparison:
-#: the debt engine's own threshold for a balance it treats as repaid, so the two agree.
-_TECH_COMPARISON_BALLOON_TOL_USD = _ENGINE_BALLOON_TOL_USD
+#: A balloon at or below this (USD) is treated as none left at maturity in the comparison.
+#: It is the debt engine's own threshold for a balance it treats as repaid
+#: (``finance.debt_v14._BALLOON_TOL``), so the two agree. It is restated here rather than
+#: imported so the report layer takes no import on the finance package; a test pins the two
+#: equal, so neither can move alone.
+_TECH_COMPARISON_BALLOON_TOL_USD = 1.0
 
 
 def _build_tech_comparison(

@@ -77,9 +77,17 @@ def test_each_row_carries_its_published_treatment_and_balloon() -> None:
     assert hybrid.carries_balloon is False
 
 
+def test_the_report_restates_the_engines_balloon_threshold() -> None:
+    """The report layer restates the engine's repaid threshold; the two cannot move alone."""
+    from app.reports.report_model import _TECH_COMPARISON_BALLOON_TOL_USD
+    from finance.debt_v14 import _BALLOON_TOL
+
+    assert _TECH_COMPARISON_BALLOON_TOL_USD == _BALLOON_TOL
+
+
 def test_the_balloon_threshold_is_the_engines() -> None:
     """At or below the engine's repaid threshold no balloon is carried; above it one is."""
-    from finance.debt.constants import _BALLOON_TOL
+    from finance.debt_v14 import _BALLOON_TOL
 
     at, above = _block(
         ("At", _kpis("refinance", _BALLOON_TOL)),
