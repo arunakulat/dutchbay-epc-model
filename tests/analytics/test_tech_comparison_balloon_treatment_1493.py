@@ -77,6 +77,18 @@ def test_each_row_carries_its_published_treatment_and_balloon() -> None:
     assert hybrid.carries_balloon is False
 
 
+def test_the_balloon_threshold_is_the_engines() -> None:
+    """At or below the engine's repaid threshold no balloon is carried; above it one is."""
+    from finance.debt.constants import _BALLOON_TOL
+
+    at, above = _block(
+        ("At", _kpis("refinance", _BALLOON_TOL)),
+        ("Above", _kpis("refinance", _BALLOON_TOL + 0.01)),
+    ).rows
+    assert at.carries_balloon is False
+    assert above.carries_balloon is True
+
+
 def test_rows_without_the_keys_carry_none() -> None:
     (row,) = _block(("Legacy", {"project_irr": 0.02})).rows
     assert row.balloon_treatment is None
@@ -97,14 +109,16 @@ def test_a_treatment_that_is_not_a_name_is_dropped(bad: Any) -> None:
         ((("refinance", 1e6), ("cash_sweep", 1e6)), True),
         # Same treatment on both.
         ((("refinance", 1e6), ("refinance", 2e6)), False),
-        # A case with no balloon never applies its treatment.
-        ((("refinance", 1e6), ("cash_sweep", 0.0)), False),
-        ((("refinance", 1e6), ("cash_sweep", None)), False),
+        # A case left with no balloon still counts: the treatment can change the debt
+        # itself (an amortize case is resized to leave none), so equity still differs.
+        ((("refinance", 1e6), ("amortize", 0.0)), True),
+        ((("refinance", 1e6), ("cash_sweep", None)), True),
+        ((("refinance", 0.0), ("refinance", 0.0)), False),
         # An unpublished treatment is not counted as a third one.
         ((("refinance", 1e6), (None, 1e6)), False),
     ],
 )
-def test_treatments_differ_only_among_cases_that_carry_a_balloon(
+def test_treatments_differ_when_any_two_cases_publish_different_ones(
     cases: Any, differ: bool
 ) -> None:
     block = _block(*[(f"c{i}", _kpis(t, b)) for i, (t, b) in enumerate(cases)])
@@ -125,6 +139,22 @@ def test_the_section_states_each_treatment_and_the_caveat_when_they_differ() -> 
     assert ">refinance<" in html
     assert ">cash sweep<" in html
     assert ">refinance (no balloon arises)<" in html
+    assert _CAVEAT in html
+    # The difference reaches more than the equity rows (#1855 domain review).
+    caveat = " ".join(html[html.index(_CAVEAT) :].split("</p>")[0].split())
+    assert "equity figures most of all" in caveat
+    assert "project IRR, project NPV and CFADS" in caveat
+
+
+def test_the_caveat_fires_for_a_case_its_treatment_left_with_no_balloon() -> None:
+    """An amortize case leaves no balloon, but its treatment still moved its equity."""
+    html = _render(
+        _block(
+            ("Lender case", _kpis("refinance", 26_560_551.7)),
+            ("Amortising variant", _kpis("amortize", 0.0)),
+        )
+    )
+    assert ">amortize (no balloon arises)<" in html
     assert _CAVEAT in html
 
 
@@ -148,7 +178,7 @@ def test_build_reads_each_runs_published_treatment_and_balloon() -> None:
         ("Base case", str(BASECASE)),
     ]
     block = build_tech_comparison_for_scenarios(pairs)
-    for (label, path), row in zip(pairs, block.rows):
+    for (label, path), row in zip(pairs, block.rows, strict=True):
         debt = run_v14_pipeline(config=path, validation_mode="strict")["debt_result"]
         assert row.label == label
         assert row.balloon_treatment == debt["balloon_treatment"]

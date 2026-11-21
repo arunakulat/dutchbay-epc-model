@@ -60,6 +60,7 @@ from app.reports.report_config import (
 )
 from app.services.report_global_sa import GlobalSABlock
 from app.services.report_tornado import TornadoBlock
+from finance.debt.constants import _BALLOON_TOL as _ENGINE_BALLOON_TOL_USD
 
 
 def format_kpi_value(value: float, kind: KpiKind) -> str:
@@ -849,16 +850,19 @@ class TechComparisonBlock(BaseModel):
 
     @property
     def balloon_treatments_differ(self) -> bool:
-        """True when the cases that carry a balloon resolve it in more than one way (#1493).
+        """True when the compared cases publish more than one balloon treatment (#1493).
 
-        Their equity figures then mix the treatment difference into what the table presents
-        as a technology or capex difference, so the section says so. A case with no balloon
-        at maturity is left out: its treatment never applies.
+        Their figures then mix the treatment difference into what the table presents as a
+        technology or capex difference, so the section says so: equity figures most of all,
+        and in some cases project IRR, project NPV and CFADS too. A case that leaves no
+        balloon at maturity still counts: a treatment can change the debt itself (an
+        ``amortize`` case is resized to leave none), so its figures differ even with no
+        balloon left. A case that publishes no treatment is not counted as another one.
         """
         treatments = {
             row.balloon_treatment
             for row in self.rows
-            if row.carries_balloon and row.balloon_treatment is not None
+            if row.balloon_treatment is not None
         }
         return len(treatments) > 1
 
@@ -2094,8 +2098,9 @@ _TECH_COMPARISON_KPI_KEYS = (
     "gearing",
 )
 
-#: A balloon at or below this (USD) is treated as none left at maturity in the comparison.
-_TECH_COMPARISON_BALLOON_TOL_USD = 1.0
+#: A balloon at or below this (USD) is treated as none left at maturity in the comparison:
+#: the debt engine's own threshold for a balance it treats as repaid, so the two agree.
+_TECH_COMPARISON_BALLOON_TOL_USD = _ENGINE_BALLOON_TOL_USD
 
 
 def _build_tech_comparison(
