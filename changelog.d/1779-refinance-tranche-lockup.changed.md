@@ -18,4 +18,4 @@
   reports its three refinance years as locked (`equity_covenant_locked_years` 1 to 4), but no
   cash is trapped there, so its distributions and every other KPI are unchanged. Project IRR,
   DSCR, the debt result and every other committed scenario are unchanged. Released as
-  15.30.0.
+  15.31.0.
