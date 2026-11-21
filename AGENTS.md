@@ -222,8 +222,9 @@ overlap judgment or the time the first edit occurred.
 
 - Changes that can alter IRR, DSCR, NPV, covenants, debt sizing, tax, tariff, FX, AEP, or
   other lender outputs require focused regression tests and explicit impact disclosure.
-- Update `VERSION` and `CHANGELOG.md` when the change affects committed financial
-  behavior, following the repository release policy.
+- `DOC-02`: a change that can affect IRR, DSCR, NPV or covenant logic adds its
+  `changelog.d/` fragment and bumps `VERSION` in the same PR. It never edits `CHANGELOG.md`:
+  release cuts compile the fragments into it (`RELEASING.md`).
 - Do not compare newly assessed locations, turbines, tariffs, or FX cases against a
   frozen reference that is no longer the applicable basis. Reconciliation guards must
   compare like-for-like cases and expose provenance.
