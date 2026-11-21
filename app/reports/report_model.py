@@ -904,6 +904,46 @@ class YieldReconciliationBlock(BaseModel):
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
 
 
+class AepTornadoRow(BaseModel):
+    """One driver of the resource-side AEP tornado (#1615 step B)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    low_label: str
+    high_label: str
+    low_gwh: float
+    high_gwh: float
+    swing_gwh: float
+    swing_pct: float
+
+
+class AepResourceSensitivityBlock(BaseModel):
+    """The wind-resource AEP sensitivity: cluster tornado and Monte Carlo (#1615 step B).
+
+    A labelled resource sensitivity beside the report's basis, never in place of it: the
+    energy and every financial figure stay on the committed IEC P50/P90. ``reconciliation``
+    says why the cluster's figures differ from the committed ones.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    base_net_aep_gwh: float
+    tornado: List[AepTornadoRow]
+    mc_p50_gwh: float
+    mc_p75_gwh: float
+    mc_p90_gwh: float
+    mc_p99_gwh: float
+    mc_mean_gwh: float
+    mc_cv: float
+    mc_n_samples: int
+    mc_seed: int
+    weibull_uncertainty_pct: float
+    committed_p50_gwh: Optional[float] = None
+    committed_p90_gwh: Optional[float] = None
+    reconciliation: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1056,6 +1096,10 @@ class ReportContext(BaseModel):
     #: (outcome: degraded)". When set, the report prints the section heading with this line
     #: instead of leaving the section out silently. None (the default) changes nothing.
     tornado_not_computed: Optional[str] = None
+    #: The wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+    #: Carlo, a labelled resource sensitivity beside the committed basis. The command-line
+    #: lender report fills it; None (the default) omits the section.
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None
 
 
 def _build_kpi_rows(

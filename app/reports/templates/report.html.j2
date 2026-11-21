@@ -472,6 +472,77 @@
   </section>
   {% endif %}
 
+  {# 4e-ii. Wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+     Carlo, a labelled resource sensitivity beside the committed basis, never in place of it. #}
+  {% if ctx.aep_resource_sensitivity %}
+  {% set aep = ctx.aep_resource_sensitivity %}
+  <section class="page aep-resource-sensitivity">
+    <h2>Wind Resource Sensitivity &mdash; Net AEP</h2>
+    <p class="muted"><strong>Model output: resource sensitivity, not the report basis.</strong>
+      The energy and every financial figure in this report stay on the committed net P50/P90.
+      There is no measured site wind data and no P90 evidence, so these figures support no
+      bankable resource claim.</p>
+    <h3>AEP tornado (one at a time)</h3>
+    <p class="muted">Net AEP when each resource driver moves alone, from a base of
+      {{ fmt_gwh(aep.base_net_aep_gwh) }}; widest swing first.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Low case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th>High case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th style="text-align:right;">Swing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in aep.tornado %}
+        <tr>
+          <td>{{ r.driver }}</td>
+          <td>{{ r.low_label }}</td>
+          <td class="num">{{ fmt_gwh(r.low_gwh) }}</td>
+          <td>{{ r.high_label }}</td>
+          <td class="num">{{ fmt_gwh(r.high_gwh) }}</td>
+          <td class="num">{{ fmt_gwh(r.swing_gwh) }} ({{ "%.1f"|format(r.swing_pct) }}%)</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <h3>AEP Monte Carlo</h3>
+    <p class="muted">{{ "{:,}".format(aep.mc_n_samples) }} draws of the Weibull A and k, each
+      with a {{ "%g"|format(aep.weibull_uncertainty_pct) }}% one-sigma (seed {{ aep.mc_seed }}).
+      P-values use the exceedance convention: P90 is exceeded in 90% of draws.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Net AEP</th>
+          <th style="text-align:right;">Resource Monte Carlo</th>
+          <th style="text-align:right;">Committed basis</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>P50</td><td class="num">{{ fmt_gwh(aep.mc_p50_gwh) }}</td>
+          <td class="num">{{ fmt_gwh(aep.committed_p50_gwh) }}</td></tr>
+        <tr><td>P75</td><td class="num">{{ fmt_gwh(aep.mc_p75_gwh) }}</td><td class="num">&mdash;</td></tr>
+        <tr><td>P90</td><td class="num">{{ fmt_gwh(aep.mc_p90_gwh) }}</td>
+          <td class="num">{{ fmt_gwh(aep.committed_p90_gwh) }}</td></tr>
+        <tr><td>P99</td><td class="num">{{ fmt_gwh(aep.mc_p99_gwh) }}</td><td class="num">&mdash;</td></tr>
+        <tr><td>Mean (CV)</td><td class="num">{{ fmt_gwh(aep.mc_mean_gwh) }} ({{ "%.1f"|format(aep.mc_cv * 100) }}%)</td><td class="num">&mdash;</td></tr>
+      </tbody>
+    </table>
+    {% if aep.reconciliation %}
+    <h3>Why the figures differ</h3>
+    <ul class="notes aep-reconciliation">
+      {% for line in aep.reconciliation %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4f. Global sensitivity (Morris screening) — MC-1 #}
   {% if ctx.global_sa and ctx.global_sa.drivers %}
   <section class="page">
