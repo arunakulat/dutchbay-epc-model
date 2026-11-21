@@ -330,7 +330,9 @@ def emit_lender_report_from_pipeline(
                     seed=seed,
                     npv_metric=npv_metric,
                 )
-            except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 - listed with its reason, never silent
                 capital_risk_not_run = (
                     "not run: the Monte Carlo did not meet the lender guards "
                     f"({type(exc).__name__}: {exc})"
