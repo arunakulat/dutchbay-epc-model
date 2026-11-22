@@ -59,7 +59,7 @@ from app.reports.report_config import (
     load_report_config,
 )
 from app.services.report_global_sa import GlobalSABlock
-from app.services.report_tornado import TornadoBlock
+from app.services.report_tornado import TornadoBlock, TornadoRow
 
 
 def format_kpi_value(value: float, kind: KpiKind) -> str:
@@ -941,6 +941,46 @@ class YieldReconciliationBlock(BaseModel):
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
 
 
+class AepTornadoRow(BaseModel):
+    """One driver of the resource-side AEP tornado (#1615 step B)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    low_label: str
+    high_label: str
+    low_gwh: float
+    high_gwh: float
+    swing_gwh: float
+    swing_pct: float
+
+
+class AepResourceSensitivityBlock(BaseModel):
+    """The wind-resource AEP sensitivity: cluster tornado and Monte Carlo (#1615 step B).
+
+    A labelled resource sensitivity beside the report's basis, never in place of it: the
+    energy and every financial figure stay on the committed IEC P50/P90. ``reconciliation``
+    says why the cluster's figures differ from the committed ones.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    base_net_aep_gwh: float
+    tornado: List[AepTornadoRow]
+    mc_p50_gwh: float
+    mc_p75_gwh: float
+    mc_p90_gwh: float
+    mc_p99_gwh: float
+    mc_mean_gwh: float
+    mc_cv: float
+    mc_n_samples: int
+    mc_seed: int
+    weibull_uncertainty_pct: float
+    committed_p50_gwh: Optional[float] = None
+    committed_p90_gwh: Optional[float] = None
+    reconciliation: List[str] = Field(default_factory=list)
+
+
 class CapitalStructureCandidate(BaseModel):
     """One candidate of a capital-structure search (#1825 slice i)."""
 
@@ -1001,6 +1041,133 @@ class CapitalStructureBlock(BaseModel):
     dscr_held_note: Optional[str] = None
     searches: List[CapitalStructureSearch]
     searches_not_run: List[str] = Field(default_factory=list)
+
+
+class LenderTornado(BaseModel):
+    """A one-at-a-time tornado on a lender metric (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    label: str
+    #: "ratio" (shown as a multiple) or "usd".
+    unit: str
+    committed: Optional[float] = None
+    rows: List[TornadoRow]
+    #: The sweep engine's reason when every driver leaves the metric unchanged.
+    flat_reason: Optional[str] = None
+    #: Set when the sweep's own base point does not reproduce the committed figure.
+    reconciliation: Optional[str] = None
+
+
+class KeBandRow(BaseModel):
+    """One cost-of-equity point of the build-up WACC band (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ke: float
+    wacc: Optional[float] = None
+    project_npv: Optional[float] = None
+    equity_npv: Optional[float] = None
+    committed: bool = False
+
+
+class FxSensitivityPoint(BaseModel):
+    """One FX sweep point (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    fx_rate: float
+    hedge_ratio: float
+    spread_bps: float
+    project_irr: Optional[float] = None
+    equity_npv: Optional[float] = None
+    #: The headline minimum DSCR, as the FX analyzer reads it.
+    min_dscr: Optional[float] = None
+    base: bool = False
+
+
+class FxSensitivitySweep(BaseModel):
+    """One FX sweep: start rate, hedge ratio or hedge spread (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    searched: str
+    points: List[FxSensitivityPoint]
+
+
+class ParetoRow(BaseModel):
+    """One evaluated point of the financing Pareto screen (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    settings: Dict[str, float]
+    objectives: Dict[str, float]
+    frontier: bool = False
+    committed: bool = False
+
+
+class ParetoScreen(BaseModel):
+    """The financing Pareto screen around the committed terms (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objectives: List[str]
+    objective_keys: List[str]
+    axes: List[str]
+    rows: List[ParetoRow]
+    n_frontier: int
+    reconciliation: Optional[str] = None
+
+
+class SobolDriverRow(BaseModel):
+    """One driver's Sobol indices on one metric (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    s1: Optional[float] = None
+    st: Optional[float] = None
+    st_conf: Optional[float] = None
+    interactive: bool = False
+
+
+class SobolMetric(BaseModel):
+    """Sobol indices on one metric, or the reason none were computed (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    rows: List[SobolDriverRow] = Field(default_factory=list)
+    flag_reason: Optional[str] = None
+
+
+class LenderSensitivityBlock(BaseModel):
+    """Lender sensitivities: DSCR and debt capacity, cost of equity, FX, Pareto, Sobol.
+
+    A sensitivity of the committed case, scored through the canonical evaluation gateway; it
+    never moves a committed figure or KPI (#1825 slice ii).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    committed_equity_npv: Optional[float] = None
+    committed_project_irr: Optional[float] = None
+    committed_min_dscr_period: Optional[float] = None
+    committed_debt_usd: Optional[float] = None
+    tornadoes: List[LenderTornado] = Field(default_factory=list)
+    ke_band: List[KeBandRow] = Field(default_factory=list)
+    ke_committed: Optional[float] = None
+    ke_reconciliation: Optional[str] = None
+    fx_sweeps: List[FxSensitivitySweep] = Field(default_factory=list)
+    fx_reconciliation: Optional[str] = None
+    pareto: Optional[ParetoScreen] = None
+    sobol: List[SobolMetric] = Field(default_factory=list)
+    sobol_runs: Optional[int] = None
+    sobol_n: Optional[int] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
 
 
 class SectionNotRun(BaseModel):
@@ -1155,10 +1322,18 @@ class ReportContext(BaseModel):
     #: (outcome: degraded)". When set, the report prints the section heading with this line
     #: instead of leaving the section out silently. None (the default) changes nothing.
     tornado_not_computed: Optional[str] = None
+    #: The wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+    #: Carlo, a labelled resource sensitivity beside the committed basis. The command-line
+    #: lender report fills it; None (the default) omits the section.
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None
     #: Capital-structure screening (#1825 slice i): the debt-mix, contingency and gearing
     #: searches. The command-line lender report fills it when switched on; None (the
     #: default) omits the section.
     capital_structure: Optional[CapitalStructureBlock] = None
+    #: Lender sensitivities (#1825 slice ii): DSCR and debt-capacity tornadoes, cost of
+    #: equity, FX, Pareto and Sobol. The command-line lender report fills it when switched
+    #: on; None (the default) omits the section.
+    lender_sensitivities: Optional[LenderSensitivityBlock] = None
 
 
 def _build_kpi_rows(

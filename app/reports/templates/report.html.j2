@@ -549,6 +549,78 @@
   </section>
   {% endif %}
 
+  {# 4e-ii. Wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+     Carlo, a labelled resource sensitivity beside the committed basis, never in place of it. #}
+  {% if ctx.aep_resource_sensitivity %}
+  {% set aep = ctx.aep_resource_sensitivity %}
+  <section class="page aep-resource-sensitivity">
+    <h2>Wind Resource Sensitivity &mdash; Net AEP</h2>
+    <p class="muted"><strong>Model output: resource sensitivity, not the report basis.</strong>
+      The energy and every financial figure in this report stay on the committed net P50/P90.
+      There is no measured site wind data and no P90 evidence, so these figures support no
+      bankable resource claim.</p>
+    <h3>AEP tornado (one at a time)</h3>
+    <p class="muted">Net AEP when each resource driver moves alone, from a base of
+      {{ fmt_gwh(aep.base_net_aep_gwh) }}; widest swing first.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Low case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th>High case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th style="text-align:right;">Swing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in aep.tornado %}
+        <tr>
+          <td>{{ r.driver }}</td>
+          <td>{{ r.low_label }}</td>
+          <td class="num">{{ fmt_gwh(r.low_gwh) }}</td>
+          <td>{{ r.high_label }}</td>
+          <td class="num">{{ fmt_gwh(r.high_gwh) }}</td>
+          <td class="num">{{ fmt_gwh(r.swing_gwh) }} ({{ "%.1f"|format(r.swing_pct) }}%)</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% set aep_committed = aep.committed_p50_gwh is not none or aep.committed_p90_gwh is not none %}
+    <h3>AEP Monte Carlo</h3>
+    <p class="muted">{{ "{:,}".format(aep.mc_n_samples) }} draws of the Weibull A and k, each
+      with a {{ "%g"|format(aep.weibull_uncertainty_pct) }}% one-sigma (seed {{ aep.mc_seed }}).
+      P-values use the exceedance convention: P90 is exceeded in 90% of draws.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Net AEP</th>
+          <th style="text-align:right;">Resource Monte Carlo</th>
+          {% if aep_committed %}<th style="text-align:right;">Committed basis</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>P50</td><td class="num">{{ fmt_gwh(aep.mc_p50_gwh) }}</td>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p50_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P75</td><td class="num">{{ fmt_gwh(aep.mc_p75_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+        <tr><td>P90</td><td class="num">{{ fmt_gwh(aep.mc_p90_gwh) }}</td>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p90_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P99</td><td class="num">{{ fmt_gwh(aep.mc_p99_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+        <tr><td>Mean (CV)</td><td class="num">{{ fmt_gwh(aep.mc_mean_gwh) }} ({{ "%.1f"|format(aep.mc_cv * 100) }}%)</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+      </tbody>
+    </table>
+    {% if aep.reconciliation %}
+    <h3>Why the figures differ</h3>
+    <ul class="notes aep-reconciliation">
+      {% for line in aep.reconciliation %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4f. Global sensitivity (Morris screening) — MC-1 #}
   {% if ctx.global_sa and ctx.global_sa.drivers %}
   <section class="page">
@@ -614,6 +686,190 @@
         {% endfor %}
       </tbody>
     </table>
+  </section>
+  {% endif %}
+
+  {# 4g-ii. Lender sensitivities (#1825 slice ii): DSCR and debt-capacity tornadoes through the
+     coupled-input seam, cost of equity, FX, financing Pareto screen, Sobol behind its own flag.
+     Opt-in; a sensitivity of the committed case, never a replacement for it. #}
+  {% if ctx.lender_sensitivities %}
+  {% set ls = ctx.lender_sensitivities %}
+  <section class="page lender-sensitivities">
+    <h2>Lender Sensitivities</h2>
+    <p class="muted"><strong>Sensitivity of the committed case, not a revised case.</strong>
+      Each point re-runs the model with the named inputs changed; the committed case and every
+      figure elsewhere in this report are unchanged. Committed case: equity NPV
+      {{ fmt_usd(ls.committed_equity_npv) }}, project IRR
+      {{ fmt_ratio_pct_or_undefined(ls.committed_project_irr) }}, minimum period DSCR
+      {{ fmt_x(ls.committed_min_dscr_period) }}, sized debt {{ fmt_usd(ls.committed_debt_usd) }}.</p>
+    {% for t in ls.tornadoes %}
+    <h3>{{ t.label }} &mdash; one-at-a-time</h3>
+    <p class="muted">The report&rsquo;s standard drivers, swept one at a time through the same
+      engine as the tornado above; widest swing first.</p>
+    {% if t.flat_reason %}
+    <p class="muted lender-sensitivity-flat"><strong>Flat:</strong> {{ t.flat_reason }}.</p>
+    {% endif %}
+    {% if t.reconciliation %}<p class="muted lender-sensitivity-reconciliation">{{ t.reconciliation }}</p>{% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">Downside case</th>
+          <th style="text-align:right;">Upside case</th>
+          <th style="text-align:right;">Swing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in t.rows %}
+        <tr>
+          <td>{{ r.label }}</td>
+          {% if t.unit == "usd" %}
+          <td class="num">{{ fmt_usd(r.low_case) }}</td>
+          <td class="num">{{ fmt_usd(r.high_case) }}</td>
+          <td class="num">{{ fmt_usd(r.impact_abs) }}</td>
+          {% else %}
+          <td class="num">{{ fmt_x(r.low_case) }}</td>
+          <td class="num">{{ fmt_x(r.high_case) }}</td>
+          <td class="num">{{ fmt_x(r.impact_abs) }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if ls.ke_band %}
+    <h3>Cost of Equity &mdash; Build-Up WACC Band</h3>
+    <p class="muted">The build-up WACC is recomputed from the sized debt at each cost of
+      equity; the committed case uses {{ fmt_ratio_pct(ls.ke_committed) }} (marked).</p>
+    {% if ls.ke_reconciliation %}<p class="muted lender-sensitivity-reconciliation">{{ ls.ke_reconciliation }}</p>{% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>Cost of equity</th>
+          <th style="text-align:right;">WACC</th>
+          <th style="text-align:right;">Project NPV</th>
+          <th style="text-align:right;">Equity NPV</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ls.ke_band %}
+        <tr{% if r.committed %} class="named"{% endif %}>
+          <td>{% if r.committed %}<strong>{{ fmt_ratio_pct(r.ke) }} (committed)</strong>{% else %}{{ fmt_ratio_pct(r.ke) }}{% endif %}</td>
+          <td class="num">{{ fmt_ratio_pct(r.wacc) }}</td>
+          <td class="num">{{ fmt_usd(r.project_npv) }}</td>
+          <td class="num">{{ fmt_usd(r.equity_npv) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% for sweep in ls.fx_sweeps %}
+    <h3>FX &mdash; {{ sweep.kind }}</h3>
+    <p class="muted">Searched: {{ sweep.searched }}. The scenario&rsquo;s own point is marked.</p>
+    {% if loop.first and ls.fx_reconciliation %}<p class="muted lender-sensitivity-reconciliation">{{ ls.fx_reconciliation }}</p>{% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:right;">LKR per USD</th>
+          <th style="text-align:right;">Hedge ratio</th>
+          <th style="text-align:right;">Spread (bps)</th>
+          <th style="text-align:right;">Project IRR</th>
+          <th style="text-align:right;">Equity NPV</th>
+          <th style="text-align:right;">Min DSCR</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in sweep.points %}
+        <tr{% if p.base %} class="named"{% endif %}>
+          <td class="num">{{ "%.2f" | format(p.fx_rate) }}</td>
+          <td class="num">{{ "%.2f" | format(p.hedge_ratio) }}</td>
+          <td class="num">{{ "%g" | format(p.spread_bps) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(p.project_irr) }}</td>
+          <td class="num">{{ fmt_usd(p.equity_npv) }}</td>
+          <td class="num">{{ fmt_x(p.min_dscr) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if ls.fx_sweeps %}
+    <p class="muted">Min DSCR in the FX tables is the headline minimum DSCR, which can sit
+      below the per-period floor under an interest-only lead-in (#790).</p>
+    {% endif %}
+    {% if ls.pareto %}
+    <h3>Financing Pareto Screen</h3>
+    <p class="muted">Every combination of {{ ls.pareto.axes | join(" and ") }} around the
+      committed terms, scored on {{ ls.pareto.objectives | join(" and ") }}.
+      {{ ls.pareto.n_frontier }} of {{ ls.pareto.rows | length }} points are on the frontier
+      (no other point is at least as good on every objective and better on one). The
+      committed terms are marked. The screen does not test whether lenders would offer
+      those terms.</p>
+    {% if ls.pareto.reconciliation %}<p class="muted lender-sensitivity-reconciliation">{{ ls.pareto.reconciliation }}</p>{% endif %}
+    <table>
+      <thead>
+        <tr>
+          {% for a in ls.pareto.axes %}<th style="text-align:right;">{{ a }}</th>{% endfor %}
+          {% for k in ls.pareto.objective_keys %}<th style="text-align:right;">{{ k }}</th>{% endfor %}
+          <th>Frontier</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ls.pareto.rows %}
+        <tr{% if r.committed %} class="named"{% endif %}>
+          {% for a in ls.pareto.axes %}<td class="num">{{ "%g" | format(r.settings.get(a)) }}</td>{% endfor %}
+          {% for k in ls.pareto.objective_keys %}<td class="num">{% if "npv" in k or "usd" in k %}{{ fmt_usd(r.objectives.get(k)) }}{% elif "dscr" in k or "llcr" in k %}{{ fmt_x(r.objectives.get(k)) }}{% else %}{{ "%.4g" | format(r.objectives.get(k)) }}{% endif %}</td>{% endfor %}
+          <td>{% if r.frontier %}yes{% else %}&ndash;{% endif %}{% if r.committed %} (committed){% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if ls.sobol %}
+    <h3>Sobol Indices</h3>
+    <p class="muted">Variance-based indices over the scenario&rsquo;s Monte Carlo driver
+      ranges ({{ ls.sobol_runs }} model evaluations, base sample {{ ls.sobol_n }}): S1 is a
+      driver acting alone, ST the driver with all its interactions. Each sample is scored
+      deterministically through the coupled-input seam; no Monte Carlo engine runs. At this
+      sample size the confidence half-widths are wide, so read the ranking, not the decimals.</p>
+    {% for m in ls.sobol %}
+    <p class="sobol-metric"><strong>{{ m.metric }}</strong></p>
+    {% if m.flag_reason %}
+    <p class="muted lender-sensitivity-flat"><strong>Not decomposed:</strong> {{ m.flag_reason }}.</p>
+    {% else %}
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th style="text-align:right;">S1</th>
+          <th style="text-align:right;">ST</th>
+          <th style="text-align:right;">ST &plusmn;</th>
+          <th>Interactive</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in m.rows %}
+        <tr>
+          <td>{{ r.driver }}</td>
+          <td class="num">{% if r.s1 is not none %}{{ "%.3f" | format(r.s1) }}{% else %}&ndash;{% endif %}</td>
+          <td class="num">{% if r.st is not none %}{{ "%.3f" | format(r.st) }}{% else %}&ndash;{% endif %}</td>
+          <td class="num">{% if r.st_conf is not none %}{{ "%.3f" | format(r.st_conf) }}{% else %}&ndash;{% endif %}</td>
+          <td>{% if r.interactive %}yes{% else %}&ndash;{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% if ls.parts_not_run %}
+    <p class="muted">Parts not run:</p>
+    <ul class="notes lender-sensitivities-not-run">
+      {% for line in ls.parts_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
   </section>
   {% endif %}
 
