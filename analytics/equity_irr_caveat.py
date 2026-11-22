@@ -15,6 +15,8 @@ from typing import Any, Mapping, Optional
 #: The equity summary keys the caveat reads (``finance.equity_distribution_v14_hydra``).
 RANKS_RELIABLY_KEY = "equity_irr_ranks_reliably"
 SIGN_CHANGES_KEY = "equity_cashflow_sign_changes"
+#: The caveat's closing sentence: where to look instead, and the #1456 decision.
+_POINTER = "Read equity NPV beside it, and rank cases on NPV, not equity IRR (#1456)."
 
 
 def equity_irr_ranking_caveat(
@@ -55,10 +57,9 @@ def equity_irr_ranking_caveat(
         reason = f"its equity cash flows change sign {count} times, so {outcome}"
     else:
         reason = "its equity cash flows do not change sign exactly once"
-    return (
-        f"Equity IRR does not rank this case: {reason}. "
-        "Read equity NPV beside it; the model's optimisers rank on equity NPV (#1456)."
-    )
+    # #1821 domain review DM-1: not every ranking in the model uses equity NPV (the solar +
+    # BESS sizing ranks on project NPV), so the caveat says NPV, not which one.
+    return f"Equity IRR does not rank this case: {reason}. {_POINTER}"
 
 
 def equity_irr_caveat_from_summary(summary: Any) -> Optional[str]:

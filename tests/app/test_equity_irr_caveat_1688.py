@@ -32,7 +32,7 @@ from analytics.pipeline_v14_enhanced import _update_kpis_with_equity_distributio
 from app.api.responses import CaseResult
 from app.reports import solar_assessment
 from app.reports.renderer import render_report_html
-from app.reports.report_model import build_report_context
+from app.reports.report_model import build_report_context, fmt_usd
 
 GENERATED_AT = "2026-11-17T00:00:00+00:00"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -116,8 +116,12 @@ def test_the_caveat_names_why_and_points_to_equity_npv(
     if isinstance(sign_changes, int) and not isinstance(sign_changes, bool):
         assert ("or none" in caveat) == (sign_changes >= 2 and sign_changes % 2 == 0)
     assert caveat.endswith(
-        "Read equity NPV beside it; the model's optimisers rank on equity NPV (#1456)."
+        "Read equity NPV beside it, and rank cases on NPV, not equity IRR (#1456)."
     )
+    # #1821 domain review DM-1: the solar + BESS sizing ranks on project NPV, so the caveat
+    # must not say that every optimiser ranks on equity NPV.
+    assert "optimisers" not in caveat
+    assert "rank on equity NPV" not in caveat
 
 
 # ── the engine side: the flag rides in metadata, never in kpis ──────────────────
@@ -188,6 +192,10 @@ def test_the_lender_report_shows_the_caveat_and_equity_npv(
     npv_row = summary.index("<td>Equity NPV</td>")
     caveat_row = summary.index('<tr class="equity-irr-caveat">')
     assert irr_row < npv_row < caveat_row, "equity NPV and the caveat follow equity IRR"
+    # The Equity NPV row prints the run's own equity NPV, not a placeholder.
+    equity_npv = flagged_run["kpis"]["equity_npv"]
+    assert isinstance(equity_npv, float)
+    assert f'<td>Equity NPV</td><td class="num">{fmt_usd(equity_npv)}</td>' in summary
     assert ctx.equity_irr_caveat in summary
     # #1821 review D-2: the Key Financial Indicators table prints equity IRR too.
     kfi = html.split("<h2>Key Financial Indicators</h2>", 1)[1].split("</section>", 1)[
