@@ -34,6 +34,7 @@ import yaml
 from scipy.stats import norm, qmc
 
 from analytics.evaluation_v14 import evaluate_with_overrides, evaluated_scenario_config
+from analytics.storage_headline import strip_headline_option
 from analytics.wind import wind_bess_options as wbo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -234,7 +235,9 @@ def run_options(  # noqa: C901 - one linear report
     """
     wbo.validate_config(cfg, schema_version=schema_version)
     scen_path = repo_path(cfg["scenario"])
-    scenario = yaml.safe_load(scen_path.read_text())
+    # #1823: every option is measured against the wind-only case, so a scenario that carries
+    # one held option in its headline KPIs is read here without that request.
+    scenario = strip_headline_option(yaml.safe_load(scen_path.read_text()))
     tcfg = cfg["tariff"]
     if float(scenario["tariff"]["lkr_per_kwh"]) != float(tcfg["wind_lkr_per_kwh"]):
         raise ValueError("tariff.wind_lkr_per_kwh differs from the scenario's tariff")

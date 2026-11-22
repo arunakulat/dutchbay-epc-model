@@ -98,6 +98,7 @@ EMITTER_ROOTS: Tuple[str, ...] = (
     "app.reports.capital_risk_emit",
     "app.reports.grid_screening_emit",
     "app.reports.interaction_grid_emit",
+    "app.reports.lender_report_emit",
     "app.reports.tech_comparison_emit",
 )
 

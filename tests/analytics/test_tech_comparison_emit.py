@@ -124,7 +124,8 @@ def test_build_for_scenarios_reconciles_wind_column_to_canonical() -> None:
     # lands nine 0.0025 steps higher, 0.355 -> 0.3775. The line above is the real
     # assertion (the column reconciles to the report's own source); this pins it.
     # #1577: 14 turbines move the solve three steps down, 0.3775 -> 0.37.
-    assert wind.gearing == pytest.approx(0.37)
+    # #1845: annual-covenant sizing binds the year-1 fold too, 0.37 -> 0.3475.
+    assert wind.gearing == pytest.approx(0.3475)
     # The hybrid column is a distinct, non-trivial economics (a real second column).
     assert hybrid.project_irr is not None
     assert hybrid.project_irr != wind.project_irr
@@ -154,8 +155,9 @@ def test_emit_renders_comparison_section_through_canonical_runs(tmp_path) -> Non
     assert "Wind" in html and "Hybrid" in html
     # The report's own Project IRR (-0.06% since #1504 charged the post-maturity fee on
     # the balance actually outstanding; -0.14% after #1397, -0.12% before; -0.25% since
-    # #1577 dropped DutchBay to 14 turbines) appears — proving reconciliation.
-    assert "-0.25%" in html
+    # #1577 dropped DutchBay to 14 turbines; -0.14% since #1845 sized the lender case to
+    # the annual covenant) appears — proving reconciliation.
+    assert "-0.14%" in html
     # No server filesystem path is leaked into the lender document.
     assert str(tmp_path) not in html
 

@@ -36,12 +36,15 @@ def test_run_pipeline_returns_full_report() -> None:
     # refinanced tranche's shortfall (-0.0999 -> -0.3054). #1504: the post-maturity senior
     # fee follows the refinanced balance actually outstanding (-0.3054 -> -0.2644).
     # #1505: the refinanced tranche's interest is deducted in the levered tax pass
-    # (-0.2644 -> -0.2301).
-    assert resp.kpis.equity_irr == pytest.approx(-0.2301, abs=0.005)
+    # (-0.2644 -> -0.2301). #1577 (14 turbines): -0.2337. #1845: the lender case sizes to
+    # the annual covenant DSCR, a smaller facility with a smaller balloon (-0.2337 ->
+    # -0.0776).
+    assert resp.kpis.equity_irr == pytest.approx(-0.0776, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     # The headline is the fold-corrected year-1 minimum (#790); the extra gearing
-    # #1397 supports pushes that fold under the 1.30 per-period sculpt target.
-    assert resp.kpis.min_dscr == pytest.approx(1.22, abs=0.02)
+    # #1397 supports pushes that fold under the 1.30 per-period sculpt target. #1845 sizes
+    # the lender case to the annual covenant, so the fold holds 1.30.
+    assert resp.kpis.min_dscr == pytest.approx(1.30, abs=0.02)
 
     # AEP (bankable, from the committed summary; post 2% P50 over-prediction haircut).
     # #1577: 14 turbines (464.3 / 404.4 for 15).
@@ -54,8 +57,9 @@ def test_run_pipeline_returns_full_report() -> None:
     # levered-tax coverage basis make the fee+levy-inclusive sculpt solve ~0.3775
     # gearing (debt ~$63.37M; was 0.355 / ~$59.59M on the pre-tax basis). #1577's 14
     # turbines shrink the financed capex to ~$159.12M and the sculpt to ~0.37 (~$58.87M).
-    assert resp.debt.debt_total_usd == pytest.approx(58.87e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.37, abs=0.01)
+    # #1845's annual-covenant sizing binds the year-1 fold too: ~0.3475 (~$55.29M).
+    assert resp.debt.debt_total_usd == pytest.approx(55.29e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.3475, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     # Default P50-only solve (bind_downside unset): the P90 sizing-detail fields stay
     # absent (None) so the lender pack renders no P90 rows for this case (#613).

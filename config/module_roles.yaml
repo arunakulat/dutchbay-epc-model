@@ -594,6 +594,18 @@ modules:
     role_description: Decomposes project IRR to equity IRR across tax, interest, leverage, and timing drivers.
     excel_representation: formula
 
+  - module_path: analytics.jurisdiction_packs.resolver
+    pipeline_stage: cost_levies_epc
+    role_description: Resolves jurisdiction pack values by governed subject and valuation date; fails closed and reports conflicts.
+    excel_representation: governance_metadata
+    notes: Not wired (#1843); no engine path calls the resolver until later #1841 slices.
+
+  - module_path: analytics.jurisdiction_packs.schema
+    pipeline_stage: cost_levies_epc
+    role_description: Strict schema and loader for versioned, sourced, effective-dated jurisdiction rule packs (statutory tax and levy parameters).
+    excel_representation: governance_metadata
+    notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
+
   - module_path: analytics.loader.aep_loader
     pipeline_stage: resource_yield
     role_description: Loads approved EPC annual energy production summaries with manifest provenance validation.
@@ -837,6 +849,11 @@ modules:
     role_description: Resolves and validates optional scenario-level site analysis configuration blocks.
     excel_representation: governance_metadata
 
+  - module_path: analytics.site_analysis_runs
+    pipeline_stage: governance
+    role_description: Runs a scenario's declared site analyses and stamps each summary with code and config digests.
+    excel_representation: governance_metadata
+
   - module_path: analytics.storage_dispatch
     pipeline_stage: tech_hybrid_bess
     role_description: Evaluates default-off hourly BESS charge/discharge instruction feasibility against ratings.
@@ -846,6 +863,11 @@ modules:
     pipeline_stage: tech_hybrid_bess
     role_description: Strict immutable hourly battery-dispatch ledger input contracts and physical receipts.
     excel_representation: governance_metadata
+
+  - module_path: analytics.storage_headline
+    pipeline_stage: tech_hybrid_bess
+    role_description: Adds a scenario's declared held wind battery option to capex and O&M before evaluation.
+    excel_representation: formula
 
   - module_path: analytics.storage_sizing
     pipeline_stage: tech_hybrid_bess
@@ -1074,9 +1096,19 @@ modules:
     role_description: CASPER optional-extra availability and pin-compliance probe read from pyproject metadata.
     excel_representation: governance_metadata
 
+  - module_path: app.reports.aep_resource_sensitivity
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's labelled wind-resource AEP sensitivity section from the AEP cluster tornado and Monte Carlo.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.capital_risk_emit
     pipeline_stage: reporting_delivery
     role_description: Opt-in emitter appending Monte Carlo capital-risk analysis blocks to lender outputs.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.capital_structure_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in capital-structure screening section from the debt-mix, contingency and gearing optimizers.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.climate_risk_disclosure
@@ -1116,6 +1148,19 @@ modules:
     role_description: Opt-in emitter formatting two-factor parameter interaction grids into report deliverables.
     excel_representation: non_model_adapter
 
+  - module_path: app.reports.lender_report_emit
+    pipeline_stage: reporting_delivery
+    role_description: Emitter writing the combined command-line lender report as HTML and a DBPL-01 PDF.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: casper_fallback
+
+  - module_path: app.reports.lender_sensitivity_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in sensitivities section (DSCR and debt-capacity tornadoes, cost-of-equity band, FX, financing Pareto screen, Sobol behind its own flag) through the coupled-input seam.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.module_ledger
     pipeline_stage: governance
     role_description: Strict Pydantic contracts and YAML loader for module role registries and execution ledgers.
@@ -1146,6 +1191,16 @@ modules:
   - module_path: app.reports.report_orchestration
     pipeline_stage: reporting_delivery
     role_description: Typed orchestration seams separating finance evaluation, report sensitivity, and context assembly.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.site_analysis_model
+    pipeline_stage: reporting_delivery
+    role_description: Typed report models for the screening site-analysis sections and their statuses.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.site_analysis_sections
+    pipeline_stage: reporting_delivery
+    role_description: Builds one screening report section per declared site analysis, with stale-summary checks.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.solar_assessment

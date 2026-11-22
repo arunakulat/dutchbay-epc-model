@@ -295,14 +295,23 @@ def test_explicit_equity_irr_is_honoured_with_a_warning(
 def test_lender_case_equity_summary_carries_the_caveat(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The refinanced tail calls equity back, so the IRR is caveated, not hidden."""
+    """The refinanced tail calls equity back, so the IRR is caveated, not hidden.
+
+    #1845 sizes the committed lender case to the annual covenant: its balloon falls to
+    USD 11.05M, the cash trapped in year 15 meets the refinance shortfall, and no year
+    calls the sponsor, so its equity cash flow changes sign once and the IRR ranks
+    reliably. This runs the lender case on the per-period basis, whose larger refinanced
+    balloon still calls equity back, to keep the caveat path covered.
+    """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
     with caplog.at_level(
         logging.WARNING, logger="finance.equity_distribution_v14_hydra"
     ):
         result = evaluate_with_overrides(
-            LENDER_CONFIG, overrides={}, return_full_result=True
+            LENDER_CONFIG,
+            overrides={"Financing_Terms.sizing_dscr_basis": "period"},
+            return_full_result=True,
         )
     equity = result["equity_distribution"]
     summary = equity["equity_summary"]

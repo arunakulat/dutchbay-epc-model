@@ -50,6 +50,12 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
+    # Re-pinned for 15.33.0 (#1845 annual covenant sizing of the lender case: only VERSION
+    # moved; the pinned 15-turbine lender scenario did not).
+    # Re-pinned for 15.31.0 (#1779 refinanced-tranche lock-up: only VERSION moved;
+    # the pinned 15-turbine lender scenario did not).
+    # Re-pinned for 15.30.0 (#1823 held battery in the Blue Whale headline KPIs: only VERSION
+    # moved; the pinned 15-turbine lender scenario did not).
     # Re-pinned for 15.29.0 (#1736 one cash basis for the sweep: only VERSION moved;
     # the pinned 15-turbine lender scenario did not).
     # Re-pinned for 15.28.0 (#1578 per-technology capex price basis: only VERSION moved;
@@ -91,7 +97,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "0a9bbc4d8cbd49ebee38d8f33096d943ba92b3d3ad318ab9b467d73abe49d25e"
+    "51f118e26dbe880fcebf87f40f49d2f88e9855c9f687949b7b3774bc691dca54"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
