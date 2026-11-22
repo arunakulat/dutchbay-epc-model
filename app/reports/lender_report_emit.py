@@ -47,7 +47,6 @@ from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
 from app.reports.renderer import render_report_html
 from app.reports.report_model import ReportContext, SectionNotRun
-from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.reports.report_orchestration import (
     PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     ReportSensitivityBundle,
@@ -57,6 +56,7 @@ from app.reports.report_orchestration import (
     global_sa_driver_count,
     report_case_from_pipeline_result,
 )
+from app.reports.site_analysis_model import SiteAnalysesBlock
 
 __all__ = [
     "LENDER_REPORT_FILES_DIR",
