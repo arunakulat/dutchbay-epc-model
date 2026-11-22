@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-14. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-22. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -1465,7 +1465,29 @@ any scenario that declares a `solar_storage_sizing` block:
   goes with the report sections (B3). The superseded hybrid's sizing
   (`conf/blue_whale_pv_bess_sizing.yaml`) stays single-site.
 
-## Latest run (the battery floor, 2026-11-14)
+## Latest run (no SSCL on revenue, #1874, 2026-11-22)
+
+IPP supply to CEB is exempt from SSCL (`#738`). The lender case already reflected this, and the owner ruled on 2026-11-22 that every
+scenario follows it, so all three Blue Whale scenarios now set
+`statutory.social_services_levy_pct: 0.0` (it was 0.025). Through
+`analytics.evaluation_v14.evaluate_with_overrides`, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.7, held 0.5 MW / 0.5 MWh battery in the headline, #1823) | 12.76% | 11.03% | 0.867 | 1,729,927 | -492,518 |
+| Solar + BESS project (v0.10) | undefined | undefined | 0.871 | -4,416,119 | -4,503,027 |
+| Hybrid (v0.11, superseded) | 11.03% | 8.71% | 0.868 | 311,832 | -2,614,185 |
+
+Before this change: wind 12.31% / 10.42% / USD 1,319,305 (v0.7), solar + BESS USD -4,479,214,
+hybrid 10.61% / 8.20% / USD -205,833. The battery options summary
+(`wind_bess_options_summary.json`) and the solar + BESS sizing summary were regenerated. The
+sizing's recommendation does not move: 107 tables, 3.5 MW AC and 0.1 MW / 0.4 MWh under both
+readings. Two alternatives do: the best P50 project IRR moves from 187 tables, 5.5 MW AC and
+3 MW / 12 MWh to 186 tables, 6.0 MW AC and 3.5 MW / 14 MWh, and the best P50 equity IRR from 188
+tables, 6.0 MW AC and 2 MW / 8 MWh to 187 tables, 6.0 MW AC and 3 MW / 12 MWh. Every other input
+is still a placeholder, so these are not results.
+
+## Earlier run (the battery floor, 2026-11-14)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on main's current
 basis (the 2026 price dates included):
