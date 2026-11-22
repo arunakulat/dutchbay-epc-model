@@ -96,6 +96,31 @@ def _sweep_omissions(
     )
 
 
+def _last_opened(created_at: str, events: list[dict[str, Any]]) -> str:
+    """When this PR last became open: its latest ``reopened`` event, else ``created_at``.
+
+    ``created_at`` does not move when a PR is reopened, so without this a reopened PR
+    would not have to name PRs opened while it was closed (#1877). An unreadable
+    ``created_at`` is returned unchanged, and an unreadable ``reopened`` time returns
+    "", so the sweep then requires every open PR (fail closed).
+    """
+    try:
+        latest = _timestamp(created_at)
+    except (TypeError, ValueError):
+        return created_at
+    opened = created_at
+    for event in events:
+        if event.get("event") != "reopened":
+            continue
+        try:
+            reopened = _timestamp(str(event["created_at"]))
+        except (KeyError, TypeError, ValueError):
+            return ""
+        if reopened > latest:
+            latest, opened = reopened, str(event["created_at"])
+    return opened
+
+
 def evaluate(
     body: str,
     author: str,
@@ -411,10 +436,25 @@ def main() -> int:
                             break
                     else:
                         raise ValueError("open PR list exceeds bounded ten-page sweep")
+                    events: list[dict[str, Any]] = []
+                    for page in range(1, 11):
+                        batch = _get_json(
+                            repository,
+                            f"issues/{pr_number}/events?per_page=100&page={page}",
+                            token,
+                        )
+                        events.extend(batch)
+                        if len(batch) < 100:
+                            break
+                    else:
+                        raise ValueError("PR event list exceeds bounded ten-page read")
                     sweep = _SWEEP.search(body)
                     assert sweep is not None
                     missing = _sweep_omissions(
-                        sweep.group(1), open_prs, pr_number, created_at
+                        sweep.group(1),
+                        open_prs,
+                        pr_number,
+                        _last_opened(created_at, events),
                     )
                     if missing:
                         code = 1
