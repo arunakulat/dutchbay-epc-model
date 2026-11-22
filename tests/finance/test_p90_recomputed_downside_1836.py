@@ -5,7 +5,9 @@ Oracles do not come from the code under test (TEST-01):
 * hand-worked fixed-debt coverage on a synthetic debt result (bridge fold and senior fee),
   and the hand algebra of the ratio method: (r x CFADS - fee) / service per row;
 * the engine's own published figures: the base case's coverage equals the engine's
-  ``dscr_by_year`` and ``llcr``, and the P90 case bills r x the base year-1 energy;
+  ``dscr_by_year`` and ``llcr``, the P90 case bills r x the base year-1 energy, and the
+  sizing downside is the factor the engine's ``dual_dscr`` detail publishes (the lender
+  case's declared flat factor, not P90/P50, because it does not bind the downside);
 * identity: when P90 = P50 the recomputed and ratio cases equal the base case;
 * the committed summary is regenerated in full and compared, with the SHA-256 of every
   scenario's bytes, so a stale summary fails here.
@@ -160,6 +162,40 @@ def test_base_case_matches_the_engines_covenant_figures() -> None:
     assert result["cases"]["recomputed"]["min_dscr"] < base["min_dscr"]
     # KPIs are untouched by the analysis.
     assert evaluate_with_overrides(raw_config=copy.deepcopy(config)) == kpis_before
+
+
+def test_sizing_downside_is_the_scenarios_own_factor() -> None:
+    config = load_scenario_config(LENDER)
+    fin = config["Financing_Terms"]
+    assert not fin.get("bind_downside")
+    result = p90.recomputed_p90_downside(config)
+    sizing = result["cases"]["sizing_downside"]
+    # Without bind_downside the engine uses the declared flat factor, not P90/P50.
+    assert sizing["factor"] == pytest.approx(float(fin["dscr_p99_downside_factor"]))
+    assert sizing["source"] == "flat_factor"
+    assert sizing["binds_gearing"] is False
+    assert sizing["factor"] != pytest.approx(result["p90_over_p50"], abs=1e-3)
+    # Hand algebra on the engine's own rows: (factor x CFADS - fee) / service.
+    debt = evaluate_with_overrides(raw_config=config, return_full_result=True)[
+        "debt_result"
+    ]
+    view = p90._cfads_map(debt, sizing["factor"])
+    expected = [d for _, _, d in fixed_debt_coverage_by_row(debt, view)]
+    assert sizing["min_dscr"] == pytest.approx(min(expected), abs=1e-12)
+    diff = result["recomputed_minus_sizing_downside"]
+    assert diff["min_dscr"] == pytest.approx(
+        result["cases"]["recomputed"]["min_dscr"] - sizing["min_dscr"], abs=1e-12
+    )
+
+
+def test_a_scenario_that_binds_the_downside_sizes_on_p90_over_p50() -> None:
+    config = load_scenario_config(HYBRID)
+    assert config["Financing_Terms"].get("bind_downside")
+    result = p90.recomputed_p90_downside(config)
+    sizing = result["cases"]["sizing_downside"]
+    assert sizing["source"] == "p90_aep"
+    assert sizing["binds_gearing"] is True
+    assert sizing["factor"] == pytest.approx(result["p90_over_p50"], rel=1e-5)
 
 
 def test_p90_equal_to_p50_reproduces_the_base_case() -> None:

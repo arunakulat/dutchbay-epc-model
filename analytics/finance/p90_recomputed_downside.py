@@ -1,10 +1,15 @@
 """Recomputed P90 downside, reported beside the CFADS-ratio approximation (#1836).
 
-The debt sizing builds its downside case by multiplying each year's CFADS by one factor,
-the P90/P50 energy ratio (``finance.debt.sizing._resolve_downside_ratio``). Scaling CFADS
-by an energy ratio is not the same as re-running the cash flow at P90 energy: fixed opex
-does not fall with production, and tax, levies, reserves and FX make the response
-nonlinear. This module measures the difference.
+A scenario's debt sizing applies its own downside factor to CFADS, and which factor that
+is depends on the scenario (``finance.debt.sizing._maybe_autosolve_dscr``). With
+``Financing_Terms.bind_downside`` it is ``_resolve_downside_ratio``'s factor (an explicit
+``downside_cfads_factor``, else the P90/P50 energy ratio, else the flat factor) and that
+case binds the gearing. Without it, the flat ``dscr_p99_downside_factor`` is used, and
+only in the dual-DSCR capacity detail; it does not bind the gearing. Scenarios with no
+DSCR sizing mode have no sizing downside at all. Whatever the factor, scaling CFADS by
+one number is not the same as re-running the cash flow at P90 energy: fixed opex does
+not fall with production, and tax, levies, reserves and FX make the response nonlinear.
+This module measures the difference.
 
 For a scenario that declares an ``expected_results`` P50/P90 pair it runs two cases
 through the canonical gateway (:func:`analytics.evaluation_v14.evaluate_with_overrides`):
@@ -14,10 +19,22 @@ through the canonical gateway (:func:`analytics.evaluation_v14.evaluate_with_ove
   technology in ``generation.technologies``) scaled by P90/P50, all else unchanged, so
   opex, tax, levies, the waterfall and reserves are recomputed by the engine.
 
-Both the ratio method (base CFADS x P90/P50) and the recomputed P90 CFADS are then set
-against the base case's FIXED debt service on the covenant basis
-(:func:`analytics.mc.fixed_debt_coverage.fixed_debt_coverage_by_row`), and the minimum and
-average annual DSCR and the LLCR are reported for each, with their difference.
+Three scaled or recomputed CFADS series are then set against the base case's FIXED debt
+service on the covenant basis
+(:func:`analytics.mc.fixed_debt_coverage.fixed_debt_coverage_by_row`):
+
+* ``sizing_downside``: base CFADS x the factor the scenario's own sizing used, read from
+  the engine's published ``debt_result["dual_dscr"]`` (``downside_ratio`` and
+  ``downside_source``), with whether it binds the gearing (the engine publishes
+  ``solved_gearing_p90`` only then); ``None`` when the scenario
+  has no DSCR sizing mode;
+* ``ratio_method``: base CFADS x P90/P50, the energy-ratio approximation;
+* ``recomputed``: the P90 case's own CFADS.
+
+The minimum and average annual DSCR and the LLCR are reported for each, with the
+recomputed case's difference from each approximation. Whether the recomputed P90 is
+milder or harsher than a scenario's sizing downside depends on that scenario's factor;
+the summary reports it per scenario and claims no general direction.
 
 What it is not: it changes no sizing, no input and no KPI. It is a modelled one-year
 exceedance on the scenario's own resource basis, not a lender P90 claim. Figures are
@@ -176,6 +193,38 @@ def _llcr(
     return base_llcr * _present_value(net(rows_case), rate) / base_npv
 
 
+def _difference(
+    case: Mapping[str, Any], other: Mapping[str, Any]
+) -> Dict[str, Optional[float]]:
+    """``case - other`` for each covenant figure, ``None`` where either is missing."""
+    out: Dict[str, Optional[float]] = {}
+    for key in ("min_dscr", "avg_dscr", "llcr"):
+        a, b = case.get(key), other.get(key)
+        out[key] = float(a) - float(b) if a is not None and b is not None else None
+    return out
+
+
+def _sizing_downside(base_debt: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    """The downside factor the scenario's own sizing used, as the engine published it.
+
+    Read from ``debt_result["dual_dscr"]`` (``downside_ratio``, ``downside_source``), so
+    no sizing rule is restated here. ``None`` when the scenario has no DSCR sizing mode
+    (the engine publishes no detail) or the detail carries no factor.
+    """
+    detail = base_debt.get("dual_dscr")
+    if not isinstance(detail, Mapping):
+        return None
+    factor = _positive(detail.get("downside_ratio"))
+    if factor is None:
+        return None
+    return {
+        "factor": factor,
+        "source": detail.get("downside_source"),
+        # The engine publishes a P90 gearing solve only when the downside binds.
+        "binds_gearing": detail.get("solved_gearing_p90") is not None,
+    }
+
+
 def _debt_result(full: Mapping[str, Any]) -> Mapping[str, Any]:
     debt = full.get("debt_result")
     return debt if isinstance(debt, Mapping) else {}
@@ -213,7 +262,14 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
     tenor = int(base_debt.get("tenor_years") or 0)
     rate = _llcr_discount_rate(config, base_debt)
     base_llcr = float(base_debt.get("llcr") or 0.0)
-    cases = {
+    sizing = _sizing_downside(base_debt)
+    sizing_rows: Optional[List[Tuple[int, float, float]]] = None
+    if sizing is not None:
+        sizing_view = _cfads_map(base_debt, sizing["factor"])
+        sizing_rows = fixed_debt_coverage_by_row(base_debt, sizing_view)
+        sizing.update(_summary(sizing_rows))
+        sizing["llcr"] = _llcr(sizing_view, base_debt, base_llcr, tenor, rate)
+    cases: Dict[str, Any] = {
         "base": {**_summary(base_rows), "llcr": base_llcr},
         "ratio_method": {
             **_summary(ratio_rows),
@@ -224,17 +280,10 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
             "llcr": _llcr(down_view, base_debt, base_llcr, tenor, rate),
         },
     }
-    diff = {
-        key: (
-            cases["recomputed"][key] - cases["ratio_method"][key]  # type: ignore[operator]
-            if cases["recomputed"][key] is not None
-            and cases["ratio_method"][key] is not None
-            else None
-        )
-        for key in ("min_dscr", "avg_dscr", "llcr")
-    }
+    cases["sizing_downside"] = sizing
     by_row = {r: d for r, _, d in down_rows}
     by_row_ratio = {r: d for r, _, d in ratio_rows}
+    by_row_sizing = {r: d for r, _, d in sizing_rows or []}
     return {
         "status": "ok",
         "label": LABEL,
@@ -243,11 +292,17 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
         "p90_over_p50": ratio,
         "llcr_discount_rate": rate,
         "cases": cases,
-        "recomputed_minus_ratio": diff,
+        "recomputed_minus_ratio": _difference(
+            cases["recomputed"], cases["ratio_method"]
+        ),
+        "recomputed_minus_sizing_downside": (
+            _difference(cases["recomputed"], sizing) if sizing is not None else None
+        ),
         "dscr_by_operating_year": [
             {
                 "operating_year": r + 1,
                 "base": d,
+                "sizing_downside": by_row_sizing.get(r),
                 "ratio_method": by_row_ratio.get(r),
                 "recomputed": by_row.get(r),
             }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hydra CLI: the recomputed P90 downside beside the CFADS-ratio method (#1836).
+"""Hydra CLI: the recomputed P90 downside beside the sizing downside and the CFADS-ratio method (#1836).
 
 For every scenario matching ``p90_downside.scenarios_glob`` that declares an
 ``expected_results`` P50/P90 pair, runs

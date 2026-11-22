@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# Recomputed P90 downside beside the CFADS-ratio approximation (#1836)
+# Recomputed P90 downside beside the sizing downside and the CFADS-ratio approximation (#1836)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Read by scripts/run_p90_recomputed_downside_v14.py. Results:
 # docs/finance/p90_recomputed_downside_summary.json.

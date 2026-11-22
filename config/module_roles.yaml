@@ -288,7 +288,7 @@ modules:
 
   - module_path: analytics.finance.p90_recomputed_downside
     pipeline_stage: core_finance
-    role_description: Reports a P90 case recomputed through the engine beside the CFADS-ratio downside, on the committed debt; no sizing change.
+    role_description: Reports a P90 case recomputed through the engine beside the scenario's own sizing downside factor and the P90/P50 CFADS ratio, on the committed debt; no sizing change.
     excel_representation: engine_table_plus_rollup
 
   - module_path: analytics.finance.fx_tenor_screening
