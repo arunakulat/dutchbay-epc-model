@@ -1,0 +1,63 @@
+# Report sections for the site analyses (#1824): titles and screening labels.
+#
+# Read by app/reports/site_analysis_sections.py. One section per site analysis
+# (analytics/site_analysis_blocks.py) and one for the wind resource transfer those analyses
+# read. Every figure in a section comes from the scenario's blocks and the analyses' results;
+# only report wording lives here. A label is shown on its section whenever the section has
+# results. Owner rulings: 2026-11-16 (every analysis for every scenario, emit_all on by
+# default) and 2026-11-17 (the Blue Whale report is wind + BESS only).
+
+schema_version: site_analysis_sections_v1
+
+intro: >-
+  Screening analyses the scenario declares. Each is listed with its status: completed, stale
+  (its committed summary no longer matches the code or inputs it was written from), not run,
+  failed or not applicable. None of them is a lender figure: F-5 (no quarterly CFADS or
+  intra-year DSCR figure supports a lender representation), #1110 and v15.6.1 stand.
+
+sections:
+  wind_resource_transfer:
+    title: Wind resource transfer (met-mast screening)
+    # Where a block names the transfer summary it reads. The first one found is shown.
+    named_by:
+      - storage_options.hourly_profile.transfer_summary
+      - equipment_cost_parity.energy_summary
+    labels:
+      - >-
+        No lender P90. This wind resource is a met-mast screening transfer, not a bankable
+        energy assessment. Its P50 is a screening figure, and no P90 from it supports a lender
+        representation.
+  storage_options:
+    title: Wind battery options
+    labels:
+      - >-
+        No lender P90. The hourly shape and the yield behind these options rest on a met-mast
+        screening transfer.
+      - >-
+        Tariff working assumption. The wind + BESS revenue basis applies a tariff formula the
+        regulator published for solar PV + BESS. It is a working assumption until a tariff for
+        wind + BESS is confirmed.
+      - >-
+        Contiguous-location limit. Under the Sri Lanka Electricity Act No. 36 of 2024, s.11(3),
+        a standardised power purchase agreement may procure at most 10 MW, on a cumulative
+        basis, from a contiguous location. Where the project relies on a standardised PPA,
+        whether other capacity on the same location counts against that limit is an open legal
+        question that this screening does not resolve.
+  equipment_cost_parity:
+    title: Equipment cost parity
+    labels:
+      - >-
+        Conditional benchmark, not a quote or a forecast. The site's yield in the parity rows
+        carries the resource holds of the energy summary it reads.
+  financing_screening:
+    title: FX and tenor screening
+    labels:
+      - >-
+        Screening indicators only, never lender terms. The lender rates are assumptions, and
+        the downside case is an assumed generation haircut, not a measured P90.
+  solar_storage_sizing:
+    title: PV + BESS sizing and dispatch
+    labels:
+      - >-
+        Screening sizing. The recommended size is the analysis's reading of its own grid, not
+        a lender case.

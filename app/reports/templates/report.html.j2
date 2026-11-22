@@ -1462,6 +1462,9 @@
   </section>
   {% endif %}
 
+  {#- 8a-bis-3. Site-analysis sections (#1824); omitted unless the caller builds them. #}
+  {%- if ctx.site_analyses %}{% include "_site_analyses.html.j2" %}{% endif %}
+
   {# 8a-ter. Three-statement financial statements + tie-outs — #479 #}
   {% if ctx.three_statement %}
   <section class="page">
