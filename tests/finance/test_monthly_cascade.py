@@ -345,7 +345,10 @@ def test_hand_cascade_with_tax_bess_fee_levies_and_hedge(hybrid) -> None:
 
 def test_augmentation_capex_is_deducted_by_days() -> None:
     cfg = copy.deepcopy(dict(load_scenario_config(BESS_ONLY)))
-    cascade = build_monthly_cascade(_with_monthly(cfg, {"cod_month": 4}))
+    # A seasonal energy shape, so a spread by energy instead of by days would show.
+    cascade = build_monthly_cascade(
+        _with_monthly(cfg, {"cod_month": 4, "energy_shape": SHAPE})
+    )
     y = 9  # the scenario's augmentation year
     a = cascade.annual_rows[y]
     assert a["bess_augmentation_capex_lkr"] > 0.0
@@ -419,8 +422,9 @@ def test_guard_checks_every_year_not_only_the_first(lender_config, monkeypatch) 
 
 
 def test_residual_closes_on_the_last_positive_weight_month() -> None:
-    """A value whose thirds do not add back exactly (see the allocator note in memory
-    of #1556): the residual must land on a positive-weight month, never a zero one."""
+    """A value whose thirds do not add back exactly (see the accuracy note on
+    ``finance.subannual_rows_v14.allocate_flow``, whose closing-residual rule ``_split``
+    follows): the residual must land on a positive-weight month, never a zero one."""
     weights = [0.0, 0.0, 1 / 3, 0.0, 1 / 3, 0.0, 0.0, 0.0, 1 / 3, 0.0, 0.0, 0.0]
     value = 7_321_208.521842453
     parts = mc._split(value, weights)
