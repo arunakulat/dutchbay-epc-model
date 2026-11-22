@@ -291,6 +291,11 @@ modules:
     role_description: Reports a P90 case recomputed through the engine and taxed on the committed loan's interest, beside the scenario's own sizing downside factor and the P90/P50 CFADS ratio, on the committed debt; no sizing change.
     excel_representation: engine_table_plus_rollup
 
+  - module_path: analytics.finance.p90_cover
+    pipeline_stage: core_finance
+    role_description: Reads the opt-in Financing_Terms.p90_cover_min_dscr and, when declared, raises the P50 sizing target until the recomputed P90 case covers the committed debt at that DSCR; absent, it changes nothing.
+    excel_representation: engine_table_plus_rollup
+
   - module_path: analytics.finance.fx_tenor_screening
     pipeline_stage: core_finance
     role_description: Evaluates dual-currency financing, FX depreciation shocks, and debt tenor-tail screening.
@@ -1216,6 +1221,11 @@ modules:
   - module_path: app.reports.tariff_status_section
     pipeline_stage: reporting_delivery
     role_description: Builds the lender report's tariff legal-status section and labels site-analysis figures that rest on an unpublished rate.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.recomputed_p90_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's rows for the recomputed P90 cover of the committed debt, beside the P90/P50 ratio method, measured at the sizing a declared P90 cover term set.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.site_analysis_sections

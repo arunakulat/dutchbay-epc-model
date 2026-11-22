@@ -47,6 +47,7 @@ from analytics.three_statement import (
 from api.pipeline_api import FinanceReportBlocks, extract_finance_report_blocks
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
+from app.reports.recomputed_p90_section import RecomputedP90Block
 from app.reports.report_config import (
     DSCR_THRESHOLD_NAME,
     Covenants,
@@ -1331,6 +1332,10 @@ class ReportContext(BaseModel):
     #: :func:`app.reports.site_analysis_sections.build_site_analyses_block`. None (the default)
     #: omits them, so every report whose caller passes none is byte-identical.
     site_analyses: Optional[SiteAnalysesBlock] = None
+    #: The recomputed P90 cover of the committed debt (#1895), built by
+    #: :func:`app.reports.recomputed_p90_section.build_recomputed_p90_block`. None (the
+    #: default) omits its rows, so every report whose caller passes none is byte-identical.
+    recomputed_p90: Optional[RecomputedP90Block] = None
     #: Project→equity IRR bridge (#621). Reconciles the published project IRR to the published
     #: equity IRR via labelled legs (leverage / cost of debt / tax shield) + an explicit residual.
     #: None unless the caller supplies the full run result AND it carries a computed equity

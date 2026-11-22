@@ -1324,6 +1324,27 @@ def run_v14_pipeline_enhanced(
         phase_start = time.time()
 
         cfg = _validate_config_type_and_structure(config)
+        # #1895: an opt-in Financing_Terms.p90_cover_min_dscr also sizes the debt against
+        # the recomputed P90 case. Absent on every committed scenario, so this branch is
+        # not taken and the run below is unchanged. When declared, the gearing cap that
+        # meets the cover is found first, then the scenario is priced at that cap.
+        from analytics.finance.p90_cover import resolve_p90_cover, solve_p90_cover
+
+        p90_cover = resolve_p90_cover(cfg)
+        if p90_cover is not None:
+            priced, cover_block = solve_p90_cover(cfg, p90_cover)
+            covered = run_v14_pipeline_enhanced(
+                priced,
+                validation_mode=validation_mode,
+                validation_modules=validation_modules,
+                enable_monitoring=enable_monitoring,
+            )
+            covered["debt_result"]["p90_cover"] = cover_block
+            # The priced run took a mapping; the scenario as loaded is what was gated.
+            covered["yield_reconciliation"] = build_yield_reconciliation_record(
+                cfg, gate_applied=isinstance(config, (str, Path))
+            )
+            return covered
         # #1768: describe the AEP <-> capacity-factor reconciliation on the configuration
         # exactly as loaded. A scenario file was loaded through load_scenario_config, whose
         # fail-loud gate has just passed on it; an inline mapping (an API case, or a Monte
