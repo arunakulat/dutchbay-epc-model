@@ -594,6 +594,12 @@ modules:
     role_description: Decomposes project IRR to equity IRR across tax, interest, leverage, and timing drivers.
     excel_representation: formula
 
+  - module_path: analytics.jurisdiction_packs.schema
+    pipeline_stage: cost_levies_epc
+    role_description: Strict schema and loader for versioned, sourced, effective-dated jurisdiction rule packs (statutory tax and levy parameters).
+    excel_representation: governance_metadata
+    notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
+
   - module_path: analytics.loader.aep_loader
     pipeline_stage: resource_yield
     role_description: Loads approved EPC annual energy production summaries with manifest provenance validation.
@@ -1120,6 +1126,14 @@ modules:
     pipeline_stage: reporting_delivery
     role_description: Opt-in emitter formatting two-factor parameter interaction grids into report deliverables.
     excel_representation: non_model_adapter
+
+  - module_path: app.reports.lender_report_emit
+    pipeline_stage: reporting_delivery
+    role_description: Emitter writing the combined command-line lender report as HTML and a DBPL-01 PDF.
+    excel_representation: non_model_adapter
+    optional_extras:
+      - report
+    extra_mode: casper_fallback
 
   - module_path: app.reports.module_ledger
     pipeline_stage: governance
