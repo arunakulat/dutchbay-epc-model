@@ -215,7 +215,7 @@ tax:
 statutory:
   success_fee_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
   env_surcharge_pct: 0.0  # non-statutory levy — not in the SL regime; zeroed (#43)
-  social_services_levy_pct: 0.025
+  social_services_levy_pct: 0.0  # IPP supply to CEB is SSCL-exempt, as in the lender case (#738); was 0.025 (#1874)
 risk_adjustment:
   cfads_haircut_pct: 0.1
 Financing_Terms:
