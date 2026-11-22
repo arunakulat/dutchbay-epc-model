@@ -51,9 +51,10 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     # reported honestly.
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)
     assert res["debt_total"] == pytest.approx(
-        0.35 * CAPEX_GROSS, rel=3e-3
+        0.3475 * CAPEX_GROSS, rel=3e-3
     )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees + #738 levies de-lever;
-    # #1577's 14 turbines move the solve two 0.0025 steps down, 0.355 -> 0.35)
+    # #1577's 14 turbines move the solve two 0.0025 steps down, 0.355 -> 0.35; #1845's
+    # annual-covenant basis binds the year-1 fold too, one more step, 0.35 -> 0.3475)
     detail = res["dual_dscr"]
     assert detail is not None
     assert (

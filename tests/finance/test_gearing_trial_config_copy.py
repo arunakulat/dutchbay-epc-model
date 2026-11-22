@@ -65,18 +65,31 @@ def _reference_solve(
     fp_eps: float = 1e-6,
     start_hint: float | None = None,
 ) -> float:
-    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial).
+    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial),
+    with #1845's annual-covenant basis.
 
     ``start_hint`` is accepted and ignored: the oracle is always the cold scan, so a
     warm-started solve is held to the same answer (see test_gearing_warm_start.py).
     """
     del start_hint
+    # #1845: on the annual-covenant basis the solve also holds every covenant year
+    # (``dscr_by_year``). Read from the config here, not through the code under test.
+    fin = config.get("Financing_Terms") or {}
+    covenant_basis = (
+        str(fin.get("sizing_dscr_basis", "period")).strip().lower() == "annual_covenant"
+    )
     ratio = max_ratio
     while ratio > 0.0:
         core = debt_v14.apply_debt_layer(
             params=_deepcopy_config_at(config, ratio), annual_rows=annual_rows
         )
         public = debt_v14._clean_public_dscr_series(core.get("dscr_series", []) or [])
+        if covenant_basis:
+            public = public + [
+                float(v)
+                for v in (core.get("dscr_by_year") or {}).values()
+                if v is not None
+            ]
         achieved = min(public) if public else float(core.get("dscr_min", 0.0))
         if achieved >= target_dscr - fp_eps:
             return round(ratio, 6)

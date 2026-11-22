@@ -434,8 +434,13 @@ def test_canonical_mc_end_to_end_feeds_capital_risk_report(tmp_path) -> None:
     # At 1.0 the DSCR figure can no longer distinguish a real regression, so LLCR is
     # the live control: it is computed from the same trials and stays clear of its
     # covenant, which a fabricated or all-breaching tail report would not manage.
+    #
+    # #1845 (owner decision 2026-11-22) sizes the lender case to the annual covenant, so
+    # each trial's solve holds the fold at 1.30 and no trial breaches: 1.0 -> 0.0. The
+    # DSCR figure is again pinned by the sizing rather than discriminating, so LLCR
+    # stays the live control.
     cb = rep.tail_report.covenant_breaches
-    assert cb.dscr_breach_probability == pytest.approx(1.0)
+    assert cb.dscr_breach_probability == pytest.approx(0.0)
     assert cb.llcr_breach_probability == pytest.approx(0.0)
 
 

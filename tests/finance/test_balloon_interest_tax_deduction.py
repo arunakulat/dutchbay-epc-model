@@ -42,7 +42,8 @@ _N = len(_DS)
 # Re-measured by #1577 (14 turbines, 2026-11-08): the `none` basis on the 14-turbine lender
 # case is -26.73% (it was -26.44% on 15). The pin is the engine's output with the #1505
 # deduction switched off, so it moves with the scenario, not with #1505.
-_PRE_1505_LENDER_EQUITY_IRR = -0.26733287852795706
+# Re-measured by #1845 (annual-covenant sizing, 2026-11-22): -7.98% on the smaller facility.
+_PRE_1505_LENDER_EQUITY_IRR = -0.07976466129176385
 
 
 def _path(treatment: str, cfads: List[float], **kw: Any) -> Dict[str, Any]:

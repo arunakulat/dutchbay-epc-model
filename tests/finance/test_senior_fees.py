@@ -164,6 +164,8 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     A/B against the FEE-ONLY-off fixture (#738 posture kept on both sides), so
     every delta below is attributable to the fee alone.
 
+    #1845 gives it back on the lender case (see the assertions below).
+
     #1397 took the title's second half away, and that is worth stating rather than
     quietly dropping. The fee used to shrink the committed facility; it no longer does,
     because the extra levered-tax capacity puts both solves on the same 0.3775 gearing
@@ -185,22 +187,20 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     # They now sit BELOW the target rather than on it, at the year-1 fold value #1397
     # re-baselined (1.2196; the orphaned bridge service folded into year 1 -- #1353,
     # issuecomment-6433557550). This docstring used to record the same gap at ~1.288.
-    # #1577 (14 turbines) moves the fold to 1.2214.
+    # #1577 (14 turbines) moves the fold to 1.2214. #1845 (annual-covenant sizing,
+    # 2026-11-22) holds the fold at the target too, so every covenant year reads 1.30.
     assert on["min_dscr"] == pytest.approx(debt_on["min_dscr"], abs=1e-9)
-    assert debt_on["min_dscr"] == pytest.approx(1.2214, abs=1e-3)
+    assert debt_on["min_dscr"] == pytest.approx(1.30, abs=1e-9)
     by_year = [v for v in debt_on["dscr_by_year"].values() if v is not None]
-    assert min(by_year) >= 1.21
-    assert sorted(by_year)[1] >= 1.29, "only year 1 may sit under the target"
-    # ...while the sculpted debt SERVICE carries the fee, which is what "inside the
-    # sculpt" means and is the part that is still observable. The committed facility is
-    # now identical on both sides (see the docstring), so asserting debt_on < debt_off
-    # would be asserting the solver's rounding, not the fee.
-    assert debt_on["debt_total"] == pytest.approx(debt_off["debt_total"], rel=1e-12)
-    service_on = debt_on["dual_dscr"]["debt_service_p50"]
-    service_off = debt_off["dual_dscr"]["debt_service_p50"]
-    assert sum(service_on) > sum(
-        service_off
-    ), "the fee is no longer inside the sculpted service at all"
+    assert min(by_year) >= 1.30 - 1e-9, "every covenant year meets the target"
+    # ...and the fee shrinks the facility again. #1397 had both solves on the same
+    # 0.3775 step, so the fee's de-levering was below the solver's granularity; with the
+    # fold binding (#1845), the fee-netted year-1 fold costs 0.0225 of gearing
+    # (0.37 -> 0.3475), so "smaller debt" in the title is observable once more.
+    assert (
+        debt_on["dual_dscr"]["solved_gearing"] < debt_off["dual_dscr"]["solved_gearing"]
+    )
+    assert debt_on["debt_total"] < debt_off["debt_total"]
     # ...and the economics honestly bear the fee.
     assert on["total_cfads_usd"] < off["total_cfads_usd"]
     assert on["project_npv"] < off["project_npv"]

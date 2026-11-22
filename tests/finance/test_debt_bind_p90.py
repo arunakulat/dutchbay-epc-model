@@ -49,9 +49,10 @@ def test_default_off_preserves_canonical() -> None:
     # No downside solve => no P90 target detail either (report renders no P90 rows).
     assert "target_dscr_p90" not in d
     assert d["solved_gearing_p50"] == pytest.approx(
-        0.3775, abs=0.01
+        0.3475, abs=0.01
     )  # PR-B UIP LKR rate + #737 fees + #738 levies, sculpted on the grossed base;
-    # #1397 lifts it 0.355 -> 0.3775 by sculpting on levered-tax CFADS
+    # #1397 lifts it 0.355 -> 0.3775 by sculpting on levered-tax CFADS; #1845's
+    # annual-covenant basis also binds the year-1 fold, 0.3775 -> 0.3475
 
 
 def test_p90_binds_when_floor_is_high() -> None:

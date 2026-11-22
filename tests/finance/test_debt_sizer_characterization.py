@@ -41,7 +41,9 @@ LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # Gearings spanning the sub-cap sculpt region (< ~0.45 DSCR-solved) and the clamped
 # region (>= ~0.45). PR B's UIP LKR debt rate (13.39%) dropped the DSCR-solved cap to ~0.45,
 # so the sweep now starts BELOW the cap (0.35/0.40) to retain genuinely sub-cap points.
-GEARINGS = [0.35, 0.40, 0.45, 0.50, 0.60, 0.70]
+# #1845 (annual-covenant sizing) moves the lender cap to 0.3475, so the sub-cap point is
+# 0.30 (it was 0.35, which now clamps).
+GEARINGS = [0.30, 0.40, 0.45, 0.50, 0.60, 0.70]
 
 
 def _kpis(debt_ratio: float) -> dict:
@@ -73,6 +75,9 @@ def test_no_phantom_covenant_lockup() -> None:
     #1779 adds the refinanced balloon tranche to the lock-up. Its three years (15 to 17)
     lock on the tranche's own coverage, so the case now locks four years; the guard
     still holds the scheduled test to the year-1 fold alone.
+
+    #1845 sizes the lender case to the annual covenant, so the year-1 fold meets 1.30
+    and the scheduled test locks nothing: the case locks only the tranche's three years.
     """
     full = evaluate_with_overrides(LENDER_CONFIG, overrides={}, return_full_result=True)
     kpis = full["kpis"]
@@ -82,7 +87,9 @@ def test_no_phantom_covenant_lockup() -> None:
     rows = full["equity_distribution"]["annual_distributions"]
     locked = [int(r["year"]) for r in rows if r["covenant_locked"]]
     tranche = [int(r["year"]) for r in rows if r["refinance_tranche_locked"]]
-    assert locked == [1, 15, 16, 17]
+    # #1845 (annual-covenant sizing, 2026-11-22): the year-1 fold is sized to the target,
+    # so the scheduled test locks no year at all and only the tranche's years remain.
+    assert locked == [15, 16, 17]
     assert tranche == [15, 16, 17]
     assert kpis["equity_covenant_locked_years"] == len(locked)
     # Every PERIOD is still genuinely sculpted to the target; only the year-1 fold is
@@ -137,7 +144,7 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
 
     irrs = [
         _kpis(dr)["equity_irr"] for dr in GEARINGS
-    ]  # [0.35,0.40,0.45,0.50,0.60,0.70]
+    ]  # [0.30,0.40,0.45,0.50,0.60,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
     # Above the DSCR-solved cap (<=0.40 after #1397; ~0.355 under F5-01, ~0.41 after
@@ -151,9 +158,11 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     # balance actually outstanding, so the clamped canon moves -30.54% -> -26.44%.
     # #1505 (2026-11-01): the refinanced tranche's interest is deducted in the levered
     # tax pass, -26.44% -> -23.01%. #1577 (2026-11-08): 14 turbines, -23.01% -> -23.37%.
-    assert plateau[0] == pytest.approx(-0.2337, abs=0.002)
+    # #1845 (2026-11-22): sized to the annual covenant, a smaller facility and balloon,
+    # -23.37% -> -7.76%.
+    assert plateau[0] == pytest.approx(-0.0776, abs=0.002)
     assert all(irr < 0.0 for irr in irrs), f"equity unexpectedly profitable: {irrs}"
-    # The sub-cap 0.35 point is ABOVE the clamped plateau: the project IRR is negative,
+    # The sub-cap 0.30 point is ABOVE the clamped plateau: the project IRR is negative,
     # so the extra leverage the cap allows costs equity rather than paying it.
     assert irrs[0] > plateau[0], f"leverage did not cost equity below the cap: {irrs}"
     assert irrs[0] - plateau[0] > 0.001, f"gearing barely moves equity_irr: {irrs}"

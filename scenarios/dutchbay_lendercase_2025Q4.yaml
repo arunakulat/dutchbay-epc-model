@@ -496,6 +496,11 @@ Financing_Terms:
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
+  # #1845 (owner decision, 2026-11-22): size the debt so the ANNUAL covenant DSCR
+  # (dscr_by_year, with the half-year bridge's service folded into operating year 1)
+  # also meets target_dscr, not only each debt period's own DSCR. Year 1 is
+  # interest-only here, so the gearing solve meets it with less debt.
+  sizing_dscr_basis: annual_covenant
   interest_rate_nominal: 0.08
 
   # ── Multi-currency debt structure (CANONICAL) ───────────────────────────

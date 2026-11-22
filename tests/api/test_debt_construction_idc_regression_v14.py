@@ -131,14 +131,17 @@ def test_lendercase_idc_totals_pinned() -> None:
     # #1577 (14 turbines, 2026-11-08): the levy-inclusive capex falls to $159.1153M and the
     # tranches re-solve smaller (LKR 32.442M -> 30.319M, USD 29.908M -> 27.950M,
     # DFI 6.553M -> 6.124M; IDC 9.312M -> 8.703M).
+    # #1845 (annual-covenant sizing, 2026-11-22): the solve also binds the year-1 fold,
+    # so the tranches re-solve smaller (LKR 30.319M -> 30.102M, USD 27.950M -> 27.751M,
+    # DFI 6.124M -> 6.080M; IDC 8.703M -> 8.640M).
     assert float(lkr.get("principal_m", 0.0)) == pytest.approx(
-        30_318_759.903499, rel=tol
+        30_102_197.332760, rel=tol
     )
     assert float(usd.get("principal_m", 0.0)) == pytest.approx(
-        27_950_474.200856, rel=tol
+        27_750_827.956564, rel=tol
     )
     assert float(dfi.get("principal_m", 0.0)) == pytest.approx(
-        6_123_782.609446, rel=tol
+        6_080_041.305093, rel=tol
     )
 
     total_principal = (
@@ -146,23 +149,24 @@ def test_lendercase_idc_totals_pinned() -> None:
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(64_393_016.713801, rel=tol)
+    assert total_principal == pytest.approx(63_933_066.594416, rel=tol)
 
     # IDC by tranche (scales with the fee+levy-sized principals).
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_258_093.766559, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(2_889_808.063916, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(554_745.690126, rel=tol)
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_220_535.953941, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(2_869_166.577745, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(550_783.220911, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(8_702_647.520601, rel=tol)
+    assert total_idc == pytest.approx(8_640_485.752596, rel=tol)
 
     # F5-01 aligns the first operating row to COD, removing the former orphaned
     # bridge-service fold gap; the headline and period minima now both meet target.
     # #1577 (14 turbines): the per-period sculpt still lands at 1.30, but the folded
     # operating-year-1 covenant coverage (dscr_by_year[1]) now sits just under it,
     # 1.3024 -> 1.2961, and plan_debt reports the conservative minimum of the two views.
+    # #1845: the lender case sizes to the annual covenant, so the fold is back at 1.30.
     min_dscr = float(result.get("min_dscr"))
-    assert min_dscr == pytest.approx(1.2961020561059817, rel=tol)
+    assert min_dscr == pytest.approx(1.30, rel=tol)
 
     # audit_status is PASS iff the debt-engine dscr_min >= the 1.30 target. The dual-DSCR
     # sculpt lands dscr_min AT the target, so this `>=` comparison sits on the boundary and
