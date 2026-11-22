@@ -157,11 +157,17 @@ def build_tech_comparison_for_scenarios(
         # read of an already-computed value (not finance recomputation); the projection
         # mapper stays pure. Absent (a non-dual-sized config) -> stays None -> honest
         # em-dash, never fabricated.
+        debt_result = result.get("debt_result") or {}
         if kpis.get("gearing") is None:
-            dual = (result.get("debt_result") or {}).get("dual_dscr") or {}
+            dual = debt_result.get("dual_dscr") or {}
             solved_gearing = dual.get("solved_gearing")
             if solved_gearing is not None:
                 kpis["gearing"] = solved_gearing
+        # #1493: each column states how its run resolves a balloon left at scheduled maturity,
+        # read from the SAME published debt result (no recomputation). Equity figures of cases
+        # that resolve a balloon differently are not like for like, and the section says so.
+        kpis["balloon_treatment"] = debt_result.get("balloon_treatment")
+        kpis["balloon_at_maturity_usd"] = debt_result.get("balloon_remaining")
         cases.append((label, kpis))
     block = _build_tech_comparison(cases)
     if (

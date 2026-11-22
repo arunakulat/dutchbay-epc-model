@@ -811,6 +811,21 @@ class TechComparisonRow(BaseModel):
     project_npv: Optional[float] = None
     total_cfads_usd: Optional[float] = None
     gearing: Optional[float] = None
+    #: How the run resolves a balloon left at scheduled maturity (``debt_result``'s published
+    #: ``balloon_treatment``, e.g. ``refinance`` or ``cash_sweep``), and the balloon it left
+    #: (``debt_result["balloon_remaining"]``, USD). A comparison of equity figures across
+    #: cases that resolve a balloon differently mixes that difference in (#1493), so each
+    #: column states its own. ``None`` when the run did not publish it.
+    balloon_treatment: Optional[str] = None
+    balloon_at_maturity_usd: Optional[float] = None
+
+    @property
+    def carries_balloon(self) -> bool:
+        """True when the run left a balloon at scheduled maturity (more than USD 1)."""
+        return (
+            self.balloon_at_maturity_usd is not None
+            and self.balloon_at_maturity_usd > _TECH_COMPARISON_BALLOON_TOL_USD
+        )
 
 
 class TechComparisonBlock(BaseModel):
@@ -831,6 +846,28 @@ class TechComparisonBlock(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     rows: List[TechComparisonRow]
+
+    @property
+    def balloon_treatments_differ(self) -> bool:
+        """True when the treatments that act on the compared cases differ (#1493).
+
+        Their figures then mix the treatment difference into what the table presents as a
+        technology or capex difference, so the section says so: equity figures most of all,
+        and in some cases project IRR, project NPV and CFADS too.
+
+        A treatment is counted only where it can act. ``refinance``, ``cash_sweep`` and the
+        like act only on a balloon, so a case that leaves none is like for like whichever of
+        them it names, and is not counted. ``amortize`` is always counted: it resizes the
+        debt to leave no balloon, and a published zero cannot tell a resized case from one
+        that never needed it. A case that publishes no treatment is not counted either.
+        """
+        treatments = {
+            row.balloon_treatment
+            for row in self.rows
+            if row.balloon_treatment is not None
+            and (row.carries_balloon or row.balloon_treatment == "amortize")
+        }
+        return len(treatments) > 1
 
 
 class RefinanceCoverageRow(BaseModel):
@@ -2081,6 +2118,13 @@ _TECH_COMPARISON_KPI_KEYS = (
     "gearing",
 )
 
+#: A balloon at or below this (USD) is treated as none left at maturity in the comparison.
+#: It is the debt engine's own threshold for a balance it treats as repaid
+#: (``finance.debt_v14._BALLOON_TOL``), so the two agree. It is restated here rather than
+#: imported so the report layer takes no import on the finance package; a test pins the two
+#: equal, so neither can move alone.
+_TECH_COMPARISON_BALLOON_TOL_USD = 1.0
+
 
 def _build_tech_comparison(
     cases: Sequence[tuple[str, Mapping[str, Any]]],
@@ -2092,7 +2136,9 @@ def _build_tech_comparison(
     The mapper only reshapes those published numbers into one :class:`TechComparisonRow` per case,
     reading each of the six headline keys from the kpis-dict; a key absent from a run renders
     em-dash (``gearing`` is not a top-level pipeline KPI, so it is em-dash unless a caller injected
-    it), and no metric is ever recomputed or fabricated here.
+    it), and no metric is ever recomputed or fabricated here. A caller may also inject the run's
+    published ``balloon_treatment`` (a string) and ``balloon_at_maturity_usd`` (#1493), so each
+    column states how its run resolves a balloon; absent, the row carries ``None``.
 
     Returns ``None`` for an empty ``cases`` sequence — the section is then omitted (default-off,
     byte-identical). The emitter enforces the config-required, non-empty scenario list fail-loud
@@ -2104,14 +2150,23 @@ def _build_tech_comparison(
     rows: List[TechComparisonRow] = []
     for label, kpis in cases:
         values: Dict[str, Optional[float]] = {}
-        for key in _TECH_COMPARISON_KPI_KEYS:
+        for key in _TECH_COMPARISON_KPI_KEYS + ("balloon_at_maturity_usd",):
             raw = kpis.get(key)
             values[key] = (
                 _finite_or_none(float(raw))
                 if isinstance(raw, (int, float)) and not isinstance(raw, bool)
                 else None
             )
-        rows.append(TechComparisonRow(label=str(label), **values))
+        treatment = kpis.get("balloon_treatment")
+        rows.append(
+            TechComparisonRow(
+                label=str(label),
+                balloon_treatment=(
+                    str(treatment) if isinstance(treatment, str) and treatment else None
+                ),
+                **values,
+            )
+        )
     return TechComparisonBlock(rows=rows)
 
 

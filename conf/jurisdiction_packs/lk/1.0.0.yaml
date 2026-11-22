@@ -1,0 +1,254 @@
+# Sri Lanka reference jurisdiction pack, version 1.0.0 (#1842, tracking #1841).
+#
+# The statutory values the Sri Lanka scenarios carry today in their `tax:`,
+# `taxes_indirect:` and `statutory:` blocks, held once with their source and effective
+# window. Schema: analytics/jurisdiction_packs/schema.py.
+#
+# NOTHING READS THIS FILE YET. The engine still takes every value from the scenario.
+# A later slice of #1841 moves the engine onto the pack, and must keep every output
+# byte-identical when it does.
+#
+# What this pack is not:
+#  - Not a legal opinion. Each value is as the repository recorded it, with the
+#    citation it recorded. No primary text is pinned here (status `as_recorded`).
+#    #1353 P0.3 keeps the applicable tax primary text and opinion as an open evidence
+#    gate.
+#  - Not complete. Project-specific choices stay in the scenario: the tax holiday
+#    route granted, BOI or bonded relief, the imported share of capex, and whether
+#    WHT applies to a given lender. They are not statutory values.
+#  - Not assured. v1 refuses `assured`; it needs an independent review record.
+#
+# `effective_from_basis: in_force_by` means the repository recorded the value as
+# current on that date; the true start may be earlier. Valuations before that date are
+# outside what this pack knows.
+#
+# Scenarios that disagree with a value below are listed, with a classification, in
+# tests/fixtures/jurisdiction_packs/lk_1_0_0_scenario_disagreements.yaml. A test keeps
+# that list in step with the scenarios.
+
+schema_id: dutchbay.jurisdiction_pack.v1
+pack_id: dutchbay.jurisdiction.lk
+kind: jurisdiction
+version: 1.0.0
+jurisdiction_code: LK
+jurisdiction_name: Sri Lanka
+status: supported
+owner: DutchBay model product owner
+effective_date: 2026-11-21
+review_date: 2027-05-21
+
+limitations:
+  - "Every value is as the repository recorded it, with the citation it recorded (status as_recorded). No primary legal text is pinned in this pack."
+  - "Effective dates are 'in force by' dates: the date the repository recorded the value as current. Earlier valuations are outside what this pack knows."
+  - "Conditions are recorded in words. Machine-readable applicability predicates are not part of v1."
+  - "Revenue VAT is recorded in scenario comments as exempt for IPP supply to CEB. It has no engine hook and no scenario key, so it is not a parameter here."
+  - "The CIF+10% import markup for import SSCL and the VAT-on-SSCL ordering are second-order cascades that finance/import_levies.py documents and does not model."
+  - "The tariff rules (PUCSL decisions) are not in this version. #1841 adds them after #1837."
+
+prohibited_substitutions:
+  - "Never apply this pack to a project in another jurisdiction, or to a project whose jurisdiction is unknown."
+  - "Never treat an as_recorded value as a legal opinion or as lender-grade evidence."
+  - "Never fill a project-specific choice (holiday route, relief, imported share, lender residence) from this pack."
+
+parameters:
+  # --- Direct tax (Inland Revenue Act) -------------------------------------------
+  - parameter_id: lk.cit.standard_rate
+    subject: tax
+    scenario_key: tax.corporate_tax_rate
+    value: 0.30
+    unit: fraction
+    conditions:
+      - "Standard company rate. A tax holiday granted to a project is a project choice recorded in the scenario."
+    effective_from: 2026-06-16
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-16
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        clause: "First Schedule, Rates of Income Tax"
+        repository_record: "finance/cashflow_v14_tax.py module docstring; scenarios/dutchbay_lendercase_2025Q4.yaml tax block, commit b2f8c6d38f58e9f84b21501425bf35fcf7862b93 (#145)"
+
+  - parameter_id: lk.tax_loss.carryforward_years
+    subject: tax
+    scenario_key: tax.loss_carryforward_years
+    value: 6
+    unit: years
+    effective_from: 2026-06-16
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-16
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml tax block, commit b2f8c6d38f58e9f84b21501425bf35fcf7862b93 (#145)"
+    note: "The engine tracks loss vintages and expires each after this many years (finance/cashflow_v14_tax.py)."
+
+  - parameter_id: lk.depreciation.plant_machinery_years
+    subject: tax
+    scenario_key: tax.plant_depreciation_years
+    value: 5
+    unit: years
+    conditions:
+      - "Plant and machinery, straight line."
+    effective_from: 2026-06-16
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-16
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        clause: "Fourth Schedule, Class 2 (plant and machinery)"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml tax block, commit b2f8c6d38f58e9f84b21501425bf35fcf7862b93 (#145)"
+
+  - parameter_id: lk.depreciation.buildings_civils_years
+    subject: tax
+    scenario_key: tax.civil_depreciation_years
+    value: 20
+    unit: years
+    conditions:
+      - "Buildings and civil works, straight line."
+    effective_from: 2026-06-16
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-16
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        clause: "Fourth Schedule, Class 4 (buildings and civil works)"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml tax block, commit b2f8c6d38f58e9f84b21501425bf35fcf7862b93 (#145)"
+
+  - parameter_id: lk.wht.interest_nonresident_rate
+    subject: tax
+    scenario_key: tax.wht_on_interest_to_nonresidents
+    value: 0.10
+    unit: fraction
+    conditions:
+      - "Interest paid to a non-resident lender. Whether a lender is non-resident, or a treaty or exemption applies, is a project fact recorded in the scenario."
+    effective_from: 2026-06-16
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-16
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml tax block comment 'interest WHT 10%', commit b2f8c6d38f58e9f84b21501425bf35fcf7862b93 (#145)"
+
+  - parameter_id: lk.wht.dividend_rate
+    subject: tax
+    scenario_key: tax.wht_on_dividends
+    value: 0.15
+    unit: fraction
+    effective_from: 2026-06-28
+    effective_from_basis: in_force_by
+    recorded_at: 2026-06-28
+    status: as_recorded
+    sources:
+      - instrument: "Inland Revenue Act No. 24 of 2017 (Sri Lanka), as amended"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml tax block comment 'SL statutory dividend WHT 15% (#81)', commit 4311b2feddca6988863a8fa45d9e011a7b72826d (#423)"
+
+  # --- Import levies on capex (customs) -------------------------------------------
+  - parameter_id: lk.customs.cid_wind_genset_rate
+    subject: supply
+    scenario_key: taxes_indirect.cid_pct
+    value: 0.0
+    unit: fraction
+    conditions:
+      - "Wind-powered generating sets, HS 8502.31. Other equipment may carry a different duty."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "Sri Lanka Customs Tariff Guide 2026"
+        clause: "Chapter 85, HS 8502.31"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+
+  - parameter_id: lk.pal.rate
+    subject: supply
+    scenario_key: taxes_indirect.pal_pct
+    value: 0.05
+    unit: fraction
+    conditions:
+      - "On the CIF value of imports. BOI or bonded relief granted to a project is a project choice recorded in the scenario."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "Ports and Airports Levy (PAL), as cited in the repository"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+    note: "A proposed PAL phase-out (Budget 2026) was recorded as not enacted and is not modelled."
+
+  - parameter_id: lk.sscl.import_rate
+    subject: supply
+    scenario_key: taxes_indirect.sscl_import_pct
+    value: 0.025
+    unit: fraction
+    conditions:
+      - "On imports. The repository records that Act 24/2025 limits the power-project machinery exemption to CEB agreements signed before 18 February 2025."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "SSCL Act (Sri Lanka), with the amendment the repository cites as Act 24/2025"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+
+  - parameter_id: lk.vat.standard_rate_capex
+    subject: tax
+    scenario_key: taxes_indirect.vat_capex_pct
+    value: 0.18
+    unit: fraction
+    conditions:
+      - "Input VAT on capex that an exempt supplier cannot recover. Relief granted to a project is a project choice recorded in the scenario."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "Value Added Tax Act (Sri Lanka), as cited in the repository"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+
+  - parameter_id: lk.vat.standard_rate_opex
+    subject: tax
+    scenario_key: taxes_indirect.vat_opex_pct
+    value: 0.18
+    unit: fraction
+    conditions:
+      - "Input VAT on O&M that an exempt supplier cannot recover."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "Value Added Tax Act (Sri Lanka), as cited in the repository"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+
+  - parameter_id: lk.vat.import_base_includes_duties
+    subject: tax
+    scenario_key: taxes_indirect.vat_on_duties
+    value: true
+    unit: flag
+    conditions:
+      - "Import VAT is charged on CIF plus the import duties and levies."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "Value Added Tax Act (Sri Lanka), as cited in the repository"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml taxes_indirect block comment 'SL cascade', commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+
+  # --- Revenue levy ----------------------------------------------------------------
+  - parameter_id: lk.sscl.revenue_rate_ipp_supply_to_ceb
+    subject: contract
+    scenario_key: statutory.social_services_levy_pct
+    value: 0.0
+    unit: fraction
+    conditions:
+      - "Revenue from electricity an IPP generates and supplies to the Ceylon Electricity Board. The repository records this supply as exempt."
+    effective_from: 2026-07-05
+    effective_from_basis: in_force_by
+    recorded_at: 2026-07-05
+    status: as_recorded
+    sources:
+      - instrument: "SSCL Act (Sri Lanka), with the amendments the repository cites as Act 24/2025 and Act 10/2026"
+        clause: "First Schedule (exemption for generation and supply of electricity other than by the Ceylon Electricity Board)"
+        repository_record: "scenarios/dutchbay_lendercase_2025Q4.yaml statutory block, commit 3b4c92f8de68310a71d910bc9d616f77635244c3 (#812, #738)"
+    note: "Several scenarios still charge 2.5% here. They are listed as discrepancies for the owner in the disagreement inventory, not corrected by this pack."
