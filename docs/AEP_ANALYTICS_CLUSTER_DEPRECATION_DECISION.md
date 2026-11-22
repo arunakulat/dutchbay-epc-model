@@ -1,6 +1,6 @@
 # Architecture Decision Record: AEP Analytics Cluster Deprecation & Boundary Freeze
 
-- **Status**: Accepted (Phase 0 boundary freeze active); amended 2026-11-16 under #1615 (section 5)
+- **Status**: Accepted (Phase 0 boundary freeze active); amended 2026-11-16 under #1615 (section 5); step B delivered 2026-11-21 (section 6)
 - **Date**: 2026-11-12
 - **Issue**: [#1551](https://github.com/arunakulat/dutchbay-epc-model/issues/1551)
 - **Authoritative references**: [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) (section "Off-path analytics"), [`docs/WIND_AEP_CHAIN_OF_CUSTODY.md`](WIND_AEP_CHAIN_OF_CUSTODY.md)
@@ -48,8 +48,8 @@ Two critical integrity controls historically associated with this cluster:
 |---|---|---|---|
 | `analytics/wind/aep_summary_builder.py` | None since #1615: the body moved to `wind_resource/aep_summary.py`, which `wind_resource/arco_assessment.py`, `wind_resource/crossval.py` and `app/reports/report_model.py` now import | `tests/analytics/test_aep_summary_builder.py` (still imports the old path, which resolves through the re-export to `wind_resource.aep_summary`) | Re-export only (section 5) |
 | `analytics/wind/pipeline_aep_v14.py` | None | `tests/analytics/test_pipeline_aep_v14.py`, `tests/analytics/test_pipeline_aep_integration.py` | Deprecated (0 live callers) |
-| `analytics/wind/mc_aep_weibull.py` | `analytics/capital_risk_layer_v14.py` | `tests/analytics/test_mc_aep_weibull.py` | Deprecated (0 live entrypoints); goes into the report as a labelled resource sensitivity in step B (section 5) |
-| `analytics/wind/aep_tornado.py` | None. Its Weibull integral `gross_aep_farm_gwh` moved to `wind_resource/aep_integral.py` under #1615 and is re-exported here | `tests/analytics/test_aep_tornado.py` | Deprecated (0 live callers); report sections pending (section 5) |
+| `analytics/wind/mc_aep_weibull.py` | `analytics/capital_risk_layer_v14.py` | `tests/analytics/test_mc_aep_weibull.py` | Deprecated; reached from the live path only through the report seam `app/reports/aep_resource_sensitivity.py` (step B, section 6) |
+| `analytics/wind/aep_tornado.py` | None. Its Weibull integral `gross_aep_farm_gwh` moved to `wind_resource/aep_integral.py` under #1615 and is re-exported here | `tests/analytics/test_aep_tornado.py` | Deprecated; reached from the live path only through the report seam `app/reports/aep_resource_sensitivity.py` (step B, section 6) |
 | `analytics/wind/wind_interface_schema.py` | `analytics/schema_guard.py` (registry only) | `tests/analytics/test_wind_interface_schema.py` | Deprecated (0 live callers) |
 | `analytics/wind/era5_interface_schema.py` | `analytics/schema_guard.py` (registry only) | `tests/analytics/test_era5_interface_schema.py` | Deprecated (0 live callers) |
 | `analytics/simulation/monte_carlo_aep.py` | `analytics/wind/pipeline_aep_v14.py`, `analytics/wind/wind_integration.py` | `tests/analytics/test_monte_carlo_aep_losses.py` | Deprecated (0 live callers) |
@@ -90,3 +90,16 @@ The owner ruled on #1615 on 2026-11-16 ("Wire into reports") and added that the 
 4. **What does not change.** The rest of the cluster (`pipeline_aep_v14.py`, the two interface schemas and `simulation/monte_carlo_aep.py`) stays deprecated and off the live path until Phase 1 removes or re-homes it. `wind_resource/` remains the sole canonical producer, and finance still consumes only frozen exports.
 
 5. **Logger name.** The summary builder's two `logger.info` lines now log under `wind_resource.aep_summary` instead of `analytics.wind.aep_summary_builder`, because the module moved. No code, test or logging configuration in the repository filters on the old name. A caller that does should switch to the new name; the re-export does not carry the logger.
+
+---
+
+## 6. Step B delivered, 2026-11-21 (#1615)
+
+Step B wires the resource-side tornado and the Monte Carlo AEP into the command-line lender report (#1752) as one labelled section, "Wind Resource Sensitivity — Net AEP".
+
+1. **One seam.** `app/reports/aep_resource_sensitivity.py` is the only live file that imports the cluster, and it imports `analytics.wind.aep_tornado` and `analytics.wind.mc_aep_weibull` only. The boundary guard records it in `REPORT_SEAM_ALLOWLIST`; a test pins that list to this one file and these two modules, and negative controls show the rest of the cluster, and every other `app/` file, stay closed. `finance/`, `api/`, `wind_resource/` and the runners are unchanged.
+2. **Inputs from the scenario.** The Weibull (`wind_resource.weibull_a/k`), turbine count and hub height, power curve and its air-density basis, loss stack and `monte_carlo.weibull_uncertainty_pct` all come from the scenario. A scenario that lacks any of them gets the section listed under "Sections not run" with the missing key named, never a default figure.
+3. **Reconciled, not substituted.** The section shows the cluster's base net AEP, the tornado and the Monte Carlo P50/P75/P90/P99 beside the committed net P50/P90 the finance run uses (`yield_reconciliation`), and says why they differ: the committed P50 carries the scenario's pre-construction haircut, which the cluster does not apply, and the committed P90 comes from the IEC 61400-15-2 uncertainty budget, while the cluster's spread comes from a one-sigma on the Weibull A and k alone. The energy and every financial figure stay on the committed basis; no KPI moves.
+4. **Labelled.** The section says it is a model output and a resource sensitivity, not the report basis, and that with no measured site wind data and no P90 evidence it supports no bankable resource claim (#1110 L04). It carries the F-5 caption.
+5. **API route.** The synchronous API report does not build the section (latency ledger #645); the API report is unchanged by step B.
+
