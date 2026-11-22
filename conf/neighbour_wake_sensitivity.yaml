@@ -1,0 +1,64 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Blue Whale wake loss from the neighbouring DutchBay turbines (#1887)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/run_neighbour_wake_sensitivity_v14.py, which names no site: every site
+# input and label is here. Results: docs/blue_whale/wake_from_dutchbay_1887_summary.json.
+#
+# A labelled sensitivity only. The Blue Whale yield assumes no wake (owner, 2026-11-07;
+# docs/blue_whale/STATUS.md open risk 2), and this file changes no scenario input, budget
+# value or KPI. Applying a wake loss, or a non-zero wake_model_pct, is a separate R3
+# decision with a before/after KPI table.
+#
+# The layout and the proxy machine come from conf/dutchbay_wake_14_turbines.yaml, composed
+# below, so the positions are exactly the #1577 re-baseline's. Here the roles invert: the
+# turbine at T2 (Blue Whale) is the only one counted, and every DutchBay turbine stands in
+# the flow as a waker. The incident wind is Blue Whale's own transferred long-term resource
+# at 130 m (docs/blue_whale/met_mast_transfer_summary.json, long_term_130m), read from the
+# committed summary and pinned by its SHA-256 in the output.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  - dutchbay_wake_14_turbines
+  - _self_
+
+neighbour_wake:
+  waked_id: T2                      # the position Blue Whale's turbine stands on (#1568)
+  resource_summary: docs/blue_whale/met_mast_transfer_summary.json
+  resource_block: long_term_130m
+  label: >-
+    Labelled sensitivity, not the Blue Whale basis (#1887). The Blue Whale yield assumes no
+    wake (owner, 2026-11-07) and wake_model_pct stays 0.0; nothing here is applied. Every
+    turbine uses the IEA 10 MW reference curves as a proxy (the Blue Whale curves are
+    confidential and not read). The wind is Blue Whale's transferred long-term resource at
+    130 m, not a measurement at each turbine, and one machine and hub height stand for all
+    turbines. The live model over-states wake loss on this layout relative to the DutchBay
+    frozen basis (#1589, #1856).
+  scaled_note: >-
+    The live loss times the DutchBay re-baseline's frozen-basis over live-farm ratio: a
+    second reading on the basis DutchBay's own yield carries, not a Blue Whale finding.
+  uncertainty_note: >-
+    ASSUMPTION: wake-model uncertainty taken as a stated fraction of the modelled loss.
+    Not applied to the Blue Whale budget.
+  # The DutchBay re-baseline's live-to-basis factor (per_turbine_sensitivity.scale_to_basis):
+  # the frozen basis over the live farm loss. Applied here only as a second reading of the
+  # live figure, because the live model over-states loss on this layout (#1589, #1856).
+  dutchbay_wake_summary: docs/wind/dutchbay_14_turbine_wake_summary.json
+  # Machine geometries. Every turbine uses one machine (model_wake_loss takes one), with the
+  # IEA 10 MW reference curves as the proxy: the confidential Blue Whale curves are not read.
+  # dutchbay_machine is the composed re-baseline's machine (the wakers); blue_whale_geometry
+  # puts the same curves on Blue Whale's scenario rotor and hub (blue_whale_wind_lot5b_2026).
+  geometries:
+    dutchbay_machine: {rotor_diameter_m: 198.0, hub_height_m: 150.0}
+    blue_whale_geometry: {rotor_diameter_m: 206.0, hub_height_m: 130.0}
+  primary_geometry: dutchbay_machine
+  # Ambient turbulence intensities; 0.10 is the engine default the re-baseline uses.
+  turbulence_intensity: [0.06, 0.10, 0.14]
+  primary_turbulence_intensity: 0.10
+  deficit_models: [bastankhah, turbopark]
+  primary_deficit_model: bastankhah
+  # ASSUMPTION, for the implied uncertainty line only: the wake-model uncertainty taken as
+  # this fraction of the modelled wake loss. It is a stated convention, not a site finding,
+  # and it is not applied to the budget.
+  wake_uncertainty_fraction_of_loss: 0.25
+  output_decimals: 2
+  summary_json: ""
