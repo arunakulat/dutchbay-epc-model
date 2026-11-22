@@ -557,6 +557,7 @@ class WaterfallRow(BaseModel):
     #: #1897: the reconciliation to the covenant DSCR (None when not published). See
     #: analytics.three_statement.CashflowWaterfallRow for each figure's source.
     coverage_cfads: Optional[float] = None
+    bridge_cfads_credit: Optional[float] = None
     fee_in_project_basis: Optional[float] = None
     tax_basis_difference: Optional[float] = None
     senior_fee: Optional[float] = None
@@ -2878,6 +2879,7 @@ def _waterfall_block(
                 balloon_sweep=r.balloon_sweep,
                 cash_to_equity=r.cash_to_equity,
                 coverage_cfads=r.coverage_cfads,
+                bridge_cfads_credit=r.bridge_cfads_credit,
                 fee_in_project_basis=r.fee_in_project_basis,
                 tax_basis_difference=r.tax_basis_difference,
                 senior_fee=r.senior_fee,

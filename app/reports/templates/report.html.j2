@@ -1586,8 +1586,11 @@
     </table>
     {% if ctx.cashflow_waterfall.has_coverage_basis %}
     <h3>Reconciliation to the DSCR covenant</h3>
-    <p class="muted">Coverage CFADS = project-basis CFADS + the senior fee as the project basis
-      carries it (deducted inside EBITDA, so after the risk haircut) + the tax-basis difference
+    <p class="muted">Coverage CFADS = project-basis CFADS &minus; any bridge CFADS credit (the
+      bridge period's CFADS that the equity_cfads_match treatment adds to operating
+      year&nbsp;1 of the waterfall, which the coverage basis does not carry) + the senior fee
+      as the project basis carries it (deducted inside EBITDA, so after the risk haircut, at
+      the year's effective FX rate) + the tax-basis difference
       (levered against unlevered tax: the interest tax shield and the tax effect of the fee;
       zero in a year with no tax). Covenant DSCR = (coverage CFADS &minus; senior fee)
       &divide; covenant debt service. The covenant debt service is the year's own debt service
@@ -1605,6 +1608,7 @@
         <tr>
           <th>Year</th>
           <th style="text-align:right;">Project-basis CFADS</th>
+          <th style="text-align:right;">Bridge CFADS credit</th>
           <th style="text-align:right;">Senior fee in project basis</th>
           <th style="text-align:right;">Tax-basis difference</th>
           <th style="text-align:right;">Coverage CFADS</th>
@@ -1619,6 +1623,7 @@
         <tr>
           <td>{{ r.year }}</td>
           <td class="num">{{ fmt_usd(r.cfads) }}</td>
+          <td class="num">{{ fmt_usd(r.bridge_cfads_credit) }}</td>
           <td class="num">{{ fmt_usd(r.fee_in_project_basis) }}</td>
           <td class="num">{{ fmt_usd(r.tax_basis_difference) }}</td>
           <td class="num">{{ fmt_usd(r.coverage_cfads) }}</td>

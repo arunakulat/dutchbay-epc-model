@@ -472,16 +472,21 @@ class CashflowWaterfallRow:
     scheduled DSCR); ``cash_to_equity`` is the engine's project-basis residual.
 
     The reconciliation to the DSCR covenant (#1897), set when the row publishes the coverage
-    CFADS and a debt result is given. The two CFADS bases differ in two ways, shown apart:
+    CFADS and a debt result is given. The two CFADS bases differ in up to three ways, shown
+    apart:
 
+    - ``bridge_cfads_credit``: under the ``equity_cfads_match`` bridge treatment the waterfall
+      credits the bridge period's CFADS to operating year 1 (``bridge_cfads_usd``); the
+      coverage CFADS carries no such credit. Zero otherwise.
     - ``fee_in_project_basis``: the project basis deducts the senior fee inside EBITDA, so
-      after the risk haircut (``senior_fee_lkr`` / ``fx_rate`` x (1 - ``risk_haircut_pct``));
-      the coverage CFADS is before the fee.
+      after the risk haircut; the coverage CFADS is before the fee. It is converted to USD at
+      the row's own effective rate (``revenue_usd`` / ``revenue_lkr``), which is the hedged
+      blend when an FX hedge applies.
     - ``tax_basis_difference``: what remains, the levered-tax difference (the interest tax
       shield, and the tax effect of the fee). It is zero in a year with no tax.
 
-    So ``coverage_cfads`` (``cfads_coverage_usd``) = ``cfads`` + ``fee_in_project_basis`` +
-    ``tax_basis_difference``. The covenant then deducts the full ``senior_fee`` once:
+    So ``coverage_cfads`` (``cfads_coverage_usd``) = ``cfads`` - ``bridge_cfads_credit`` +
+    ``fee_in_project_basis`` + ``tax_basis_difference``. The covenant then deducts the full ``senior_fee`` once:
     ``covenant_cfads`` = coverage - senior fee. ``covenant_debt_service`` is the debt service
     the covenant divides: the row's own debt period's service and, in operating year 1, the
     bridge period's service whatever the bridge treatment, as the engine's ``dscr_by_year``
@@ -496,6 +501,7 @@ class CashflowWaterfallRow:
     balloon_sweep: float
     cash_to_equity: float
     coverage_cfads: Optional[float] = None
+    bridge_cfads_credit: Optional[float] = None
     fee_in_project_basis: Optional[float] = None
     tax_basis_difference: Optional[float] = None
     senior_fee: Optional[float] = None
@@ -576,14 +582,29 @@ def _covenant_terms_by_row(
     return out
 
 
+def _usd_per_lkr(row: Mapping[str, Any]) -> Optional[float]:
+    """The row's effective LKR-to-USD factor: the hedged blend when a hedge applies.
+
+    The engine converts revenue and CFADS with the same linear blend of spot and hedged
+    forward (``finance.cashflow_v14_fx._hedged_usd``), so revenue's own ratio is the factor;
+    with no revenue in the row, the spot rate.
+    """
+    revenue_lkr = row.get("revenue_lkr")
+    revenue_usd = row.get("revenue_usd")
+    if revenue_lkr and revenue_usd is not None:
+        return float(revenue_usd) / float(revenue_lkr)
+    fx = row.get("fx_rate")
+    return 1.0 / float(fx) if fx else None
+
+
 def _fee_in_project_basis(row: Mapping[str, Any]) -> Optional[float]:
     """The senior fee as the project basis carries it: in USD, after the risk haircut."""
     fee_lkr = row.get("senior_fee_lkr")
-    fx = row.get("fx_rate")
-    if fee_lkr is None or not fx:
+    factor = _usd_per_lkr(row)
+    if fee_lkr is None or factor is None:
         return None
     retained = 1.0 - float(row.get("risk_haircut_pct") or 0.0)
-    return float(fee_lkr) / float(fx) * retained
+    return float(fee_lkr) * factor * retained
 
 
 def build_cashflow_waterfall(
@@ -635,6 +656,7 @@ def build_cashflow_waterfall(
         # cf_after_debt is the engine's own residual; reconstruct it only if a row omits it.
         cash_to_equity = _f(row, "cf_after_debt", cfads - scheduled - balloon)
         coverage: Optional[float] = None
+        bridge_credit: Optional[float] = None
         in_project: Optional[float] = None
         difference: Optional[float] = None
         covenant_cfads: Optional[float] = None
@@ -644,9 +666,10 @@ def build_cashflow_waterfall(
             coverage = _f(row, "cfads_coverage_usd")
             total_coverage += coverage
             if fee is not None:
+                bridge_credit = _f(row, "bridge_cfads_usd", 0.0)
                 in_project = _fee_in_project_basis(row)
                 if in_project is not None:
-                    difference = coverage - cfads - in_project
+                    difference = coverage - (cfads - bridge_credit) - in_project
                 covenant_cfads = coverage - fee
                 if covenant_service is not None and covenant_service > 0.0:
                     dscr = covenant_cfads / covenant_service
@@ -658,6 +681,7 @@ def build_cashflow_waterfall(
                 balloon_sweep=balloon,
                 cash_to_equity=cash_to_equity,
                 coverage_cfads=coverage,
+                bridge_cfads_credit=bridge_credit,
                 fee_in_project_basis=in_project,
                 tax_basis_difference=difference,
                 senior_fee=fee,

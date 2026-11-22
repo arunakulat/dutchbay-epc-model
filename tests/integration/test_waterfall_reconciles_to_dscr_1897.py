@@ -83,8 +83,12 @@ def test_every_waterfall_year_reconciles_to_the_engine_covenant_dscr(
         assert r.coverage_cfads is not None
         assert r.fee_in_project_basis is not None and r.tax_basis_difference is not None
         assert r.senior_fee is not None and r.covenant_cfads is not None
+        assert r.bridge_cfads_credit is not None
         assert math.isclose(
-            r.cfads + r.fee_in_project_basis + r.tax_basis_difference,
+            r.cfads
+            - r.bridge_cfads_credit
+            + r.fee_in_project_basis
+            + r.tax_basis_difference,
             r.coverage_cfads,
             abs_tol=1e-6,
         )
@@ -108,7 +112,7 @@ def test_the_senior_fee_is_not_counted_as_tax(
     reported as tax.
     """
     checked = 0
-    for key in ("lender:historical_fold", "bw_wind"):
+    for key in ("lender:historical_fold", "lender:equity_cfads_match", "bw_wind"):
         result = runs[key]
         wf = build_cashflow_waterfall(_rows(result), debt_result=result["debt_result"])
         for r, row in zip(wf.rows, _rows(result), strict=True):
@@ -239,3 +243,39 @@ def test_the_report_names_a_year_whose_covenant_service_differs(
     assert "it differs from the waterfall's scheduled debt service" in section
     _, folded = _report_html(runs["lender:historical_fold"], LENDER)
     assert "it differs from the waterfall's scheduled debt service" not in folded
+
+
+def test_the_bridge_cfads_credit_is_its_own_column_not_tax(
+    runs: Dict[str, Mapping[str, Any]],
+) -> None:
+    """Under equity_cfads_match, year 1's bridge credit is shown apart, not as tax."""
+    matched = runs["lender:equity_cfads_match"]
+    folded = runs["lender:historical_fold"]
+    m = build_cashflow_waterfall(_rows(matched), debt_result=matched["debt_result"])
+    f = build_cashflow_waterfall(_rows(folded), debt_result=folded["debt_result"])
+    # Non-vacuity: the credit is real and moves the project-basis CFADS.
+    assert m.rows[0].bridge_cfads_credit and m.rows[0].bridge_cfads_credit > 1e6
+    assert m.rows[0].cfads > f.rows[0].cfads + 1e6
+    assert f.rows[0].bridge_cfads_credit == 0.0
+    # The tax-basis difference is the same under both treatments.
+    for a, b in zip(m.rows, f.rows, strict=True):
+        assert a.tax_basis_difference == pytest.approx(
+            b.tax_basis_difference, abs=1e-6
+        ), a.year
+
+
+def test_the_fee_converts_at_the_hedged_rate() -> None:
+    """With an FX hedge, the fee in the project basis converts at the row's blended rate."""
+    cfg: Dict[str, Any] = copy.deepcopy(dict(load_scenario_config(str(LENDER))))
+    cfg["fx"] = {**(cfg.get("fx") or {}), "hedge_ratio": 0.5}
+    hedged = run_v14_pipeline(config=cfg)
+    rows = _rows(hedged)
+    spot = [float(r["revenue_lkr"]) / float(r["fx_rate"]) for r in rows]
+    # Non-vacuity: the hedge moves the conversion away from spot.
+    assert any(
+        abs(float(r["revenue_usd"]) - s) > 1.0 for r, s in zip(rows, spot, strict=True)
+    )
+    wf = build_cashflow_waterfall(rows, debt_result=hedged["debt_result"])
+    for r, row in zip(wf.rows, rows, strict=True):
+        if float(row.get("tax_lkr") or 0.0) == 0.0:
+            assert r.tax_basis_difference == pytest.approx(0.0, abs=1e-6), r.year

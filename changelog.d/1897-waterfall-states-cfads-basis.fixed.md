@@ -11,8 +11,10 @@
   - When the run publishes the coverage CFADS, the section adds a "Reconciliation to the DSCR
     covenant" table, with these columns:
     - project-basis CFADS;
+    - any bridge CFADS credit (the `equity_cfads_match` treatment credits year 1 of the
+      waterfall with the bridge period's CFADS; the coverage basis carries none);
     - the senior fee as the project basis carries it, deducted inside EBITDA and so after the
-      risk haircut;
+      risk haircut, at the year's effective (hedged where a hedge applies) FX rate;
     - the tax-basis difference, which is zero in a year with no tax;
     - coverage CFADS;
     - the senior fee;
