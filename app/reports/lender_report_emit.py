@@ -33,17 +33,31 @@ from __future__ import annotations
 
 import dataclasses
 import html as _html
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
+from app.reports.capital_structure_section import (
+    DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
+    SECTION_CAPITAL_STRUCTURE,
+    CapitalStructureSettings,
+    build_capital_structure_section,
+)
+from app.reports.capital_structure_section import (
+    settings_from_config as capital_structure_settings_from_config,
+)
 from app.reports.renderer import render_report_html
-from app.reports.report_model import ReportContext, SectionNotRun
+from app.reports.report_model import (
+    CapitalStructureBlock,
+    ReportContext,
+    SectionNotRun,
+)
 from app.reports.report_orchestration import (
     PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     ReportSensitivityBundle,
@@ -55,6 +69,8 @@ from app.reports.report_orchestration import (
     tornado_not_computed_reason,
 )
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "LENDER_REPORT_FILES_DIR",
     "LENDER_REPORT_HTML_NAME",
@@ -64,6 +80,7 @@ __all__ = [
     "LenderReportOutput",
     "dbpl_furniture_for",
     "emit_lender_report_from_pipeline",
+    "capital_structure_settings_from_config",
     "sections_not_run",
     "to_dbpl_print_html",
 ]
@@ -85,6 +102,8 @@ NO_MONTE_CARLO_PARAMETERS = "the scenario declares no monte_carlo.parameters to 
 
 SensitivityComputer = Callable[..., ReportSensitivityBundle]
 CapitalRiskBuilder = Callable[..., CapitalRiskReport]
+#: Returns the section block, or a "not run: ..." reason (#1825 slice i).
+CapitalStructureBuilder = Callable[..., Union[CapitalStructureBlock, str]]
 
 
 @dataclass(frozen=True)
@@ -126,6 +145,7 @@ def sections_not_run(
     scenario_config: Mapping[str, Any],
     *,
     capital_risk_not_run: Optional[str],
+    capital_structure_not_run: Optional[str] = None,
 ) -> List[SectionNotRun]:
     """List the sections the report will not render, each with its reason.
 
@@ -137,11 +157,19 @@ def sections_not_run(
         scenario_config: The scenario the sensitivities ran on.
         capital_risk_not_run: Why the capital-risk section has no report, or ``None`` when it has
             one.
+        capital_structure_not_run: Why the capital-structure screening (#1825 slice i) was not
+            built, or ``None`` when it was.
 
     Returns:
         The left-out sections, in report order.
     """
     out: List[SectionNotRun] = []
+    if capital_structure_not_run is not None:
+        out.append(
+            SectionNotRun(
+                section=SECTION_CAPITAL_STRUCTURE, reason=capital_structure_not_run
+            )
+        )
     tornado_reason = tornado_not_computed_reason(sensitivity)
     if tornado_reason is not None:
         out.append(SectionNotRun(section=SECTION_TORNADO, reason=tornado_reason))
@@ -445,6 +473,8 @@ def emit_lender_report_from_pipeline(
     profile: ReportSensitivityProfile = PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     sensitivity_computer: SensitivityComputer = compute_report_sensitivity,
     capital_risk_builder: Optional[CapitalRiskBuilder] = None,
+    capital_structure: CapitalStructureSettings = DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
+    capital_structure_builder: CapitalStructureBuilder = build_capital_structure_section,
 ) -> LenderReportOutput:
     """Write the combined lender report for a finance run, as HTML and a DBPL PDF (#1752).
 
@@ -470,6 +500,10 @@ def emit_lender_report_from_pipeline(
             :func:`~app.reports.report_orchestration.compute_report_sensitivity`.
         capital_risk_builder: Seam for tests; production uses
             :func:`~app.reports.capital_risk_emit.build_capital_risk_report_for_scenario`.
+        capital_structure: The capital-structure screening settings
+            (``lender_report.capital_structure``); off by default (#1825 slice i).
+        capital_structure_builder: Seam for tests; production uses
+            :func:`~app.reports.capital_structure_section.build_capital_structure_section`.
 
     Returns:
         The paths written, the sections left out, and the PDF's print provenance.
@@ -516,8 +550,21 @@ def emit_lender_report_from_pipeline(
                 )
 
     sensitivity = sensitivity_computer(scenario, profile=profile)
+    try:
+        cs_built: Union[CapitalStructureBlock, str] = capital_structure_builder(
+            scenario_config_path, scenario, capital_structure
+        )
+    except Exception as exc:  # noqa: BLE001 - an opt-in section never sinks the report
+        # #1859 domain D-4: listed under "Sections not run", as the capital-risk builder's
+        # failures are.
+        logger.exception("Capital-structure screening could not be built")
+        cs_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
+    cs_block = cs_built if isinstance(cs_built, CapitalStructureBlock) else None
     left_out = sections_not_run(
-        sensitivity, scenario, capital_risk_not_run=capital_risk_not_run
+        sensitivity,
+        scenario,
+        capital_risk_not_run=capital_risk_not_run,
+        capital_structure_not_run=None if cs_block is not None else str(cs_built),
     )
     case = report_case_from_pipeline_result(
         result,
@@ -531,6 +578,7 @@ def emit_lender_report_from_pipeline(
         sensitivity,
         capital_risk=capital_risk,
         sections_not_run=left_out,
+        capital_structure=cs_block,
     )
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)

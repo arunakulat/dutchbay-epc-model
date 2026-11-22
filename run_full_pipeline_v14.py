@@ -1674,6 +1674,7 @@ def cli(cfg: DictConfig) -> None:
             def _emit_lender_report() -> None:
                 from app.reports.lender_report_emit import (
                     LENDER_REPORT_HTML_NAME,
+                    capital_structure_settings_from_config,
                     emit_lender_report_from_pipeline,
                 )
 
@@ -1713,6 +1714,9 @@ def cli(cfg: DictConfig) -> None:
                         capital_risk_report_cfg.get("npv_metric", "equity_npv")
                     ),
                     require_pdf=emit_plan["emit_lender_report"].source != "emit_all",
+                    capital_structure=capital_structure_settings_from_config(
+                        lender_report_cfg.get("capital_structure", None)
+                    ),
                 )
                 result["lender_report"] = written.as_dict()
                 logger.info("Wrote lender report to %s", written.html_path)
