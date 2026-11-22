@@ -70,10 +70,13 @@ SCRIPT = (
 # timeline.construction_years only, and the engine now runs it on one period instead of
 # its default of two (no scenario byte changed). Before, at 15.22.0 (v0.11): project IRR
 # 0.09281689612238768, equity IRR 0.0679064018838691, min DSCR 0.8677878013266592.
+# Re-pinned at 15.32.0 for #1874: revenue SSCL dropped (IPP supply to CEB is exempt, #738).
+# Before, at 15.31.0: project IRR 0.10611756549994622, equity IRR 0.08201291001414934,
+# min DSCR 0.8681364992015315.
 PINS = {
-    "project_irr": 0.10611756549994622,
-    "equity_irr": 0.08201291001414934,
-    "min_dscr": 0.8681364992015315,
+    "project_irr": 0.11025257825790903,
+    "equity_irr": 0.0871229631724173,
+    "min_dscr": 0.8676638649021998,
 }
 
 
