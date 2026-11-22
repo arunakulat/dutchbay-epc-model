@@ -241,7 +241,7 @@ The CI gate topology is:
 
 - **Fast lane** — `ruff` and `mypy` over the v14 entry point, for fast feedback.
 - **Regression smoke** — a required smoke check over the CLI and core analytics.
-- **Test suite** — the full suite split into six time-balanced shards
+- **Test suite** — the full suite split into eight time-balanced shards
   (`pytest-split`), each run with `pytest -n auto`, combined into a single 95% coverage gate,
   plus mandatory `ruff`/`black`/`isort`/`mypy` and `bandit`/`pip-audit` gates.
 - **Docker build** — builds the runtime image and boots it to check `/health` (it does not
