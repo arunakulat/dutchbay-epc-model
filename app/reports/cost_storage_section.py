@@ -13,7 +13,8 @@ command-line lender report:
 * **Storage dispatch**: :func:`analytics.storage_dispatch.evaluate_chronological_dispatch`, for
   a scenario that declares an enabled ``chronological_dispatch`` block.
 * **LCOS**: :func:`finance.bess_lcos.compute_lcos_suite` for every ``type: bess`` technology,
-  at the run's own discount rate over its operating years.
+  on the financed configuration (a declared ``capex.price_basis`` applied), at the run's own
+  discount rate over its operating years.
 * **Battery-project economics** and **EPC margin**: the entries the pipeline already publishes
   (``bess_project_economics``, ``epc_margin``) for a scenario that declares the block.
 
@@ -256,7 +257,8 @@ def _capex_mc(
     rows = []
     for attr, kpi, label, unit in _MC_ROWS:
         pct = getattr(result, attr)
-        value = base if kpi is None else committed.get(kpi)
+        # CAPEX sits beside the base the module scaled, on the module's own basis.
+        value = float(result.base_capex_usd) if kpi is None else committed.get(kpi)
         rows.append(
             CapexMcRow(
                 label=label,
@@ -308,13 +310,20 @@ def _lcos(
     scenario: Mapping[str, Any], result: Mapping[str, Any]
 ) -> Union[Tuple[List[LcosRow], float], str]:
     from analytics.cost.benchmark import lcos_benchmark
+    from analytics.evaluation_v14 import evaluated_scenario_config
     from finance.bess_lcos import compute_lcos_suite
 
     rate = (result.get("kpis") or {}).get("discount_rate_used")
     rows_in = result.get("annual_rows") or []
     if rate is None or not rows_in:
         return "not run: the run publishes no discount rate or no operating years"
-    suite = compute_lcos_suite(scenario, wacc=float(rate), project_years=len(rows_in))
+    # The financed configuration: a declared capex.price_basis is applied, as the run
+    # applied it to the figures the LCOS sits beside.
+    suite = compute_lcos_suite(
+        evaluated_scenario_config(copy.deepcopy(dict(scenario))),
+        wacc=float(rate),
+        project_years=len(rows_in),
+    )
     if not suite:
         return "not run: the scenario has no battery (no type: bess technology)"
     rows = []

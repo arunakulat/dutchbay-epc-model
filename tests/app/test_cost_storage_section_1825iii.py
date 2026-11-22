@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Mapping, Optional
 import pytest
 
 import analytics.storage_dispatch as storage_dispatch
+from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.scenario_loader import load_scenario_config
 from app.models.inputs import WindFarmInputs
 from app.reports.capital_risk_emit import LENDER_GRADE_MIN_TRIALS
@@ -47,6 +48,7 @@ COMMITTED = {
 }
 _REPO = Path(__file__).resolve().parents[2]
 _HYBRID = _REPO / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
+_SOLAR_BESS = _REPO / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 
 
 def _scenario(**capex: Any) -> Dict[str, Any]:
@@ -423,7 +425,9 @@ def test_lcos_runs_at_the_runs_own_discount_rate_on_a_scenario_with_a_battery(
     result = _result()
     block = fakes.build(scenario, result=result)
     assert isinstance(block, CostStorageBlock)
-    direct = compute_lcos_suite(scenario, wacc=0.08, project_years=20)
+    direct = compute_lcos_suite(
+        evaluated_scenario_config(scenario), wacc=0.08, project_years=20
+    )
     assert direct, "the hybrid scenario declares a battery"
     assert block.lcos_discount_rate == 0.08
     assert [r.technology for r in block.lcos] == [r.technology for r in direct]
@@ -432,6 +436,22 @@ def test_lcos_runs_at_the_runs_own_discount_rate_on_a_scenario_with_a_battery(
     ]
     assert all(r.benchmark_note for r in block.lcos)
     assert not any(p.startswith("LCOS:") for p in block.parts_not_run)
+
+
+def test_lcos_prices_the_battery_on_the_financed_capex(fakes: _Fakes) -> None:
+    """A declared capex.price_basis is applied, as the run applied it (#1569, #1899)."""
+    scenario = dict(load_scenario_config(str(_SOLAR_BESS)))
+    assert "price_basis" in scenario["capex"], "the fixture must declare a price basis"
+    block = fakes.build(scenario)
+    assert isinstance(block, CostStorageBlock) and block.lcos
+    financed = compute_lcos_suite(
+        evaluated_scenario_config(scenario), wacc=0.08, project_years=20
+    )
+    stated = compute_lcos_suite(scenario, wacc=0.08, project_years=20)
+    got = [r.lcos_usd_per_mwh for r in block.lcos]
+    assert got == [r.lcos_usd_per_mwh for r in financed]
+    # Non-vacuity: the stated (unescalated) CAPEX would give a different figure.
+    assert got != [r.lcos_usd_per_mwh for r in stated]
 
 
 def test_lcos_without_a_discount_rate_says_so(fakes: _Fakes) -> None:
