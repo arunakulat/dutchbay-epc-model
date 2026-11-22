@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import ast
+import csv
 import hashlib
 import io
 import math
@@ -26,6 +27,7 @@ import time
 import xml.etree.ElementTree as ET
 import zipfile
 from collections import Counter
+from collections.abc import Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -111,7 +113,7 @@ def test_xml_illegal_literals_are_refused_before_destination_creation(
 
 @pytest.mark.parametrize("literal", ("source\ufffd", "source\U00010000"))
 def test_xml_boundary_literals_reopen_exactly(tmp_path: Path, literal: str) -> None:
-    item = _sample_inputs()[0].model_dump() | {"value": literal}
+    item = _sample_inputs()[0].model_dump() | {"value": literal, "number_format": "@"}
     destination, _ = build_dfi_workbook_foundation(
         tmp_path / "valid_xml.xlsx",
         metadata=_sample_metadata(),
@@ -181,7 +183,9 @@ def test_supported_numeric_boundaries_survive_xml_and_readback(tmp_path: Path) -
     )
     items = tuple(
         WorkbookInputItem.model_validate(
-            _sample_inputs()[0].model_dump() | {"key": f"n{n}", "value": value}
+            _sample_inputs()[0].model_dump()
+            | {"key": f"n{n}", "value": value}
+            | ({"number_format": "General"} if isinstance(value, bool) else {})
         )
         for n, value in enumerate(values)
     )
@@ -256,8 +260,8 @@ def test_supported_scalar_formats_preserve_value_and_type(tmp_path: Path) -> Non
         (0.125, "0.0%", "n"),
         (-1250.75, "$#,##0.00", "n"),
         (4, '0 "days"', "n"),
-        ("1900-02-28", "yyyy-mm-dd", "s"),
-        (True, "hh:mm:ss", "b"),
+        ("1900-02-28", "@", "s"),
+        (True, "General", "b"),
         ("Archive record NUM-04", "@", "s"),
     )
     items = tuple(
@@ -421,9 +425,12 @@ def test_supported_numeric_grammar_round_trips_in_both_readers(tmp_path: Path) -
         (61, '";"0.0', "n"),
         (62, r"0.0\;", "n"),
         (2, '0 ";" "days"', "n"),
-        (0.5, "[>=1]0.00;[Red]0.0%", "n"),
-        (-4, '[Blue]0.00;[Red](0.00);0.00;"Ref "@', "n"),
-        (0.5, '0.00 "A/P"', "n"),
+        (-4, '[Blue]0.00;[Red](0.00);0.00;"x"@', "n"),
+        (-3, "0.0;-0.0", "n"),
+        (-2, r"0.0;\-0.0", "n"),
+        (-1, '0.0;"-"0.0;0.0', "n"),
+        (1.25, '0.00" x"', "n"),
+        (-0.000125, "0.00E-00", "n"),
         ("Archive reference F04", "@", "s"),
         (True, "General", "b"),
     )
@@ -1725,7 +1732,7 @@ def test_empty_scalar_and_invalid_unicode_are_explicitly_refused() -> None:
 
 
 def test_supplementary_unicode_respects_cell_text_capacity(tmp_path: Path) -> None:
-    payload = _sample_inputs()[0].model_dump()
+    payload = _sample_inputs()[0].model_dump() | {"number_format": "@"}
     safe_text = "\U0001f30d" * 16383 + "x"
     item = WorkbookInputItem.model_validate({**payload, "value": safe_text})
     path, _ = build_dfi_workbook_foundation(
@@ -1824,3 +1831,114 @@ def test_formula_boundary_note_does_not_claim_input_formulas() -> None:
     note = _sample_metadata().formula_boundary_note
     assert "not formulas" in note
     assert "use live Excel formulas bound via CellRegistry" not in note
+
+
+# #1828: display formats must not hide or alter what a reader sees.
+_MISSTATING_FORMAT_CASES = (
+    pytest.param("Fund A", ";;;", "displayed text", id="text-hidden"),
+    pytest.param("Fund A", ';;;"X"', "displayed text", id="text-replaced"),
+    pytest.param("Fund A", "yyyy-mm-dd", "displayed text", id="text-date"),
+    pytest.param(True, "hh:mm:ss", "displayed text", id="bool-time"),
+    pytest.param(-1234.5, "0.0;0.0", "negative section", id="sign-dropped"),
+    pytest.param(-1234.5, "[Red]0.0;[Blue]0.0", "negative section", id="sign-colour"),
+    pytest.param(-1234.5, "0.0;0.0;0.0", "negative section", id="sign-3-sections"),
+    pytest.param(-1234.5, "0.0;(0.0", "negative section", id="sign-half-paren"),
+    pytest.param(1234.5, "-0.0", "non-negative", id="sign-invented"),
+    pytest.param(1234.5, "(0.0);-0.0", "non-negative", id="paren-invented"),
+    pytest.param(0, "0.0;-0.0;-0.0", "non-negative", id="zero-signed"),
+    pytest.param(-1234.5, "[>=1]0.00;[Red]0.0%", "conditional", id="conditional"),
+    pytest.param(-1234.5, "[<0]0.00;0.00", "conditional", id="conditional-neg"),
+    pytest.param(1.5, '0.00" (lender case)"', "unit token", id="affix-wording"),
+    pytest.param(0.5, '0.00 "A/P"', "unit token", id="affix-ampm"),
+    pytest.param(-4, '0.00;(0.00);0.00;"Ref "@', "unit token", id="affix-text-sect"),
+)
+
+
+@pytest.mark.parametrize("copied", (False, True), ids=("mapping", "typed-copy"))
+@pytest.mark.parametrize(("value", "number_format", "reason"), _MISSTATING_FORMAT_CASES)
+def test_builder_refuses_misstating_display_formats(
+    tmp_path: Path,
+    copied: bool,
+    value: int | float | str | bool,
+    number_format: str,
+    reason: str,
+) -> None:
+    source = _sample_inputs()[0]
+    update = {"value": value, "number_format": number_format}
+    item = source.model_copy(update=update) if copied else source.model_dump() | update
+    destination = tmp_path / "new_parent" / "misstating_format.xlsx"
+    with pytest.raises(ValidationError, match=reason):
+        build_dfi_workbook_foundation(
+            destination, metadata=_sample_metadata(), inputs=(item,), ledger_entries=()
+        )
+    assert not destination.parent.exists()
+
+
+def _libreoffice_displayed_cells(
+    tmp_path: Path, cells: Sequence[tuple[object, str]]
+) -> list[str]:
+    """Render cells in LibreOffice headless and return the text as shown."""
+    soffice = shutil.which("soffice")
+    if soffice is None:
+        pytest.skip("LibreOffice is not installed; displayed-value oracle unavailable")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    for row, (value, number_format) in enumerate(cells, start=1):
+        cell = sheet.cell(row=row, column=1, value=value)
+        cell.number_format = number_format
+    source = tmp_path / "oracle.xlsx"
+    workbook.save(source)
+    # 76 = UTF-8; the 9th token "true" exports cell contents as shown.
+    subprocess.run(
+        [
+            soffice,
+            f"-env:UserInstallation=file://{tmp_path / 'lo_profile'}",
+            "--headless",
+            "--convert-to",
+            "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true",
+            "--outdir",
+            str(tmp_path),
+            str(source),
+        ],
+        check=True,
+        capture_output=True,
+        timeout=180,
+    )
+    with (tmp_path / "oracle.csv").open(encoding="utf-8", newline="") as handle:
+        return [row[0] if row else "" for row in csv.reader(handle)]
+
+
+def test_misstating_formats_are_real_and_general_control_shows_the_value(
+    tmp_path: Path,
+) -> None:
+    """Oracle: the refused formats do misstate in a reader; the controls do not."""
+    cells: tuple[tuple[object, str], ...] = (
+        ("Fund A", ";;;"),
+        ("Fund A", ';;;"X"'),
+        ("Fund A", "General"),
+        (-1234.5, "0.0;0.0"),
+        (-1234.5, "0.0"),
+        (-1234.5, "0.0;-0.0"),
+        (-1234.5, "0.0;(0.0)"),
+        (1.5, '0.00" (lender case)"'),
+        (1.5, "0.00"),
+    )
+    shown = _libreoffice_displayed_cells(tmp_path, cells)
+    assert shown == [
+        "",
+        "X",
+        "Fund A",
+        "1234.5",
+        "-1234.5",
+        "-1234.5",
+        "(1234.5)",
+        "1.50 (lender case)",
+        "1.50",
+    ]
+    for value, number_format in cells[:2] + cells[3:4] + cells[7:8]:
+        update = {"value": value, "number_format": number_format}
+        with pytest.raises(ValidationError):
+            WorkbookInputItem.model_validate(_sample_inputs()[0].model_dump() | update)
+    for value, number_format in cells[2:3] + cells[4:7] + cells[8:]:
+        update = {"value": value, "number_format": number_format}
+        WorkbookInputItem.model_validate(_sample_inputs()[0].model_dump() | update)
