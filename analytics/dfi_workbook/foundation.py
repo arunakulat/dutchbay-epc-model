@@ -92,6 +92,83 @@ _SUPPORTED_NUMERIC_FORMAT_RE = re.compile(
     re.VERBOSE | re.IGNORECASE | re.ASCII,
 )
 
+# A quoted literal may hold only a unit token (optionally with one space on
+# either side) or one character that could also be written escaped. Free
+# wording beside a value would bypass the literal-text and reliance controls
+# (#1828).
+_QUOTED_UNIT_TOKENS: frozenset[str] = frozenset(
+    {"%", "x", "MW", "MWh", "kWh", "GWh", "USD", "LKR", "days", "years", "yrs"}
+)
+_QUOTED_SINGLE_CHARACTERS: frozenset[str] = frozenset(" ;:,.%$€£¥()+-")
+_FORMAT_TOKEN_RE = re.compile(r'"[^"]*"|\\.|.', re.DOTALL)
+_TEXT_OR_BOOL_FORMATS: frozenset[str] = frozenset({"General", "@"})
+
+
+def _quoted_literal_allowed(content: str) -> bool:
+    if content in _QUOTED_SINGLE_CHARACTERS:
+        return True
+    core = content[1:] if content.startswith(" ") else content
+    core = core[:-1] if core.endswith(" ") else core
+    return core in _QUOTED_UNIT_TOKENS
+
+
+def _numeric_format_display_problem(number_format: str) -> Optional[str]:
+    """Return why a grammar-valid numeric format would misstate a value.
+
+    The grammar fixes the shape of a format; this check fixes what it shows.
+    Conditional sections are refused because spreadsheet readers disagree on
+    whether such a section prints the minus sign (#1828). With an explicit
+    negative section, the minus sign must be written into that section, either
+    as ``-`` or as parentheses, and no other section may print one.
+    """
+    # Each section is a list of (character, written_as_literal) pairs.
+    sections: list[list[tuple[str, bool]]] = [[]]
+    for token in _FORMAT_TOKEN_RE.findall(number_format):
+        if token == ";":
+            sections.append([])
+        elif token.startswith('"'):
+            content = token[1:-1]
+            if not _quoted_literal_allowed(content):
+                return (
+                    f"quoted literal {token} is not an allowed unit token; allowed "
+                    f"are {', '.join(sorted(_QUOTED_UNIT_TOKENS))} or one "
+                    "punctuation character."
+                )
+            sections[-1].extend((char, True) for char in content)
+        elif token.startswith("\\"):
+            sections[-1].append((token[1:], True))
+        else:
+            sections[-1].append((token, False))
+    if "[<" in number_format or "[>" in number_format or "[=" in number_format:
+        return "conditional sections are not supported."
+    numeric_sections = sections[:3]
+    for index, section in enumerate(numeric_sections):
+        # The sign of a scientific exponent (E-00, E+00) is not a value sign.
+        text = "".join(
+            char
+            for position, (char, literal) in enumerate(section)
+            if not (
+                not literal
+                and char in "+-"
+                and position > 0
+                and section[position - 1] in (("E", False), ("e", False))
+            )
+        )
+        signs = "-" in text or ("(" in text and ")" in text)
+        if index == 1:
+            if not signs:
+                return (
+                    "the negative section must show the sign as '-' or as "
+                    "parentheses."
+                )
+        elif "-" in text or "(" in text or ")" in text:
+            return (
+                f"section {index + 1} prints a minus sign or parentheses, so a "
+                "non-negative value would read as negative."
+            )
+    return None
+
+
 _INPUT_HEADERS: tuple[str, ...] = (
     "Key",
     "Section",
@@ -220,15 +297,20 @@ class WorkbookInputItem(BaseModel):
     digits to the same Python float. Numeric formats allow one to three sections
     using General or digit placeholders, grouping, decimals, scaling commas,
     percentages and signed scientific exponents. Each numeric section may have
-    one of the eight standard named colors and a decimal comparison, in that
-    order when both are present. Affixes may use spaces, signs, parentheses,
-    currency symbols ($, €, £, ¥), quoted literals without backslashes, or
-    backslash-escaped punctuation from the allowlist. An optional fourth section
-    after three numeric sections accepts a single @ with literal affixes.
-    Formats that openpyxl would reopen as a date, time, or duration are also
-    refused. Preserve unsupported sources externally and supply a supported
-    textual reference as the input value. Text must satisfy the literal-text
-    contract, including its formula-prefix restriction.
+    one of the eight standard named colors. Affixes may use spaces, signs,
+    parentheses, currency symbols ($, €, £, ¥), backslash-escaped punctuation
+    from the allowlist, or quoted literals holding a unit token or one such
+    punctuation character. An optional fourth section after three numeric
+    sections accepts a single @ with literal affixes. Formats that openpyxl
+    would reopen as a date, time, or duration are also refused.
+
+    A format must not change what a reader sees (#1828). Text and boolean
+    values accept only General or @. Conditional sections are refused. An
+    explicit negative section must print the sign as ``-`` or parentheses, and
+    the positive and zero sections must print neither. Preserve unsupported
+    sources externally and supply a supported textual reference as the input
+    value. Text must satisfy the literal-text contract, including its
+    formula-prefix restriction.
     """
 
     model_config = ConfigDict(
@@ -318,9 +400,25 @@ class WorkbookInputItem(BaseModel):
 
     @model_validator(mode="after")
     def _validate_scalar_format(self) -> Self:
-        if isinstance(self.value, (str, bool)) or self.number_format == "General":
+        if isinstance(self.value, (str, bool)):
+            if self.number_format in _TEXT_OR_BOOL_FORMATS:
+                return self
+            raise ValueError(
+                f"WorkbookInputItem {self.key!r} has number_format "
+                f"{self.number_format!r} for a {type(self.value).__name__} value. "
+                "Text and boolean inputs accept only 'General' or '@', so the "
+                "displayed text always equals the stored value (#1828)."
+            )
+        if self.number_format == "General":
             return self
         if _SUPPORTED_NUMERIC_FORMAT_RE.fullmatch(self.number_format):
+            problem = _numeric_format_display_problem(self.number_format)
+            if problem is not None:
+                raise ValueError(
+                    f"WorkbookInputItem {self.key!r} has number_format "
+                    f"{self.number_format!r} that would misstate the value: "
+                    f"{problem}"
+                )
             # The reader may misinterpret even a supported literal (e.g. a
             # quoted semicolon after date letters). Check the emitted spelling.
             formats = _require_openpyxl().styles.numbers
