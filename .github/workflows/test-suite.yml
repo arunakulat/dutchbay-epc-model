@@ -53,7 +53,7 @@ permissions:
 # value, which is the only place the two can be held together.
 env:
   DUTCHBAY_TEST_MODE: full
-  TOTAL_SHARDS: 6
+  TOTAL_SHARDS: 8
 
 jobs:
   changes:
@@ -185,7 +185,7 @@ jobs:
         # The required 'Test Summary' check aggregates whatever legs ran (needs.test),
         # so 'success' requires every leg that ran to pass.
         python-version: ${{ fromJSON('["3.12"]') }}
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
     - name: Checkout repository
@@ -235,12 +235,17 @@ jobs:
         # timed (see #760). --splitting-algorithm least_duration bin-packs tests into
         # shards by duration (greedy LPT) instead of the default CONTIGUOUS chunking,
         # which stranded whole heavy files in one shard (measured 426s vs 129s spread
-        # on the first 6-shard run). Non-contiguous grouping is safe here: -n auto
+        # on the first 6-shard run). Non-contiguous grouping is safe here: xdist
         # already distributes tests across workers arbitrarily WITHIN a shard, so
         # inter-test order was never guaranteed anyway. The ordinary tree is exercised
         # exactly once across the ordinary shards; the paired protected-base receipt is intentionally
         # isolated to the full-history Grid Study below.
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
+        # With psutil installed `auto` counts PHYSICAL cores: 2 workers on the
+        # 4-vCPU hosted runner. `-n logical` (4 workers) was measured on #1879 and
+        # gained nothing: per-test times doubled because the 4 vCPUs are 2 SMT
+        # cores. The suite is CPU-bound per runner, so more shards (#1878), not
+        # more workers, is what shortens the gate.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
         # The paired receipt archives protected main and therefore runs only in the

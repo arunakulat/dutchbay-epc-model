@@ -39,7 +39,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from analytics.capital_risk_layer_v14 import (
     NPV_METRICS,
@@ -167,6 +167,7 @@ def emit_capital_risk_report_from_pipeline(
     npv_metric: str = "equity_npv",
     scenario_variant: Optional[str] = None,
     generated_at: Optional[str] = None,
+    on_report: Optional[Callable[[CapitalRiskReport], None]] = None,
 ) -> Path:
     """Render a lender HTML report with the capital-risk section from a finance run (#779).
 
@@ -188,6 +189,9 @@ def emit_capital_risk_report_from_pipeline(
         scenario_variant: Report label; defaults to the scenario file stem.
         generated_at: ISO timestamp stamped on the report; defaults to ``now(UTC)`` (this is a
             production edge, so the wall-clock is stamped here rather than inside the pure builder).
+        on_report: Called with the built :class:`CapitalRiskReport` before rendering, so the
+            command-line lender report (#1752) reuses this run's Monte Carlo instead of running
+            a second one. ``None`` (the default) changes nothing.
 
     Returns:
         The path the HTML report was written to.
@@ -200,6 +204,8 @@ def emit_capital_risk_report_from_pipeline(
         seed=seed,
         npv_metric=npv_metric,
     )
+    if on_report is not None:
+        on_report(report)
 
     variant = scenario_variant or Path(str(scenario_config_path)).stem
     case_result = CaseResult.from_pipeline_result(result, scenario_variant=variant)

@@ -201,5 +201,7 @@ def test_basecase_returns_regression_pins(base_config):
     # their shortfall instead of being clamped to zero (-2.90% -> -3.14% at 27e0cb10).
     # #1736 moved it again (-3.14% -> -7.52%): the post-maturity sweep now pays the
     # balloon from the reserve and the trapped cash before anything reaches equity.
-    assert -0.09 < base["equity_irr"] < -0.06
-    assert 0.03 < base["project_irr"] < 0.05
+    # #1874 moved it up (-7.52% -> -5.44%; project IRR 4.20% -> 4.52%): IPP supply to
+    # CEB is SSCL-exempt, so the basecase no longer pays 2.5% of revenue as a levy.
+    assert -0.07 < base["equity_irr"] < -0.04
+    assert 0.035 < base["project_irr"] < 0.055

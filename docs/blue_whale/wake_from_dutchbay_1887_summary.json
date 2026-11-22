@@ -1,0 +1,258 @@
+{
+  "implied_wake_model_uncertainty_pct": {
+    "committed_wake_model_pct": 0.0,
+    "fraction_of_loss": 0.25,
+    "note": "ASSUMPTION: wake-model uncertainty taken as a stated fraction of the modelled loss. Not applied to the Blue Whale budget.",
+    "value": 4.05
+  },
+  "label": "Labelled sensitivity, not the Blue Whale basis (#1887). The Blue Whale yield assumes no wake (owner, 2026-11-07) and wake_model_pct stays 0.0; nothing here is applied. Every turbine uses the IEA 10 MW reference curves as a proxy (the Blue Whale curves are confidential and not read). The wind is Blue Whale's transferred long-term resource at 130 m, not a measurement at each turbine, and one machine and hub height stand for all turbines. The live model over-states wake loss on this layout relative to the DutchBay frozen basis (#1589, #1856).",
+  "nearest_neighbours_m": [
+    {
+      "distance_m": 526.2,
+      "id": "T3"
+    },
+    {
+      "distance_m": 621.1,
+      "id": "T1"
+    },
+    {
+      "distance_m": 1182.7,
+      "id": "T4"
+    }
+  ],
+  "net_energy_relative_change_if_applied_pct": -16.21,
+  "primary": {
+    "deficit_model": "bastankhah",
+    "geometry": "dutchbay_machine",
+    "sector_wake_loss_pct": [
+      5.47,
+      45.77,
+      2.07,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.01,
+      30.47,
+      76.92,
+      7.32,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "turbulence_intensity": 0.1,
+    "wake_loss_pct": 16.21
+  },
+  "resource": {
+    "basis": "long_term_130m omni Weibull and sector frequency rose",
+    "sector_centre_deg": [
+      0.0,
+      22.5,
+      45.0,
+      67.5,
+      90.0,
+      112.5,
+      135.0,
+      157.5,
+      180.0,
+      202.5,
+      225.0,
+      247.5,
+      270.0,
+      292.5,
+      315.0,
+      337.5
+    ],
+    "source": "docs/blue_whale/met_mast_transfer_summary.json",
+    "source_sha256": "2deb3836798d88938400705ef45b8572fee65108fcd4289aa8f0f5970ea09e22",
+    "weibull_a_ms": 9.206553808013767,
+    "weibull_k": 3.043591722491189
+  },
+  "scaled_to_dutchbay_basis": {
+    "note": "The live loss times the DutchBay re-baseline's frozen-basis over live-farm ratio: a second reading on the basis DutchBay's own yield carries, not a Blue Whale finding.",
+    "scale_to_basis": 0.376634,
+    "source": "docs/wind/dutchbay_14_turbine_wake_summary.json",
+    "source_sha256": "4ad4b81d6699bd9c9113fb076cba1971f1639bd578a3e0230fc24eaec723af16",
+    "wake_loss_pct": 6.11
+  },
+  "sensitivities": {
+    "deficit_model": [
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.47,
+          45.77,
+          2.07,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          30.47,
+          76.92,
+          7.32,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.1,
+        "wake_loss_pct": 16.21
+      },
+      {
+        "deficit_model": "turbopark",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.47,
+          50.89,
+          1.98,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          46.93,
+          93.36,
+          7.86,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.1,
+        "wake_loss_pct": 19.23
+      }
+    ],
+    "geometry": [
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.47,
+          45.77,
+          2.07,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          30.47,
+          76.92,
+          7.32,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.1,
+        "wake_loss_pct": 16.21
+      },
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "blue_whale_geometry",
+        "sector_wake_loss_pct": [
+          6.16,
+          47.75,
+          2.45,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          32.33,
+          78.94,
+          8.28,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.1,
+        "wake_loss_pct": 16.99
+      }
+    ],
+    "turbulence_intensity": [
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.12,
+          56.11,
+          1.58,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          36.04,
+          84.03,
+          6.54,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.06,
+        "wake_loss_pct": 17.75
+      },
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.47,
+          45.77,
+          2.07,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.01,
+          30.47,
+          76.92,
+          7.32,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.1,
+        "wake_loss_pct": 16.21
+      },
+      {
+        "deficit_model": "bastankhah",
+        "geometry": "dutchbay_machine",
+        "sector_wake_loss_pct": [
+          5.8,
+          38.01,
+          2.57,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.03,
+          26.82,
+          69.22,
+          8.2,
+          0.01,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "turbulence_intensity": 0.14,
+        "wake_loss_pct": 14.88
+      }
+    ]
+  },
+  "waked_id": "T2",
+  "work_item": "#1887"
+}

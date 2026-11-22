@@ -44,7 +44,8 @@ GENERIC_MODULES = (
     # #1578 U3: the run and summary moved out of the single-site script.
     "solar_resource/pv_bess_sizing_runner.py",
 )
-SITE_WORDING = re.compile(r"blue[ _-]?whale|\bPR \d|\bPR\d", re.IGNORECASE)
+#: "PR 4", "PR4", "PR #1590" and "PR#12" (#1820: the "#" spellings were not caught).
+SITE_WORDING = re.compile(r"blue[ _-]?whale|\bPR ?#?\d", re.IGNORECASE)
 
 
 def _yaml(path: Path) -> Dict[str, Any]:
@@ -88,9 +89,19 @@ def test_the_wording_pattern_catches_what_it_is_for() -> None:
         "blue-whale",
         "(PR 2)",
         "PR 4's",
+        "PR #1590",
+        "(PR#12)",
+        "pr 7",
     ):
         assert SITE_WORDING.search(bad), bad
-    for fine in ("PUCSL 2026", "the separate solar + BESS project", "PRICING_SCHEMA"):
+    for fine in (
+        "PUCSL 2026",
+        "the separate solar + BESS project",
+        "PRICING_SCHEMA",
+        "#1590",
+        "PROJECT 2",
+        "APR 2026",
+    ):
         assert not SITE_WORDING.search(fine), fine
 
 
@@ -328,6 +339,14 @@ def test_the_status_literal_is_the_engines_constant() -> None:
         ({}, None),  # undefined: the numeric surface leaves the key out (#1494)
         ({"project_irr": None, "project_irr_status": "undefined"}, None),
         ({"project_irr": 0.0, "project_irr_status": "not_computed"}, None),
+        # #1820 (#1725 A-2): an explicit None status is no status; any other status that
+        # is not exactly "computed" (empty, another case, not a string) is no IRR.
+        ({"project_irr": 0.05, "project_irr_status": None}, 0.05),
+        ({"project_irr": 0.05, "project_irr_status": ""}, None),
+        ({"project_irr": 0.05, "project_irr_status": "COMPUTED"}, None),
+        ({"project_irr": 0.05, "project_irr_status": "Computed"}, None),
+        ({"project_irr": 0.05, "project_irr_status": 1}, None),
+        ({"project_irr": 0.05, "project_irr_status": True}, None),
     ],
 )
 def test_project_irr_reads_the_engines_status(kpis: Dict[str, Any], want: Any) -> None:

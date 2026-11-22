@@ -154,12 +154,20 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     #1505 widened it once more, to +929bps: with the flag on, the levered tax now also
     deducts the refinanced tranche's interest when it is paid (the off case deducts
     nothing, so it does not move). The upper bound moves from 0.08 to 0.12.
+
+    #1845 sizes the committed lender case to the annual covenant DSCR, where the fold
+    binds and both cases land on 1.30, so the min_dscr direction below has nothing to
+    show. This test is about the interest shield reaching the sizing path, so it runs
+    both cases on the per-period basis, which reproduces the pre-#1845 engine exactly
+    (``tests/finance/test_sizing_dscr_basis_1845.py``); the pins are that engine's.
     """
-    on = evaluate_with_overrides(LENDER, overrides={})  # default True
+    period = {"Financing_Terms.sizing_dscr_basis": "period"}
+    on = evaluate_with_overrides(LENDER, overrides=dict(period))  # default True
     off = evaluate_with_overrides(
-        LENDER, overrides={"tax.interest_deductibility": False}
+        LENDER, overrides={**period, "tax.interest_deductibility": False}
     )
-    assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
+    # The pre-#1845 canonical equity IRR (tests/_canon.py before #1845).
+    assert on["equity_irr"] == pytest.approx(-0.23365411952833248, abs=1e-9)
     # #1504 (2026-10-31): both cases now charge the post-maturity senior fee on the
     # refinanced balance actually outstanding; off moves -35.90% -> -32.30% and the
     # gap stays inside the band (+586bps). #1577 (14 turbines): off -32.30% -> -33.61%.

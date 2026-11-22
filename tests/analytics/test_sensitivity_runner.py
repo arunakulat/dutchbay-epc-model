@@ -129,21 +129,45 @@ def test_covenant_pinned_dscr_period_tornado_is_flagged_flat() -> None:
     assert "covenant" in suite.metadata.get("flat_metric_reason", "").lower()
 
 
-def test_fold_headline_min_dscr_tornado_is_not_flat() -> None:
-    """#790: the min_dscr HEADLINE (fold-corrected) responds to real shocks — a
-    lender's DSCR tornado is no longer an all-zero chart on the lender case.
+def _lender_on_the_period_basis(tmp_path: Path) -> Path:
+    """The lender case with ``sizing_dscr_basis: period`` (the pre-#1845 sizing basis)."""
+    text = LENDER.read_text(encoding="utf-8")
+    old = "  sizing_dscr_basis: annual_covenant"
+    assert text.count(old) == 1, "the lender case must declare the annual basis once"
+    out = tmp_path / LENDER.name
+    out.write_text(text.replace(old, "  sizing_dscr_basis: period"), encoding="utf-8")
+    return out
+
+
+def test_fold_headline_min_dscr_tornado_is_not_flat(tmp_path: Path) -> None:
+    """#790: the min_dscr HEADLINE (fold-corrected) responds to real shocks when the
+    sizing does not bind the fold.
 
     #1397 shrank the response without removing it, and the threshold moves with the
     measurement rather than the measurement being argued away. Largest bar: 0.0051,
-    against 0.01 before. The headline now sits on the year-1 fold, which combines the
+    against 0.01 before. The headline sits on the year-1 fold, which combines the
     stub/bridge period with the first operating period; the bridge service in that fold
     is fixed, so a CFADS shock moves the folded ratio less than it moved the previously
-    binding year (#1353, issuecomment-6433557550). It is still two orders of magnitude
-    above the covenant-pinned per-period metric above, which is what this test
-    contrasts it with."""
-    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
+    binding year (#1353, issuecomment-6433557550).
+
+    #1845 sizes the committed lender case to the annual covenant, which pins the fold too
+    (see the next test), so this runs the lender case on the per-period basis, where the
+    fold is not sized. Largest bar there: 0.0047."""
+    suite = run_sensitivity_analysis(
+        str(_lender_on_the_period_basis(tmp_path)), metric="min_dscr"
+    )
     assert max(abs(t.impact_abs) for t in suite.tornado_results) > 0.001
     assert suite.metadata.get("flat_metric") is False
+
+
+def test_annual_covenant_sizing_pins_the_headline_min_dscr() -> None:
+    """#1845: on the annual-covenant basis the solve also binds the year-1 fold, so the
+    lender case's min_dscr HEADLINE is covenant-pinned like min_dscr_period and the
+    tornado says so rather than drawing an all-zero chart."""
+    suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
+    assert max(abs(t.impact_abs) for t in suite.tornado_results) < 1e-9
+    assert suite.metadata.get("flat_metric") is True
+    assert "covenant" in suite.metadata.get("flat_metric_reason", "").lower()
 
 
 def test_basecase_min_dscr_no_longer_covenant_flat() -> None:

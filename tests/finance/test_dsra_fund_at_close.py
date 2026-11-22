@@ -73,10 +73,15 @@ def test_dsra_sized_off_operating_year_1_not_the_bridge_period() -> None:
     `interest_only_years < 2` -- and under-reserving the DSRA (~50% low at io=0). The
     canonical lender case uses `interest_only_years: 2` (bridge == op-year-1, which masks
     the bug), so this test forces io=0 to make the two periods differ.
+
+    #1845: on the annual-covenant basis the sculpt takes the bridge's service out of
+    operating year 1, which narrows exactly the gap this test needs, so it runs on the
+    per-period basis.
     """
     cfg = dict(load_scenario_config(LENDER))
     cfg["Financing_Terms"] = {
         **cfg["Financing_Terms"],
+        "sizing_dscr_basis": "period",
         "interest_only_years": 0,
         "dsra": {"fund_at_close": True, "target_months": 6},
     }

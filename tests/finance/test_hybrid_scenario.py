@@ -51,11 +51,15 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # #1577 (2026-11-08): DutchBay's wind drops to 14 turbines (148.9 MW, P50 433.2 GWh,
     # wind capex 151.4072M), so project_irr 0.307% -> 0.111%, equity_irr -4.07% -> -4.28%,
     # NPV -107.33M -> -104.61M and total CFADS 205.30M -> 193.36M; min_dscr holds 1.30.
-    assert kpis["project_irr"] == pytest.approx(0.001106519897835912, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.04283297582286927, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-104611914.41813616, rel=1e-6)
+    # #1874 (2026-11-22): revenue SSCL dropped (IPP supply to CEB is exempt, #738), so
+    # project_irr 0.111% -> 0.404%, equity_irr -4.28% -> -3.96%,
+    # NPV -104.61M -> -102.10M and total CFADS 193.36M -> 198.62M;
+    # min_dscr holds 1.30.
+    assert kpis["project_irr"] == pytest.approx(0.004043007284029234, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.039619255319482405, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-102095404.72277786, rel=1e-6)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(193364431.99320891, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(198624368.92428488, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:
