@@ -63,6 +63,16 @@ record under `DATA-01`.
    only, not the wake this turbine casts on DutchBay. At about 2.5 to 3 rotor diameters this is also a loads and
    site-suitability question (IEC 61400-1 effective turbulence, OEM approval) for both
    projects, not only one of wake energy (#1568 domain review N-1). It is not solved.
+   *Sensitivity, 2026-11-22 (#1887), not applied:* on Blue Whale's own long-term resource
+   at 130 m, with every DutchBay turbine waking it and the IEA 10 MW reference curves as a
+   proxy machine, the live PyWake model gives this turbine a wake loss of 16.21%
+   (Bastankhah, turbulence intensity 0.10; 14.88% to 19.23% across the turbulence, deficit
+   model and geometry sensitivities), almost all from the T1 and T3 sectors. The live model
+   over-states loss on this layout against DutchBay's frozen basis (#1589, #1856); scaled
+   by DutchBay's own live-to-basis ratio the same loss reads 6.11%. The yield, the P90 and
+   `wake_model_pct` (0.0) are unchanged: applying any of it is a separate R3 decision with
+   a before/after KPI table. Summary:
+   `docs/blue_whale/wake_from_dutchbay_1887_summary.json`.
 3. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone
    (CC&CRMD permit, IEE or EIA), with lagoon ecology and bird collision in scope.
 4. **Component transport.** Blade and tower delivery over a 9 m right of way, or by the
