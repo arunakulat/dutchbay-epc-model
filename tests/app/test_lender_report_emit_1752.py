@@ -151,13 +151,13 @@ def test_cli_report_has_the_api_report_sections(
     )
     cli_html = out.html_path.read_text(encoding="utf-8")
 
-    # The CLI report is the API report plus the wind-resource AEP sensitivity, which only
-    # the CLI builds (#1615 step B).
+    # The CLI report is the API report plus the wind-resource AEP sensitivity (#1615 step
+    # B) and the tariff legal status (#1837), which only the CLI builds.
+    cli_only = ("Wind Resource Sensitivity", "Tariff Basis and Legal Status")
     cli_h2s = _h2s(cli_html)
-    assert any(h.startswith("Wind Resource Sensitivity") for h in cli_h2s)
-    assert [
-        h for h in cli_h2s if not h.startswith("Wind Resource Sensitivity")
-    ] == _h2s(api_html)
+    for title in cli_only:
+        assert any(h.startswith(title) for h in cli_h2s), title
+    assert [h for h in cli_h2s if not h.startswith(cli_only)] == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
     # The capital-structure screening and the lender sensitivities (#1825 slices i and
