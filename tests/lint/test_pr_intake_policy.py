@@ -380,3 +380,73 @@ def test_workflow_keeps_required_job_and_uses_env_for_untrusted_body() -> None:
         "Recorded before edits:",
     ):
         assert label in template
+
+
+# INTAKE-01 asks for the sweep "before opening a PR": a PR opened after this one is not
+# required in this one's sweep (its own sweep names this one). Before this, each new PR
+# failed every older PR's intake on its next run.
+_THIS_PR_OPENED = "2026-10-12T07:00:00Z"
+
+
+@pytest.mark.parametrize(
+    "later, required",
+    [
+        ({"number": 1360, "created_at": "2026-10-12T09:00:00Z"}, False),
+        ({"number": 1360, "created_at": "2026-10-12T06:59:59Z"}, True),
+        ({"number": 1360, "created_at": _THIS_PR_OPENED}, True),
+        ({"number": 1360}, True),
+        ({"number": 1360, "created_at": "not a time"}, True),
+    ],
+)
+def test_sweep_requires_only_prs_open_when_this_one_opened(
+    later: dict[str, Any], required: bool
+) -> None:
+    code, message = _evaluate(_body(), open_prs=[*OPEN_PRS, later])
+    if required:
+        assert code == 1 and "omits #1360" in message
+    else:
+        assert code == 0, message
+
+
+def test_unreadable_own_creation_time_requires_every_open_pr() -> None:
+    later = {"number": 1360, "created_at": "2026-10-12T09:00:00Z"}
+    assert check._sweep_omissions("#1346", [*OPEN_PRS, later], 1355, "") == [1360]
+    assert (
+        check._sweep_omissions("#1346", [*OPEN_PRS, later], 1355, _THIS_PR_OPENED) == []
+    )
+
+
+def test_main_ignores_prs_opened_later(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The live path applies the same rule to the GitHub open-PR list."""
+    pulls = [
+        {"number": 1346, "created_at": "2026-10-12T05:00:00Z"},
+        {"number": 1355, "created_at": _THIS_PR_OPENED},
+        {"number": 1360, "created_at": "2026-10-12T09:00:00Z"},
+    ]
+    tracker = {**TRACKER, "comments": len(TRACKER_COMMENTS)}
+
+    def fake_get_json(repository: str, path: str, token: str) -> Any:
+        if path.startswith("pulls?"):
+            return pulls
+        if path.startswith("issues/1353/comments"):
+            return TRACKER_COMMENTS
+        if path == "issues/1353":
+            return tracker
+        if path == "issues/1354":
+            return ISSUE
+        raise AssertionError(path)
+
+    monkeypatch.setattr(check, "_get_json", fake_get_json)
+    for key, value in {
+        "PR_BODY": _body(),
+        "GITHUB_REPOSITORY": "arunakulat/dutchbay-epc-model",
+        "GITHUB_TOKEN": "token",
+        "PR_NUMBER": "1355",
+        "PR_AUTHOR": "human",
+        "PR_AUTHOR_TYPE": "User",
+        "PR_CREATED_AT": _THIS_PR_OPENED,
+    }.items():
+        monkeypatch.setenv(key, value)
+    assert check.main() == 0
+    pulls[2]["created_at"] = "2026-10-12T06:00:00Z"
+    assert check.main() == 1

@@ -43,6 +43,10 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
+from app.reports.aep_resource_sensitivity import (
+    SECTION_AEP_RESOURCE,
+    build_aep_resource_sensitivity,
+)
 from app.reports.capital_structure_section import (
     DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
     SECTION_CAPITAL_STRUCTURE,
@@ -63,6 +67,7 @@ from app.reports.lender_sensitivity_section import (
 )
 from app.reports.renderer import render_report_html
 from app.reports.report_model import (
+    AepResourceSensitivityBlock,
     CapitalStructureBlock,
     LenderSensitivityBlock,
     ReportContext,
@@ -113,6 +118,10 @@ NO_MONTE_CARLO_PARAMETERS = "the scenario declares no monte_carlo.parameters to 
 
 SensitivityComputer = Callable[..., ReportSensitivityBundle]
 CapitalRiskBuilder = Callable[..., CapitalRiskReport]
+#: Returns the section block, or a "not run: ..." reason (#1615 step B).
+AepResourceBuilder = Callable[
+    [Mapping[str, Any], Mapping[str, Any]], Union[AepResourceSensitivityBlock, str]
+]
 #: Returns the section block, or a "not run: ..." reason (#1825 slice i).
 CapitalStructureBuilder = Callable[..., Union[CapitalStructureBlock, str]]
 #: Returns the section block, or a "not run: ..." reason (#1825 slice ii).
@@ -158,6 +167,7 @@ def sections_not_run(
     scenario_config: Mapping[str, Any],
     *,
     capital_risk_not_run: Optional[str],
+    aep_resource_not_run: Optional[str] = None,
     capital_structure_not_run: Optional[str] = None,
     lender_sensitivities_not_run: Optional[str] = None,
 ) -> List[SectionNotRun]:
@@ -171,6 +181,8 @@ def sections_not_run(
         scenario_config: The scenario the sensitivities ran on.
         capital_risk_not_run: Why the capital-risk section has no report, or ``None`` when it has
             one.
+        aep_resource_not_run: Why the wind-resource AEP sensitivity (#1615 step B) was not
+            built, or ``None`` when it was.
         capital_structure_not_run: Why the capital-structure screening (#1825 slice i) was not
             built, or ``None`` when it was.
         lender_sensitivities_not_run: Why the lender sensitivities (#1825 slice ii) were not
@@ -189,6 +201,10 @@ def sections_not_run(
     tornado_reason = tornado_not_computed_reason(sensitivity)
     if tornado_reason is not None:
         out.append(SectionNotRun(section=SECTION_TORNADO, reason=tornado_reason))
+    if aep_resource_not_run is not None:
+        out.append(
+            SectionNotRun(section=SECTION_AEP_RESOURCE, reason=aep_resource_not_run)
+        )
     no_drivers = global_sa_driver_count(scenario_config) == 0
     for section, method, block in (
         (SECTION_MORRIS, "morris", sensitivity.morris),
@@ -496,6 +512,7 @@ def emit_lender_report_from_pipeline(
     profile: ReportSensitivityProfile = PRODUCTION_REPORT_SENSITIVITY_PROFILE,
     sensitivity_computer: SensitivityComputer = compute_report_sensitivity,
     capital_risk_builder: Optional[CapitalRiskBuilder] = None,
+    aep_resource_builder: AepResourceBuilder = build_aep_resource_sensitivity,
     capital_structure: CapitalStructureSettings = DEFAULT_CAPITAL_STRUCTURE_SETTINGS,
     capital_structure_builder: CapitalStructureBuilder = build_capital_structure_section,
     sensitivities: LenderSensitivitySettings = DEFAULT_SENSITIVITY_SETTINGS,
@@ -525,6 +542,9 @@ def emit_lender_report_from_pipeline(
             :func:`~app.reports.report_orchestration.compute_report_sensitivity`.
         capital_risk_builder: Seam for tests; production uses
             :func:`~app.reports.capital_risk_emit.build_capital_risk_report_for_scenario`.
+        aep_resource_builder: Seam for tests; production uses
+            :func:`~app.reports.aep_resource_sensitivity.build_aep_resource_sensitivity`, the
+            wind-resource AEP tornado and Monte Carlo (#1615 step B).
         capital_structure: The capital-structure screening settings
             (``lender_report.capital_structure``); off by default (#1825 slice i).
         capital_structure_builder: Seam for tests; production uses
@@ -579,6 +599,10 @@ def emit_lender_report_from_pipeline(
                 )
 
     sensitivity = sensitivity_computer(scenario, profile=profile)
+    aep_built = aep_resource_builder(scenario, result)
+    aep_resource = (
+        aep_built if isinstance(aep_built, AepResourceSensitivityBlock) else None
+    )
     try:
         cs_built: Union[CapitalStructureBlock, str] = capital_structure_builder(
             scenario_config_path, scenario, capital_structure
@@ -601,6 +625,7 @@ def emit_lender_report_from_pipeline(
         sensitivity,
         scenario,
         capital_risk_not_run=capital_risk_not_run,
+        aep_resource_not_run=None if aep_resource is not None else str(aep_built),
         capital_structure_not_run=None if cs_block is not None else str(cs_built),
         lender_sensitivities_not_run=None if ls_block is not None else str(ls_built),
     )
@@ -616,6 +641,7 @@ def emit_lender_report_from_pipeline(
         sensitivity,
         capital_risk=capital_risk,
         sections_not_run=left_out,
+        aep_resource_sensitivity=aep_resource,
         capital_structure=cs_block,
         lender_sensitivities=ls_block,
     )
