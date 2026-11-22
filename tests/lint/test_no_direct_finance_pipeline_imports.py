@@ -114,6 +114,13 @@ ALLOWLIST: dict[str, str] = {
         "[PERMANENT] 6-line re-export shim for finance.epc_helper_v14 EPC "
         "breakdown helpers; exists precisely to give analytics one import seam."
     ),
+    "analytics/finance/p90_recomputed_downside.py": (
+        "[PERMANENT] Imports finance.cashflow_v14_utils (CAPACITY_FACTOR_PATHS, the "
+        "engine's single list of billed capacity-factor paths), finance.tech_types "
+        "(is_storage_type) and finance.irr (npv) to build the P90 case on exactly what "
+        "the cashflow bills (#1836). Pure leaf contracts and the canonical NPV, no "
+        "engine logic; every evaluation still goes through evaluate_with_overrides."
+    ),
     "analytics/portfolio/generation_aggregator.py": (
         "[PERMANENT] Imports finance.tech_types (GENERATION_TYPES) — a pure leaf "
         "registry of technology TYPE discriminators with no engine logic. It is the "
