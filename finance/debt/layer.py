@@ -23,6 +23,7 @@ from finance.debt.terms import (
     _resolve_construction_periods,
     placeholder_construction_schedule,
     placeholder_debt_drawdown_pct,
+    resolve_sizing_dscr_basis,
 )
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
@@ -161,6 +162,14 @@ def apply_debt_layer(
             cfads_ext[construction_periods:],
             target_dscr,
             senior_fee_rate=senior_fee_rate,
+            # #1845: on the annual-covenant basis the bridge's service, which
+            # dscr_by_year folds into operating year 1, comes out of year 1's sculpt.
+            folded_index=(
+                bridge_debt_period - construction_periods
+                if bridge_debt_period is not None
+                and resolve_sizing_dscr_basis(params) == "annual_covenant"
+                else None
+            ),
         )
 
     for k in schedules:

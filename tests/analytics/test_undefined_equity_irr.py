@@ -69,6 +69,10 @@ def test_lender_case_undefined_equity_irr_reaches_the_kpis_as_none() -> None:
         evaluate_with_overrides(
             LENDER_CONFIG,
             overrides={
+                # #1845 sizes the lender case to the annual covenant, which leaves a
+                # balloon small enough to refinance with a defined IRR. The per-period
+                # basis keeps the larger balloon this test needs.
+                "Financing_Terms.sizing_dscr_basis": "period",
                 "Financing_Terms.balloon_treatment": "refinance",
                 "constraints.refinancing.refinance_tenor_years": 6,
             },

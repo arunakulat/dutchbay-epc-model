@@ -63,9 +63,12 @@ def test_capex_mc_distribution_is_monotonic_and_sound() -> None:
     # debt size) — a real band below the floor, not the old degenerate 1.30 pin.
     # #1397 widens that gap: sizing on levered-tax CFADS supports more gearing,
     # whose extra bridge service drags the fold from ~1.28 to ~1.218.
+    # #1845 sizes the lender case to the annual covenant, so the solve holds the fold at
+    # the target too and every level reads 1.30 again (now by construction, not by the
+    # old degenerate pin: the fold is in the solve).
     for level in ("p10", "p50", "p90"):
         assert res.min_dscr[level] <= 1.30 + 1e-9
-        assert res.min_dscr[level] == pytest.approx(1.218, abs=0.01)
+        assert res.min_dscr[level] == pytest.approx(1.30, abs=0.01)
     assert res.min_dscr["p10"] <= res.min_dscr["p50"] <= res.min_dscr["p90"]
 
 
