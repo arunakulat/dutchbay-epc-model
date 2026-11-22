@@ -1,0 +1,31 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Recomputed P90 downside beside the sizing downside and the CFADS-ratio approximation (#1836)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/run_p90_recomputed_downside_v14.py. Results:
+# docs/finance/p90_recomputed_downside_summary.json.
+#
+# Universal: every scenario matching `scenarios_glob` that declares an expected_results
+# net_aep_p50_gwh / net_aep_p90_gwh pair is run; the others are skipped. There is no
+# scenario list here and no site-specific value. The analysis changes no input, sizing or
+# KPI (analytics.finance.p90_recomputed_downside).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+p90_downside:
+  scenarios_glob: "scenarios/**/*.yaml"
+  # Leave empty to print only; set to write the committed summary.
+  summary_json: ""
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
