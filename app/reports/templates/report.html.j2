@@ -236,6 +236,7 @@
     {% endif %}
   </section>
 
+  {% if ctx.tariff_legal_status %}{% include "_tariff_status.html.j2" %}{% endif %}
   {# 4b. Energy production (P50/P90) — RPT-1 #}
   {% if ctx.finance %}
   <section class="page">
@@ -1481,6 +1482,9 @@
       max balance residual {{ fmt_usd(ctx.three_statement.max_abs_balance_residual) }}).</p>
 
     <h3>Income statement</h3>
+    {% if ctx.tariff_legal_status %}
+    <p class="{% if ctx.tariff_legal_status.headline_needs_label %}fx-warning{% else %}muted{% endif %}">{{ ctx.tariff_legal_status.headline_line }}</p>
+    {% endif %}
     <table>
       <thead><tr><th>Year</th><th>Revenue</th><th>EBITDA</th><th>Depr.</th><th>EBIT</th><th>Interest</th><th>Tax</th><th>Net income</th></tr></thead>
       <tbody>

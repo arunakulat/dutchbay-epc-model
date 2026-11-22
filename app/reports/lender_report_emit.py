@@ -86,6 +86,7 @@ from app.reports.report_model import (
     LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
+    TariffLegalStatusBlock,
 )
 from app.reports.report_orchestration import (
     PRODUCTION_REPORT_SENSITIVITY_PROFILE,
@@ -98,6 +99,7 @@ from app.reports.report_orchestration import (
     tornado_not_computed_reason,
 )
 from app.reports.site_analysis_model import SiteAnalysesBlock
+from app.reports.tariff_status_section import build_tariff_status, label_site_analyses
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,7 @@ SECTION_MORRIS = "Global sensitivity: Morris screening"
 SECTION_PAWN = "Global sensitivity: PAWN"
 SECTION_CAPITAL_RISK = "Capital risk: Monte Carlo distribution"
 SECTION_SITE_ANALYSES = "Site analyses (screening)"
+SECTION_TARIFF_STATUS = "Tariff legal status"
 
 NO_MONTE_CARLO_PARAMETERS = "the scenario declares no monte_carlo.parameters to sample"
 
@@ -705,6 +708,34 @@ def emit_lender_report_from_pipeline(
         left_out.append(
             SectionNotRun(section=SECTION_SITE_ANALYSES, reason=site_analyses_not_run)
         )
+    tariff_status: Optional[TariffLegalStatusBlock] = None
+    try:
+        resolved, tariff_status = build_tariff_status(
+            scenario, Path(str(scenario_config_path)).stem
+        )
+        site_analyses = label_site_analyses(site_analyses, resolved)
+    except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+        # #1837: a malformed registry leaves the status out and says so; the site-analysis
+        # figures it would have labelled are then left out too, so no figure on an
+        # unpublished rate reaches the report without its label.
+        logger.exception("Tariff legal status could not be built")
+        left_out.append(
+            SectionNotRun(
+                section=SECTION_TARIFF_STATUS,
+                reason=f"not run: could not be built ({type(exc).__name__}: {exc})",
+            )
+        )
+        if site_analyses is not None:
+            left_out.append(
+                SectionNotRun(
+                    section=SECTION_SITE_ANALYSES,
+                    reason=(
+                        "not run: the tariff legal status that labels these figures "
+                        "could not be built"
+                    ),
+                )
+            )
+            site_analyses = None
     case = report_case_from_pipeline_result(
         result,
         scenario_config=scenario,
@@ -721,7 +752,9 @@ def emit_lender_report_from_pipeline(
         capital_structure=cs_block,
         lender_sensitivities=ls_block,
         cost_storage=csx_block,
-    ).model_copy(update={"site_analyses": site_analyses})
+    ).model_copy(
+        update={"site_analyses": site_analyses, "tariff_legal_status": tariff_status}
+    )
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)
     html_path.write_text(html, encoding="utf-8")

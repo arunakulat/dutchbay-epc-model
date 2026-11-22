@@ -859,6 +859,11 @@ modules:
     role_description: Resolves and validates optional scenario-level site analysis configuration blocks.
     excel_representation: governance_metadata
 
+  - module_path: analytics.tariff_legal_status
+    pipeline_stage: governance
+    role_description: Reads the shared tariff legal-status registry strictly and resolves each scenario's rate status and effective-window flags.
+    excel_representation: governance_metadata
+
   - module_path: analytics.site_analysis_runs
     pipeline_stage: governance
     role_description: Runs a scenario's declared site analyses and stamps each summary with code and config digests.
@@ -1211,6 +1216,11 @@ modules:
   - module_path: app.reports.site_analysis_model
     pipeline_stage: reporting_delivery
     role_description: Typed report models for the screening site-analysis sections and their statuses.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.tariff_status_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's tariff legal-status section and labels site-analysis figures that rest on an unpublished rate.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.site_analysis_sections

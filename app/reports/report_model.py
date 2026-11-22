@@ -1171,6 +1171,51 @@ class LenderSensitivityBlock(BaseModel):
     parts_not_run: List[str] = Field(default_factory=list)
 
 
+class TariffStatusRow(BaseModel):
+    """One recorded rate behind a revenue figure, and its legal status (#1837)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Where the rate is used, in words ("Headline revenue", "Battery options: ...").
+    use: str
+    rate_id: Optional[str] = None
+    #: The rate in LKR/kWh, formatted; "n/a" for a formula with no single value.
+    value: str
+    status: str
+    status_label: str
+    #: Set when every figure built on this rate must print its status beside it.
+    needs_label: bool
+    instrument: str
+    clause: str
+    window: str
+    conditions: List[str] = Field(default_factory=list)
+    open_questions: List[str] = Field(default_factory=list)
+
+
+class TariffLegalStatusBlock(BaseModel):
+    """What the scenario's revenue rests on (#1837): status, instrument, effective window.
+
+    Labelling only. It never changes a tariff value or a KPI, and it is not a legal opinion.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Whether the shared registry lists the scenario at all.
+    recorded: bool
+    #: One line printed beside the revenue in the statements.
+    headline_line: str
+    #: The headline revenue's status, for the badge beside it.
+    headline_status: str
+    headline_status_label: str
+    headline_needs_label: bool
+    rows: List[TariffStatusRow] = Field(default_factory=list)
+    #: Where the scenario's assumed SPPA signing date or COD falls outside a rate's window.
+    window_flags: List[str] = Field(default_factory=list)
+    #: The dates the window check used, in words.
+    dates_checked: str
+    registry: str
+
+
 class EstimateClassBand(BaseModel):
     """The scenario's AACE estimate class and its expected accuracy band (#1825 slice iii)."""
 
@@ -1463,6 +1508,10 @@ class ReportContext(BaseModel):
     #: equity, FX, Pareto and Sobol. The command-line lender report fills it when switched
     #: on; None (the default) omits the section.
     lender_sensitivities: Optional[LenderSensitivityBlock] = None
+    #: Tariff legal status (#1837): what the revenue rests on, printed beside it. The
+    #: command-line lender report fills it; None (the default) omits it, so every other
+    #: report stays byte-identical.
+    tariff_legal_status: Optional[TariffLegalStatusBlock] = None
     #: Cost and storage (#1825 slice iii): estimate class, CAPEX Monte Carlo, storage
     #: dispatch, LCOS, battery-project economics and EPC margin. The command-line lender
     #: report fills it when switched on; None (the default) omits the section.
