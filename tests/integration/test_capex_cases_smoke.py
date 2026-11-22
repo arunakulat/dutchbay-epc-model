@@ -95,8 +95,12 @@ DRIVERS = (
 # 0.305 and LLCR moves 5e-7; on 15 it moved 1.5e-3, and the lean case moves the other way).
 # The opex driver moves LLCR by 1.6% on the same case, which the opex parametrisation of
 # the test below asserts, so the guard against a returned vector still covers it.
+# PLCR (PV of CFADS over the project life, over the same sized debt) has the same property.
+# #1874 dropped revenue SSCL; on the lean case the tariff shock now moves PLCR by 9.9e-5
+# (1.42457 -> 1.42471), just under the 1e-4 floor. The opex driver still moves it.
 DRIVER_INVARIANT_KPIS: dict[tuple[str, str], tuple[str, ...]] = {
     ("prudent_1420", "tariff +10%"): ("llcr",),
+    ("lean_977", "tariff +10%"): ("plcr",),
 }
 
 

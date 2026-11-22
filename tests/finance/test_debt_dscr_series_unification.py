@@ -315,16 +315,18 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
 @pytest.mark.parametrize(
     ("scenario_name", "expected_min_dscr", "expected_fold_min"),
     [
+        # Re-baselined in v15.32.0 (#1874: revenue SSCL dropped, IPP supply to CEB is
+        # exempt). Before: 0.9011847533626354 and 0.9387210732131591.
         # Re-baselined in v15.24.0 (#1570: both run on the one-year build their timeline
         # declares; the engine had defaulted to two periods). Before: 0.9019916469950849 and
         # 0.8942466976990286.
         # Re-baselined in v15.11.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
         # -> 50.10 / 15 y). Before: 0.9069456485322224 and 0.8724193845452927.
-        ("ceb_bess_10mw_capacity_charge.yaml", 0.9011847533626354, 0.9011847533626354),
+        ("ceb_bess_10mw_capacity_charge.yaml", 0.9022464554800647, 0.9022464554800647),
         (
             "ceb_solar_bess_nightpeak_10mw.yaml",
-            0.9387210732131591,
-            0.9387210732131591,
+            0.9443970914635553,
+            0.9443970914635553,
         ),
     ],
 )
