@@ -327,10 +327,59 @@ def test_the_capex_monte_carlo_reports_the_financed_capex(
         }
 
     monkeypatch.setattr(pipeline, "run_v14_pipeline", fake)
+    from analytics.evaluation_v14 import evaluated_scenario_config
+
     raw = _raw(WIND)
     result = run_capex_mc(raw, n_samples=3, sigma_pct=10, seed=1)
     stated = float(raw["capex"]["usd_total"])
     factor = float(apply_capex_price_basis(raw)["capex"][APPLIED_KEY]["factor"])
     assert factor > 1.0
-    assert result.base_capex_usd == pytest.approx(stated * factor, rel=1e-12)
-    assert sorted(seen)[1] == pytest.approx(result.capex_usd["p50"] / factor, rel=1e-9)
+    # The financed base is the escalated capex plus the declared headline battery
+    # (#1823), so it exceeds the stated capex times the price-date factor.
+    assert result.base_capex_usd == pytest.approx(_escalated_usd_total(WIND), rel=1e-12)
+    assert result.base_capex_usd > stated * factor
+
+    def financed(stated_trial: float) -> float:
+        trial = copy.deepcopy(raw)
+        trial["capex"]["usd_total"] = stated_trial
+        return float(evaluated_scenario_config(trial)["capex"]["usd_total"])
+
+    assert result.capex_usd["p50"] == pytest.approx(
+        financed(sorted(seen)[1]), rel=1e-12
+    )
+
+
+def test_the_solar_assessment_monte_carlo_starts_from_the_scenario_as_written(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A trial may replace capex with a draw from the price-year range; each trial's
+    pipeline must then escalate it, so the MC starts from the unapplied scenario."""
+    import analytics.mc.engine as engine
+    import app.reports.solar_assessment as sa
+
+    for name in (
+        "_resource",
+        "kpis",
+        "_tariff_sweep",
+        "_capex_sweep",
+        "_sensitivity",
+        "_gearing",
+        "_dscr_targets",
+    ):
+        monkeypatch.setattr(sa, name, lambda *a, **k: {})
+    seen: list[Dict[str, Any]] = []
+
+    class _Captured(Exception):
+        pass
+
+    def fake_mc(*, base_config: Dict[str, Any], **_: Any) -> Any:
+        seen.append(copy.deepcopy(base_config))
+        raise _Captured
+
+    monkeypatch.setattr(engine, "run_monte_carlo_analysis", fake_mc)
+    sa.run_assessment(WIND, trials=2, work_dir=tmp_path)
+    assert len(seen) == 1
+    capex = seen[0]["capex"]
+    assert "price_basis" in capex
+    assert APPLIED_KEY not in capex
+    assert float(capex["usd_total"]) == float(_raw(WIND)["capex"]["usd_total"])
