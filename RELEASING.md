@@ -122,7 +122,9 @@ git push origin "v${VERSION}"                        # push the TAG, not main
   (`docs/blue_whale/solar_bess_project_sizing_summary.json`, a run of about 70 minutes).
   The summary names what it was computed from by content (`spec.code_sha256`,
   `spec.inputs_sha256` and, from the next regeneration, `spec.inputs_digest`), not by
-  release number, and `tests/solar/test_pv_bess_sizing.py` fails only when a config or
-  scenario file it read has changed. Regenerate it when that check fails, or when a code
+  release number. `tests/solar/test_pv_bess_sizing.py` fails when a unit, pricing,
+  scenario or regulatory file it recorded by bytes changes, or when the sizing config's
+  composed values change (a trial count, say; a comment-only edit does not). It does not
+  compare the code digests. Regenerate the summary when that check fails, or when a code
   change moves its figures; its `model_version`, where present, records the release it
   ran at and is not compared with `VERSION`.

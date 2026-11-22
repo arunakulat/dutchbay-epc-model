@@ -864,5 +864,79 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
     for rel, digest in inputs.items():
         current = hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest()
         assert current == digest, f"{rel} changed since {summary} ran: regenerate it"
+    # The sizing config's parsed values (not its bytes: comments are ignored) must still be
+    # the ones the run used, composed as the CLI composes them (#1865 lanes D-1, A-2).
+    from hydra import compose, initialize_config_dir
+    from omegaconf import OmegaConf
+
+    config = Path(
+        json.loads((REPO_ROOT / "docs" / "blue_whale" / summary).read_text())["config"]
+    )
+    with initialize_config_dir(
+        config_dir=str((REPO_ROOT / config).parent), version_base="1.3"
+    ):
+        composed = OmegaConf.to_container(
+            compose(config_name=config.stem), resolve=True
+        )
+    assert isinstance(composed, dict)
+    values = {
+        k: v
+        for k, v in composed.items()
+        if k not in ("hydra", "n_workers", "output", "recommendation")
+    }
+    current = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+    recorded = spec["sizing_config_sha256"]
+    assert current == recorded, f"{config} values changed: regenerate it"
     if "inputs_digest" in spec:
         assert spec["inputs_digest"] == inputs_digest(spec)
+
+
+def test_inputs_digest_covers_exactly_its_inputs() -> None:
+    """``inputs_digest`` covers the code tree, the input files and the sizing config only.
+
+    A known answer pins the record's composition; each covered component moves the digest,
+    and ``VERSION``, ``model_version`` and the per-run fields do not (#1865 lanes A-1, D-2).
+    """
+    from solar_resource.pv_bess_sizing_runner import inputs_digest
+
+    spec: Dict[str, Any] = {
+        "code_sha256": {
+            "tree": "a" * 64,
+            "files": {"x.py": "b" * 64},
+            "uncommitted": [],
+        },
+        "inputs_sha256": {
+            "conf/unit.yaml": "1" * 64,
+            "conf/pricing.yaml": "2" * 64,
+            "scenarios/s.yaml": "3" * 64,
+        },
+        "sizing_config_sha256": "c" * 64,
+    }
+    known = "b7c6baed824e7797bcf883af8056352dc53bacd06f30cabb15c8d734c75a1414"
+    assert inputs_digest(spec) == known
+    moved = copy.deepcopy(spec)
+    moved["code_sha256"]["tree"] = "d" * 64
+    assert inputs_digest(moved) != known
+    for rel in spec["inputs_sha256"]:
+        moved = copy.deepcopy(spec)
+        moved["inputs_sha256"][rel] = "e" * 64
+        assert inputs_digest(moved) != known, rel
+    moved = copy.deepcopy(spec)
+    moved["inputs_sha256"]["conf/regulatory.yaml"] = "4" * 64
+    assert inputs_digest(moved) != known
+    moved = copy.deepcopy(spec)
+    moved["sizing_config_sha256"] = "f" * 64
+    assert inputs_digest(moved) != known
+    noise = copy.deepcopy(spec)
+    noise["code_sha256"]["files"] = {"y.py": "9" * 64}
+    noise["code_sha256"]["uncommitted"] = ["y.py"]
+    noise.update(
+        model_version=(REPO_ROOT / "VERSION").read_text().strip(),
+        git_sha="0" * 40,
+        runtime_s=1.0,
+        result_sha256="8" * 64,
+    )
+    assert inputs_digest(noise) == known
+    reordered = dict(reversed(list(spec.items())))
+    reordered["inputs_sha256"] = dict(reversed(list(spec["inputs_sha256"].items())))
+    assert inputs_digest(reordered) == known
