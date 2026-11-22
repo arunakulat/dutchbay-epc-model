@@ -231,14 +231,14 @@ jobs:
         # it is pytest-split's default, but being explicit documents the dependency and
         # survives a rootdir change). Balancing is by duration SUM, so groups carry unequal
         # test COUNTS by design; a test absent from the durations file is assigned the mean.
-        # Regenerate periodically from the shards' own junit artifacts with
-        # scripts/ci/durations_from_junit.py, so the split balances on hosted-runner
-        # times; a local `--store-durations` run under-weights some tests up to 7x (#1884).
-        # --splitting-algorithm least_duration bin-packs tests into shards by duration
-        # (greedy LPT) instead of the default CONTIGUOUS chunking, which stranded whole
-        # heavy files in one shard (measured 426s vs 129s spread on the first 6-shard run).
-        # Non-contiguous grouping is safe here: -n auto already distributes tests
-        # across workers arbitrarily WITHIN a shard, so
+        # Regenerate periodically with scripts/ci/durations_from_junit.py from the shards'
+        # own junit artifacts, not a local `--store-durations` run, which under-weights
+        # some tests up to 7x on the hosted runner (#1884; first timing pass #760).
+        # --splitting-algorithm least_duration bin-packs tests into
+        # shards by duration (greedy LPT) instead of the default CONTIGUOUS chunking,
+        # which stranded whole heavy files in one shard (measured 426s vs 129s spread
+        # on the first 6-shard run). Non-contiguous grouping is safe here: -n auto
+        # already distributes tests across workers arbitrarily WITHIN a shard, so
         # inter-test order was never guaranteed anyway. The ordinary tree is exercised
         # exactly once across the ordinary shards; the paired protected-base receipt is intentionally
         # isolated to the full-history Grid Study below.
