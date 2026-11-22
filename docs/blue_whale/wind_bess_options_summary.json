@@ -120,7 +120,7 @@
   }
  },
  "hold": "SCREENING ONLY, not lender-grade. PUCSL's BESS tariff names solar PV only: every wind + BESS revenue basis here is a working assumption. The wind yield carries the met-mast HOLD (no measured Dutch Bay wind, no P90 for lenders); the hourly shape is a generic curve on a reanalysis; F-5 (no quarterly CFADS or intra-year DSCR figure supports a lender representation), #1110 and v15.6.1 stand. The 40 MW black-start battery is UNCONFIRMED (PUCSL discussions only, no document).",
- "model_version": "15.31.0",
+ "model_version": "15.33.0",
  "monte_carlo_base_basis": {
   "cycled_0_5_2|B": {
    "delta_project_npv_vs_wind_only": {
@@ -1117,7 +1117,7 @@
    }
   }
  },
- "scenario_sha256": "710aee9dccb7c938280ca5f5bbf32cc9b78e18b24897f451af6f663d308a3fdd",
+ "scenario_sha256": "cc1544a70fbda2b8c4a43af93d893081523ba7c9b8e2a509d77c909609448eff",
  "schema": "blue_whale_wind_bess_options_summary_v1",
  "tariff": {
   "bess_component_after_adjustment": {

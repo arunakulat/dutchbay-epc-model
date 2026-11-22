@@ -87,7 +87,7 @@ def test_bounded_profile_records_all_methods_within_test03_budget() -> None:
 
     def _morris(_scenario: Mapping[str, Any], *, n_trajectories: int) -> GlobalSABlock:
         calls["morris"] = {"n_trajectories": n_trajectories}
-        return _global_sa("morris", 28)
+        return _global_sa("morris", 32)
 
     def _pawn(_scenario: Mapping[str, Any], *, n: int, s: int) -> GlobalSABlock:
         calls["pawn"] = {"n": n, "s": s}
@@ -114,8 +114,10 @@ def test_bounded_profile_records_all_methods_within_test03_budget() -> None:
         "morris",
         "pawn",
     ]
-    assert bundle.requested_evaluations == 171
-    assert bundle.effective_evaluations == 171
+    # 15 tornado + 4 x (7 lender-case drivers + 1) Morris + 128 PAWN (#1898 adds the
+    # FX depreciation driver).
+    assert bundle.requested_evaluations == 175
+    assert bundle.effective_evaluations == 175
     assert bundle.requested_evaluations <= stochastic_policy.hard_max_model_evaluations
     assert bundle.effective_evaluations <= stochastic_policy.hard_max_model_evaluations
 
@@ -127,7 +129,7 @@ def test_production_profile_preserves_historical_morris_and_pawn_counts() -> Non
 
     def _morris(_scenario: Mapping[str, Any], *, n_trajectories: int) -> GlobalSABlock:
         calls["morris"] = n_trajectories
-        return _global_sa("morris", 112)
+        return _global_sa("morris", 128)
 
     def _pawn(_scenario: Mapping[str, Any], *, n: int, s: int) -> GlobalSABlock:
         calls["pawn"] = n
@@ -147,8 +149,9 @@ def test_production_profile_preserves_historical_morris_and_pawn_counts() -> Non
     assert asdict(PRODUCTION_REPORT_SENSITIVITY_PROFILE) == asdict(
         report_policy.production_sensitivity_profile
     )
-    assert bundle.requested_evaluations == 383
-    assert bundle.effective_evaluations == 383
+    # 15 tornado + 16 x (7 drivers + 1) Morris + 256 PAWN.
+    assert bundle.requested_evaluations == 399
+    assert bundle.effective_evaluations == 399
 
 
 def test_context_assembly_consumes_precomputed_case_and_sensitivity() -> None:
@@ -218,7 +221,7 @@ def test_bundle_requires_all_methods_and_preserves_degraded_count_uncertainty() 
     )
 
     assert called == ["tornado", "morris", "pawn"]
-    assert bundle.requested_evaluations == 171
+    assert bundle.requested_evaluations == 175
     assert bundle.effective_evaluations is None
     assert {row.method for row in bundle.methods} == {"tornado", "morris", "pawn"}
     assert all(row.outcome == "degraded" for row in bundle.methods)
