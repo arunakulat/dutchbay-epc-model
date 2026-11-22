@@ -424,10 +424,16 @@ def test_main_ignores_prs_opened_later(monkeypatch: pytest.MonkeyPatch) -> None:
         {"number": 1360, "created_at": "2026-10-12T09:00:00Z"},
     ]
     tracker = {**TRACKER, "comments": len(TRACKER_COMMENTS)}
+    events: list[dict[str, Any]] = [
+        {"event": "labeled", "created_at": "2026-10-12T07:05:00Z"},
+        {"event": "closed", "created_at": "2026-10-12T08:00:00Z"},
+    ]
 
     def fake_get_json(repository: str, path: str, token: str) -> Any:
         if path.startswith("pulls?"):
             return pulls
+        if path.startswith("issues/1355/events"):
+            return events
         if path.startswith("issues/1353/comments"):
             return TRACKER_COMMENTS
         if path == "issues/1353":
@@ -448,5 +454,41 @@ def test_main_ignores_prs_opened_later(monkeypatch: pytest.MonkeyPatch) -> None:
     }.items():
         monkeypatch.setenv(key, value)
     assert check.main() == 0
+    # Reopened after #1360 opened: #1360 is now required (#1877).
+    events.append({"event": "reopened", "created_at": "2026-10-12T10:00:00Z"})
+    assert check.main() == 1
+    events.pop()
     pulls[2]["created_at"] = "2026-10-12T06:00:00Z"
     assert check.main() == 1
+
+
+@pytest.mark.parametrize(
+    "events, expected",
+    [
+        ([], _THIS_PR_OPENED),
+        ([{"event": "closed", "created_at": "2026-10-12T08:00:00Z"}], _THIS_PR_OPENED),
+        (
+            [
+                {"event": "reopened", "created_at": "2026-10-12T08:00:00Z"},
+                {"event": "reopened", "created_at": "2026-10-12T10:00:00Z"},
+                {"event": "reopened", "created_at": "2026-10-12T09:00:00Z"},
+            ],
+            "2026-10-12T10:00:00Z",
+        ),
+        (
+            [{"event": "reopened", "created_at": "2026-10-12T06:00:00Z"}],
+            _THIS_PR_OPENED,
+        ),
+        ([{"event": "reopened", "created_at": "not a time"}], ""),
+        ([{"event": "reopened"}], ""),
+    ],
+)
+def test_last_opened_uses_the_latest_reopen(
+    events: list[dict[str, Any]], expected: str
+) -> None:
+    assert check._last_opened(_THIS_PR_OPENED, events) == expected
+
+
+def test_last_opened_keeps_an_unreadable_creation_time() -> None:
+    reopened = [{"event": "reopened", "created_at": "2026-10-12T10:00:00Z"}]
+    assert check._last_opened("", reopened) == ""

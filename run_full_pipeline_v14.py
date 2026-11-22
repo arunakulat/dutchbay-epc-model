@@ -1676,6 +1676,7 @@ def cli(cfg: DictConfig) -> None:
                     LENDER_REPORT_HTML_NAME,
                     capital_structure_settings_from_config,
                     emit_lender_report_from_pipeline,
+                    lender_sensitivity_settings_from_config,
                 )
 
                 lr_path_raw = lender_report_cfg.get("path", None)
@@ -1716,6 +1717,9 @@ def cli(cfg: DictConfig) -> None:
                     require_pdf=emit_plan["emit_lender_report"].source != "emit_all",
                     capital_structure=capital_structure_settings_from_config(
                         lender_report_cfg.get("capital_structure", None)
+                    ),
+                    sensitivities=lender_sensitivity_settings_from_config(
+                        lender_report_cfg.get("sensitivities", None)
                     ),
                 )
                 result["lender_report"] = written.as_dict()

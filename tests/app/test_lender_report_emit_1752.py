@@ -31,6 +31,7 @@ from app.reports.lender_report_emit import (
     emit_lender_report_from_pipeline,
     to_dbpl_print_html,
 )
+from app.reports.lender_sensitivity_section import SECTION_LENDER_SENSITIVITIES
 from app.reports.renderer import render_report_html
 from app.reports.report_model import technology_subtitle
 from app.reports.report_orchestration import (
@@ -159,9 +160,11 @@ def test_cli_report_has_the_api_report_sections(
     ] == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
-    # The capital-structure screening (#1825 slice i) is opt-in and off by default.
+    # The capital-structure screening and the lender sensitivities (#1825 slices i and
+    # ii) are opt-in and off by default.
     assert [s.section for s in out.sections_not_run] == [
         SECTION_CAPITAL_STRUCTURE,
+        SECTION_LENDER_SENSITIVITIES,
         SECTION_CAPITAL_RISK,
     ]
 
@@ -222,10 +225,12 @@ def test_every_section_left_out_is_listed_with_its_reason(
         SECTION_AEP_RESOURCE,
         SECTION_MORRIS,
         SECTION_PAWN,
+        SECTION_LENDER_SENSITIVITIES,
         SECTION_CAPITAL_RISK,
     ]
     assert "outcome: degraded" in listed[SECTION_TORNADO]
     assert "switched off" in listed[SECTION_CAPITAL_STRUCTURE]
+    assert "switched off" in listed[SECTION_LENDER_SENSITIVITIES]
     # The scenario declares no Monte Carlo block, so neither screening nor the
     # capital-risk Monte Carlo has anything to sample (and the builder is never called).
     assert "monte_carlo.parameters" in listed[SECTION_MORRIS]
@@ -339,8 +344,11 @@ def test_a_shared_capital_risk_report_is_used_as_is(
         sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
         capital_risk_builder=_not_called,
     )
-    # Only the opt-in capital-structure screening (#1825 slice i, off by default) is left out.
-    assert [s.section for s in out.sections_not_run] == [SECTION_CAPITAL_STRUCTURE]
+    # Only the opt-in #1825 sections (slices i and ii, off by default) are left out.
+    assert [s.section for s in out.sections_not_run] == [
+        SECTION_CAPITAL_STRUCTURE,
+        SECTION_LENDER_SENSITIVITIES,
+    ]
     html = out.html_path.read_text(encoding="utf-8")
     assert f"{shared.n_trials}" in html
 
@@ -369,6 +377,34 @@ def test_a_capital_structure_builder_failure_is_listed_not_raised(
     listed = {s.section: s.reason for s in out.sections_not_run}
     assert listed[SECTION_CAPITAL_STRUCTURE] == (
         "not run: could not be built (RuntimeError: breakdown mismatch)"
+    )
+    assert out.html_path.exists()
+
+
+def test_a_lender_sensitivities_builder_failure_is_listed_not_raised(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1825 slice ii: the opt-in sensitivities section never sinks the report either."""
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+
+    def _raises(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("fx block malformed")
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        sensitivities_builder=_raises,
+    )
+    listed = {s.section: s.reason for s in out.sections_not_run}
+    assert listed[SECTION_LENDER_SENSITIVITIES] == (
+        "not run: could not be built (RuntimeError: fx block malformed)"
     )
     assert out.html_path.exists()
 
