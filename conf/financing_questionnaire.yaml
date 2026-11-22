@@ -21,6 +21,7 @@ fields:
   - {id: sizing_minimum, path: Financing_Terms.min_dscr, unit: ratio, label: Financing minimum DSCR, note: Model threshold; confirm covenant basis.}
   - {id: constraint_minimum, path: constraints.min_dscr_covenant, unit: ratio, label: Constraint minimum DSCR, note: Separate constraint; confirm covenant basis.}
   - {id: constraint_target, path: constraints.target_dscr, unit: ratio, label: Constraint target DSCR, note: Separate constraint; confirm covenant basis.}
+  - {id: balloon_ceiling, path: constraints.max_balloon_pct, unit: fraction, label: Balloon ceiling, note: Required covenant term with no model default; confirm the largest balloon share of the debt allowed at maturity.}
   - {id: dsra_target, path: Financing_Terms.reserves.dsra_months, unit: months, label: DSRA target, note: Target does not establish initial funding; confirm funding timing and source.}
   - {id: upfront_fee, path: Financing_Terms.fees.upfront_pct, unit: fraction, label: Upfront fee, note: Amortised into WACC debt cost; does not establish CAPEX cash funding.}
   - {id: capex, path: capex.usd_total, unit: USD, label: CAPEX model reference, note: Confirm currency and cash funding basis.}
