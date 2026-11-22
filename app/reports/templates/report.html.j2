@@ -1000,8 +1000,24 @@
           <td>Gearing</td>
           {% for row in tc.rows %}<td class="num">{{ fmt_ratio_pct(row.gearing) }}</td>{% endfor %}
         </tr>
+        <tr>
+          <td>Balloon at maturity</td>
+          {% for row in tc.rows %}<td class="num">{% if row.balloon_at_maturity_usd is none %}&mdash;{% elif row.carries_balloon %}{{ fmt_usd(row.balloon_at_maturity_usd) }}{% else %}None{% endif %}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Balloon treatment</td>
+          {% for row in tc.rows %}<td class="num">{% if row.balloon_treatment is none %}&mdash;{% elif row.balloon_at_maturity_usd is not none and not row.carries_balloon %}{{ row.balloon_treatment | replace("_", " ") }} (no balloon arises){% else %}{{ row.balloon_treatment | replace("_", " ") }}{% endif %}</td>{% endfor %}
+        </tr>
       </tbody>
     </table>
+    {# #1493: equity figures of cases that resolve a balloon differently are not like for like. #}
+    {% if tc.balloon_treatments_differ %}
+    <p class="muted"><strong>Balloon treatments differ.</strong> The compared cases resolve a
+      balloon in different ways (see the Balloon treatment row), and a treatment can change the
+      debt itself. So the differences between their figures, equity figures most of all and in
+      some cases project IRR, project NPV and CFADS too, include that difference, not only the
+      technology or capex difference.</p>
+    {% endif %}
   </section>
   {% endif %}
 
