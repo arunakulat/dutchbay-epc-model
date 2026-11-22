@@ -51,6 +51,7 @@ from analytics.pipeline_v14_enhanced import (
 )
 from analytics.run_modes import POLICIES, resolve_run_mode
 from analytics.scenario_loader import load_scenario_config
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import deprecated_raw_dscr_series, plan_debt
 
@@ -92,7 +93,8 @@ def _plan_for(
     given, replaces ``timeline.construction_years``, which sets the engine's
     construction-period count when the financing section declares none (#1570).
     """
-    cfg = load_scenario_config(str(path))
+    # #1899: the pipeline applies a declared capex price date before the engine runs.
+    cfg = apply_capex_price_basis(load_scenario_config(str(path)))
     if construction_years is not None:
         cfg["timeline"]["construction_years"] = construction_years
     if capacity_charge_lkr_per_mw_month is not None:

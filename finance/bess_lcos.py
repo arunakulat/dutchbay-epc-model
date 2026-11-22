@@ -318,6 +318,9 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
     project_opex_esc = (
         pct_to_decimal(_as_float(_nested_get(config, "opex", "escalation_pct"))) or 0.0
     )
+    from finance.capex_price_basis import refuse_unapplied_price_basis
+
+    refuse_unapplied_price_basis(config, "the BESS LCOS resolver")
     project_capex_total = _as_float(_nested_get(config, "capex", "usd_total"))
 
     out: List[LcosSpec] = []

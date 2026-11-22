@@ -129,10 +129,17 @@ def _summarise_mc_irr(
 
 
 def load_scenario(path: str | Path) -> Dict[str, Any]:
-    """Load a scenario through the canonical loader, as a plain mutable dict."""
+    """Load a scenario as the engine evaluates it, as a plain mutable dict.
+
+    #1899: a declared ``capex.price_basis`` is applied, so the assessment reads the
+    capex the engine finances (``analytics.evaluation_v14.evaluated_scenario_config``).
+    """
+    from analytics.evaluation_v14 import evaluated_scenario_config
     from analytics.scenario_loader import load_scenario_config
 
-    return copy.deepcopy(dict(load_scenario_config(str(path))))
+    return copy.deepcopy(
+        evaluated_scenario_config(dict(load_scenario_config(str(path))))
+    )
 
 
 def _number(value: Any) -> Optional[float]:
@@ -166,6 +173,9 @@ def scenario_covenant(cfg: Mapping[str, Any]) -> float:
 
 
 def scenario_capex(cfg: Mapping[str, Any]) -> float:
+    from finance.capex_price_basis import refuse_unapplied_price_basis
+
+    refuse_unapplied_price_basis(cfg, "the solar assessment")
     capex = cfg.get("capex")
     value = _number(capex.get("usd_total")) if isinstance(capex, Mapping) else None
     if value is None or value <= 0:

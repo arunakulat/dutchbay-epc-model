@@ -121,7 +121,28 @@ def run_capex_mc(
     # overruns — correct). Grossing here would write a levy-inclusive total back
     # as the base and levy it AGAIN per trial. base_capex_usd in the result is
     # therefore the PRE-LEVY base.
-    base = _extract_capex_usd(cfg, include_import_levies=False)
+    # #1899: each trial perturbs the STATED (price-year) capex and the pipeline then
+    # applies a declared capex.price_basis to it, so the base is read on the stated
+    # basis, and the capex percentiles are reported on the financed basis (x the
+    # price-date factor), the capex each trial's KPIs were computed on.
+    from finance.capex_price_basis import (
+        APPLIED_KEY,
+        PRICE_BASIS_KEY,
+        apply_capex_price_basis,
+    )
+
+    stated_cfg = copy.deepcopy(cfg)
+    price_factor = 1.0
+    stated_capex = stated_cfg.get("capex")
+    if isinstance(stated_capex, dict) and PRICE_BASIS_KEY in stated_capex:
+        from finance.native_cost_inputs import normalize_native_capex
+
+        applied = apply_capex_price_basis(normalize_native_capex(cfg))["capex"][
+            APPLIED_KEY
+        ]
+        price_factor = float(applied["factor"])
+        stated_capex.pop(PRICE_BASIS_KEY)
+    base = _extract_capex_usd(stated_cfg, include_import_levies=False)
     if base <= 0:
         raise ValueError("base CAPEX must be > 0 for a probabilistic run")
 
@@ -147,7 +168,7 @@ def run_capex_mc(
             cap["usd_total"] = base * float(factor)
         run_cfg["capex"] = cap
         kpis = run_v14_pipeline(config=run_cfg)["kpis"]
-        capex_s.append(base * float(factor))
+        capex_s.append(base * float(factor) * price_factor)
         if kpis.get("project_irr") is None:
             # #1494: an undefined project IRR has no number to put in a percentile;
             # refuse rather than coerce it to 0.0 (break-even) or drop the trial.
@@ -176,7 +197,7 @@ def run_capex_mc(
     return CapexMcResult(
         n_samples=int(n_samples),
         sigma_pct=sigma,
-        base_capex_usd=base,
+        base_capex_usd=base * price_factor,
         seed=int(seed),
         capex_usd=pcts(capex_s),
         project_irr=pcts(irr),
