@@ -1,0 +1,35 @@
+# One site analysis for one scenario (#1824).
+#
+# Read by scripts/run_site_analysis_v14.py (Hydra; CLI-01, CLI-03) through
+# analytics.site_analysis_runs. The analysis reads its own method config: the one its block
+# names under method_config, or its default. Every site input comes from the scenario.
+#
+# Usage:
+#   .venv/bin/python scripts/run_site_analysis_v14.py \
+#       analysis=<block> scenario=scenarios/<file>.yaml [write=true]
+#
+# write=true writes the result, stamped with its code and config digests, to
+# docs/site_analyses/<scenario file stem>/<block>.json, where a report reads it. Otherwise the
+# result is printed as one JSON object.
+
+# Required: one of storage_options, solar_storage_sizing, financing_screening,
+# equipment_cost_parity.
+analysis: null
+# Required: the scenario file, relative to the repository root.
+scenario: null
+write: false
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

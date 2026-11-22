@@ -1,0 +1,1209 @@
+{
+  "analysis": "wind battery options",
+  "block_sha256": "d08492934b4fc8ab3fe5e23a3b6e5ae1ea3ba5e0494af8c0312bfc4457751592",
+  "down_ramp_illustrative": {
+    "0.0": {
+      "energy_mwh": 0.07520833333333334,
+      "minutes": 0.95,
+      "power_mw": 9.5
+    },
+    "90.0": {
+      "energy_mwh": 0.7877083333333332,
+      "minutes": 9.95,
+      "power_mw": 9.5
+    },
+    "firming_unit_base_basis": {
+      "power_heavy_cells_x1": {
+        "all_in_usd": 508304.490538428,
+        "charged_mwh_per_year": 0.0,
+        "cif_usd": 357200.33685761446,
+        "delivered_mwh_per_year": 0.0,
+        "energy_mwh": 0.7877083333333332,
+        "kpis": {
+          "delta_equity_npv_vs_wind_only": -525912.8213330163,
+          "delta_project_npv_vs_wind_only": -557324.3766806696,
+          "discount_rate_used": 0.10645028333333333,
+          "equity_irr": 0.10242031332103085,
+          "equity_npv": -944288.4936095293,
+          "min_dscr": 0.8673482608579041,
+          "project_irr": 0.12182832552700035,
+          "project_npv": 1252523.8296160793
+        },
+        "om_usd_per_year": 7144.006737152289,
+        "operation": "held",
+        "power_mw": 9.5,
+        "reserve_mwh": null
+      },
+      "power_heavy_cells_x3": {
+        "all_in_usd": 700199.6462329237,
+        "charged_mwh_per_year": 0.0,
+        "cif_usd": 492050.6392478433,
+        "delivered_mwh_per_year": 0.0,
+        "energy_mwh": 0.7877083333333332,
+        "kpis": {
+          "delta_equity_npv_vs_wind_only": -726754.5276878905,
+          "delta_project_npv_vs_wind_only": -766701.4274204775,
+          "discount_rate_used": 0.10670714999999999,
+          "equity_irr": 0.09915414155900204,
+          "equity_npv": -1145130.1999644036,
+          "min_dscr": 0.8677293304358755,
+          "project_irr": 0.11938137812647753,
+          "project_npv": 1043146.7788762714
+        },
+        "om_usd_per_year": 9841.012784956865,
+        "operation": "held",
+        "power_mw": 9.5,
+        "reserve_mwh": null
+      },
+      "smallest_block": {
+        "all_in_usd": 2561468.0000000005,
+        "charged_mwh_per_year": 0.0,
+        "cif_usd": 1800018.0,
+        "delivered_mwh_per_year": 0.0,
+        "energy_mwh": 18.2,
+        "kpis": {
+          "delta_equity_npv_vs_wind_only": -2664834.9766754955,
+          "delta_project_npv_vs_wind_only": -2746060.852347548,
+          "discount_rate_used": 0.10863365,
+          "equity_irr": 0.07307346583106389,
+          "equity_npv": -3083210.6489520087,
+          "min_dscr": 0.8667629946517575,
+          "project_irr": 0.09829130369919412,
+          "project_npv": -936212.6460507992
+        },
+        "om_usd_per_year": 36000.36,
+        "operation": "held",
+        "power_mw": 9.5,
+        "reserve_mwh": null
+      },
+      "smallest_block_cycled|B": {
+        "all_in_usd": 2561468.0000000005,
+        "charged_mwh_per_year": 4801.88540058475,
+        "cif_usd": 1800018.0,
+        "delivered_mwh_per_year": 4081.167203416876,
+        "energy_mwh": 18.2,
+        "kpis": {
+          "delta_equity_npv_vs_wind_only": -1512537.4062506394,
+          "delta_project_npv_vs_wind_only": -1362620.30003198,
+          "discount_rate_used": 0.1072851,
+          "equity_irr": 0.08946521710857991,
+          "equity_npv": -1930913.0785271525,
+          "min_dscr": 0.8671473421152099,
+          "project_irr": 0.11211839518998801,
+          "project_npv": 447227.906264769
+        },
+        "om_usd_per_year": 36000.36,
+        "operation": "cycled",
+        "power_mw": 9.5,
+        "reserve_mwh": 1.2877083333333332
+      },
+      "smallest_block_cycled|C": {
+        "all_in_usd": 2561468.0000000005,
+        "charged_mwh_per_year": 6728.140940396046,
+        "cif_usd": 1800018.0,
+        "delivered_mwh_per_year": 5718.484412256432,
+        "energy_mwh": 18.2,
+        "kpis": {
+          "delta_equity_npv_vs_wind_only": -1051657.0151513992,
+          "delta_project_npv_vs_wind_only": -804139.650150447,
+          "discount_rate_used": 0.10677136666666664,
+          "equity_irr": 0.09639099443957377,
+          "equity_npv": -1470032.6874279124,
+          "min_dscr": 0.8678756430349266,
+          "project_irr": 0.11754606491054831,
+          "project_npv": 1005708.5561463019
+        },
+        "om_usd_per_year": 36000.36,
+        "operation": "cycled",
+        "power_mw": 9.5,
+        "reserve_mwh": 1.2877083333333332
+      }
+    }
+  },
+  "hold": "SCREENING ONLY, not lender-grade. A wind + BESS revenue basis built from a solar + BESS tariff formula is a working assumption, not a published tariff. The hourly shape is a generic Cp-limited curve on a reanalysis, calibrated to the scenario's committed yield, which keeps its own resource holds. F-5 (no quarterly CFADS or intra-year DSCR figure supports a lender representation), #1110 and v15.6.1 stand.",
+  "method_sha256": "5a1ca9505c1745ee2389e457b75ed8fd56e5190448003c8dd6b70c033cf0ca1e",
+  "model_version": "15.32.0",
+  "monte_carlo_base_basis": {
+    "cycled_0_5_2|B": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -87625.51104132924,
+        "p50": -152896.1326578525,
+        "p90": -209150.70159572025,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.10862857014752236,
+      "min_dscr_p50": 0.8673123300000791
+    },
+    "cycled_0_5_2|C": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -87625.51104132924,
+        "p50": -152896.1326578525,
+        "p90": -209150.70159572025,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.10862857014752236,
+      "min_dscr_p50": 0.8673123300000791
+    },
+    "cycled_10_40|B": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -3908416.4006906725,
+        "p50": -4855917.004334625,
+        "p90": -5905371.858686209,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.0543672532728795,
+      "min_dscr_p50": 0.8676443137285708
+    },
+    "cycled_10_40|C": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -1557963.7950163363,
+        "p50": -2597629.7219081456,
+        "p90": -3679429.5982795944,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.07525836891134574,
+      "min_dscr_p50": 0.8674543795800789
+    },
+    "cycled_1_4|B": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -128686.78348079696,
+        "p50": -258538.63277483964,
+        "p90": -370911.50708024966,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.1066152153532256,
+      "min_dscr_p50": 0.867289195020331
+    },
+    "cycled_1_4|C": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -119641.85145048611,
+        "p50": -249367.64056669857,
+        "p90": -361029.61047626106,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.10676158627622467,
+      "min_dscr_p50": 0.8673922995911894
+    },
+    "cycled_2_5_10|B": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -442311.5189859383,
+        "p50": -766099.9238167692,
+        "p90": -1044109.7849121513,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.09810735691194417,
+      "min_dscr_p50": 0.8672816499470798
+    },
+    "cycled_2_5_10|C": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -241617.37618652824,
+        "p50": -560951.3261632554,
+        "p90": -843175.8587861427,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.10083283594046089,
+      "min_dscr_p50": 0.8674308236506465
+    },
+    "held_0_5_0_5": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -65835.31059199758,
+        "p50": -84119.99112997646,
+        "p90": -98371.10579755018,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.11038585636184184,
+      "min_dscr_p50": 0.8673658901576364
+    },
+    "held_1_1": {
+      "delta_project_npv_vs_wind_only": {
+        "max": -131670.62118399795,
+        "p50": -168094.5165334941,
+        "p90": -196541.37938150845,
+        "share_positive": 0.0
+      },
+      "equity_irr_p50": 0.10885146968475423,
+      "min_dscr_p50": 0.8673516190661106
+    },
+    "n_trials": 256,
+    "seed": 20261101,
+    "wind_only_project_npv": {
+      "p50": 1813151.9507666042,
+      "p90": -910464.7141708733
+    }
+  },
+  "notes": "Owner direction 2026-11-14: a battery is needed only for a ramping and black-start function and is not mandatory; it charges from the turbine off-peak and is paid at peak on the solar + BESS terms (the whole wind peak rate). The 40 MW AC black-start battery is UNCONFIRMED (PUCSL discussions only, no document); cycled_10_40 is the owner's 10/40 reading of it. About 0.5 MW of grid-forming inverter as the black-start floor, the 0.5 MWh reserve, the 2% service share and the power-cell premium are assumptions. The 10 MW standardised-PPA limit stays the open legal question of conf/blue_whale_pucsl_fit_2026.yaml.",
+  "options": {
+    "cycled_0_5_2": {
+      "bottom_up_price": {
+        "all_in_usd": 323856.1897652096,
+        "all_in_usd_per_kwh": 161.92809488260482,
+        "cif_usd": 227583.15582657797
+      },
+      "capex_usd_at_mode": 281480.0,
+      "energy_mwh": 2.0,
+      "fits_reading_A_turbine_plus_battery_le_limit": true,
+      "operation": "cycled",
+      "power_mw": 0.5,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -156983.6073145051,
+              "delta_project_npv_vs_wind_only": -141650.35136099323,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.1089167051741462,
+              "equity_npv": -575359.2795910182,
+              "min_dscr": 0.8667976736246062,
+              "project_irr": 0.1266198297484945,
+              "project_npv": 1668197.8549357557
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -140194.02886027348,
+              "delta_project_npv_vs_wind_only": -121156.71305218223,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10924424058580584,
+              "equity_npv": -558569.7011367866,
+              "min_dscr": 0.8673100070282608,
+              "project_irr": 0.12686728762220723,
+              "project_npv": 1688691.4932445667
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 2290805.96847691,
+              "delta_project_npv_vs_wind_only": 3000811.122945258,
+              "discount_rate_used": 0.10246885,
+              "equity_irr": 0.16133057247112914,
+              "equity_npv": 1872430.2962003972,
+              "min_dscr": 0.8670025419738999,
+              "project_irr": 0.1588142445978697,
+              "project_npv": 4810659.329242007
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 295554.0,
+            "irr": 0.0688214992703895,
+            "npv_usd": -49786.25312848689,
+            "year1_net_usd": 36937.88405809877
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -163851.49162182747,
+            "equity_irr": 0.1085247011036472
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 71.72067855464087,
+          "break_even_usd_per_kwh_base_basis": 77.84048999786377,
+          "charged_mwh_per_year": 639.6760471037954,
+          "delivered_min_year_mwh": 540.0451177599273,
+          "delivered_mwh_per_year": 543.542821856411,
+          "equivalent_full_cycles_per_year": 271.7714109282055,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -115230.85941119678,
+            "equity_irr": 0.109339119770828
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -103853.6652215689,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 723.2885293017864,
+            "delta_project_npv_vs_wind_only": -59128.77408975246
+          }
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -156983.6073145051,
+              "delta_project_npv_vs_wind_only": -141650.35136099323,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.1089167051741462,
+              "equity_npv": -575359.2795910182,
+              "min_dscr": 0.8667976736246062,
+              "project_irr": 0.1266198297484945,
+              "project_npv": 1668197.8549357557
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -140194.02886027348,
+              "delta_project_npv_vs_wind_only": -121156.71305218223,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10924424058580584,
+              "equity_npv": -558569.7011367866,
+              "min_dscr": 0.8673100070282608,
+              "project_irr": 0.12686728762220723,
+              "project_npv": 1688691.4932445667
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 2290805.96847691,
+              "delta_project_npv_vs_wind_only": 3000811.122945258,
+              "discount_rate_used": 0.10246885,
+              "equity_irr": 0.16133057247112914,
+              "equity_npv": 1872430.2962003972,
+              "min_dscr": 0.8670025419738999,
+              "project_irr": 0.1588142445978697,
+              "project_npv": 4810659.329242007
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 295554.0,
+            "irr": 0.0688214992703895,
+            "npv_usd": -49786.25312848689,
+            "year1_net_usd": 36937.88405809877
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -163851.49162182747,
+            "equity_irr": 0.1085247011036472
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 71.72067855464087,
+          "break_even_usd_per_kwh_base_basis": 77.84048999786377,
+          "charged_mwh_per_year": 639.6760471037954,
+          "delivered_min_year_mwh": 540.0451177599273,
+          "delivered_mwh_per_year": 543.542821856411,
+          "equivalent_full_cycles_per_year": 271.7714109282055,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -115230.85941119678,
+            "equity_irr": 0.109339119770828
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -103853.6652215689,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 723.2885293017864,
+            "delta_project_npv_vs_wind_only": -59128.77408975246
+          }
+        }
+      }
+    },
+    "cycled_10_40": {
+      "bottom_up_price": {
+        "all_in_usd": 5284595.724294353,
+        "all_in_usd_per_kwh": 132.11489310735882,
+        "cif_usd": 3713638.98610206
+      },
+      "capex_usd_at_mode": 5629600.0,
+      "energy_mwh": 40.0,
+      "fits_reading_A_turbine_plus_battery_le_limit": false,
+      "operation": "cycled",
+      "power_mw": 10.0,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -4555309.136349875,
+              "delta_project_npv_vs_wind_only": -4446369.138219183,
+              "discount_rate_used": 0.10966111666666664,
+              "equity_irr": 0.05773970810835416,
+              "equity_npv": -4973684.808626387,
+              "min_dscr": 0.8675653663642878,
+              "project_irr": 0.08484583703707313,
+              "project_npv": -2636520.9319224344
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -4372322.716073453,
+              "delta_project_npv_vs_wind_only": -4221237.113923011,
+              "discount_rate_used": 0.10946846666666665,
+              "equity_irr": 0.05977836677626147,
+              "equity_npv": -4790698.388349966,
+              "min_dscr": 0.8667958907137927,
+              "project_irr": 0.08683949340229297,
+              "project_npv": -2411388.9076262624
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": -1901637.0091462047,
+              "delta_project_npv_vs_wind_only": -1234962.6319622246,
+              "discount_rate_used": 0.10715666666666665,
+              "equity_irr": 0.08923942094234061,
+              "equity_npv": -2320012.681422718,
+              "min_dscr": 0.8673678794547405,
+              "project_irr": 0.11231508091774058,
+              "project_npv": 574885.5743345243
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 5911080.0,
+            "irr": null,
+            "npv_usd": -4025702.547227588,
+            "year1_net_usd": 316304.0817877146
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -3885576.7318194835,
+            "equity_irr": 0.0626399189113187
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 113.69653370380402,
+          "break_even_usd_per_kwh_base_basis": 31.385571250915525,
+          "charged_mwh_per_year": 6248.840492710441,
+          "delivered_min_year_mwh": 4532.7885154354535,
+          "delivered_mwh_per_year": 5310.545066841208,
+          "equivalent_full_cycles_per_year": 132.76362667103018,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -4161217.326310673,
+            "equity_irr": 0.06045241254134326
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -3862036.426100169,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 5317.86263170291,
+            "delta_project_npv_vs_wind_only": -4218859.32635247
+          }
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -2835282.5351376454,
+              "delta_project_npv_vs_wind_only": -2369290.5126980324,
+              "discount_rate_used": 0.10799148333333333,
+              "equity_irr": 0.07746948728529657,
+              "equity_npv": -3253658.2074141586,
+              "min_dscr": 0.8671350438137173,
+              "project_irr": 0.10285516595096725,
+              "project_npv": -559442.3064012835
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -2424731.600757841,
+              "delta_project_npv_vs_wind_only": -1874473.88456683,
+              "discount_rate_used": 0.10760618333333333,
+              "equity_irr": 0.0825109190969755,
+              "equity_npv": -2843107.273034354,
+              "min_dscr": 0.8669608252854369,
+              "project_irr": 0.1070179266259815,
+              "project_npv": -64625.67827008104
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 19885.499439631647,
+              "delta_project_npv_vs_wind_only": 1135290.7311143582,
+              "discount_rate_used": 0.10529438333333332,
+              "equity_irr": 0.11440223905181113,
+              "equity_npv": -398490.1728368815,
+              "min_dscr": 0.8674342216270899,
+              "project_irr": 0.13086942678254102,
+              "project_npv": 2945138.937411107
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 5911080.0,
+            "irr": 0.09573013663015484,
+            "npv_usd": -284545.8838616113,
+            "year1_net_usd": 837843.0777153631
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -1545282.8281486514,
+            "equity_irr": 0.08598493461730339
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 66.88408211867015,
+          "break_even_usd_per_kwh_base_basis": 92.06153919219972,
+          "charged_mwh_per_year": 14318.433596450277,
+          "delivered_min_year_mwh": 11779.088491033093,
+          "delivered_mwh_per_year": 12170.304779751046,
+          "equivalent_full_cycles_per_year": 304.25761949377613,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -1736127.5191988694,
+            "equity_irr": 0.08401422751290322
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -1668576.511230825,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 12299.626251923368,
+            "delta_project_npv_vs_wind_only": -1834412.0022770343
+          }
+        }
+      }
+    },
+    "cycled_1_4": {
+      "bottom_up_price": {
+        "all_in_usd": 584947.7442141118,
+        "all_in_usd_per_kwh": 146.23693605352796,
+        "cif_usd": 411059.7784726559
+      },
+      "capex_usd_at_mode": 562960.0,
+      "energy_mwh": 4.0,
+      "fits_reading_A_turbine_plus_battery_le_limit": false,
+      "operation": "cycled",
+      "power_mw": 1.0,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -278481.9110570574,
+              "delta_project_npv_vs_wind_only": -238379.98592014657,
+              "discount_rate_used": 0.10606498333333332,
+              "equity_irr": 0.10690365312063221,
+              "equity_npv": -696857.5833335705,
+              "min_dscr": 0.8667884596160861,
+              "project_irr": 0.125181005672724,
+              "project_npv": 1571468.2203766024
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -240474.90582098492,
+              "delta_project_npv_vs_wind_only": -192027.38153592497,
+              "discount_rate_used": 0.10606498333333332,
+              "equity_irr": 0.10762866717249064,
+              "equity_npv": -658850.578097498,
+              "min_dscr": 0.8679285816311849,
+              "project_irr": 0.12573077669851193,
+              "project_npv": 1617820.824760824
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 2192595.6936164447,
+              "delta_project_npv_vs_wind_only": 2924421.98547741,
+              "discount_rate_used": 0.10266149999999999,
+              "equity_irr": 0.1579795631329628,
+              "equity_npv": 1774220.0213399315,
+              "min_dscr": 0.8671562297165599,
+              "project_irr": 0.15707253689370443,
+              "project_npv": 4734270.191774159
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 591108.0,
+            "irr": 0.09824715906834824,
+            "npv_usd": -21394.867784593538,
+            "year1_net_usd": 84774.19032944749
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -211192.76822003745,
+            "equity_irr": 0.10728145606976636
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 66.57698075241512,
+          "break_even_usd_per_kwh_base_basis": 92.3590826034546,
+          "charged_mwh_per_year": 1447.9803079004653,
+          "delivered_min_year_mwh": 1221.3063803673858,
+          "delivered_mwh_per_year": 1230.4320166609489,
+          "equivalent_full_cycles_per_year": 307.6080041652372,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -172779.9567881229,
+            "equity_irr": 0.1078670869373195
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -162795.3122143622,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 1359.774378874619,
+            "delta_project_npv_vs_wind_only": -145715.0748886082
+          }
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -272145.95469213795,
+              "delta_project_npv_vs_wind_only": -230711.9009830025,
+              "discount_rate_used": 0.10606498333333332,
+              "equity_irr": 0.10702414973599694,
+              "equity_npv": -690521.6269686511,
+              "min_dscr": 0.8669895901020547,
+              "project_irr": 0.12527261174950322,
+              "project_npv": 1579136.3053137464
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -229861.7990277722,
+              "delta_project_npv_vs_wind_only": -177466.71229771804,
+              "discount_rate_used": 0.10600076666666666,
+              "equity_irr": 0.10779375051351892,
+              "equity_npv": -648237.4713042853,
+              "min_dscr": 0.8668274411139171,
+              "project_irr": 0.12583471768509713,
+              "project_npv": 1632381.493999031
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 2199654.9198803427,
+              "delta_project_npv_vs_wind_only": 2933329.9697273034,
+              "discount_rate_used": 0.10266149999999999,
+              "equity_irr": 0.1581257982124873,
+              "equity_npv": 1781279.2476038297,
+              "min_dscr": 0.8673383902254174,
+              "project_irr": 0.15716954014802015,
+              "project_npv": 4743178.176024052
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 591108.0,
+            "irr": 0.1035957229705009,
+            "npv_usd": -6187.90037470954,
+            "year1_net_usd": 86894.17455162277
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -202474.13124972256,
+            "equity_irr": 0.10741804963332613
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 65.7827185869217,
+          "break_even_usd_per_kwh_base_basis": 94.86149898529052,
+          "charged_mwh_per_year": 1480.7884868063534,
+          "delivered_min_year_mwh": 1246.9697388945879,
+          "delivered_mwh_per_year": 1258.3189687309548,
+          "equivalent_full_cycles_per_year": 314.5797421827387,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -163753.89653100725,
+            "equity_irr": 0.10800891622552666
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -154059.06025871844,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 1434.486706319913,
+            "delta_project_npv_vs_wind_only": -116479.19050433743
+          }
+        }
+      }
+    },
+    "cycled_2_5_10": {
+      "bottom_up_price": {
+        "all_in_usd": 1368222.4075608186,
+        "all_in_usd_per_kwh": 136.82224075608187,
+        "cif_usd": 961489.6464108899
+      },
+      "capex_usd_at_mode": 1407400.0,
+      "energy_mwh": 10.0,
+      "fits_reading_A_turbine_plus_battery_le_limit": false,
+      "operation": "cycled",
+      "power_mw": 2.5,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -791307.1960277737,
+              "delta_project_npv_vs_wind_only": -709303.316016813,
+              "discount_rate_used": 0.10664293333333333,
+              "equity_irr": 0.09896995876440795,
+              "equity_npv": -1209682.8683042869,
+              "min_dscr": 0.8675653419458565,
+              "project_irr": 0.11935461264951272,
+              "project_npv": 1100544.890279936
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -699481.9621770272,
+              "delta_project_npv_vs_wind_only": -595935.0500572829,
+              "discount_rate_used": 0.10651449999999998,
+              "equity_irr": 0.10048968985585405,
+              "equity_npv": -1117857.6344535404,
+              "min_dscr": 0.8672241998924205,
+              "project_irr": 0.12050428242185532,
+              "project_npv": 1213913.156239466
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 1734082.6947484696,
+              "delta_project_npv_vs_wind_only": 2490567.8088822667,
+              "discount_rate_used": 0.10336788333333333,
+              "equity_irr": 0.14565617957508725,
+              "equity_npv": 1315707.0224719564,
+              "min_dscr": 0.8670127796519919,
+              "project_irr": 0.15031345285616488,
+              "project_npv": 4300416.015179016
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 1477770.0,
+            "irr": 0.06753982680980619,
+            "npv_usd": -256909.76866294193,
+            "year1_net_usd": 183567.28278136437
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -555792.2090395882,
+            "equity_irr": 0.10106559390224157
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 71.4680951833725,
+          "break_even_usd_per_kwh_base_basis": 79.93855251312254,
+          "charged_mwh_per_year": 3179.5979809488695,
+          "delivered_min_year_mwh": 2535.8410629325494,
+          "delivered_mwh_per_year": 2702.294506574879,
+          "equivalent_full_cycles_per_year": 270.2294506574879,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -566584.2619317374,
+            "equity_irr": 0.10093111371859997
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -523863.32642864366,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 2803.9581095996796,
+            "delta_project_npv_vs_wind_only": -564220.7924006926
+          }
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -638009.0789173581,
+              "delta_project_npv_vs_wind_only": -521757.08714710944,
+              "discount_rate_used": 0.10645028333333333,
+              "equity_irr": 0.10151826315324497,
+              "equity_npv": -1056384.7511938713,
+              "min_dscr": 0.8677235791464091,
+              "project_irr": 0.12128434164352372,
+              "project_npv": 1288091.1191496395
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -528089.4029322921,
+              "delta_project_npv_vs_wind_only": -384829.1101720652,
+              "discount_rate_used": 0.10632185,
+              "equity_irr": 0.10338420556472072,
+              "equity_npv": -946465.0752088053,
+              "min_dscr": 0.8679292977842413,
+              "project_irr": 0.12269033934414678,
+              "project_npv": 1425019.0961246837
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": 1905095.054548843,
+              "delta_project_npv_vs_wind_only": 2709674.3636842608,
+              "discount_rate_used": 0.10317523333333331,
+              "equity_irr": 0.14923844521951057,
+              "equity_npv": 1486719.3822723299,
+              "min_dscr": 0.8675891584096287,
+              "project_irr": 0.15235497899903985,
+              "project_npv": 4519522.56998101
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 1477770.0,
+            "irr": 0.11668437422586186,
+            "npv_usd": 80511.15154720038,
+            "year1_net_usd": 230606.70936765723
+          },
+          "black_start_reserve_mwh": 0.5,
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -344601.4509613204,
+            "equity_irr": 0.1039739990327071
+          },
+          "break_even_peak_rate_lkr_per_kwh_base_basis": 63.87258810202282,
+          "break_even_usd_per_kwh_base_basis": 101.46848857879638,
+          "charged_mwh_per_year": 3907.5646832152665,
+          "delivered_min_year_mwh": 3263.838274915269,
+          "delivered_mwh_per_year": 3321.066203501294,
+          "equivalent_full_cycles_per_year": 332.1066203501294,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -342623.5690001182,
+            "equity_irr": 0.10393444094786197
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -330018.354278259,
+          "without_reserve_base_basis": {
+            "delivered_mwh_per_year": 3487.776762501387,
+            "delta_project_npv_vs_wind_only": -326678.0264212217
+          }
+        }
+      }
+    },
+    "held_0_5_0_5": {
+      "bottom_up_price": {
+        "all_in_usd": 141147.23433009067,
+        "all_in_usd_per_kwh": 282.29446866018134,
+        "cif_usd": 99188.26331009448
+      },
+      "capex_usd_at_mode": 70370.0,
+      "energy_mwh": 0.5,
+      "fits_reading_A_turbine_plus_battery_le_limit": true,
+      "operation": "held",
+      "power_mw": 0.5,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 73888.5,
+            "irr": null,
+            "npv_usd": -86510.23742644968,
+            "year1_net_usd": -1091.4750000000001
+          },
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -147305.5754672282,
+            "equity_irr": 0.10913929452818905
+          },
+          "break_even_usd_per_kwh_base_basis": null,
+          "charged_mwh_per_year": 0.0,
+          "delivered_min_year_mwh": 0.0,
+          "delivered_mwh_per_year": 0.0,
+          "equivalent_full_cycles_per_year": 0.0,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -79921.28574155318,
+            "equity_irr": 0.11034537510601128
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -68513.21524595749
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": -74142.55831287522,
+              "delta_project_npv_vs_wind_only": -79921.28574155318,
+              "discount_rate_used": 0.10587233333333332,
+              "equity_irr": 0.11034537510601128,
+              "equity_npv": -492518.23058938835,
+              "min_dscr": 0.867338551390403,
+              "project_irr": 0.12764205206673865,
+              "project_npv": 1729926.9205551958
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 73888.5,
+            "irr": null,
+            "npv_usd": -86510.23742644968,
+            "year1_net_usd": -1091.4750000000001
+          },
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -147305.5754672282,
+            "equity_irr": 0.10913929452818905
+          },
+          "break_even_usd_per_kwh_base_basis": null,
+          "charged_mwh_per_year": 0.0,
+          "delivered_min_year_mwh": 0.0,
+          "delivered_mwh_per_year": 0.0,
+          "equivalent_full_cycles_per_year": 0.0,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -79921.28574155318,
+            "equity_irr": 0.11034537510601128
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -68513.21524595749
+        }
+      }
+    },
+    "held_1_1": {
+      "bottom_up_price": {
+        "all_in_usd": 219529.83334387396,
+        "all_in_usd_per_kwh": 219.52983334387397,
+        "cif_usd": 154269.993439689
+      },
+      "capex_usd_at_mode": 140740.0,
+      "energy_mwh": 1.0,
+      "fits_reading_A_turbine_plus_battery_le_limit": false,
+      "operation": "held",
+      "power_mw": 1.0,
+      "readings": {
+        "B": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 147777.0,
+            "irr": null,
+            "npv_usd": -173020.47485289935,
+            "year1_net_usd": -2182.9500000000003
+          },
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -234188.73309483216,
+            "equity_irr": 0.10768622677799033
+          },
+          "break_even_usd_per_kwh_base_basis": null,
+          "charged_mwh_per_year": 0.0,
+          "delivered_min_year_mwh": 0.0,
+          "delivered_mwh_per_year": 0.0,
+          "equivalent_full_cycles_per_year": 0.0,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -154129.63573813392,
+            "equity_irr": 0.10903306352185904
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -137026.43049191567
+        },
+        "C": {
+          "bases": {
+            "stacked": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            },
+            "whole_wind_peak_rate": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            },
+            "whole_wind_peak_rate_on_all_window_exports": {
+              "delta_equity_npv_vs_wind_only": -145079.06028507504,
+              "delta_project_npv_vs_wind_only": -154129.63573813392,
+              "discount_rate_used": 0.10593654999999999,
+              "equity_irr": 0.10903306352185904,
+              "equity_npv": -563454.7325615882,
+              "min_dscr": 0.8666874226180761,
+              "project_irr": 0.1266852908704862,
+              "project_npv": 1655718.570558615
+            }
+          },
+          "battery_pretax_base_basis": {
+            "capex_usd_at_draw": 147777.0,
+            "irr": null,
+            "npv_usd": -173020.47485289935,
+            "year1_net_usd": -2182.9500000000003
+          },
+          "bottom_up_price_base_basis": {
+            "delta_project_npv_vs_wind_only": -234188.73309483216,
+            "equity_irr": 0.10768622677799033
+          },
+          "break_even_usd_per_kwh_base_basis": null,
+          "charged_mwh_per_year": 0.0,
+          "delivered_min_year_mwh": 0.0,
+          "delivered_mwh_per_year": 0.0,
+          "equivalent_full_cycles_per_year": 0.0,
+          "one_time_adjustment_base_basis": {
+            "delta_project_npv_vs_wind_only": -154129.63573813392,
+            "equity_irr": 0.10903306352185904
+          },
+          "pinned_discount_rate_delta_project_npv_base_basis": -137026.43049191567
+        }
+      }
+    }
+  },
+  "profile": {
+    "first_utc": "2015010100",
+    "generic_cp": 0.4164703819328103,
+    "gross_cf": 0.5286509963249072,
+    "hours": 96432,
+    "hub_mean_speed_ms": 8.242754180611904,
+    "last_utc": "2025123123",
+    "net_cf_scenario": 0.48756,
+    "poi_peak_mw": 9.216899999999999,
+    "shear_alpha": 0.09920662705916664,
+    "target_gross_cf": 0.5286509963249072,
+    "window_hours_poi_above_9_mw_share": 0.23992035838725734,
+    "window_mean_poi_mw": 5.228543438841882,
+    "window_share_of_net_energy": 0.1788444796779909,
+    "window_wind_mwh_per_year": 7261.992048336621
+  },
+  "provenance": {
+    "block": "storage_options",
+    "code": {
+      "files": {
+        "analytics/wind/wind_bess_options.py": "d0a89d4116e85ecdefedf032692787648151b178df668d04771f3ff5fd4fdbc8",
+        "analytics/wind/wind_bess_options_runner.py": "046ddda4a581e5aabd35e1fb21fb6fbcadb98bbbf8b719814218bfd819ba81c7"
+      },
+      "tree": "ac666810cefb43e58b9ed8c17064ed4b0d781a18c25d981f0d730445ba751d79"
+    },
+    "config": {
+      "files": {
+        "conf/blue_whale_met_mast_transfer.yaml": "85ed4e98a73685cbf2ff4978500a3219f2d21c54bf4b440d7da138c0e9feb2fc",
+        "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
+        "conf/wind_bess_options.yaml": "8168ddd6c39ee8d28efa091687c01cf3954c6fa35bcff6cedc1456cc0965f1f7",
+        "docs/blue_whale/met_mast_transfer_summary.json": "2deb3836798d88938400705ef45b8572fee65108fcd4289aa8f0f5970ea09e22",
+        "scenarios/blue_whale_wind_lot5b_2026.yaml": "710aee9dccb7c938280ca5f5bbf32cc9b78e18b24897f451af6f663d308a3fdd"
+      },
+      "tree": "edd4d301632c41b16731ec6f7a3895a5ae0005758add9567d3308ad630baed1c"
+    },
+    "model_version": "15.32.0",
+    "schema": "dutchbay.site_analysis_provenance.v1"
+  },
+  "recommended_option_reading_A": "held_0_5_0_5",
+  "revenue_bases": {
+    "base": "whole_wind_peak_rate",
+    "sensitivities": [
+      "stacked",
+      "whole_wind_peak_rate_on_all_window_exports"
+    ]
+  },
+  "rte_grid_delta_project_npv_base_basis": {
+    "cycled_0_5_2": {
+      "B": {
+        "0.8": -135867.72971536638,
+        "0.82": -129768.82364805299,
+        "0.835": -125385.91710671782,
+        "0.85": -121156.71305218223,
+        "0.865": -117072.82130746706,
+        "0.88": -113126.81112944521,
+        "0.9": -108068.86980581097
+      },
+      "C": {
+        "0.8": -135867.72971536638,
+        "0.82": -129768.82364805299,
+        "0.835": -125385.91710671782,
+        "0.85": -121156.71305218223,
+        "0.865": -117072.82130746706,
+        "0.88": -113126.81112944521,
+        "0.9": -108068.86980581097
+      }
+    },
+    "cycled_10_40": {
+      "B": {
+        "0.8": -4398223.362753272,
+        "0.82": -4330362.418302985,
+        "0.835": -4275072.872305067,
+        "0.85": -4221237.113923011,
+        "0.865": -4174771.3491349285,
+        "0.88": -4123432.3154211207,
+        "0.9": -4064963.2263774625
+      },
+      "C": {
+        "0.8": -2266771.294290766,
+        "0.82": -2105639.551609153,
+        "0.835": -1992038.8202341937,
+        "0.85": -1874473.88456683,
+        "0.865": -1766816.597556715,
+        "0.88": -1661940.085725412,
+        "0.9": -1521495.3521865634
+      }
+    },
+    "cycled_1_4": {
+      "B": {
+        "0.8": -225557.24213474337,
+        "0.82": -211660.85382251628,
+        "0.835": -201670.65073609492,
+        "0.85": -192027.38153592497,
+        "0.865": -176871.06939144176,
+        "0.88": -167864.8487017483,
+        "0.9": -156315.64940115018
+      },
+      "C": {
+        "0.8": -217589.6594134979,
+        "0.82": -203381.85836384725,
+        "0.835": -193167.88564575417,
+        "0.85": -177466.71229771804,
+        "0.865": -167940.42678696103,
+        "0.88": -158732.82687964477,
+        "0.9": -146925.56384091894
+      }
+    },
+    "cycled_2_5_10": {
+      "B": {
+        "0.8": -677003.8194605354,
+        "0.82": -645927.7718168336,
+        "0.835": -617579.4383418208,
+        "0.85": -595935.0500572829,
+        "0.865": -574995.0324534366,
+        "0.88": -548728.818207745,
+        "0.9": -522689.52500833734
+      },
+      "C": {
+        "0.8": -482721.093965109,
+        "0.82": -438663.25297439774,
+        "0.835": -411285.51107220864,
+        "0.85": -384829.1101720652,
+        "0.865": -353157.68285344983,
+        "0.88": -328396.41841145745,
+        "0.9": -290486.64050795767
+      }
+    }
+  },
+  "scenario": "scenarios/blue_whale_wind_lot5b_2026.yaml",
+  "scenario_sha256": "710aee9dccb7c938280ca5f5bbf32cc9b78e18b24897f451af6f663d308a3fdd",
+  "schema": "dutchbay.wind_bess_options.v1",
+  "site": {
+    "location": "DutchBay T2 position, Kalpitiya peninsula, Puttalam District",
+    "name": "Blue Whale Lot 5B wind turbine (the separate 9.5 MW wind project, no solar)"
+  },
+  "status": "completed",
+  "tariff": {
+    "bess_component_after_adjustment": {
+      "escalable": -0.0022222222222221255,
+      "non_escalable": 27.94854146341463,
+      "total": 27.94631924119241
+    },
+    "bess_component_floating": {
+      "escalable": 0.004444444444445139,
+      "non_escalable": 27.080000000000005,
+      "total": 27.08444444444445
+    },
+    "bess_component_ground": {
+      "escalable": -0.0022222222222221255,
+      "non_escalable": 27.08,
+      "total": 27.077777777777776
+    },
+    "escalable_index_rate": 0.03207317073170733,
+    "one_time_adjustment_factor": 1.0320731707317072,
+    "stacked": {
+      "escalable": 4.927777777777777,
+      "non_escalable": 47.879999999999995,
+      "total": 52.80777777777777
+    },
+    "whole_wind_peak_rate": {
+      "escalable": 5.475555555555555,
+      "non_escalable": 50.19111111111111,
+      "total": 55.66666666666667
+    },
+    "whole_wind_peak_rate_after_adjustment": {
+      "escalable": 5.475555555555555,
+      "non_escalable": 51.05965257452574,
+      "total": 56.5352081300813
+    },
+    "wind": {
+      "escalable": 4.93,
+      "non_escalable": 20.8,
+      "total": 25.73
+    }
+  },
+  "transfer_summary_sha256": "2deb3836798d88938400705ef45b8572fee65108fcd4289aa8f0f5970ea09e22",
+  "wind_only": {
+    "discount_rate_used": 0.10574389999999999,
+    "equity_irr": 0.11171537176065605,
+    "equity_npv": -418375.6722765131,
+    "min_dscr": 0.8667037655972165,
+    "project_irr": 0.12860777411857657,
+    "project_npv": 1809848.206296749
+  },
+  "wind_only_pinned_discount_rate": {
+    "discount_rate_used": 0.10574389999999999,
+    "equity_irr": 0.11171537176065605,
+    "equity_npv": 670436.3920439936,
+    "min_dscr": 0.8667037655972165,
+    "project_irr": 0.12860777411857657,
+    "project_npv": 1809848.206296749
+  }
+}

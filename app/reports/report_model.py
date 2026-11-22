@@ -58,6 +58,7 @@ from app.reports.report_config import (
     RiskItem,
     load_report_config,
 )
+from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.services.report_global_sa import GlobalSABlock
 from app.services.report_tornado import TornadoBlock, TornadoRow
 
@@ -1281,6 +1282,10 @@ class ReportContext(BaseModel):
     #: (the API report routes) pass none, so the section is omitted and the report is unchanged.
     #: Disclose-only — the recommended P50 basis never overwrites the committed/frozen P50.
     resource_trend: Optional[ResourceTrendBlock] = None
+    #: Site-analysis sections (#1824), built by
+    #: :func:`app.reports.site_analysis_sections.build_site_analyses_block`. None (the default)
+    #: omits them, so every report whose caller passes none is byte-identical.
+    site_analyses: Optional[SiteAnalysesBlock] = None
     #: Project→equity IRR bridge (#621). Reconciles the published project IRR to the published
     #: equity IRR via labelled legs (leverage / cost of debt / tax shield) + an explicit residual.
     #: None unless the caller supplies the full run result AND it carries a computed equity
@@ -3235,6 +3240,7 @@ def build_report_context(
     tech_comparison: Optional[TechComparisonBlock] = None,
     resource_trend: Optional[Mapping[str, Any]] = None,
     run_result: Optional[Mapping[str, Any]] = None,
+    site_analyses: Optional[SiteAnalysesBlock] = None,
 ) -> ReportContext:
     """Assemble a :class:`ReportContext` from a canonical case result.
 
@@ -3288,6 +3294,8 @@ def build_report_context(
             ``debt_result`` / ``equity_distribution``), used solely to build the additive
             project→equity IRR bridge (#621). Optional — ``None`` for legacy callers, in which
             case the bridge section is omitted (default-off).
+        site_analyses: Pre-built site-analysis sections (#1824). Passed straight through;
+            ``None`` (the default) omits them.
 
     Returns:
         A fully populated :class:`ReportContext` ready for the renderer.
@@ -3361,6 +3369,7 @@ def build_report_context(
         three_statement=_three_statement_block(ts_result),
         cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
         resource_trend=_build_resource_trend(resource_trend),
+        site_analyses=site_analyses,
         irr_bridge=_irr_bridge_block(run_result),
         fx_warning=_build_fx_warning(run_result),
         fx_fallback_note=_build_fx_fallback_note(run_result),
