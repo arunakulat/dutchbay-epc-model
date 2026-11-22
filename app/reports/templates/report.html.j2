@@ -417,6 +417,73 @@
   </section>
   {% endif %}
 
+  {# 4d-ii. Capital-structure screening (#1825 slice i): debt mix, contingency and gearing
+     searches around the committed case, held to the scenario's covenants. Opt-in; never
+     replaces the committed structure. #}
+  {% if ctx.capital_structure %}
+  {% set cs = ctx.capital_structure %}
+  <section class="page capital-structure">
+    <h2>Capital Structure Screening</h2>
+    <p class="muted"><strong>Screening of alternatives, not the committed structure.</strong>
+      Each candidate re-runs the model with one financing choice changed and is ranked on
+      equity NPV; the committed case and every figure elsewhere in this report are unchanged.
+      Covenants held: {{ cs.covenants | join("; ") }}. Committed case: equity NPV
+      {{ fmt_usd(cs.committed_objective) }}, minimum period DSCR {{ fmt_x(cs.committed_dscr) }},
+      headline minimum DSCR {{ fmt_x(cs.committed_headline_dscr) }}.</p>
+    {% if cs.dscr_held_note %}<p class="muted capital-structure-dscr-held">{{ cs.dscr_held_note }}</p>{% endif %}
+    {% if cs.covenants_not_screened %}
+    <p class="muted">Declared covenants not screened on:</p>
+    <ul class="notes capital-structure-not-screened">
+      {% for line in cs.covenants_not_screened %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% for search in cs.searches %}
+    <h3>{{ search.kind }}</h3>
+    <p class="muted">Searched: {{ search.searched }}.
+      {%- if search.current %} Committed: {{ search.current }}.{% endif %}
+      {{ search.n_feasible }} of {{ search.n_evaluated }} candidates clear every covenant.
+      {%- if search.best_label %} Named: <strong>{{ search.best_label }}</strong>
+      {%- if search.best_objective is not none %} (equity NPV {{ fmt_usd(search.best_objective) }}){% endif %}.{% endif %}</p>
+    {% if search.note %}<p class="muted capital-structure-note">{{ search.note }}</p>{% endif %}
+    {% if search.infeasibility %}
+    <ul class="notes capital-structure-infeasible">
+      {% for line in search.infeasibility %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th style="text-align:right;">Equity NPV</th>
+          {% for key in cs.covenant_keys %}<th style="text-align:right;">{{ key }}</th>{% endfor %}
+          {% for key in cs.shown_keys %}<th style="text-align:right;">{{ key }} (shown)</th>{% endfor %}
+          <th>Covenants</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in search.candidates %}
+        <tr{% if c.best %} class="named"{% endif %}>
+          <td>{% if c.best %}<strong>{{ c.label }}</strong>{% else %}{{ c.label }}{% endif %}</td>
+          <td class="num">{{ fmt_usd(c.objective) }}</td>
+          {% for key in cs.covenant_keys %}<td class="num">{% if c.constraints.get(key) is not none %}{{ "%.3f" | format(c.constraints.get(key)) }}{% else %}&ndash;{% endif %}</td>{% endfor %}
+          {% for key in cs.shown_keys %}<td class="num">{% if c.constraints.get(key) is none %}&ndash;{% elif key.endswith("_usd") %}{{ fmt_usd(c.constraints.get(key)) }}{% else %}{{ "%.3f" | format(c.constraints.get(key)) }}{% endif %}</td>{% endfor %}
+          <td>{% if c.feasible %}clear{% else %}fail: {{ c.binding | join(", ") }}{% endif %}{% if c.also_clears %}; also within {{ c.also_clears | join(", ") }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if cs.searches_not_run %}
+    <ul class="notes capital-structure-not-run">
+      {% for line in cs.searches_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">
@@ -463,6 +530,21 @@
     <p class="muted tornado-not-computed-note">&ldquo;not computed&rdquo; marks a driver
       whose shock the model refused, so it has no bar; the other drivers are unaffected.
       {% for r in ctx.tornado.not_computed_rows %}{{ r.label }}: not computed: {{ r.not_computed }}.{% if not loop.last %} {% endif %}{% endfor %}</p>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    {# #1818: the F-5 non-reliance line beside the sensitivities. #}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% elif ctx.tornado_not_computed %}
+  {# #1818: a tornado that was not computed is said so, not left out silently. #}
+  <section class="page">
+    <h2>Sensitivity Tornado</h2>
+    <p class="tornado-not-computed"><strong>Not computed.</strong> {{ ctx.tornado_not_computed }}.
+      This report therefore shows no one-at-a-time sensitivity; that is not a finding that
+      the drivers have no effect.</p>
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
     {% endif %}
   </section>
   {% endif %}
@@ -734,8 +816,24 @@
           <td>Gearing</td>
           {% for row in tc.rows %}<td class="num">{{ fmt_ratio_pct(row.gearing) }}</td>{% endfor %}
         </tr>
+        <tr>
+          <td>Balloon at maturity</td>
+          {% for row in tc.rows %}<td class="num">{% if row.balloon_at_maturity_usd is none %}&mdash;{% elif row.carries_balloon %}{{ fmt_usd(row.balloon_at_maturity_usd) }}{% else %}None{% endif %}</td>{% endfor %}
+        </tr>
+        <tr>
+          <td>Balloon treatment</td>
+          {% for row in tc.rows %}<td class="num">{% if row.balloon_treatment is none %}&mdash;{% elif row.balloon_at_maturity_usd is not none and not row.carries_balloon %}{{ row.balloon_treatment | replace("_", " ") }} (no balloon arises){% else %}{{ row.balloon_treatment | replace("_", " ") }}{% endif %}</td>{% endfor %}
+        </tr>
       </tbody>
     </table>
+    {# #1493: equity figures of cases that resolve a balloon differently are not like for like. #}
+    {% if tc.balloon_treatments_differ %}
+    <p class="muted"><strong>Balloon treatments differ.</strong> The compared cases resolve a
+      balloon in different ways (see the Balloon treatment row), and a treatment can change the
+      debt itself. So the differences between their figures, equity figures most of all and in
+      some cases project IRR, project NPV and CFADS too, include that difference, not only the
+      technology or capex difference.</p>
+    {% endif %}
   </section>
   {% endif %}
 
