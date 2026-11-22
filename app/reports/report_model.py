@@ -1171,6 +1171,130 @@ class LenderSensitivityBlock(BaseModel):
     parts_not_run: List[str] = Field(default_factory=list)
 
 
+class EstimateClassBand(BaseModel):
+    """The scenario's AACE estimate class and its expected accuracy band (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    estimate_class: int
+    low_pct: float
+    high_pct: float
+    implied_sigma_pct: float
+    #: Whether the scenario declares ``capex.estimate_class`` (else the repository default).
+    declared: bool
+
+
+class CapexMcRow(BaseModel):
+    """One KPI's CAPEX Monte Carlo percentiles beside the committed figure."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    unit: str
+    committed: Optional[float] = None
+    p10: float
+    p50: float
+    p90: float
+
+
+class CapexMcBlock(BaseModel):
+    """CAPEX Monte Carlo under the lender guards (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    n_trials: int
+    seed: int
+    sigma_pct: float
+    #: Where the 1-sigma came from, in words.
+    sigma_basis: str
+    base_capex_usd: float
+    rows: List[CapexMcRow] = Field(default_factory=list)
+    #: Whether a factor-1.0 trial reproduces the committed KPIs, in words.
+    base_point: str
+    #: Set when each trial re-sizes the debt, which damps the minimum DSCR's spread.
+    debt_sizing_note: Optional[str] = None
+
+
+class DispatchSummary(BaseModel):
+    """Totals of a chronological storage dispatch ledger (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    hours: int
+    charged_mwh: float
+    discharged_mwh: float
+    exported_mwh: float
+    curtailed_mwh: float
+    losses_mwh: float
+    unmet_mwh: float
+
+
+class LcosRow(BaseModel):
+    """One battery's levelised cost of storage (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technology: str
+    lcos_usd_per_mwh: Optional[float] = None
+    pv_costs_usd: float
+    pv_discharged_mwh: float
+    cycles_per_year: float
+    depth_of_discharge: float
+    round_trip_efficiency: float
+    benchmark_note: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
+
+
+class BessEconomicsRow(BaseModel):
+    """One battery as its own project (``bess_project_economics``, #1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technology: str
+    landed_capex_usd: Optional[float] = None
+    npv_usd: float
+    irr_usd: Optional[float] = None
+    discount_rate: float
+    horizon_years: int
+    currency_basis: str
+
+
+class EpcMarginSummary(BaseModel):
+    """The EPC construction margin (``epc_margin``, #1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    contract_value: float
+    total_cost: float
+    gross_margin: float
+    gross_margin_pct: float
+    return_on_cost_pct: float
+    construction_months: int
+    peak_working_capital: float
+    annualized_irr: Optional[float] = None
+    irr_note: Optional[str] = None
+
+
+class CostStorageBlock(BaseModel):
+    """Cost and storage analytics beside the committed case (#1825 slice iii).
+
+    Each part either runs or is listed in ``parts_not_run`` with its reason. None of it moves
+    a committed figure or KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    estimate_class: Optional[EstimateClassBand] = None
+    capex_mc: Optional[CapexMcBlock] = None
+    dispatch: Optional[DispatchSummary] = None
+    lcos: List[LcosRow] = Field(default_factory=list)
+    lcos_discount_rate: Optional[float] = None
+    bess_economics: List[BessEconomicsRow] = Field(default_factory=list)
+    epc_margin: Optional[EpcMarginSummary] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1339,6 +1463,10 @@ class ReportContext(BaseModel):
     #: equity, FX, Pareto and Sobol. The command-line lender report fills it when switched
     #: on; None (the default) omits the section.
     lender_sensitivities: Optional[LenderSensitivityBlock] = None
+    #: Cost and storage (#1825 slice iii): estimate class, CAPEX Monte Carlo, storage
+    #: dispatch, LCOS, battery-project economics and EPC margin. The command-line lender
+    #: report fills it when switched on; None (the default) omits the section.
+    cost_storage: Optional[CostStorageBlock] = None
 
 
 def _build_kpi_rows(

@@ -60,6 +60,15 @@ from app.reports.capital_structure_section import (
 from app.reports.capital_structure_section import (
     settings_from_config as capital_structure_settings_from_config,
 )
+from app.reports.cost_storage_section import (
+    DEFAULT_COST_STORAGE_SETTINGS,
+    SECTION_COST_STORAGE,
+    CostStorageSettings,
+    build_cost_storage_section,
+)
+from app.reports.cost_storage_section import (
+    settings_from_config as cost_storage_settings_from_config,
+)
 from app.reports.lender_sensitivity_section import (
     DEFAULT_SENSITIVITY_SETTINGS,
     SECTION_LENDER_SENSITIVITIES,
@@ -73,6 +82,7 @@ from app.reports.renderer import render_report_html
 from app.reports.report_model import (
     AepResourceSensitivityBlock,
     CapitalStructureBlock,
+    CostStorageBlock,
     LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
@@ -101,6 +111,7 @@ __all__ = [
     "dbpl_furniture_for",
     "emit_lender_report_from_pipeline",
     "capital_structure_settings_from_config",
+    "cost_storage_settings_from_config",
     "lender_sensitivity_settings_from_config",
     "sections_not_run",
     "to_dbpl_print_html",
@@ -132,6 +143,8 @@ AepResourceBuilder = Callable[
 CapitalStructureBuilder = Callable[..., Union[CapitalStructureBlock, str]]
 #: Returns the section block, or a "not run: ..." reason (#1825 slice ii).
 LenderSensitivityBuilder = Callable[..., Union[LenderSensitivityBlock, str]]
+#: Returns the section block, or a "not run: ..." reason (#1825 slice iii).
+CostStorageBuilder = Callable[..., Union[CostStorageBlock, str]]
 SiteAnalysesBuilder = Callable[..., Optional[SiteAnalysesBlock]]
 
 
@@ -177,6 +190,7 @@ def sections_not_run(
     aep_resource_not_run: Optional[str] = None,
     capital_structure_not_run: Optional[str] = None,
     lender_sensitivities_not_run: Optional[str] = None,
+    cost_storage_not_run: Optional[str] = None,
 ) -> List[SectionNotRun]:
     """List the sections the report will not render, each with its reason.
 
@@ -194,6 +208,8 @@ def sections_not_run(
             built, or ``None`` when it was.
         lender_sensitivities_not_run: Why the lender sensitivities (#1825 slice ii) were not
             built, or ``None`` when they were.
+        cost_storage_not_run: Why the cost and storage section (#1825 slice iii) was not
+            built, or ``None`` when it was.
 
     Returns:
         The left-out sections, in report order.
@@ -234,6 +250,10 @@ def sections_not_run(
                 section=SECTION_LENDER_SENSITIVITIES,
                 reason=lender_sensitivities_not_run,
             )
+        )
+    if cost_storage_not_run is not None:
+        out.append(
+            SectionNotRun(section=SECTION_COST_STORAGE, reason=cost_storage_not_run)
         )
     if capital_risk_not_run is not None:
         out.append(
@@ -548,6 +568,8 @@ def emit_lender_report_from_pipeline(
     capital_structure_builder: CapitalStructureBuilder = build_capital_structure_section,
     sensitivities: LenderSensitivitySettings = DEFAULT_SENSITIVITY_SETTINGS,
     sensitivities_builder: LenderSensitivityBuilder = build_lender_sensitivity_section,
+    cost_storage: CostStorageSettings = DEFAULT_COST_STORAGE_SETTINGS,
+    cost_storage_builder: CostStorageBuilder = build_cost_storage_section,
     site_analyses_builder: Optional[SiteAnalysesBuilder] = None,
 ) -> LenderReportOutput:
     """Write the combined lender report for a finance run, as HTML and a DBPL PDF (#1752).
@@ -585,6 +607,10 @@ def emit_lender_report_from_pipeline(
             off by default (#1825 slice ii).
         sensitivities_builder: Seam for tests; production uses
             :func:`~app.reports.lender_sensitivity_section.build_lender_sensitivity_section`.
+        cost_storage: The cost and storage settings (``lender_report.cost_storage``); off by
+            default (#1825 slice iii).
+        cost_storage_builder: Seam for tests; production uses
+            :func:`~app.reports.cost_storage_section.build_cost_storage_section`.
         site_analyses_builder: Seam for tests; production uses
             :func:`~app.reports.site_analysis_sections.build_site_analyses_block`.
 
@@ -655,6 +681,14 @@ def emit_lender_report_from_pipeline(
         logger.exception("Lender sensitivities could not be built")
         ls_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
     ls_block = ls_built if isinstance(ls_built, LenderSensitivityBlock) else None
+    try:
+        csx_built: Union[CostStorageBlock, str] = cost_storage_builder(
+            scenario_config_path, scenario, result, cost_storage
+        )
+    except Exception as exc:  # noqa: BLE001 - an opt-in section never sinks the report
+        logger.exception("Cost and storage section could not be built")
+        csx_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
+    csx_block = csx_built if isinstance(csx_built, CostStorageBlock) else None
     left_out = sections_not_run(
         sensitivity,
         scenario,
@@ -662,6 +696,7 @@ def emit_lender_report_from_pipeline(
         aep_resource_not_run=None if aep_resource is not None else str(aep_built),
         capital_structure_not_run=None if cs_block is not None else str(cs_built),
         lender_sensitivities_not_run=None if ls_block is not None else str(ls_built),
+        cost_storage_not_run=None if csx_block is not None else str(csx_built),
     )
     site_analyses, site_analyses_not_run = _site_analyses_for(
         scenario, Path(str(scenario_config_path)), site_analyses_builder
@@ -685,6 +720,7 @@ def emit_lender_report_from_pipeline(
         aep_resource_sensitivity=aep_resource,
         capital_structure=cs_block,
         lender_sensitivities=ls_block,
+        cost_storage=csx_block,
     ).model_copy(update={"site_analyses": site_analyses})
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)

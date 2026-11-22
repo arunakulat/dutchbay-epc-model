@@ -19,6 +19,7 @@ from app.reports import lender_report_emit as lre
 from app.reports.aep_resource_sensitivity import SECTION_AEP_RESOURCE
 from app.reports.capital_risk_emit import build_capital_risk_report_for_scenario
 from app.reports.capital_structure_section import SECTION_CAPITAL_STRUCTURE
+from app.reports.cost_storage_section import SECTION_COST_STORAGE
 from app.reports.dbpl import DbplDependencyError
 from app.reports.lender_report_emit import (
     DOCUMENT_STATUS,
@@ -160,11 +161,12 @@ def test_cli_report_has_the_api_report_sections(
     ] == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
-    # The capital-structure screening and the lender sensitivities (#1825 slices i and
-    # ii) are opt-in and off by default.
+    # The capital-structure screening, the lender sensitivities and the cost and storage
+    # section (#1825 slices i to iii) are opt-in and off by default.
     assert [s.section for s in out.sections_not_run] == [
         SECTION_CAPITAL_STRUCTURE,
         SECTION_LENDER_SENSITIVITIES,
+        SECTION_COST_STORAGE,
         SECTION_CAPITAL_RISK,
     ]
 
@@ -226,11 +228,13 @@ def test_every_section_left_out_is_listed_with_its_reason(
         SECTION_MORRIS,
         SECTION_PAWN,
         SECTION_LENDER_SENSITIVITIES,
+        SECTION_COST_STORAGE,
         SECTION_CAPITAL_RISK,
     ]
     assert "outcome: degraded" in listed[SECTION_TORNADO]
     assert "switched off" in listed[SECTION_CAPITAL_STRUCTURE]
     assert "switched off" in listed[SECTION_LENDER_SENSITIVITIES]
+    assert "switched off" in listed[SECTION_COST_STORAGE]
     # The scenario declares no Monte Carlo block, so neither screening nor the
     # capital-risk Monte Carlo has anything to sample (and the builder is never called).
     assert "monte_carlo.parameters" in listed[SECTION_MORRIS]
@@ -344,10 +348,11 @@ def test_a_shared_capital_risk_report_is_used_as_is(
         sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
         capital_risk_builder=_not_called,
     )
-    # Only the opt-in #1825 sections (slices i and ii, off by default) are left out.
+    # Only the opt-in #1825 sections (slices i to iii, off by default) are left out.
     assert [s.section for s in out.sections_not_run] == [
         SECTION_CAPITAL_STRUCTURE,
         SECTION_LENDER_SENSITIVITIES,
+        SECTION_COST_STORAGE,
     ]
     html = out.html_path.read_text(encoding="utf-8")
     assert f"{shared.n_trials}" in html
@@ -407,6 +412,80 @@ def test_a_lender_sensitivities_builder_failure_is_listed_not_raised(
         "not run: could not be built (RuntimeError: fx block malformed)"
     )
     assert out.html_path.exists()
+
+
+def test_a_cost_storage_builder_failure_is_listed_not_raised(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1825 slice iii: the opt-in cost and storage section never sinks the report."""
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+
+    def _raises(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("capex block malformed")
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        cost_storage_builder=_raises,
+    )
+    listed = {s.section: s.reason for s in out.sections_not_run}
+    assert listed[SECTION_COST_STORAGE] == (
+        "not run: could not be built (RuntimeError: capex block malformed)"
+    )
+    assert out.html_path.exists()
+
+
+def test_a_built_cost_storage_block_reaches_the_report(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1825 slice iii: switched on, the built section is rendered, not listed as not run."""
+    from app.reports.cost_storage_section import CostStorageSettings
+    from app.reports.report_model import CostStorageBlock, EstimateClassBand
+
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+    seen: List[Any] = []
+    block = CostStorageBlock(
+        estimate_class=EstimateClassBand(
+            estimate_class=3,
+            low_pct=-15.0,
+            high_pct=22.0,
+            implied_sigma_pct=9.25,
+            declared=True,
+        ),
+        parts_not_run=["LCOS: not run: the scenario has no battery"],
+    )
+
+    def _builder(path: Any, scenario: Any, result: Any, settings: Any) -> Any:
+        seen.append((dict(result.get("kpis") or {}), settings))
+        return block
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        cost_storage=CostStorageSettings(enabled=True),
+        cost_storage_builder=_builder,
+    )
+    # The builder sees the run's own result, so the section sits beside the committed case.
+    assert seen and seen[0][1].enabled is True
+    assert seen[0][0] == dict(lender_run["kpis"])
+    assert SECTION_COST_STORAGE not in {s.section for s in out.sections_not_run}
+    html = out.html_path.read_text(encoding="utf-8")
+    assert "<h2>Cost and Storage</h2>" in html
+    assert "LCOS: not run: the scenario has no battery" in html
 
 
 def test_a_built_capital_structure_block_reaches_the_report(
