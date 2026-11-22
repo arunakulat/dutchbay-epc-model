@@ -197,8 +197,8 @@ tests. Two facts put it off-path:
 | `analytics/loader/aep_loader.py` | **LIVE** (provenance) | AEP-provenance guard (`APPROVED_SOURCES`); the lender control of [`AEP_PROVENANCE.md`](AEP_PROVENANCE.md) — **now wired into the financed run** via `analytics/aep_provenance.py` (scenario load + API boundary). The summary-loading / MC helpers in the module remain off-path. |
 | `analytics/wind/aep_summary_builder.py` | re-export only | builds the AEP summary block; since #1615 the code lives in `wind_resource/aep_summary.py` (LIVE, used by crossval, ARCO and the report wind rose) and this path re-exports it |
 | `analytics/wind/pipeline_aep_v14.py` | orphaned | a parallel AEP pipeline |
-| `analytics/wind/mc_aep_weibull.py` | orphaned | Monte-Carlo AEP from ECMWF-derived Weibull |
-| `analytics/wind/aep_tornado.py` | orphaned | wind/shear/losses/power-curve AEP sensitivities; its Weibull integral `gross_aep_farm_gwh` moved to `wind_resource/aep_integral.py` (LIVE) under #1615 and is re-exported here |
+| `analytics/wind/mc_aep_weibull.py` | report only | Monte-Carlo AEP from ECMWF-derived Weibull; since #1615 step B it feeds the lender report's labelled wind-resource sensitivity through `app/reports/aep_resource_sensitivity.py`, and nothing else on the live path |
+| `analytics/wind/aep_tornado.py` | report only | wind/shear/losses/power-curve AEP sensitivities, shown in the lender report's labelled wind-resource sensitivity through `app/reports/aep_resource_sensitivity.py` since #1615 step B; its Weibull integral `gross_aep_farm_gwh` moved to `wind_resource/aep_integral.py` (LIVE) under #1615 and is re-exported here |
 | `analytics/wind/wind_interface_schema.py`, `era5_interface_schema.py` | orphaned | GIS→EPC schemas ([`WIND_INTERFACE_SCHEMA.md`](WIND_INTERFACE_SCHEMA.md)); registered but never invoked |
 | `analytics/simulation/monte_carlo_aep.py` | orphaned | MC-AEP driver |
 | `analytics/capital_risk_layer_v14.py` | orphaned | sole importer of `mc_aep_weibull` |

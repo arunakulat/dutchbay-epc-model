@@ -60,7 +60,7 @@ from app.reports.report_config import (
 )
 from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.services.report_global_sa import GlobalSABlock
-from app.services.report_tornado import TornadoBlock
+from app.services.report_tornado import TornadoBlock, TornadoRow
 
 
 def format_kpi_value(value: float, kind: KpiKind) -> str:
@@ -812,6 +812,21 @@ class TechComparisonRow(BaseModel):
     project_npv: Optional[float] = None
     total_cfads_usd: Optional[float] = None
     gearing: Optional[float] = None
+    #: How the run resolves a balloon left at scheduled maturity (``debt_result``'s published
+    #: ``balloon_treatment``, e.g. ``refinance`` or ``cash_sweep``), and the balloon it left
+    #: (``debt_result["balloon_remaining"]``, USD). A comparison of equity figures across
+    #: cases that resolve a balloon differently mixes that difference in (#1493), so each
+    #: column states its own. ``None`` when the run did not publish it.
+    balloon_treatment: Optional[str] = None
+    balloon_at_maturity_usd: Optional[float] = None
+
+    @property
+    def carries_balloon(self) -> bool:
+        """True when the run left a balloon at scheduled maturity (more than USD 1)."""
+        return (
+            self.balloon_at_maturity_usd is not None
+            and self.balloon_at_maturity_usd > _TECH_COMPARISON_BALLOON_TOL_USD
+        )
 
 
 class TechComparisonBlock(BaseModel):
@@ -832,6 +847,28 @@ class TechComparisonBlock(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     rows: List[TechComparisonRow]
+
+    @property
+    def balloon_treatments_differ(self) -> bool:
+        """True when the treatments that act on the compared cases differ (#1493).
+
+        Their figures then mix the treatment difference into what the table presents as a
+        technology or capex difference, so the section says so: equity figures most of all,
+        and in some cases project IRR, project NPV and CFADS too.
+
+        A treatment is counted only where it can act. ``refinance``, ``cash_sweep`` and the
+        like act only on a balloon, so a case that leaves none is like for like whichever of
+        them it names, and is not counted. ``amortize`` is always counted: it resizes the
+        debt to leave no balloon, and a published zero cannot tell a resized case from one
+        that never needed it. A case that publishes no treatment is not counted either.
+        """
+        treatments = {
+            row.balloon_treatment
+            for row in self.rows
+            if row.balloon_treatment is not None
+            and (row.carries_balloon or row.balloon_treatment == "amortize")
+        }
+        return len(treatments) > 1
 
 
 class RefinanceCoverageRow(BaseModel):
@@ -903,6 +940,235 @@ class YieldReconciliationBlock(BaseModel):
     tolerance_overridden: bool = False
     reason: Optional[str] = None
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
+
+
+class AepTornadoRow(BaseModel):
+    """One driver of the resource-side AEP tornado (#1615 step B)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    low_label: str
+    high_label: str
+    low_gwh: float
+    high_gwh: float
+    swing_gwh: float
+    swing_pct: float
+
+
+class AepResourceSensitivityBlock(BaseModel):
+    """The wind-resource AEP sensitivity: cluster tornado and Monte Carlo (#1615 step B).
+
+    A labelled resource sensitivity beside the report's basis, never in place of it: the
+    energy and every financial figure stay on the committed IEC P50/P90. ``reconciliation``
+    says why the cluster's figures differ from the committed ones.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    base_net_aep_gwh: float
+    tornado: List[AepTornadoRow]
+    mc_p50_gwh: float
+    mc_p75_gwh: float
+    mc_p90_gwh: float
+    mc_p99_gwh: float
+    mc_mean_gwh: float
+    mc_cv: float
+    mc_n_samples: int
+    mc_seed: int
+    weibull_uncertainty_pct: float
+    committed_p50_gwh: Optional[float] = None
+    committed_p90_gwh: Optional[float] = None
+    reconciliation: List[str] = Field(default_factory=list)
+
+
+class CapitalStructureCandidate(BaseModel):
+    """One candidate of a capital-structure search (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    objective: Optional[float] = None
+    constraints: Dict[str, float] = Field(default_factory=dict)
+    feasible: bool
+    binding: List[str] = Field(default_factory=list)
+    #: The candidate the search names: the best feasible one.
+    best: bool = False
+    #: Declared covenants the committed case fails (not screened on) that this candidate
+    #: nevertheless clears.
+    also_clears: List[str] = Field(default_factory=list)
+
+
+class CapitalStructureSearch(BaseModel):
+    """One capital-structure search around the committed case (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    searched: str
+    current: Optional[str] = None
+    best_label: Optional[str] = None
+    best_objective: Optional[float] = None
+    candidates: List[CapitalStructureCandidate]
+    n_evaluated: int
+    n_feasible: int
+    #: The infeasibility register (#741) when no candidate clears the covenants.
+    infeasibility: List[str] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
+class CapitalStructureBlock(BaseModel):
+    """Capital-structure screening: debt mix, contingency and gearing (#1825 slice i).
+
+    A screening of alternatives around the committed case, scored through the canonical
+    evaluation gateway; it never replaces the committed structure or moves a KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objective_key: str
+    committed_objective: Optional[float] = None
+    committed_dscr: Optional[float] = None
+    #: The committed case's headline minimum DSCR (min_dscr, #790).
+    committed_headline_dscr: Optional[float] = None
+    covenants: List[str]
+    #: The KPI keys of the held covenants, in column order for the candidate tables.
+    covenant_keys: List[str] = Field(default_factory=list)
+    #: KPIs shown beside the held covenants for every candidate, never screened on.
+    shown_keys: List[str] = Field(default_factory=list)
+    #: Declared covenants the committed case itself fails, shown and not screened on.
+    covenants_not_screened: List[str] = Field(default_factory=list)
+    #: Set when the screened DSCR is held by construction on every candidate.
+    dscr_held_note: Optional[str] = None
+    searches: List[CapitalStructureSearch]
+    searches_not_run: List[str] = Field(default_factory=list)
+
+
+class LenderTornado(BaseModel):
+    """A one-at-a-time tornado on a lender metric (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    label: str
+    #: "ratio" (shown as a multiple) or "usd".
+    unit: str
+    committed: Optional[float] = None
+    rows: List[TornadoRow]
+    #: The sweep engine's reason when every driver leaves the metric unchanged.
+    flat_reason: Optional[str] = None
+    #: Set when the sweep's own base point does not reproduce the committed figure.
+    reconciliation: Optional[str] = None
+
+
+class KeBandRow(BaseModel):
+    """One cost-of-equity point of the build-up WACC band (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ke: float
+    wacc: Optional[float] = None
+    project_npv: Optional[float] = None
+    equity_npv: Optional[float] = None
+    committed: bool = False
+
+
+class FxSensitivityPoint(BaseModel):
+    """One FX sweep point (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    fx_rate: float
+    hedge_ratio: float
+    spread_bps: float
+    project_irr: Optional[float] = None
+    equity_npv: Optional[float] = None
+    #: The headline minimum DSCR, as the FX analyzer reads it.
+    min_dscr: Optional[float] = None
+    base: bool = False
+
+
+class FxSensitivitySweep(BaseModel):
+    """One FX sweep: start rate, hedge ratio or hedge spread (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    searched: str
+    points: List[FxSensitivityPoint]
+
+
+class ParetoRow(BaseModel):
+    """One evaluated point of the financing Pareto screen (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    settings: Dict[str, float]
+    objectives: Dict[str, float]
+    frontier: bool = False
+    committed: bool = False
+
+
+class ParetoScreen(BaseModel):
+    """The financing Pareto screen around the committed terms (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objectives: List[str]
+    objective_keys: List[str]
+    axes: List[str]
+    rows: List[ParetoRow]
+    n_frontier: int
+    reconciliation: Optional[str] = None
+
+
+class SobolDriverRow(BaseModel):
+    """One driver's Sobol indices on one metric (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    s1: Optional[float] = None
+    st: Optional[float] = None
+    st_conf: Optional[float] = None
+    interactive: bool = False
+
+
+class SobolMetric(BaseModel):
+    """Sobol indices on one metric, or the reason none were computed (#1825 slice ii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    rows: List[SobolDriverRow] = Field(default_factory=list)
+    flag_reason: Optional[str] = None
+
+
+class LenderSensitivityBlock(BaseModel):
+    """Lender sensitivities: DSCR and debt capacity, cost of equity, FX, Pareto, Sobol.
+
+    A sensitivity of the committed case, scored through the canonical evaluation gateway; it
+    never moves a committed figure or KPI (#1825 slice ii).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    committed_equity_npv: Optional[float] = None
+    committed_project_irr: Optional[float] = None
+    committed_min_dscr_period: Optional[float] = None
+    committed_debt_usd: Optional[float] = None
+    tornadoes: List[LenderTornado] = Field(default_factory=list)
+    ke_band: List[KeBandRow] = Field(default_factory=list)
+    ke_committed: Optional[float] = None
+    ke_reconciliation: Optional[str] = None
+    fx_sweeps: List[FxSensitivitySweep] = Field(default_factory=list)
+    fx_reconciliation: Optional[str] = None
+    pareto: Optional[ParetoScreen] = None
+    sobol: List[SobolMetric] = Field(default_factory=list)
+    sobol_runs: Optional[int] = None
+    sobol_n: Optional[int] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
 
 
 class SectionNotRun(BaseModel):
@@ -1057,6 +1323,22 @@ class ReportContext(BaseModel):
     #: lender report fills it, so a reader can tell "no sensitivity" from "sensitivity not
     #: run". Empty (the default) omits the list, so every other report stays byte-identical.
     sections_not_run: List[SectionNotRun] = Field(default_factory=list)
+    #: Why the tornado section has no rows to print (#1818), for example "not computed: ...
+    #: (outcome: degraded)". When set, the report prints the section heading with this line
+    #: instead of leaving the section out silently. None (the default) changes nothing.
+    tornado_not_computed: Optional[str] = None
+    #: The wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+    #: Carlo, a labelled resource sensitivity beside the committed basis. The command-line
+    #: lender report fills it; None (the default) omits the section.
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None
+    #: Capital-structure screening (#1825 slice i): the debt-mix, contingency and gearing
+    #: searches. The command-line lender report fills it when switched on; None (the
+    #: default) omits the section.
+    capital_structure: Optional[CapitalStructureBlock] = None
+    #: Lender sensitivities (#1825 slice ii): DSCR and debt-capacity tornadoes, cost of
+    #: equity, FX, Pareto and Sobol. The command-line lender report fills it when switched
+    #: on; None (the default) omits the section.
+    lender_sensitivities: Optional[LenderSensitivityBlock] = None
 
 
 def _build_kpi_rows(
@@ -2082,6 +2364,13 @@ _TECH_COMPARISON_KPI_KEYS = (
     "gearing",
 )
 
+#: A balloon at or below this (USD) is treated as none left at maturity in the comparison.
+#: It is the debt engine's own threshold for a balance it treats as repaid
+#: (``finance.debt_v14._BALLOON_TOL``), so the two agree. It is restated here rather than
+#: imported so the report layer takes no import on the finance package; a test pins the two
+#: equal, so neither can move alone.
+_TECH_COMPARISON_BALLOON_TOL_USD = 1.0
+
 
 def _build_tech_comparison(
     cases: Sequence[tuple[str, Mapping[str, Any]]],
@@ -2093,7 +2382,9 @@ def _build_tech_comparison(
     The mapper only reshapes those published numbers into one :class:`TechComparisonRow` per case,
     reading each of the six headline keys from the kpis-dict; a key absent from a run renders
     em-dash (``gearing`` is not a top-level pipeline KPI, so it is em-dash unless a caller injected
-    it), and no metric is ever recomputed or fabricated here.
+    it), and no metric is ever recomputed or fabricated here. A caller may also inject the run's
+    published ``balloon_treatment`` (a string) and ``balloon_at_maturity_usd`` (#1493), so each
+    column states how its run resolves a balloon; absent, the row carries ``None``.
 
     Returns ``None`` for an empty ``cases`` sequence — the section is then omitted (default-off,
     byte-identical). The emitter enforces the config-required, non-empty scenario list fail-loud
@@ -2105,14 +2396,23 @@ def _build_tech_comparison(
     rows: List[TechComparisonRow] = []
     for label, kpis in cases:
         values: Dict[str, Optional[float]] = {}
-        for key in _TECH_COMPARISON_KPI_KEYS:
+        for key in _TECH_COMPARISON_KPI_KEYS + ("balloon_at_maturity_usd",):
             raw = kpis.get(key)
             values[key] = (
                 _finite_or_none(float(raw))
                 if isinstance(raw, (int, float)) and not isinstance(raw, bool)
                 else None
             )
-        rows.append(TechComparisonRow(label=str(label), **values))
+        treatment = kpis.get("balloon_treatment")
+        rows.append(
+            TechComparisonRow(
+                label=str(label),
+                balloon_treatment=(
+                    str(treatment) if isinstance(treatment, str) and treatment else None
+                ),
+                **values,
+            )
+        )
     return TechComparisonBlock(rows=rows)
 
 

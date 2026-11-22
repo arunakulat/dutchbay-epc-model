@@ -27,9 +27,13 @@ from typing import Any, Callable, Literal, Mapping, Optional, Sequence
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
+from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_model import (
+    AepResourceSensitivityBlock,
+    CapitalStructureBlock,
+    LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
     build_report_context,
@@ -331,17 +335,44 @@ def compute_report_sensitivity(
     )
 
 
+def tornado_not_computed_reason(sensitivity: ReportSensitivityBundle) -> Optional[str]:
+    """Return why the report has no tornado to print, or ``None`` when it has one (#1818).
+
+    The template renders the tornado only with driver rows, so this is ``None`` exactly when
+    the tornado section renders. The reason names the method outcome the bundle recorded, so
+    a reader can tell "no sensitivity" from "sensitivity not run".
+    """
+    tornado = sensitivity.tornado
+    if tornado is not None and tornado.rows:
+        return None
+    outcome = next(
+        (entry.outcome for entry in sensitivity.methods if entry.method == "tornado"),
+        "degraded",
+    )
+    return (
+        "not computed: the one-at-a-time sweep returned no usable driver rows "
+        f"(outcome: {outcome})"
+    )
+
+
 def build_report_context_from_case(
     report_case: ReportCaseData,
     sensitivity: ReportSensitivityBundle,
     *,
     capital_risk: Optional[CapitalRiskReport] = None,
     sections_not_run: Sequence[SectionNotRun] = (),
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None,
+    capital_structure: Optional[CapitalStructureBlock] = None,
+    lender_sensitivities: Optional[LenderSensitivityBlock] = None,
 ) -> ReportContext:
     """Assemble a render-ready context from already-computed typed inputs.
 
-    ``capital_risk`` and ``sections_not_run`` are supplied only by the batch CLI's lender
-    report (#1752); the API route passes neither, so its context is unchanged.
+    ``capital_risk``, ``sections_not_run``, ``aep_resource_sensitivity`` (#1615 step B),
+    ``capital_structure`` (#1825 slice i) and ``lender_sensitivities`` (#1825 slice ii) are
+    supplied only by the batch CLI's lender report (#1752); the API route passes none.
+
+    Every lender report built through this seam carries the F-5 non-reliance notice on its
+    cover and beside its sensitivities, and says when its tornado was not computed (#1818).
     """
     result = report_case.run_result
     context = build_report_context(
@@ -357,8 +388,16 @@ def build_report_context_from_case(
         capital_risk=capital_risk,
         run_result=result,
     )
+    update: dict[str, Any] = {
+        "f5_notice": EXECUTIVE_WORKBOOK_F5_CAVEAT,
+        "tornado_not_computed": tornado_not_computed_reason(sensitivity),
+    }
     if sections_not_run:
-        context = context.model_copy(
-            update={"sections_not_run": list(sections_not_run)}
-        )
-    return context
+        update["sections_not_run"] = list(sections_not_run)
+    if aep_resource_sensitivity is not None:
+        update["aep_resource_sensitivity"] = aep_resource_sensitivity
+    if capital_structure is not None:
+        update["capital_structure"] = capital_structure
+    if lender_sensitivities is not None:
+        update["lender_sensitivities"] = lender_sensitivities
+    return context.model_copy(update=update)

@@ -264,22 +264,24 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # FX path to COD while retaining the close-date tax basis.
     # #1577 (14 turbines): -5.18% -> -5.45%, equity -16.18% -> -16.44%, NPV -148.6M ->
     # -142.3M, facility 48.76M -> 45.27M.
-    assert kpis["project_irr"] == pytest.approx(-0.0545, abs=0.005)
+    # #1874 (revenue SSCL dropped; IPP supply to CEB is exempt, #738): -5.45% -> -5.03%,
+    # equity -17.59% -> -17.25%, NPV -142.3M -> -140.2M, facility 45.27M -> 46.75M.
+    assert kpis["project_irr"] == pytest.approx(-0.0503, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.17589, abs=0.005
+        -0.17248, abs=0.005
     )  # PR-B UIP LKR rate deepens it; #1397's levered-tax sizing deepens it again
     # (the facility grows 48.24M -> 48.76M and absorbs more than the shield returns).
     # #1736 (-16.44% -> -17.59%): the post-maturity sweep now pays the balloon from the
     # cash the SPV holds (the reserve and trapped cash) before anything reaches equity.
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(
-        -142.31e6, rel=0.05
+        -140.25e6, rel=0.05
     )  # PR-B higher WACC deepens NPV
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(
-        45.2747e6, rel=0.02
+        46.7511e6, rel=0.02
     )  # PR-B UIP LKR rate de-levers; #1397's levered-tax basis adds two steps back
 
 

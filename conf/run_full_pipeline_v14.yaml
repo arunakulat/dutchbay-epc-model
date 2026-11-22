@@ -218,3 +218,42 @@ lender_report:
   # Target .html path. When null, defaults to '<export_dir>/lender_report.html'.
   # The PDF is written beside it with a .pdf suffix.
   path: null
+  # #1825 slice (i): capital-structure screening section (debt mix, capex contingency and
+  # gearing searches around the committed case, held to the scenario's constraints.*
+  # covenants). OPT-IN: off unless enabled. The lattice below is an analysis setting, not a
+  # site input; about 50 model evaluations at these defaults.
+  capital_structure:
+    enabled: false
+    lkr_bounds: [0.0, 0.6]
+    dfi_bounds: [0.0, 0.4]
+    mix_steps: 6
+    contingency_bounds: [0.0, 0.20]
+    contingency_steps: 11
+    gearing_bounds: [0.30, 0.80]
+    gearing_steps: 11
+  # #1825 slice (ii): lender sensitivities section (DSCR and debt-capacity tornadoes through
+  # the coupled-input seam, cost-of-equity band, FX start rate / hedge ratio / hedge spread,
+  # and a financing Pareto screen around the scenario's own terms; Sobol behind its own
+  # flag). OPT-IN: off unless enabled. Bands and grids are analysis settings, not site
+  # inputs; about 80 model evaluations at these defaults, plus n * (drivers + 2) for Sobol.
+  sensitivities:
+    enabled: false
+    ke_values: [0.10, 0.12, 0.14, 0.16, 0.18, 0.20]
+    fx:
+      variation_pct: 10.0
+      steps: 5
+      hedge_ratio_steps: [0.0, 0.25, 0.5, 0.75, 1.0]
+      spread_variation_bps: 100.0
+      spread_steps: 5
+    pareto:
+      objectives:
+        - {metric: equity_npv, direction: max}
+        - {metric: min_dscr_period, direction: max}
+      # Offsets are added to the scenario's own committed value of each key.
+      grid:
+        - {key: Financing_Terms.tenor_years, offsets: [-3, 0, 3]}
+        - {key: Financing_Terms.target_dscr, offsets: [-0.1, 0, 0.1]}
+    sobol:
+      enabled: false
+      n: 64
+      metrics: [equity_npv, max_debt_usd]

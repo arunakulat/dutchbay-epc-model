@@ -57,15 +57,18 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # project IRR ~3.12% (unchanged by PR B — unlevered). PR B's UIP LKR debt rate (13.39%)
     # takes levered equity IRR to ~-4.12% (the costlier LKR tranche); project IRR is upstream
     # of the equity waterfall.
-    assert kpis["project_irr"] == pytest.approx(0.01524, abs=0.005)
+    # #1874 (2026-11-22): revenue SSCL dropped (IPP supply to CEB is exempt, #738), so
+    # project IRR 1.52% -> 1.83%.
+    assert kpis["project_irr"] == pytest.approx(0.01829, abs=0.005)
     # #1397 sizes debt on levered-tax CFADS. On this case the shield's benefit to
     # equity outruns the extra leverage's drag, so equity IRR EASES -0.0625 ->
     # -0.0547 (the opposite sign of the move on the wind lendercase, where the
     # larger facility absorbs most of the shield).
     # #1503 (2026-10-31): the cash-swept balloon now accrues interest at the facility
     # rate until it clears, so the sweep takes USD 3.01M more and equity IRR moves
-    # -0.0547 -> -0.0607.
-    assert kpis["equity_irr"] == pytest.approx(-0.06068, abs=0.005)
+    # -0.0547 -> -0.0607. Later engine moves within tolerance (#1736, #1779) took it to
+    # -0.0572; #1874 (revenue SSCL dropped) moves it -0.0572 -> -0.0549.
+    assert kpis["equity_irr"] == pytest.approx(-0.05495, abs=0.005)
     assert (
         kpis["equity_irr"] < kpis["project_irr"]
     )  # levered equity below the project return

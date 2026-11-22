@@ -8,28 +8,12 @@
 #   synthetic_fixture      a test or example scenario that is not meant to carry Sri Lanka law
 #   project_override       a project-specific choice (relief, exemption) recorded as a rate
 #   discrepancy_for_owner  a value that may be wrong for the project; for the owner to rule.
-#                          Not corrected here: this change moves no value.
 #
-# Values are as the scenario files state them on main 4cfed491.
+# Values are as the scenario files state them on main 4cfed491, except that the 15
+# revenue-SSCL entries were removed by #1874 when the owner ruled (2026-11-22) that
+# IPP supply to CEB is exempt in every scenario, as in the lender case (#738).
 
 disagreements:
-  # --- Revenue SSCL: the lender case records IPP supply to CEB as exempt (#738) ------
-  - {scenario: blue_whale_hybrid_lot5b_2026.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: blue_whale_solar_bess_lot5b_2026.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: blue_whale_wind_lot5b_2026.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: ceb_bess_10mw_capacity_charge.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: ceb_solar_bess_nightpeak_10mw.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_basecase_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_capex_eia_prudent_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_capex_sinohydro_lean_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_equitycase_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_hybrid_bess_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_hybrid_windsolar_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_lendercase_5usc_fixed_lkr.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: dutchbay_solar_only_2025Q4.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: kalpitiya_lendercase_160m_fitted.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-  - {scenario: mullikulam_2x50mw_mannar.yaml, scenario_key: statutory.social_services_levy_pct, scenario_value: 0.025, classification: discrepancy_for_owner}
-
   # --- PAL relieved by a bonded scheme, recorded as a zero rate -----------------------
   - {scenario: nso250_ltl_portfolio_base.yaml, scenario_key: taxes_indirect.pal_pct, scenario_value: 0.0, classification: project_override}
   - {scenario: nso250_ltl_portfolio_bidimplied.yaml, scenario_key: taxes_indirect.pal_pct, scenario_value: 0.0, classification: project_override}
