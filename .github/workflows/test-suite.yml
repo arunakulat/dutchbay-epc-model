@@ -53,7 +53,7 @@ permissions:
 # value, which is the only place the two can be held together.
 env:
   DUTCHBAY_TEST_MODE: full
-  TOTAL_SHARDS: 6
+  TOTAL_SHARDS: 8
 
 jobs:
   changes:
@@ -159,8 +159,8 @@ jobs:
     # tests/lint/test_coverage_gate_policy.py, and the split is by DURATION SUM, so shards
     # carry unequal counts by design (see the `Run test shard` step below). Measure it when
     # you actually need it: `pytest tests/ --collect-only -q | tail -1`. Each shard still
-    # runs its slice across the runner's logical CPUs via -n logical, so the two
-    # parallelisms compound. Coverage is measured per shard (DATA FILE ONLY — NO --cov-fail-under
+    # runs its slice across the runner cores via -n auto, so the two parallelisms
+    # compound. Coverage is measured per shard (DATA FILE ONLY — NO --cov-fail-under
     # here, one shard cannot reach the 95% floor alone); the combined 95% gate lives in
     # the `coverage` job below, preserving R8/TEST-02.
     name: Run Tests (Python ${{ matrix.python-version }}, shard ${{ matrix.shard }})
@@ -185,7 +185,7 @@ jobs:
         # The required 'Test Summary' check aggregates whatever legs ran (needs.test),
         # so 'success' requires every leg that ran to pass.
         python-version: ${{ fromJSON('["3.12"]') }}
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
     - name: Checkout repository
@@ -240,10 +240,12 @@ jobs:
         # inter-test order was never guaranteed anyway. The ordinary tree is exercised
         # exactly once across the ordinary shards; the paired protected-base receipt is intentionally
         # isolated to the full-history Grid Study below.
-        # -n logical parallelises WITHIN each shard; the two parallelisms compound.
-        # It is `logical`, not `auto`: with psutil installed, `auto` counts PHYSICAL
-        # cores, which gave 2 workers on the 4-vCPU hosted runner ("created: 2/2
-        # workers"). `logical` uses all 4 vCPUs (#1878).
+        # -n auto parallelises WITHIN each shard; the two parallelisms compound.
+        # With psutil installed `auto` counts PHYSICAL cores: 2 workers on the
+        # 4-vCPU hosted runner. `-n logical` (4 workers) was measured on #1879 and
+        # gained nothing: per-test times doubled because the 4 vCPUs are 2 SMT
+        # cores. The suite is CPU-bound per runner, so more shards (#1878), not
+        # more workers, is what shortens the gate.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
         # The paired receipt archives protected main and therefore runs only in the
@@ -255,7 +257,7 @@ jobs:
           --group ${{ matrix.shard }} \
           --splitting-algorithm least_duration \
           --durations-path .test_durations \
-          -n logical \
+          -n auto \
           --tb=short \
           --maxfail=10 \
           --junit-xml=test-results-${{ matrix.python-version }}-${{ matrix.shard }}.xml \
