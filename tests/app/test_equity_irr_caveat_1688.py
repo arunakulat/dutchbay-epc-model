@@ -3,7 +3,8 @@
 #1522 put the flag (``equity_irr_ranks_reliably``) and the sign-change count in the waterfall's
 opaque equity summary, outside ``kpis``. These tests pin that each rendered surface shows the
 caveat, with equity NPV beside equity IRR, when the flag is False, and shows nothing new when it
-is True. The lender case is flagged (three sign changes); the base case is not.
+is True. The pessimistic case is flagged (two sign changes); the base case and, since #1892
+(#1845) sized it to the annual covenant DSCR, the lender case are not.
 """
 
 from __future__ import annotations
@@ -35,8 +36,17 @@ from app.reports.report_model import build_report_context
 
 GENERATED_AT = "2026-11-17T00:00:00+00:00"
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+#: The committed case whose equity IRR does not rank it. The lender case motivated #1688 with
+#: three sign changes until #1892 (#1845) sized it to the annual covenant DSCR; it now has one.
+_FLAGGED_CFG = _REPO_ROOT / "scenarios" / "dutchbay_pessimistic_2025Q4.yaml"
+FLAGGED_SIGN_CHANGES = 2
 _LENDER_CFG = _REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 _BASE_CFG = _REPO_ROOT / "scenarios" / "dutchbay_basecase_2025Q4.yaml"
+
+
+@pytest.fixture(scope="module")
+def flagged_run() -> Dict[str, Any]:
+    return evaluate_with_overrides(str(_FLAGGED_CFG), return_full_result=True)
 
 
 @pytest.fixture(scope="module")
@@ -133,16 +143,21 @@ def test_the_flag_rides_in_equity_metadata_and_stays_out_of_kpis() -> None:
     assert not any("ranks_reliably" in key or "sign_changes" in key for key in kpis)
 
 
-def test_the_committed_cases_carry_the_flag_they_motivated(
-    lender_run: Dict[str, Any], base_run: Dict[str, Any]
+def test_the_committed_cases_carry_the_flag(
+    flagged_run: Dict[str, Any],
+    lender_run: Dict[str, Any],
+    base_run: Dict[str, Any],
 ) -> None:
-    assert _summary(lender_run)["equity_irr_ranks_reliably"] is False
-    assert _summary(lender_run)["equity_cashflow_sign_changes"] == 3
+    assert _summary(flagged_run)["equity_irr_ranks_reliably"] is False
+    assert _summary(flagged_run)["equity_cashflow_sign_changes"] == FLAGGED_SIGN_CHANGES
     assert _summary(base_run)["equity_irr_ranks_reliably"] is True
-    meta = lender_run["scenario_result"]["equity_performance"]["metadata"]
+    # #1892 (#1845): the lender case's equity cash flows now change sign once.
+    assert _summary(lender_run)["equity_irr_ranks_reliably"] is True
+    assert _summary(lender_run)["equity_cashflow_sign_changes"] == 1
+    meta = flagged_run["scenario_result"]["equity_performance"]["metadata"]
     assert meta["equity_irr_ranks_reliably"] is False
-    assert meta["equity_cashflow_sign_changes"] == 3
-    assert "equity_irr_caveat" not in lender_run["kpis"]
+    assert meta["equity_cashflow_sign_changes"] == FLAGGED_SIGN_CHANGES
+    assert "equity_irr_caveat" not in flagged_run["kpis"]
 
 
 # ── the lender report ──────────────────────────────────────────────────────────
@@ -162,10 +177,12 @@ def _report_html(run: Dict[str, Any], cfg: Path) -> tuple[Any, str]:
 
 
 def test_the_lender_report_shows_the_caveat_and_equity_npv(
-    lender_run: Dict[str, Any],
+    flagged_run: Dict[str, Any],
 ) -> None:
-    ctx, html = _report_html(lender_run, _LENDER_CFG)
-    assert ctx.equity_irr_caveat == equity_irr_ranking_caveat(False, 3)
+    ctx, html = _report_html(flagged_run, _FLAGGED_CFG)
+    assert ctx.equity_irr_caveat == equity_irr_ranking_caveat(
+        False, FLAGGED_SIGN_CHANGES
+    )
     summary = html.split("<h2>Executive Summary</h2>", 1)[1].split("</table>", 1)[0]
     irr_row = summary.index("<td>Equity IRR</td>")
     npv_row = summary.index("<td>Equity NPV</td>")
@@ -180,19 +197,21 @@ def test_the_lender_report_shows_the_caveat_and_equity_npv(
     assert ctx.equity_irr_caveat in kfi
 
 
-def test_the_kpi_only_report_still_shows_the_caveat(lender_run: Dict[str, Any]) -> None:
+def test_the_kpi_only_report_still_shows_the_caveat(
+    flagged_run: Dict[str, Any],
+) -> None:
     """#1821 review D-4: without scenario_config or debt_result there is no Executive
     Summary finance block, but the Key Financial Indicators table still prints equity IRR.
     """
     case = CaseResult.from_pipeline_result(
-        lender_run, scenario_variant=_LENDER_CFG.stem
+        flagged_run, scenario_variant=_FLAGGED_CFG.stem
     )
-    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=lender_run)
+    ctx = build_report_context(case, generated_at=GENERATED_AT, run_result=flagged_run)
     html = unescape(render_report_html(ctx))
     kfi = html.split("<h2>Key Financial Indicators</h2>", 1)[1].split("</section>", 1)[
         0
     ]
-    assert equity_irr_ranking_caveat(False, 3) in kfi
+    assert equity_irr_ranking_caveat(False, FLAGGED_SIGN_CHANGES) in kfi
 
 
 def test_a_case_whose_irr_ranks_gets_no_caveat_or_extra_row(
@@ -208,10 +227,10 @@ def test_a_case_whose_irr_ranks_gets_no_caveat_or_extra_row(
 
 
 def test_the_workbook_puts_the_caveat_after_equity_irr(
-    lender_run: Dict[str, Any],
+    flagged_run: Dict[str, Any],
 ) -> None:
-    frames = frames_from_pipeline_result(lender_run)
-    caveat = equity_irr_ranking_caveat(False, 3)
+    frames = frames_from_pipeline_result(flagged_run)
+    caveat = equity_irr_ranking_caveat(False, FLAGGED_SIGN_CHANGES)
     metrics = list(frames["summary"]["Metric"])
     at = metrics.index("equity_irr")
     assert metrics[at + 1] == EQUITY_IRR_CAVEAT_LABEL
@@ -251,13 +270,15 @@ def _scenario(meta: Dict[str, Any]) -> ScenarioResult:
 
 
 def test_the_casper_payload_carries_the_caveat_beside_equity_npv(
-    lender_run: Dict[str, Any], base_run: Dict[str, Any]
+    flagged_run: Dict[str, Any], base_run: Dict[str, Any]
 ) -> None:
-    lender_meta = lender_run["scenario_result"]["equity_performance"]["metadata"]
+    lender_meta = flagged_run["scenario_result"]["equity_performance"]["metadata"]
     block = build_casper_payload(scenario=_scenario(lender_meta))["scenario"][
         "equity_performance"
     ]
-    assert block["equity_irr_caveat"] == equity_irr_ranking_caveat(False, 3)
+    assert block["equity_irr_caveat"] == equity_irr_ranking_caveat(
+        False, FLAGGED_SIGN_CHANGES
+    )
     assert block["equity_npv"] == -5.0
     base_meta = base_run["scenario_result"]["equity_performance"]["metadata"]
     block = build_casper_payload(scenario=_scenario(base_meta))["scenario"][
@@ -318,9 +339,9 @@ _BASE_KPIS = {
 
 
 def test_the_solar_assessment_finance_table_notes_the_caveat(
-    lender_run: Dict[str, Any],
+    flagged_run: Dict[str, Any],
 ) -> None:
-    caveat = equity_irr_caveat_from_summary(_summary(lender_run))
+    caveat = equity_irr_caveat_from_summary(_summary(flagged_run))
     assert caveat is not None
     table = _finance_table({**_BASE_KPIS, "equity_irr_caveat": caveat})
     assert table["notes"] == [caveat]
@@ -334,6 +355,8 @@ def test_the_solar_assessment_table_has_no_note_when_the_irr_ranks() -> None:
 
 
 def test_the_solar_assessment_kpis_carry_the_caveat() -> None:
-    out = solar_assessment.kpis(solar_assessment.load_scenario(_LENDER_CFG))
-    assert out["equity_irr_caveat"] == equity_irr_ranking_caveat(False, 3)
-    assert out["equity_sign_changes"] == 3
+    out = solar_assessment.kpis(solar_assessment.load_scenario(_FLAGGED_CFG))
+    assert out["equity_irr_caveat"] == equity_irr_ranking_caveat(
+        False, FLAGGED_SIGN_CHANGES
+    )
+    assert out["equity_sign_changes"] == FLAGGED_SIGN_CHANGES
