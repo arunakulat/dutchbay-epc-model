@@ -353,8 +353,8 @@ def _validate_cashflow_period_fields(
     as ``_validate_run_mode`` (#733a) and ``_validate_taxes_indirect`` (#738): a guard
     must reuse the engine's exact resolution, or pre-flight and call time drift apart.
 
-    Four delegations, in dependency order. The first two must succeed before the
-    last two can run, because both measure against the resolved grid:
+    Five delegations. The first two must succeed before the next two can run, because
+    both measure against the resolved grid; the fifth is independent of the grid:
 
     * ``resolve_period_grid`` rejects a non-string, blank or unrecognised resolution,
       and a ``cashflow`` node that is a mapping but not a ``dict`` -- the silent
@@ -376,6 +376,10 @@ def _validate_cashflow_period_fields(
       event kind (``working_capital``), and malformed periods or weights. On a
       sub-annual grid it also names, in a warning, any kind left on its illustrative
       default date.
+    * :func:`finance.monthly_cascade_v14.resolve_monthly_spec` rejects a malformed
+      ``cashflow.monthly`` node (unknown key, ``cod_month`` outside 1-12, an
+      ``energy_shape`` that is not 12 weights summing to 1, or a shape with no
+      ``cod_month``). It does not depend on the grid.
 
     The cross-field consequence is the reason the grid is resolved first, and it is the
     mistake most likely to reach a real config: a four-weight
@@ -404,6 +408,15 @@ def _validate_cashflow_period_fields(
 
     try:
         resolve_event_calendar(raw_config, grid)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    # Monthly CFADS cascade, dolphin 1 (2026-11-22): ``cashflow.monthly`` is opt-in and
+    # independent of the grid above, so it is checked whatever the grid resolved to.
+    from finance.monthly_cascade_v14 import resolve_monthly_spec
+
+    try:
+        resolve_monthly_spec(raw_config)
     except ValueError as exc:
         errors.append(str(exc))
 
