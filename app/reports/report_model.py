@@ -1466,6 +1466,23 @@ def _scenario_number(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
+def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
+    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
+
+    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
+    restated here because the report layer takes no import on the finance package (the
+    debt-package boundary lint and the architecture diagram both refuse one). A test pins
+    the two to the same answers (#1862).
+    """
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
 def _scenario_covenants(
     defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
 ) -> Covenants:
@@ -1487,14 +1504,17 @@ def _scenario_covenants(
         The covenants to test, with their sources.
     """
     constraints = (
-        scenario_config.get("constraints")
+        _lookup_key_as_engine(scenario_config, "constraints")
         if isinstance(scenario_config, Mapping)
         else None
     )
     if not isinstance(constraints, Mapping):
         return defaults
     update: Dict[str, Any] = {}
-    floor = _scenario_number(constraints.get("min_dscr_covenant"))
+    # Each key is read as the engine reads it (#1862, DOM-4 on #1860): the section name
+    # in any case; ``min_dscr_covenant`` in any case, as the equity lock-up reads it;
+    # ``max_balloon_pct`` exactly, as ``finance.debt.plan.resolve_max_balloon_pct`` does.
+    floor = _scenario_number(_lookup_key_as_engine(constraints, "min_dscr_covenant"))
     if floor is not None:
         update["min_dscr_floor"] = floor
         update["min_dscr_floor_source"] = "scenario"

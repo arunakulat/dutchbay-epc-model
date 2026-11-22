@@ -34,6 +34,7 @@ SUPPORTED_PATHS = frozenset(
         "Financing_Terms.min_dscr",
         "constraints.min_dscr_covenant",
         "constraints.target_dscr",
+        "constraints.max_balloon_pct",
         "Financing_Terms.reserves.dsra_months",
         "Financing_Terms.fees.upfront_pct",
         "capex.usd_total",
