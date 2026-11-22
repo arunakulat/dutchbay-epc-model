@@ -256,3 +256,182 @@ def test_tariff_guard_fires_when_the_tariff_differs(lender_config, monkeypatch) 
 def test_a_directly_built_spec_with_a_shape_and_no_cod_month_is_refused() -> None:
     with pytest.raises(ValueError, match="cod_month"):
         operating_month_weights(MonthlySpec(cod_month=None, energy_shape=tuple(SHAPE)))
+
+
+# --- lines the lender case leaves at zero (#1894 review notes) -----------------------
+#
+# The lender case carries no senior fee, BESS revenue, augmentation capex or FX hedge,
+# and its statutory rates are zero, so a mis-spread of any of those lines adds back to
+# the year and passes every test above. These fixtures switch each one on.
+
+HYBRID_BESS = "scenarios/dutchbay_hybrid_bess_2025Q4.yaml"
+BESS_ONLY = "scenarios/ceb_bess_10mw_capacity_charge.yaml"
+_DAYS_FROM_APRIL = [30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 28, 31]  # Apr..Mar
+
+
+def _hybrid_with_every_line() -> tuple[mc.MonthlyCascade, List[float]]:
+    """Hybrid BESS scenario with statutory rates, an FX hedge and a senior fee on."""
+    cfg = copy.deepcopy(dict(load_scenario_config(HYBRID_BESS)))
+    cfg["statutory"] = {
+        **cfg["statutory"],
+        "success_fee_pct": 0.01,
+        "env_surcharge_pct": 0.0025,
+        "social_services_levy_pct": 0.02,
+    }
+    cfg["fx"] = {**(cfg.get("fx") or {}), "hedge_ratio": 0.5, "spread_bps": 50}
+    fee = [1.0e8 * (1.0 - i / 25.0) for i in range(20)]
+    cascade = build_monthly_cascade(
+        _with_monthly(cfg, {"cod_month": 4, "energy_shape": SHAPE}),
+        senior_fee_lkr_series=fee,
+    )
+    return cascade, fee
+
+
+@pytest.fixture(scope="module")
+def hybrid() -> tuple[mc.MonthlyCascade, List[float]]:
+    return _hybrid_with_every_line()
+
+
+def test_fixture_exercises_the_lines_the_lender_case_leaves_at_zero(hybrid) -> None:
+    cascade, _ = hybrid
+    year8 = cascade.annual_rows[7]
+    for line in (
+        "bess_revenue_lkr",
+        "generation_revenue_lkr",
+        "tax_lkr",
+        "senior_fee_lkr",
+        "success_fee_lkr",
+        "env_surcharge_lkr",
+        "social_levy_lkr",
+    ):
+        assert year8[line] > 0.0, line
+    # A hedge makes USD CFADS differ from LKR CFADS / spot.
+    assert year8["cfads_usd"] != year8["cfads_final_lkr"] / year8["fx_rate"]
+    _assert_reconciles(cascade)
+
+
+def test_hand_cascade_with_tax_bess_fee_levies_and_hedge(hybrid) -> None:
+    """Year 8, operating month 11 (February), rebuilt by hand."""
+    cascade, fee = hybrid
+    y, k = 7, 10
+    a = cascade.annual_rows[y]
+    row = cascade.rows[y * 12 + k]
+    assert row["calendar_month"] == 2
+    w_energy = SHAPE[1]
+    w_days = _DAYS_FROM_APRIL[k] / 365
+    tariff = a["generation_revenue_lkr"] / a["net_kwh"]
+    gen = a["net_kwh"] * w_energy * tariff
+    bess = a["bess_revenue_lkr"] * w_days  # a capacity charge accrues by days
+    revenue = gen + bess
+    levies = revenue * (0.01 + 0.0025 + 0.02)
+    assert math.isclose(
+        a["total_statutory_deductions_lkr"], a["revenue_lkr"] * 0.0325, rel_tol=1e-12
+    )
+    ebitda = revenue - levies - a["opex_lkr"] * w_days - fee[y] * w_days
+    posttax = ebitda - a["tax_lkr"] * w_days  # tax is spread by days, not by energy
+    assert a["posttax_cfads_lkr"] >= 0.0
+    cfads_lkr = posttax * (1.0 - a["risk_haircut_pct"])
+    usd_per_lkr = a["cfads_usd"] / a["cfads_final_lkr"]  # the year's hedged rate
+    assert math.isclose(row["bess_revenue_lkr"], bess, rel_tol=1e-12)
+    assert math.isclose(row["senior_fee_lkr"], fee[y] * w_days, rel_tol=1e-12)
+    assert math.isclose(row["tax_lkr"], a["tax_lkr"] * w_days, rel_tol=1e-12)
+    assert math.isclose(row["total_statutory_deductions_lkr"], levies, rel_tol=1e-12)
+    assert math.isclose(row["cfads_final_lkr"], cfads_lkr, rel_tol=1e-9)
+    assert math.isclose(row["cfads_usd"], cfads_lkr * usd_per_lkr, rel_tol=1e-9)
+
+
+def test_augmentation_capex_is_deducted_by_days() -> None:
+    cfg = copy.deepcopy(dict(load_scenario_config(BESS_ONLY)))
+    cascade = build_monthly_cascade(_with_monthly(cfg, {"cod_month": 4}))
+    y = 9  # the scenario's augmentation year
+    a = cascade.annual_rows[y]
+    assert a["bess_augmentation_capex_lkr"] > 0.0
+    for k in (0, 10):
+        row = cascade.rows[y * 12 + k]
+        w_days = _DAYS_FROM_APRIL[k] / 365
+        aug = a["bess_augmentation_capex_lkr"] * w_days
+        assert math.isclose(row["bess_augmentation_capex_lkr"], aug, rel_tol=1e-12)
+        factor = 1.0 - a["risk_haircut_pct"]
+        assert math.isclose(
+            row["cfads_final_lkr"],
+            row["posttax_cfads_lkr"] * factor - aug,
+            rel_tol=1e-9,
+        )
+
+
+# --- the reconciliation guard's tolerance and reach ----------------------------------
+
+
+def _skew(monkeypatch, *, year: int, line: str, amount) -> None:
+    """Add ``amount(annual)`` to ``line`` in month 1 of operating ``year``."""
+    real = mc._cascade_year
+
+    def skewed(annual, **kwargs):
+        months = real(annual, **kwargs)
+        if int(annual["year"]) == year:
+            months[0] = {**months[0], line: months[0][line] + amount(annual)}
+        return months
+
+    monkeypatch.setattr(mc, "_cascade_year", skewed)
+
+
+def test_guard_fires_at_a_tenth_of_a_rupee_per_billion(
+    lender_config, monkeypatch
+) -> None:
+    """A 1e-11 share of revenue is ten times the tolerance; a looser one would pass it."""
+    _skew(
+        monkeypatch,
+        year=1,
+        line="cfads_final_lkr",
+        amount=lambda a: 1e-11 * a["revenue_lkr"],
+    )
+    with pytest.raises(ValueError, match="cfads_final_lkr"):
+        build_monthly_cascade(_with_monthly(lender_config, {"cod_month": 7}))
+
+
+def test_guard_scales_the_usd_tolerance_by_fx(lender_config, monkeypatch) -> None:
+    """Ten times the USD tolerance, which an unscaled (LKR) tolerance would absorb."""
+    _skew(
+        monkeypatch,
+        year=1,
+        line="cfads_usd",
+        amount=lambda a: 10
+        * RECONCILIATION_REL_TOLERANCE
+        * a["revenue_lkr"]
+        / a["fx_rate"],
+    )
+    with pytest.raises(ValueError, match="cfads_usd"):
+        build_monthly_cascade(_with_monthly(lender_config, {"cod_month": 7}))
+
+
+def test_guard_checks_every_year_not_only_the_first(lender_config, monkeypatch) -> None:
+    _skew(
+        monkeypatch, year=17, line="tax_lkr", amount=lambda a: 1e-6 * a["revenue_lkr"]
+    )
+    with pytest.raises(ValueError, match="Operating year 17"):
+        build_monthly_cascade(_with_monthly(lender_config, {"cod_month": 7}))
+
+
+# --- where the rounding residual goes -------------------------------------------------
+
+
+def test_residual_closes_on_the_last_positive_weight_month() -> None:
+    """A value whose thirds do not add back exactly (see the allocator note in memory
+    of #1556): the residual must land on a positive-weight month, never a zero one."""
+    weights = [0.0, 0.0, 1 / 3, 0.0, 1 / 3, 0.0, 0.0, 0.0, 1 / 3, 0.0, 0.0, 0.0]
+    value = 7_321_208.521842453
+    parts = mc._split(value, weights)
+    assert [p for p, w in zip(parts, weights, strict=True) if w == 0.0] == [0.0] * 9
+    assert abs(math.fsum(parts) - value) <= math.ulp(value)
+
+
+def test_residual_absorbs_a_shape_that_sums_just_short_of_one(lender_config) -> None:
+    """A shape inside the 1e-9 sum tolerance still yields months that add back."""
+    shape = list(SHAPE)
+    shape[-1] -= 4e-10
+    cascade = build_monthly_cascade(
+        _with_monthly(lender_config, {"cod_month": 7, "energy_shape": shape})
+    )
+    for y, annual in enumerate(cascade.annual_rows):
+        total = math.fsum(r["net_kwh"] for r in cascade.rows[y * 12 : (y + 1) * 12])
+        assert abs(total - annual["net_kwh"]) <= 2 * math.ulp(annual["net_kwh"])
