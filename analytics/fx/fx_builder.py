@@ -484,6 +484,27 @@ def compute_fx_curve(
     )
 
 
+#: How far float rounding may carry the debt-concentration index past 1 (#1850). With all
+#: debt in one currency, ``100 * x / x`` can round to 100.00000000000001, so the squared
+#: share is a few ulps above 1. Within this tolerance the index is the bound itself; a value
+#: clearly outside [0, 1] is left for ``FXRiskProfile`` to refuse.
+_HHI_ROUNDING_TOL = 1e-9
+
+
+def _debt_concentration_hhi(lkr_pct: float, usd_pct: float, cny_pct: float) -> float:
+    """The Herfindahl index of the debt's currency shares, given in percent (#1850).
+
+    The sum of the squared shares. Float rounding can put a single-currency mix a few ulps
+    above 1, which ``FXRiskProfile`` refused, dropping the FX risk profile for that run.
+    A value within :data:`_HHI_ROUNDING_TOL` of 1 is returned as 1; anything further out is
+    returned unchanged, so a genuinely inconsistent mix is still refused downstream.
+    """
+    hhi = (lkr_pct / 100.0) ** 2 + (usd_pct / 100.0) ** 2 + (cny_pct / 100.0) ** 2
+    if 1.0 < hhi <= 1.0 + _HHI_ROUNDING_TOL:
+        return 1.0
+    return hhi
+
+
 def compute_fx_risk_profile(
     *,
     fx_block: FXStructuredBlock,
@@ -604,11 +625,7 @@ def compute_fx_risk_profile(
 
     # Herfindahl index of debt concentration
     # HHI = (debt_lkr_pct/100)^2 + (debt_usd_pct/100)^2 + (debt_cny_pct/100)^2
-    hhi = (
-        (debt_lkr_pct / 100.0) ** 2
-        + (debt_usd_pct / 100.0) ** 2
-        + (debt_cny_pct / 100.0) ** 2
-    )
+    hhi = _debt_concentration_hhi(debt_lkr_pct, debt_usd_pct, debt_cny_pct)
 
     fx_risk = FXRiskProfile(
         var_95_usd_million=var_95_usd_million,
