@@ -17,8 +17,9 @@
   The canonical lender case does not move. The PR has the full table.
 - Two committed summaries are regenerated because they pin a changed scenario:
   `docs/blue_whale/wind_bess_options_summary.json` and
-  `docs/blue_whale/solar_bess_project_sizing_summary.json`. No finding in them changes. The
-  KPI fixtures for the capex variants, the 5 US-cent case and Mullikulam are re-baselined.
+  `docs/blue_whale/solar_bess_project_sizing_summary.json`. Neither recommendation changes.
+  Two solar + BESS alternatives, the best P50 project IRR and equity IRR, move to larger units.
+  The KPI fixtures for the capex variants, the 5 US-cent case and Mullikulam are re-baselined.
 - The refinanced-tranche lock-up test (#1779) changes case. The EIA-prudent variant's year 17
   now covers 1.18x, above a 1.10x threshold, so the threshold-not-floor control now uses the
   Sinohydro lean variant at 0.90x.

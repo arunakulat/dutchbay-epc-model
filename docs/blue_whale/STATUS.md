@@ -1480,8 +1480,12 @@ scenario follows it, so all three Blue Whale scenarios now set
 
 Before this change: wind 12.31% / 10.42% / USD 1,319,305 (v0.7), solar + BESS USD -4,479,214,
 hybrid 10.61% / 8.20% / USD -205,833. The battery options summary
-(`wind_bess_options_summary.json`) and the solar + BESS sizing summary were regenerated. Every
-other input is still a placeholder, so these are not results.
+(`wind_bess_options_summary.json`) and the solar + BESS sizing summary were regenerated. The
+sizing's recommendation does not move: 107 tables, 3.5 MW AC and 0.1 MW / 0.4 MWh under both
+readings. Two alternatives do: the best P50 project IRR moves from 187 tables, 5.5 MW AC and
+3 MW / 12 MWh to 186 tables, 6.0 MW AC and 3.5 MW / 14 MWh, and the best P50 equity IRR from 188
+tables, 6.0 MW AC and 2 MW / 8 MWh to 187 tables, 6.0 MW AC and 3 MW / 12 MWh. Every other input
+is still a placeholder, so these are not results.
 
 ## Earlier run (the battery floor, 2026-11-14)
 
