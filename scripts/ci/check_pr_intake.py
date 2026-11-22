@@ -62,6 +62,40 @@ def _specific(text: str) -> bool:
     )
 
 
+def _sweep_omissions(
+    sweep_text: str, open_prs: list[dict[str, Any]], pr_number: int, created_at: str
+) -> list[int]:
+    """Open PRs the sweep must name but does not.
+
+    INTAKE-01 asks for the sweep "before opening a PR", so it covers the PRs that were
+    open when this one was opened. A PR opened later is not required here: its own
+    sweep must name this one, so every pair is still recorded once. Without this, each
+    new PR failed every older PR's intake on its next run. A PR whose creation time is
+    missing or unreadable is still required (fail closed), as is every open PR when this
+    PR's own creation time cannot be read.
+    """
+    try:
+        opened = _timestamp(created_at)
+    except (TypeError, ValueError):
+        opened = None
+
+    def _required(pr: dict[str, Any]) -> bool:
+        if opened is None or not pr.get("created_at"):
+            return True
+        try:
+            return _timestamp(str(pr["created_at"])) <= opened
+        except (TypeError, ValueError):
+            return True
+
+    return sorted(
+        int(pr["number"])
+        for pr in open_prs
+        if int(pr["number"]) != pr_number
+        and _required(pr)
+        and not _references(sweep_text, int(pr["number"]))
+    )
+
+
 def evaluate(
     body: str,
     author: str,
@@ -183,12 +217,7 @@ def evaluate(
     sweep = _SWEEP.search(body)
     if sweep is None or sweep.group(1).strip().lower() in {"", "...", "tbd", "todo"}:
         return 1, "INTAKE-01: describe the open-PR sweep and overlap dispositions."
-    missing = sorted(
-        int(pr["number"])
-        for pr in open_prs
-        if int(pr["number"]) != pr_number
-        and not _references(sweep.group(1), int(pr["number"]))
-    )
+    missing = _sweep_omissions(sweep.group(1), open_prs, pr_number, created_at)
     if missing:
         return 1, "INTAKE-01: open-PR sweep omits " + ", ".join(
             f"#{n}" for n in missing
@@ -384,11 +413,8 @@ def main() -> int:
                         raise ValueError("open PR list exceeds bounded ten-page sweep")
                     sweep = _SWEEP.search(body)
                     assert sweep is not None
-                    missing = sorted(
-                        int(pr["number"])
-                        for pr in open_prs
-                        if int(pr["number"]) != pr_number
-                        and not _references(sweep.group(1), int(pr["number"]))
+                    missing = _sweep_omissions(
+                        sweep.group(1), open_prs, pr_number, created_at
                     )
                     if missing:
                         code = 1
