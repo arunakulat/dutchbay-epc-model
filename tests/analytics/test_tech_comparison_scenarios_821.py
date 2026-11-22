@@ -67,14 +67,16 @@ def test_solar_only_runs_canonically_with_finite_distinct_kpis() -> None:
     solar = run_v14_pipeline(config=str(SOLAR_SCENARIO), validation_mode="strict")
     wind = run_v14_pipeline(config=str(WIND_SCENARIO), validation_mode="strict")
     s_irr = solar["kpis"]["project_irr"]
-    assert s_irr == pytest.approx(-0.047345111849281016)
+    # #1874 (revenue SSCL dropped; IPP supply to CEB is exempt): -4.73% -> -4.45%.
+    assert s_irr == pytest.approx(-0.04452870075898073)
     # A real, distinct second technology — the lower-CF flat-LKR PV is materially worse than wind,
     # not a copy of it (a spurious pass would be s_irr == wind_irr).
     assert s_irr != wind["kpis"]["project_irr"]
     assert s_irr < wind["kpis"]["project_irr"]
     # The solar column carries its OWN dual-DSCR solved gearing (distinct from wind's 0.41).
     solved = solar["debt_result"]["dual_dscr"]["solved_gearing"]
-    assert solved == pytest.approx(0.1775)
+    # #1874 (revenue SSCL dropped): 0.1775 -> 0.185, the higher CFADS carrying more debt.
+    assert solved == pytest.approx(0.185)
     assert solved != _CANON_GEARING
 
 
@@ -118,8 +120,9 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     # USD 25M battery, so the BESS now LOWERS project IRR below the plain hybrid (0.164% against
     # 0.307%). Before v15.11.0 it raised it (1.774%). The direction is asserted, not assumed.
     # #1577 (14 turbines): -0.018% against the plain hybrid's 0.111%.
+    # #1874 (revenue SSCL dropped): 0.270% against the plain hybrid's 0.404%.
     b_irr = out["kpis"]["project_irr"]
-    assert b_irr == pytest.approx(-0.0001794208130251876)
+    assert b_irr == pytest.approx(0.00270048922024839)
     assert b_irr < hybrid["kpis"]["project_irr"]
 
 
