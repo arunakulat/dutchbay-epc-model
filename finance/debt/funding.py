@@ -34,8 +34,11 @@ def _resolve_dsra_target_months(
     keeps 6 months as a labelled assumption until a term sheet sets it; the figure now comes
     from the scenario YAML, and ``dsra_target_basis`` still labels it an assumption.
 
+    The months may not be negative (#1862).
+
     Raises:
-        ValueError: If no key declares the months, or the winning key is not a number.
+        ValueError: If no key declares the months, or the winning key is not a number or
+            is negative.
     """
     for mapping, key, path in (
         (dsra_cfg, "target_months", f"{prefix}dsra.target_months"),
@@ -43,17 +46,32 @@ def _resolve_dsra_target_months(
         (reserves, "dsra_months", f"{prefix}reserves.dsra_months"),
     ):
         if key in mapping:
-            return _required_number(mapping[key], path), path
+            return _required_number(mapping[key], path, minimum=0.0), path
     # Name the path scenarios author: nested under ``reserves`` in the canonical
     # ``Financing_Terms`` schema, flat in the simple ``financing``/``debt`` schemas.
     leaf = "reserves.dsra_months" if prefix == "Financing_Terms." else "dsra_months"
     path = f"{prefix}{leaf}"
-    return _required_number(None, path), path
+    return _required_number(None, path, minimum=0.0), path
 
 
 def _mapping_at(section: Mapping[str, Any], key: str) -> Mapping[str, Any]:
     value = section.get(key)
     return value if isinstance(value, Mapping) else {}
+
+
+def _financing_section(config: Mapping[str, Any]) -> Tuple[Mapping[str, Any], str]:
+    """The section the debt layer reads its terms from, and its YAML path prefix.
+
+    ``Financing_Terms``, else ``financing``, else ``debt``, else the top level, as
+    :func:`finance.debt.terms._financing_key_prefix` orders them. The DSRA months and
+    ``dsra.fund_at_close`` are both read here, so they cannot come from different
+    sections (#1862).
+    """
+    prefix = _financing_key_prefix(config)
+    section: Mapping[str, Any] = (
+        (_section_case_insensitive(config, prefix[:-1]) or {}) if prefix else config
+    )
+    return section, prefix
 
 
 def resolve_dsra_target_months(config: Mapping[str, Any]) -> Tuple[float, str]:
@@ -66,10 +84,7 @@ def resolve_dsra_target_months(config: Mapping[str, Any]) -> Tuple[float, str]:
     unchanged.
     Strict pre-flight calls this so it refuses exactly what the debt engine refuses.
     """
-    prefix = _financing_key_prefix(config)
-    section: Mapping[str, Any] = (
-        (_section_case_insensitive(config, prefix[:-1]) or {}) if prefix else config
-    )
+    section, prefix = _financing_section(config)
     return _resolve_dsra_target_months(
         _mapping_at(section, "dsra"),
         section,
@@ -92,9 +107,11 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
     CAPEX equity portion + the initial DSRA; so uses (CAPEX + IDC + DSRA) == sources.
     """
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
-    _dsra = fin.get("dsra")
-    dsra_cfg: Mapping[str, Any] = _dsra if isinstance(_dsra, Mapping) else {}
-    fund_at_close = _truthy_flag(dsra_cfg.get("fund_at_close"))
+    # ``dsra.fund_at_close`` is read from the same section as the DSRA months, so on the
+    # simple ``financing:`` or ``debt:`` schema it is honoured as the months are, not
+    # ignored without a message (#1862, findings A-1 and DOM-3 on #1860).
+    dsra_section, _ = _financing_section(config)
+    fund_at_close = _truthy_flag(_mapping_at(dsra_section, "dsra").get("fund_at_close"))
     # DSRA months precedence: dsra.target_months -> Financing_Terms.dsra_months ->
     # Financing_Terms.reserves.dsra_months, with no code default (#1429). The canonical
     # nests it under `reserves` (the path scenarios actually author).
