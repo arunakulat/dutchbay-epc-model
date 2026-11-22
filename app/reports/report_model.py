@@ -1089,6 +1089,10 @@ class ReportContext(BaseModel):
     #: lender report fills it, so a reader can tell "no sensitivity" from "sensitivity not
     #: run". Empty (the default) omits the list, so every other report stays byte-identical.
     sections_not_run: List[SectionNotRun] = Field(default_factory=list)
+    #: Why the tornado section has no rows to print (#1818), for example "not computed: ...
+    #: (outcome: degraded)". When set, the report prints the section heading with this line
+    #: instead of leaving the section out silently. None (the default) changes nothing.
+    tornado_not_computed: Optional[str] = None
 
 
 def _build_kpi_rows(
