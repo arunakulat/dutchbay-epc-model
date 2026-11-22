@@ -31,7 +31,9 @@ from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.report_model import (
+    AepResourceSensitivityBlock,
     CapitalStructureBlock,
+    LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
     build_report_context,
@@ -359,11 +361,14 @@ def build_report_context_from_case(
     *,
     capital_risk: Optional[CapitalRiskReport] = None,
     sections_not_run: Sequence[SectionNotRun] = (),
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None,
     capital_structure: Optional[CapitalStructureBlock] = None,
+    lender_sensitivities: Optional[LenderSensitivityBlock] = None,
 ) -> ReportContext:
     """Assemble a render-ready context from already-computed typed inputs.
 
-    ``capital_risk``, ``sections_not_run`` and ``capital_structure`` (#1825 slice i) are
+    ``capital_risk``, ``sections_not_run``, ``aep_resource_sensitivity`` (#1615 step B),
+    ``capital_structure`` (#1825 slice i) and ``lender_sensitivities`` (#1825 slice ii) are
     supplied only by the batch CLI's lender report (#1752); the API route passes none.
 
     Every lender report built through this seam carries the F-5 non-reliance notice on its
@@ -389,6 +394,10 @@ def build_report_context_from_case(
     }
     if sections_not_run:
         update["sections_not_run"] = list(sections_not_run)
+    if aep_resource_sensitivity is not None:
+        update["aep_resource_sensitivity"] = aep_resource_sensitivity
     if capital_structure is not None:
         update["capital_structure"] = capital_structure
+    if lender_sensitivities is not None:
+        update["lender_sensitivities"] = lender_sensitivities
     return context.model_copy(update=update)

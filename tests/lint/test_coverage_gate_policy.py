@@ -83,7 +83,7 @@ def test_total_shards_is_defined_once_at_workflow_level() -> None:
     """The shard count is shared by the `test` and `coverage` jobs — one definition only."""
     workflow = _workflow()
 
-    assert workflow["env"]["TOTAL_SHARDS"] == 6
+    assert workflow["env"]["TOTAL_SHARDS"] == 8
 
     # A job-level redefinition would shadow the workflow-level value for that job only,
     # which is precisely the drift this pins against.

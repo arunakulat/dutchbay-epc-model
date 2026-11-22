@@ -185,7 +185,7 @@ DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
 # PyYAML parses a bare `on:` key as the boolean True (YAML 1.1 truthiness).
 ON_KEYS = (True, "on")
-TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 6}
+TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 8}
 # The one runner both committed gate jobs use. Exact equality, so a label list, a runner
 # group or a self-hosted label fails closed rather than being judged harmless.
 GATE_RUNNER = "ubuntu-latest"
