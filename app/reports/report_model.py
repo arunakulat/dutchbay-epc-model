@@ -981,6 +981,68 @@ class AepResourceSensitivityBlock(BaseModel):
     reconciliation: List[str] = Field(default_factory=list)
 
 
+class CapitalStructureCandidate(BaseModel):
+    """One candidate of a capital-structure search (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    objective: Optional[float] = None
+    constraints: Dict[str, float] = Field(default_factory=dict)
+    feasible: bool
+    binding: List[str] = Field(default_factory=list)
+    #: The candidate the search names: the best feasible one.
+    best: bool = False
+    #: Declared covenants the committed case fails (not screened on) that this candidate
+    #: nevertheless clears.
+    also_clears: List[str] = Field(default_factory=list)
+
+
+class CapitalStructureSearch(BaseModel):
+    """One capital-structure search around the committed case (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    searched: str
+    current: Optional[str] = None
+    best_label: Optional[str] = None
+    best_objective: Optional[float] = None
+    candidates: List[CapitalStructureCandidate]
+    n_evaluated: int
+    n_feasible: int
+    #: The infeasibility register (#741) when no candidate clears the covenants.
+    infeasibility: List[str] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
+class CapitalStructureBlock(BaseModel):
+    """Capital-structure screening: debt mix, contingency and gearing (#1825 slice i).
+
+    A screening of alternatives around the committed case, scored through the canonical
+    evaluation gateway; it never replaces the committed structure or moves a KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objective_key: str
+    committed_objective: Optional[float] = None
+    committed_dscr: Optional[float] = None
+    #: The committed case's headline minimum DSCR (min_dscr, #790).
+    committed_headline_dscr: Optional[float] = None
+    covenants: List[str]
+    #: The KPI keys of the held covenants, in column order for the candidate tables.
+    covenant_keys: List[str] = Field(default_factory=list)
+    #: KPIs shown beside the held covenants for every candidate, never screened on.
+    shown_keys: List[str] = Field(default_factory=list)
+    #: Declared covenants the committed case itself fails, shown and not screened on.
+    covenants_not_screened: List[str] = Field(default_factory=list)
+    #: Set when the screened DSCR is held by construction on every candidate.
+    dscr_held_note: Optional[str] = None
+    searches: List[CapitalStructureSearch]
+    searches_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1137,6 +1199,10 @@ class ReportContext(BaseModel):
     #: Carlo, a labelled resource sensitivity beside the committed basis. The command-line
     #: lender report fills it; None (the default) omits the section.
     aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None
+    #: Capital-structure screening (#1825 slice i): the debt-mix, contingency and gearing
+    #: searches. The command-line lender report fills it when switched on; None (the
+    #: default) omits the section.
+    capital_structure: Optional[CapitalStructureBlock] = None
 
 
 def _build_kpi_rows(
