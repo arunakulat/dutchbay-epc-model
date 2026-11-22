@@ -889,6 +889,24 @@ def cli(cfg: DictConfig) -> None:
                 - capital_risk_report.path: Target .html path. Default
                   '<export_dir>/capital_risk_report.html'. On emission the written
                   path is echoed back under result['capital_risk_report_path'].
+            Optional fields (#1752 — the combined lender report, HTML and a DBPL-01
+            PDF; follows emit_all, so ON by default for every run with figures; KPIs
+            are byte-identical either way):
+                - emit_lender_report: If true, after a successful run render the same
+                  combined lender report POST /v1/cases/report.pdf builds, through
+                  app.reports.report_orchestration (production sensitivity profile:
+                  tornado, Morris, PAWN) plus the capital-risk section, via
+                  app.reports.lender_report_emit. The Monte Carlo is the capital-risk
+                  emitter's own when it ran in this run, otherwise run here under the
+                  same lender guards and capital_risk_report settings. Every section
+                  left out is listed on the report with its reason. The PDF goes
+                  through the DBPL print core; under emit_all a missing [report]
+                  extra leaves the HTML and records why there is no PDF, and switched
+                  on by name it fails loud. Default null (follows emit_all).
+                - lender_report.path: Target .html path. Default
+                  '<export_dir>/lender_report.html'. The PDF is written beside it
+                  with a .pdf suffix. On emission the record is echoed back under
+                  result['lender_report'].
             Optional fields (#739 slice-2 — two-factor interaction-grid report
             emission; follows emit_all, so ON by default since #1756 for a scenario
             with an interaction_grid block; KPIs are byte-identical either way):
@@ -1069,6 +1087,11 @@ def cli(cfg: DictConfig) -> None:
     # ------------------------------------------------------------------
     emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
     capital_risk_report_cfg = cfg.get("capital_risk_report", None) or {}
+
+    # #1752: the combined lender report (follows emit_all). It reuses the capital-risk Monte
+    # Carlo of this run when that emitter ran, and lists every section it left out.
+    emit_lender_report = emit_plan["emit_lender_report"].run
+    lender_report_cfg = cfg.get("lender_report", None) or {}
 
     # #739 slice-2: optional two-factor interaction-grid report emission (follows emit_all); the
     # drivers/metric are config-required (interaction_grid block), no default pair is imposed.
@@ -1381,6 +1404,7 @@ def cli(cfg: DictConfig) -> None:
                 }
             emit_executive_workbook = emit_plan["emit_executive_workbook"].run
             emit_capital_risk_report = emit_plan["emit_capital_risk_report"].run
+            emit_lender_report = emit_plan["emit_lender_report"].run
             emit_interaction_grid = emit_plan["emit_interaction_grid"].run
             emit_tech_comparison = emit_plan["emit_tech_comparison"].run
             emit_grid_screen = emit_plan["emit_grid_screen"].run
@@ -1444,6 +1468,9 @@ def cli(cfg: DictConfig) -> None:
             "emit_capital_risk_report": _read_optional(
                 capital_risk_report_cfg, "path", None, "capital_risk_report"
             ),
+            "emit_lender_report": _read_optional(
+                lender_report_cfg, "path", None, "lender_report"
+            ),
             "emit_interaction_grid": _read_optional(
                 interaction_grid_cfg, "path", None, "interaction_grid_report"
             ),
@@ -1456,6 +1483,7 @@ def cli(cfg: DictConfig) -> None:
         }
         config_block_of = {
             "emit_capital_risk_report": "capital_risk_report",
+            "emit_lender_report": "lender_report",
             "emit_interaction_grid": "interaction_grid_report",
             "emit_tech_comparison": "tech_comparison",
             "emit_grid_screen": "grid_screen_report",
@@ -1468,6 +1496,13 @@ def cli(cfg: DictConfig) -> None:
             "emit_capital_risk_report": [
                 export_dir_scoped / "capital_risk_report.html",
                 export_dir_scoped / "npv_distribution_{}.png".format(npv_metric),
+            ],
+            "emit_lender_report": [
+                export_dir_scoped / "lender_report.html",
+                export_dir_scoped / "lender_report.pdf",
+                export_dir_scoped
+                / "lender_report_files"
+                / "npv_distribution_{}.png".format(npv_metric),
             ],
             "emit_interaction_grid": [
                 export_dir_scoped / "interaction_grid_report.html"
@@ -1590,6 +1625,9 @@ def cli(cfg: DictConfig) -> None:
         # section. Fails loud on error, since the caller explicitly opted in
         # (CESSPIT). Imported lazily so the report stack (jinja/matplotlib) is not
         # pulled onto the finance CLI's import path unless this step runs.
+        # #1752: the capital-risk emitter hands its report here, so the lender report below
+        # reuses this run's Monte Carlo rather than running a second one.
+        shared_capital_risk: list[Any] = []
         if emit_capital_risk_report and isinstance(result, dict):
 
             def _emit_capital_risk_report() -> None:
@@ -1618,11 +1656,85 @@ def cli(cfg: DictConfig) -> None:
                     npv_metric=str(
                         capital_risk_report_cfg.get("npv_metric", "equity_npv")
                     ),
+                    on_report=shared_capital_risk.append,
                 )
                 result["capital_risk_report_path"] = str(cr_written)
                 logger.info("Wrote capital-risk report to %s", cr_written)
 
             _run_emitter("emit_capital_risk_report", _emit_capital_risk_report)
+
+        # #1752: the combined lender report, HTML and a DBPL-01 PDF. The same sections as
+        # POST /v1/cases/report.pdf, through app.reports.report_orchestration, plus the
+        # capital-risk section. The Monte Carlo is the one the capital-risk emitter ran above
+        # when it ran; if that emitter failed, the section is listed as not run rather than
+        # run a second time. Imported lazily so the report stack stays off the finance CLI's
+        # import path unless this step runs.
+        if emit_lender_report and isinstance(result, dict):
+
+            def _emit_lender_report() -> None:
+                from app.reports.lender_report_emit import (
+                    LENDER_REPORT_HTML_NAME,
+                    capital_structure_settings_from_config,
+                    emit_lender_report_from_pipeline,
+                    lender_sensitivity_settings_from_config,
+                )
+
+                lr_path_raw = lender_report_cfg.get("path", None)
+                lr_out = (
+                    Path(str(lr_path_raw))
+                    if lr_path_raw
+                    else export_dir_scoped / LENDER_REPORT_HTML_NAME
+                )
+                cr_entry = (result.get("emitters") or {}).get(
+                    "emit_capital_risk_report"
+                )
+                cr_not_run = None
+                if not shared_capital_risk and isinstance(cr_entry, dict):
+                    # Never re-attempt a Monte Carlo this run already declined or failed:
+                    # list the capital-risk emitter's own reason instead.
+                    if cr_entry.get("status") == STATUS_FAILED:
+                        cr_not_run = (
+                            "not run: the capital-risk Monte Carlo failed in this run ("
+                            f"{cr_entry.get('reason')})"
+                        )
+                    elif cr_entry.get("status") == STATUS_NOT_RUN:
+                        cr_not_run = f"not run: {cr_entry.get('reason')}"
+                cr_seed_raw = capital_risk_report_cfg.get("seed", None)
+                cr_trials_raw = capital_risk_report_cfg.get("n_trials", None)
+                written = emit_lender_report_from_pipeline(
+                    result,
+                    effective_config,
+                    lr_out,
+                    capital_risk=(
+                        shared_capital_risk[0] if shared_capital_risk else None
+                    ),
+                    capital_risk_not_run=cr_not_run,
+                    n_trials=int(cr_trials_raw) if cr_trials_raw is not None else None,
+                    seed=int(cr_seed_raw) if cr_seed_raw is not None else None,
+                    npv_metric=str(
+                        capital_risk_report_cfg.get("npv_metric", "equity_npv")
+                    ),
+                    require_pdf=emit_plan["emit_lender_report"].source != "emit_all",
+                    capital_structure=capital_structure_settings_from_config(
+                        lender_report_cfg.get("capital_structure", None)
+                    ),
+                    sensitivities=lender_sensitivity_settings_from_config(
+                        lender_report_cfg.get("sensitivities", None)
+                    ),
+                )
+                result["lender_report"] = written.as_dict()
+                logger.info("Wrote lender report to %s", written.html_path)
+                if written.pdf_path is not None:
+                    logger.info("Wrote lender report PDF to %s", written.pdf_path)
+                else:
+                    logger.warning(
+                        "Lender report PDF not written: %s", written.pdf_not_written
+                    )
+                    lr_entry = (result.get("emitters") or {}).get("emit_lender_report")
+                    if isinstance(lr_entry, dict):
+                        lr_entry["pdf_not_written"] = written.pdf_not_written
+
+            _run_emitter("emit_lender_report", _emit_lender_report)
 
         # #739 slice-2: optional two-factor interaction-grid report emission. OFF unless
         # emit_interaction_grid=true (committed scenarios leave it off → byte-identical). Builds

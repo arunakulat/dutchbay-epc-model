@@ -15,7 +15,15 @@ precision. When the canon legitimately re-baselines, update the number here and 
 one-line "Re-baselined by ..." note in the oracle docstring — nothing else.
 
 Provenance of the current vector (see the oracle docstring for the full history):
-#1577 (2026-11-08) drops DutchBay to 14 turbines, because the Blue Whale turbine stands on
+#1845 (2026-11-22) sizes the lender case to the ANNUAL covenant DSCR
+(``Financing_Terms.sizing_dscr_basis: annual_covenant``; owner decision and KPI sign-off
+2026-11-22): the gearing solve also binds ``dscr_by_year``, so the year-1 fold holds the
+1.30 target. Facility USD 58.87M -> 55.29M; min_dscr 1.2214 -> 1.30, LLCR 1.2910 -> 1.3795,
+PLCR 1.3344 -> 1.4249, equity IRR -23.37% -> -7.76%, project IRR -0.251% -> -0.138%,
+project NPV -88.03M -> -87.98M, total CFADS 155.46M -> 157.10M, prudential NPV -92.39M ->
+-92.33M, prudential rate 11.213% -> 11.322%. min_dscr_period reads 1.30 to the last bit
+(1.2999999999999998).
+Prior: #1577 (2026-11-08) drops DutchBay to 14 turbines, because the Blue Whale turbine stands on
 T2 (owner decision): 148.9 MW, wake 7.32%, bankable P50 433.2 GWh, capex USD 151.41M, opex
 USD 2.85M/yr. Project IRR -0.060% -> -0.251%, equity IRR -23.01% -> -23.37%, project NPV
 -91.40M -> -88.03M (a smaller loss on a smaller plant), min_dscr 1.2196 -> 1.2214, LLCR
@@ -54,9 +62,9 @@ from __future__ import annotations
 from typing import Final
 
 # Base-case (undiscounted / as-modelled) economics.
-LENDER_PROJECT_IRR: Final[float] = -0.0025127491710946323
-LENDER_EQUITY_IRR: Final[float] = -0.23365411952833248
-LENDER_PROJECT_NPV: Final[float] = -88034789.6671125
+LENDER_PROJECT_IRR: Final[float] = -0.0013777935011814939
+LENDER_EQUITY_IRR: Final[float] = -0.07758702842754783
+LENDER_PROJECT_NPV: Final[float] = -87976535.91571534
 
 # Debt-service coverage. ``min_dscr`` is the #790 conservative fold-corrected covenant
 # minimum (the annual number covenants are tested on); ``min_dscr_period`` is the
@@ -82,8 +90,13 @@ LENDER_PROJECT_NPV: Final[float] = -88034789.6671125
 # ~1.288 for the same reason -- and it is tracked as its own work item (#1353,
 # issuecomment-6433557550). Owner decision 2026-10-27: correct the CFADS basis and report
 # the year-1 figure honestly rather than hold 1.30 by constraining the solver.
-LENDER_MIN_DSCR: Final[float] = 1.221395537939147
-LENDER_MIN_DSCR_PERIOD: Final[float] = 1.3
+#
+# #1845 (owner decision 2026-11-22) closes that hole for the lender case by opting it into
+# ``Financing_Terms.sizing_dscr_basis: annual_covenant``: the solve now also binds the
+# ``dscr_by_year`` fold, so the covenant minimum is the 1.30 target. Scenarios without the
+# key keep the per-period basis and the account above.
+LENDER_MIN_DSCR: Final[float] = 1.2999999999999998
+LENDER_MIN_DSCR_PERIOD: Final[float] = 1.2999999999999998
 
 # Loan- and project-life coverage ratios, on the levered-tax coverage CFADS net of the
 # senior credit-support fee actually charged. Pinned at full precision by #1526 because
@@ -92,8 +105,8 @@ LENDER_MIN_DSCR_PERIOD: Final[float] = 1.3
 # (#1510 domain DOM-1, assurance A-2). #1505 moves both: LLCR 1.2875 -> 1.2905, PLCR
 # 1.3283 -> 1.3342, because their windows reach the years the deducted balloon interest
 # is paid.
-LENDER_LLCR: Final[float] = 1.290969180499094
-LENDER_PLCR: Final[float] = 1.3343762881897394
+LENDER_LLCR: Final[float] = 1.379512325009476
+LENDER_PLCR: Final[float] = 1.4249053105005822
 
 # Total cash available for debt service over the modelled life, on the PROJECT basis
 # (unlevered tax, after the senior credit-support fee) -- the same series project NPV and
@@ -105,9 +118,9 @@ LENDER_PLCR: Final[float] = 1.3343762881897394
 # 16.44M of coverage CFADS. That is the figure audit P2-F4-01 is about; the register's
 # USD 17.32M was measured at its own commit. Emitting the coverage total as a KPI of its
 # own would change the KPI contract and is deliberately not done here.
-LENDER_TOTAL_CFADS_USD: Final[float] = 155463499.1353382
+LENDER_TOTAL_CFADS_USD: Final[float] = 157100149.8800872
 
 # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
 # WACC + spread), strictly below the base NPV.
-LENDER_PROJECT_NPV_PRUDENTIAL: Final[float] = -92388433.20421007
-LENDER_PRUDENTIAL_RATE_USED: Final[float] = 0.11213405728850369
+LENDER_PROJECT_NPV_PRUDENTIAL: Final[float] = -92333022.03448309
+LENDER_PRUDENTIAL_RATE_USED: Final[float] = 0.11322049975068929

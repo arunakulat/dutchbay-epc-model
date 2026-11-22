@@ -51,6 +51,10 @@ logger = logging.getLogger(__name__)
 # matters, so genuine sub-covenant years still lock.
 _DSCR_LOCKUP_EPS = 1e-9
 
+# #1736: the pipeline iterates the cash sweep and this waterfall's cash to within this
+# many USD per period (``analytics.pipeline_v14_enhanced._CFADS_FIXED_POINT_TOL_USD``).
+_SWEEP_CASH_TOL_USD = 0.01
+
 
 class EquityDistributionConfig(BaseModel):
     """Configuration for equity distribution calculations.
@@ -501,6 +505,26 @@ def _extract_dscr(
     return None
 
 
+def _refinance_coverage_for_row(
+    index: int,
+    row_period_map: Sequence[Any],
+    coverage_by_period: Mapping[int, float],
+) -> Optional[float]:
+    """The refinanced tranche's coverage in the debt period this annual row maps to (#1779).
+
+    ``None`` when the row maps to no debt period or the tranche is not serviced in it.
+    """
+    if not coverage_by_period or index >= len(row_period_map):
+        return None
+    entry = row_period_map[index]
+    if not isinstance(entry, Mapping):
+        return None
+    period = _as_float(entry.get("debt_period"))
+    if period is None:
+        return None
+    return coverage_by_period.get(int(period))
+
+
 def build_equity_distribution_schedule(
     *,
     annual_rows: Sequence[Mapping[str, Any]],
@@ -539,17 +563,42 @@ def build_equity_distribution_schedule(
     locked_cash_balance = 0.0
     retained_balance = 0.0
     # Senior-fee arrears (#1539, owner ruling 2026-11-15). On a cash sweep the debt engine
-    # defers the part of the senior fee its sizing-basis cash cannot pay and publishes the
-    # balance carried at the end of each period (row `senior_fee_deferred_usd`). This
-    # waterfall holds its own cash, so it settles that balance, as a senior claim, before
-    # any cash reaches equity: no distribution, lockup trap or retention while arrears are
-    # owed and cash is held. `engine_arrears` is the engine's carried balance (carried
+    # defers the part of the senior fee its cash cannot pay and publishes the balance
+    # carried at the end of each period (row `senior_fee_deferred_usd`). In the pipeline
+    # that cash is this waterfall's own (#1736, `waterfall_sweep_cash`), so the engine
+    # defers only what this waterfall cannot pay either, and nothing below is settled.
+    # The settlement stays for a caller whose debt_result was swept on another basis
+    # (the sizing-basis CFADS, by default): it pays that balance, as a senior claim,
+    # before any cash reaches equity: no distribution, lockup trap or retention while
+    # arrears are owed and cash is held. `engine_arrears` is the engine's carried balance (carried
     # forward on rows the balloon path does not govern); `arrears_settled` is what this
     # waterfall has paid against it so far. The engine still pays arrears first from its
     # own later cash; if it pays arrears this waterfall already settled, the difference is
     # handed back to equity cash, so no fee is ever paid twice.
     engine_arrears = 0.0
     arrears_settled = 0.0
+    # #1736: on a cash sweep the engine's post-maturity sweep reads the cash this
+    # waterfall holds (see `waterfall_sweep_cash`), the cash the SPV holds for the
+    # sponsor included. So the waterfall funds that sweep from the SPV-held cash before
+    # it asks the sponsor for any. Other treatments keep their cash call.
+    is_cash_sweep = debt_result.get("balloon_treatment") == "cash_sweep"
+    funds_sweep_from_spv_cash = debt_result.get("balloon_treatment") in (
+        "cash_sweep",
+        # #1779: a refinanced tranche's service is met from cash the SPV holds for the
+        # sponsor (cash a lock-up trapped, then retentions) before any new sponsor call,
+        # so cash trapped while the tranche's coverage was below the covenant meets it.
+        "refinance",
+    )
+    # #1779: the refinanced balloon tranche's published coverage per debt period. Balloon
+    # service stays outside the scheduled DSCR (#1396), so the lock-up tests it separately:
+    # a year whose tranche coverage is below the lock-up threshold traps its distribution.
+    refinance_coverage_by_period: Dict[int, float] = {}
+    for item in (debt_result.get("refinance") or {}).get("coverage_by_period") or ():
+        if isinstance(item, Mapping):
+            period_value = _as_float(item.get("period"))
+            coverage_value = _as_float(item.get("coverage"))
+            if period_value is not None and coverage_value is not None:
+                refinance_coverage_by_period[int(period_value)] = coverage_value
 
     for index, row in enumerate(annual_rows):
         year_value = row.get("year", index + 1)
@@ -594,6 +643,12 @@ def build_equity_distribution_schedule(
         # (negative in a shortfall year); every step of the cure is a row field. A year that
         # covers its service is untouched, so no committed scenario with DSCR>=1 moves.
         cf_after_debt = cf_pre_debt - debt_service - wht_cost
+        # #1736: every dollar the SPV has this year for a claim senior to equity after
+        # scheduled service: the year's cash and the cash it holds (the reserve, cash a
+        # lockup trapped, and retentions), at the start of the year.
+        cash_available_for_balloon = (
+            cf_after_debt + reserve_balance + locked_cash_balance + retained_balance
+        )
         shortfall = max(0.0, -cf_after_debt)
         dsra_draw = min(shortfall, reserve_balance)
         reserve_balance -= dsra_draw
@@ -647,6 +702,21 @@ def build_equity_distribution_schedule(
         # in which case the shortfall is a sponsor cash call (negative equity CF).
         balloon_resolution = _as_float(row.get("balloon_resolution"), 0.0) or 0.0
         cash_for_equity = cash_after_reserve - balloon_resolution
+        if cash_for_equity < 0.0 and funds_sweep_from_spv_cash:
+            # #1736: the sweep counted the SPV-held cash, so it pays the sweep before
+            # any sponsor cash call: lockup-trapped cash first, then retentions. #1779:
+            # a refinanced tranche's service is met the same way before a sponsor call.
+            sweep_from_locked = min(-cash_for_equity, locked_cash_balance)
+            locked_cash_balance -= sweep_from_locked
+            cash_for_equity += sweep_from_locked
+            sweep_from_retained = min(-cash_for_equity, retained_balance)
+            retained_balance -= sweep_from_retained
+            cash_for_equity += sweep_from_retained
+            spv_cash_applied += sweep_from_locked + sweep_from_retained
+            if is_cash_sweep and -_SWEEP_CASH_TOL_USD <= cash_for_equity < 0.0:
+                # The pipeline settles the sweep on this cash to within the tolerance,
+                # so a shortfall below it is that rounding, not a sponsor cash call.
+                cash_for_equity = 0.0
 
         # #1539: settle senior-fee arrears ahead of equity. They rank behind scheduled
         # service, the reserve top-up and the engine's balloon sweep (each already sized),
@@ -686,11 +756,24 @@ def build_equity_distribution_schedule(
         # boundary-flip anti-pattern). Subtracting _DSCR_LOCKUP_EPS locks only when DSCR is
         # MATERIALLY below the covenant (a real breach), keeping sculpted-to-floor scenarios
         # byte-identical while still trapping genuine sub-covenant years (stress cases).
-        covenant_locked = bool(
+        scheduled_locked = bool(
             dscr is not None
             and distribution_config.min_dscr_threshold > 0.0
             and dscr < distribution_config.min_dscr_threshold - _DSCR_LOCKUP_EPS
         )
+        # #1779: the refinanced tranche is tested against the same lock-up threshold, with
+        # the same tolerance, in each year it is serviced. Cash it traps is released by the
+        # same cure as any trapped cash: the next year that is not locked.
+        refinance_coverage = _refinance_coverage_for_row(
+            index, row_period_map, refinance_coverage_by_period
+        )
+        refinance_locked = bool(
+            refinance_coverage is not None
+            and distribution_config.min_dscr_threshold > 0.0
+            and refinance_coverage
+            < distribution_config.min_dscr_threshold - _DSCR_LOCKUP_EPS
+        )
+        covenant_locked = scheduled_locked or refinance_locked
 
         # Dividend WHT applies only to positive distributions actually paid to the sponsor
         # (the two non-distributing branches below are a lockup or a cash call -> no WHT).
@@ -754,9 +837,12 @@ def build_equity_distribution_schedule(
                 "spv_cash_applied_usd": spv_cash_applied,
                 "sponsor_cure_usd": sponsor_cure,
                 "balloon_resolution_usd": balloon_resolution,
+                "cash_available_for_balloon_usd": cash_available_for_balloon,
                 "senior_fee_arrears_settled_usd": arrears_settled_now,
                 "senior_fee_arrears_usd": arrears_owed,
                 "dscr": dscr,
+                "refinance_coverage": refinance_coverage,
+                "refinance_tranche_locked": refinance_locked,
                 "covenant_locked": covenant_locked,
                 "reserve_required_usd": reserve_required,
                 "reserve_funded_usd": reserve_funded,
@@ -811,6 +897,62 @@ def build_equity_distribution_schedule(
             last["reserve_balance_usd"] = 0.0
 
     return schedule
+
+
+def waterfall_sweep_cash(
+    *,
+    config: Mapping[str, Any],
+    annual_rows: Sequence[Mapping[str, Any]],
+    debt_result: Mapping[str, Any],
+) -> Optional[List[Optional[float]]]:
+    """The cash this waterfall holds for a cash sweep, PERIOD-indexed, before the fee.
+
+    Owner ruling on #1736 (2026-11-15): one cash basis decides both the post-maturity
+    sweep and the senior-fee deferral, and the debt engine and this waterfall agree on
+    it. The basis is the cash the SPV actually has, which is this waterfall's: the
+    year's cash after scheduled service and interest WHT, on the equity-facing rows
+    (the tax the SPV pays, every deduction taken), plus the cash it holds at the start
+    of the year (the reserve, cash a lockup trapped, and retentions). The rows are net
+    of the senior fee the engine paid, so that fee is added back: the engine pays the
+    fee first from this cash, then the balloon.
+
+    Returns ``None`` unless ``debt_result`` is a ``cash_sweep`` whose balloon path
+    governs a period. Otherwise a list on the debt timeline with a figure for each
+    governed period that maps to an annual row and ``None`` elsewhere, which the
+    engine reads as "keep the sizing-basis CFADS" (``plan_debt(sweep_cash_usd=...)``).
+    The pipeline iterates the two to a fixed point.
+    """
+    if debt_result.get("balloon_treatment") != "cash_sweep":
+        return None
+    # A cash sweep's carried-fee series is None exactly where its path does not govern.
+    deferred = list(debt_result.get("senior_fee_deferred_usd") or [])
+    governed = [period for period, value in enumerate(deferred) if value is not None]
+    if not governed or not annual_rows:
+        return None
+    schedule = build_equity_distribution_schedule(
+        annual_rows=annual_rows,
+        debt_result=debt_result,
+        distribution_config=_build_distribution_config(config),
+    )
+    row_of_period: Dict[int, int] = {}
+    for mapping in debt_result.get("annual_row_debt_period_map") or []:
+        try:
+            row_of_period[int(mapping["debt_period"])] = int(
+                mapping["annual_row_index"]
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    fee_paid = list(debt_result.get("senior_fee_usd") or [])
+    sweep_cash: List[Optional[float]] = [None] * len(deferred)
+    for period in governed:
+        row_index = row_of_period.get(period)
+        if row_index is None or not 0 <= row_index < len(schedule):
+            continue
+        fee = _as_float(fee_paid[period], 0.0) if period < len(fee_paid) else 0.0
+        sweep_cash[period] = float(
+            schedule[row_index]["cash_available_for_balloon_usd"]
+        ) + float(fee or 0.0)
+    return sweep_cash
 
 
 def calculate_equity_distribution_from_pipeline(
@@ -1027,4 +1169,5 @@ __all__ = [
     "EquityDistributionConfig",
     "build_equity_distribution_schedule",
     "calculate_equity_distribution_from_pipeline",
+    "waterfall_sweep_cash",
 ]

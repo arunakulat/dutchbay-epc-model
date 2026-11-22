@@ -7,7 +7,9 @@
 
 report:
   title: "Lender Information Memorandum"
-  subtitle: "Utility-Scale Wind — Project-Finance Summary"
+  # {technology} is filled from the scenario's own technologies (technology_subtitle in
+  # app/reports/report_model.py): the model is universal, so the subtitle is not fixed on wind.
+  subtitle: "Utility-Scale {technology} — Project-Finance Summary"
   organization: "DutchBay Capital"
   version: "1.0"
   confidentiality: "Strictly Private & Confidential"

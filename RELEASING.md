@@ -112,5 +112,19 @@ git push origin "v${VERSION}"                        # push the TAG, not main
 
 - `VERSION` is the single source of truth for the release number; keep
   `pyproject.toml [project].version` in sync with it.
+- Between releases, `VERSION` already moves: under `DOC-02`, a change that can affect IRR,
+  DSCR, NPV or covenant logic bumps `VERSION` in the same PR, because pinned summaries record
+  `model_version`. It never edits `CHANGELOG.md`: release cuts compile the fragments into it
+  (step 0 sets the release number, which may equal the `VERSION` already on `main`).
 - Runtime/CI installs use the pinned `requirements.txt` lock (the single lock file).
 - Dev installs use `-e ".[dev]"` (the toolchain extra) so local and CI behave the same.
+- A `VERSION` bump does not require regenerating the solar + BESS sizing summary
+  (`docs/blue_whale/solar_bess_project_sizing_summary.json`, a run of about 70 minutes).
+  The summary names what it was computed from by content (`spec.code_sha256`,
+  `spec.inputs_sha256` and, from the next regeneration, `spec.inputs_digest`), not by
+  release number. `tests/solar/test_pv_bess_sizing.py` fails when a unit, pricing,
+  scenario or regulatory file it recorded by bytes changes, or when the sizing config's
+  composed values change (a trial count, say; a comment-only edit does not). It does not
+  compare the code digests. Regenerate the summary when that check fails, or when a code
+  change moves its figures; its `model_version`, where present, records the release it
+  ran at and is not compared with `VERSION`.

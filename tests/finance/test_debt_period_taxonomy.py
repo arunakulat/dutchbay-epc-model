@@ -300,8 +300,10 @@ def _synthetic_config(construction_periods: int) -> dict[str, Any]:
             "target_dscr": 1.30,
             "mix": {"usd_commercial_min": 1.0},
             "rates": {"usd_nominal": 0.08},
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
         },
         "capex": {"usd_total": 100_000_000.0},
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
     }
 
 
@@ -553,7 +555,7 @@ def test_dscr_index_space_collision_is_resolved() -> None:
     # And the value at a mapped period is that PERIOD's DSCR, which is the substance of
     # the fix — not merely two lists that happen to be equal.
     assert public[period] == debt_result["dscr_periods"][period]["dscr"]
-    assert public[period] == pytest.approx(2.5922041122119635)  # #1577 (was 2.6047)
+    assert public[period] == pytest.approx(2.6120900199254375)  # #1845 (was 2.5922)
 
 
 def test_cfads_timeline_pads_zero_when_tenor_outruns_operating_life() -> None:

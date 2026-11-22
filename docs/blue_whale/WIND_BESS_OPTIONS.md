@@ -10,7 +10,10 @@ stand.
 - Method: `analytics/wind/wind_bess_options.py`.
 - CLI: `scripts/run_blue_whale_wind_bess_options_v14.py` (Hydra, one JSON object on stdout).
 - Committed output: `docs/blue_whale/wind_bess_options_summary.json`. It pins the config and
-  scenario SHA-256; model 15.27.0; scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.6.
+  scenario SHA-256; model 15.31.0 (the engine `#1874` releases as 15.32.0); scenario `scenarios/blue_whale_wind_lot5b_2026.yaml` v0.7.
+  Regenerated for `#1822`, which adds the scenario's `monte_carlo` block, and again for
+  `#1823`, which names the held headline battery: each time only `scenario_sha256` and
+  `model_version` changed; every figure is the same.
 - Every KPI comes from `analytics.evaluation_v14.evaluate_with_overrides` (ARCH-04).
 
 > **Addendum (`#1578` U2, 17 November 2026):** The options now run for any scenario that
@@ -26,6 +29,27 @@ stand.
 > The summary was regenerated only because the scenario file gained the block; its
 > `scenario_sha256` is the one value that changed. The same scenario also carries the
 > `equipment_cost_parity` block (`#1755`), which reproduces the single-site parity result.
+>
+> **Addendum (`#1823`, 21 November 2026):** The recommended held 0.5 / 0.5 option is now part
+> of the scenario's own project: `storage_options.headline_option: held_0_5_0_5` (scenario
+> v0.7, model 15.30.0) carries it into the headline KPIs, debt sizing and reports, capex and
+> O&M only, built by the same `scenario_with_battery` this analysis uses
+> (`analytics/storage_headline.py`). The headline KPIs therefore equal this summary's figures
+> for that option (project NPV USD 1,729,927, project IRR 12.76%; before `#1874`, USD 1,319,305
+> and 12.31%). This analysis still compares
+> every option with the wind-only case: it reads the scenario without the headline request.
+> The summary was regenerated only because the scenario file and the model version changed.
+> Tariff basis, a working assumption: the held battery earns no storage tariff.
+>
+> **Addendum (`#1874`, 22 November 2026):** The scenario no longer charges SSCL on revenue: IPP
+> supply to CEB is exempt (`#738`), as in the lender case, and the owner ruled the same for
+> every scenario. Wind-only project NPV rises from USD 1,398,803 to 1,809,848. The summary was
+> regenerated on the same engine before the version bump, so it records model 15.31.0. The headline, wind-only and options tables below are updated
+> from it. The other figures in the prose (bottom-up prices, the cycled 0.5 / 2 detail, pinned
+> rates, Monte Carlo percentiles, the RTE grid and the firming table) are as of 15.31.0; the
+> summary holds the current values. No finding changes: no option beats wind-only on any
+> basis except all-window exports, no Monte Carlo trial does, and held 0.5 MW / 0.5 MWh stays
+> the cheapest option and the recommendation.
 
 ```bash
 DUTCHBAY_NASA_POWER_DIR=/path/to/power \
@@ -74,15 +98,15 @@ apply to a power plant.
   non-escalable part. Adjusting the whole 50.19, or the wind tariff's own 20.80 (which would
   also raise the charging cost), are other readings and are not run.
 
-## Results (project NPV change vs wind-only USD 1,398,803)
+## Results (project NPV change vs wind-only USD 1,809,848)
 
 Wind-only KPIs:
 
 | KPI | Value |
 |---|---|
-| Project IRR | 12.41% |
-| Equity IRR | 10.55% |
-| Equity NPV | USD −740,793 |
+| Project IRR | 12.86% |
+| Equity IRR | 11.17% |
+| Equity NPV | USD −418,376 |
 | Engine min DSCR | 0.867 (operating-year-1 covenant row) |
 
 Every option moves the min DSCR by at most 0.001.
@@ -101,16 +125,16 @@ is reported only to show what giving up the function would be worth.
 
 | Option | Fits A | B: whole rate | C: whole rate | Stacked (B) | Equity IRR (B) | Pinned rate (B) |
 |---|:-:|---:|---:|---:|---:|---:|
-| **Held 0.5 MW / 0.5 MWh (black start only)** | **yes** | **−79k** | **−79k** | −79k | **10.42%** | −69k |
-| Cycled 0.5 MW / 2 MWh, 0.5 MWh reserve | yes | −125k | −125k | −145k | 10.31% | −109k |
-| Held 1 MW / 1 MWh | no | −153k | −153k | −153k | 10.29% | −137k |
-| Cycled 1 MW / 4 MWh, reserve | no | −196k | −187k | −247k | 10.16% | −173k |
-| Cycled 2.5 MW / 10 MWh, reserve | no | −611k | −406k | −721k | 9.46% | −547k |
-| Cycled 10 MW / 40 MWh, reserve (UNCONFIRMED 40 MW reading) | no | −4.26M | −1.97M | −4.48M | 5.52% | −3.93M |
+| **Held 0.5 MW / 0.5 MWh (black start only)** | **yes** | **−80k** | **−80k** | −80k | **11.03%** | −69k |
+| Cycled 0.5 MW / 2 MWh, 0.5 MWh reserve | yes | −121k | −121k | −142k | 10.92% | −104k |
+| Held 1 MW / 1 MWh | no | −154k | −154k | −154k | 10.90% | −137k |
+| Cycled 1 MW / 4 MWh, reserve | no | −192k | −177k | −238k | 10.76% | −163k |
+| Cycled 2.5 MW / 10 MWh, reserve | no | −596k | −385k | −709k | 10.05% | −524k |
+| Cycled 10 MW / 40 MWh, reserve (UNCONFIRMED 40 MW reading) | no | −4.22M | −1.87M | −4.45M | 5.98% | −3.86M |
 
 - **No option beats wind-only.** The cheapest black-start battery is **0.5 MW / 0.5 MWh,
-  held**, with the soft (voltage-ramped) energisation the config assumes. It costs about USD 79k
-  of project NPV and 0.13 points of equity IRR, and it fits every reading of the 10 MW limit.
+  held**, with the soft (voltage-ramped) energisation the config assumes. It costs about USD 80k
+  of project NPV and 0.14 points of equity IRR, and it fits every reading of the 10 MW limit.
 - **For the short units, that cost is a floor.** Every option is priced at the all-in mode of
   USD 140.74 per kWh, the price of a 4-hour product. Power-related and per-site costs (the
   inverter skid, the EMS) do not shrink with the energy, so a 1-hour unit costs more per kWh. Priced bottom-up from the generic

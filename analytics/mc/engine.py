@@ -45,6 +45,7 @@ from analytics.mc.covenant import (
     resolve_min_dscr_covenant as _resolve_min_dscr_covenant,
 )
 from analytics.mc.degradation import apply_degradation_if_enabled
+from analytics.mc.fixed_debt_coverage import fixed_debt_coverage_by_row
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 from analytics.run_modes import POLICIES, resolve_run_mode
 
@@ -228,78 +229,17 @@ def _trial_fixed_debt_min_dscr(
     per-trial pipeline RE-SIZES debt (DSCR sculpting), pinning every trial's min_dscr at the
     covenant target and reporting ZERO breach probability. This tests each trial's CFADS
     against the BASE case's committed debt instead, on the basis the covenant is tested on
-    (#1728): the per-year ``dscr_by_year`` table that ``plan_debt`` publishes.
-
-    For each operating row of the base ``annual_row_debt_period_map`` (operating periods
-    only; construction, the bridge and post-tenor padding map to no row), the coverage is
-
-        (trial row CFADS - base senior fee of that period) / base debt service of that period
-
-    and operating year 1 also carries the base bridge period's service, exactly as
-    ``finance.debt.layer`` folds it into ``dscr_by_year``. A row whose base period carries
-    no service is not a covenant observation (``dscr_by_year`` holds ``None`` there). With
-    trial = base the result is the minimum of the base ``dscr_by_year``.
-
-    The senior fee is the BASE (committed-debt) fee, not the fee the trial charged on its
-    own re-sized debt, so a committed loan's fee does not shrink with the trial (#1728 L-1).
-    Stated limits: the trial's CFADS is its own pipeline's figure, so any CFADS term that
-    depends on the trial's own debt is not re-based; and the base debt service is zero
-    after the balloon period, so a refinanced balloon falls outside the stress (#1728 L-2;
-    its coverage is disclosed separately under ``debt_result.refinance``).
-
-    Reads ``annual_row_debt_period_map``, ``debt_service_total``, ``senior_fee_usd`` and
-    ``bridge_debt_period``; never the deprecated ``raw_dscr_series`` alias (REFACTOR-04).
-    Returns ``None`` when no operating row carries base service or the trial publishes no
-    CFADS for those rows.
+    (#1728). The per-row coverage, its basis and its stated limits are
+    :func:`analytics.mc.fixed_debt_coverage.fixed_debt_coverage_by_row` (moved there
+    unchanged for #1836). Returns ``None`` when no operating row carries base service or the
+    trial publishes no CFADS for those rows.
     """
-    base_map = base_debt_result.get("annual_row_debt_period_map") or []
-    base_svc = list(base_debt_result.get("debt_service_total") or [])
-    base_fee = list(base_debt_result.get("senior_fee_usd") or [])
-
-    mapped_periods = set()
-    for entry in base_map:
-        if isinstance(entry, Mapping) and _finite(entry.get("debt_period")) is not None:
-            mapped_periods.add(int(entry["debt_period"]))
-    bridge = _finite(base_debt_result.get("bridge_debt_period"))
-    bridge_extra = 0.0
-    if (
-        bridge is not None
-        and int(bridge) not in mapped_periods
-        and 0 <= int(bridge) < len(base_svc)
-    ):
-        bridge_extra = _finite(base_svc[int(bridge)]) or 0.0
-
-    trial_cfads: Dict[int, float] = {}
-    for entry in trial_debt_result.get("annual_row_debt_period_map") or []:
-        if not isinstance(entry, Mapping):
-            continue
-        row = _finite(entry.get("annual_row_index"))
-        cfads = _finite(entry.get("cfads_usd"))
-        if row is not None and cfads is not None:
-            trial_cfads[int(row)] = cfads
-
-    vals: List[float] = []
-    for row_i, entry in enumerate(base_map):
-        if not isinstance(entry, Mapping):
-            continue
-        period = _finite(entry.get("debt_period"))
-        row = _finite(entry.get("annual_row_index"))
-        if period is None or row is None or not 0 <= int(period) < len(base_svc):
-            continue
-        svc = _finite(base_svc[int(period)]) or 0.0
-        if svc <= 0.0:
-            continue  # no base service: not a covenant observation
-        if row_i == 0 and bridge_extra > 0.0:
-            svc += bridge_extra
-        cfads = trial_cfads.get(int(row))
-        if cfads is None:
-            continue
-        fee = (
-            _finite(base_fee[int(period)]) or 0.0
-            if int(period) < len(base_fee)
-            else 0.0
+    vals = [
+        dscr
+        for _, _, dscr in fixed_debt_coverage_by_row(
+            base_debt_result, trial_debt_result
         )
-        vals.append((cfads - fee) / svc)
+    ]
     return min(vals) if vals else None
 
 
@@ -354,12 +294,12 @@ class MonteCarloEngine:
     (and the same param set/order) to both ``MonteCarloEngine`` instances and the draws line
     up. This is by design, not a defect — the engine does not implicitly couple two runs.
 
-    Toy fallback (MC-9, #473): when a trial's full v14 evaluation raises, the engine appends a
-    deterministic toy-metric stand-in so a smoke run still yields an array; the trial is tagged
-    ``_toy_fallback`` and counted in ``toy_fallback_count``. Set
-    ``monte_carlo.allow_toy_fallback: false`` to fail loud instead — a production run then
-    RAISES on the first failed trial rather than reporting fabricated KPIs. Declared lender
-    and IC modes forbid the fallback even if the config explicitly enables it (#962).
+    Toy fallback (MC-9, #473): off by default (#962). A trial whose full v14 evaluation raises
+    stops the run with the trial's error rather than reporting fabricated KPIs. A smoke config
+    may opt in with ``monte_carlo.allow_toy_fallback: true``; the engine then appends a
+    deterministic toy-metric stand-in so the run still yields an array, tags the trial
+    ``_toy_fallback`` and counts it in ``toy_fallback_count``. Declared lender and IC modes
+    forbid the fallback even if the config explicitly enables it.
     """
 
     def __init__(
@@ -412,6 +352,7 @@ class MonteCarloEngine:
         self._refuse_native_capex_conflicts(
             self._base_config, self._param_names, self._param_kinds
         )
+        self._refuse_bare_capex_on_full_scenario(self._base_config, self._param_names)
         # Opt-in per parameter (#1762): a swept capex.usd_total on a derive_from_breakdown
         # scenario scales the breakdown line items pro rata so the two stay reconciled.
         self._breakdown_reconciliation: Dict[str, str] = (
@@ -450,10 +391,13 @@ class MonteCarloEngine:
         # never itself trigger fabricated KPIs. The existing policy is a permission ceiling;
         # permissive/undeclared modes retain the engine setting, including explicit false.
         self._run_mode = resolve_run_mode(self._base_config)
+        # Off unless the config opts in (#962, owner decision 2026-11-21): a failed trial
+        # stops the run rather than being replaced by a fabricated toy metric. Smoke configs
+        # that exercise the toy path declare ``allow_toy_fallback: true``.
         self._allow_toy_fallback: bool = (
-            bool(_mc_cfg.get("allow_toy_fallback", True))
+            bool(_mc_cfg.get("allow_toy_fallback", False))
             if isinstance(_mc_cfg, Mapping)
-            else True
+            else False
         )
         if self._run_mode is not None:
             self._allow_toy_fallback = (
@@ -596,23 +540,18 @@ class MonteCarloEngine:
         """Capture base CFs for hybrid project.capacity_factor coupling (if applicable).
 
         Active only when project.capacity_factor is a swept param AND the scenario carries
-        per-tech generation capacity factors (multi-tech). Wind-only scenarios have no
-        generation.technologies block, so the project.capacity_factor override drives
-        production directly and no coupling is needed (self._cf_coupling stays None).
+        per-tech generation capacity factors the year-1 reconciliation counts. The counted
+        set is the one shared helper the tornado and global SA also use
+        (``analytics.sensitivity.engine.coupled_technology_capacity_factors``, #1817), so a
+        storage block or a numeric-string capacity factor is treated the same on every
+        path. Wind-only scenarios with no generation.technologies block need no coupling
+        (self._cf_coupling stays None).
         """
         if "project.capacity_factor" not in self._param_names:
             return
-        gen = self._base_config.get("generation")
-        techs = gen.get("technologies") if isinstance(gen, Mapping) else None
-        if not isinstance(techs, Mapping):
-            return
-        base_tech_cfs: Dict[str, float] = {}
-        for name, blk in techs.items():
-            if isinstance(blk, Mapping) and blk.get("capacity_factor") is not None:
-                try:
-                    base_tech_cfs[str(name)] = float(blk["capacity_factor"])
-                except (TypeError, ValueError):
-                    continue
+        from analytics.sensitivity.engine import coupled_technology_capacity_factors
+
+        base_tech_cfs = coupled_technology_capacity_factors(self._base_config)
         proj = self._base_config.get("project")
         base_proj_cf = (
             proj.get("capacity_factor") if isinstance(proj, Mapping) else None
@@ -720,65 +659,51 @@ class MonteCarloEngine:
                 )
 
     @staticmethod
+    def _refuse_bare_capex_on_full_scenario(
+        cfg: Mapping[str, Any], names: Sequence[str]
+    ) -> None:
+        """Refuse a bare ``capex`` parameter on a scenario that carries a capex section (#1793).
+
+        A parameter named ``capex`` (any case or padding) overrides the whole capex section
+        with one number. On a full scenario every trial then refuses it (a cost section that
+        is not a mapping, #1767), so the run could only report toy KPIs or fail late. The
+        native-CAPEX guard already refuses the name on ``capex.input`` scenarios; this covers
+        the USD ones. A config with no capex mapping in any spelling is the minimal smoke
+        config, whose toy metric reads ``capex`` directly, so the name stays accepted there.
+        """
+        if not isinstance(cfg, Mapping):
+            return
+        if not any(
+            isinstance(key, str)
+            and key.strip().lower() == "capex"
+            and isinstance(value, Mapping)
+            for key, value in cfg.items()
+        ):
+            return
+        for name in names:
+            if name.strip().lower() == "capex":
+                raise MonteCarloConfigError(
+                    f"monte_carlo parameter {name!r} is refused before sampling (#1793): it "
+                    "overrides the whole capex section with one number, which every trial "
+                    "of a full scenario refuses (the #1629 trial-path check). Sweep "
+                    "capex.usd_total on a USD scenario, or capex.input.amount on a "
+                    "native-CAPEX scenario."
+                )
+
+    @staticmethod
     def _extract_breakdown_reconciliation(cfg: Mapping[str, Any]) -> Dict[str, str]:
         """Read and validate each parameter's opt-in ``reconcile_breakdown`` (#1762).
 
-        On a ``capex.derive_from_breakdown`` scenario the trial path cross-checks
-        ``capex.usd_total`` against the sum of ``capex.breakdown`` and refuses a >0.5%
-        mismatch, so a plain ``capex.usd_total`` sweep fails its trials. Declaring
-        ``reconcile_breakdown: pro_rata`` on that parameter scales every numeric breakdown
-        line by the same factor as the sampled total: a uniform overrun or underrun across
-        the line items. It is explicit (CCCDIR): nothing is reconciled unless the scenario
-        asks, and the key is refused anywhere it would not mean exactly that.
+        The declaration is read by the one shared helper the tornado and global SA also
+        use (``analytics.sensitivity.engine.declared_breakdown_reconciliation``, #1817);
+        an invalid declaration is a :class:`MonteCarloConfigError` here.
         """
-        mc = cfg.get("monte_carlo", {}) if isinstance(cfg, Mapping) else {}
-        params = (mc.get("parameters", []) or mc.get("params", [])) if mc else []
-        out: Dict[str, str] = {}
-        for idx, p in enumerate(params if isinstance(params, list) else []):
-            if not isinstance(p, Mapping) or "reconcile_breakdown" not in p:
-                continue
-            name = str(p.get("name"))
-            mode = str(p["reconcile_breakdown"]).strip().lower()
-            where = f"monte_carlo.parameters[{idx}].name {name!r}"
-            if mode != "pro_rata":
-                raise MonteCarloConfigError(
-                    f"{where}: reconcile_breakdown must be 'pro_rata', got "
-                    f"{p['reconcile_breakdown']!r}."
-                )
-            if name != "capex.usd_total":
-                raise MonteCarloConfigError(
-                    f"{where}: reconcile_breakdown applies to capex.usd_total only."
-                )
-            capex = cfg.get("capex")
-            breakdown = capex.get("breakdown") if isinstance(capex, Mapping) else None
-            if not (
-                isinstance(capex, Mapping)
-                and capex.get("derive_from_breakdown")
-                and isinstance(breakdown, Mapping)
-            ):
-                raise MonteCarloConfigError(
-                    f"{where}: reconcile_breakdown needs capex.derive_from_breakdown and "
-                    "a capex.breakdown mapping in the scenario."
-                )
-            from analytics.cost.contingency import contingency_is_qra
+        from analytics.sensitivity.engine import declared_breakdown_reconciliation
 
-            if contingency_is_qra(capex):
-                raise MonteCarloConfigError(
-                    f"{where}: reconcile_breakdown is not defined for a QRA contingency "
-                    "(the QRA recomputes the total and ignores capex.usd_total)."
-                )
-            line_total = sum(
-                float(v)
-                for v in breakdown.values()
-                if isinstance(v, (int, float)) and not isinstance(v, bool)
-            )
-            if not line_total > 0.0:
-                raise MonteCarloConfigError(
-                    f"{where}: capex.breakdown must sum to a positive total to be "
-                    "scaled pro rata."
-                )
-            out[name] = mode
-        return out
+        try:
+            return declared_breakdown_reconciliation(cfg)
+        except ValueError as exc:
+            raise MonteCarloConfigError(str(exc)) from exc
 
     def _apply_breakdown_reconciliation(
         self, overrides: Dict[str, Any]
@@ -799,15 +724,10 @@ class MonteCarloEngine:
         )
         if sampled is None:
             return overrides
-        breakdown = self._base_config["capex"]["breakdown"]
-        lines = {
-            k: float(v)
-            for k, v in breakdown.items()
-            if isinstance(v, (int, float)) and not isinstance(v, bool)
-        }
-        factor = sampled / sum(lines.values())
-        for key, value in lines.items():
-            self._set_dotted(overrides, f"capex.breakdown.{key}", value * factor)
+        from analytics.sensitivity.engine import pro_rata_breakdown
+
+        for key, value in pro_rata_breakdown(self._base_config, sampled).items():
+            self._set_dotted(overrides, f"capex.breakdown.{key}", value)
         return overrides
 
     def _dry_run_capex_resolution(self) -> None:

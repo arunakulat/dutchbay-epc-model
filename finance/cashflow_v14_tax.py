@@ -46,6 +46,49 @@ def _lookup_case_insensitive(section: Mapping[str, Any], key: str) -> Any:
     return None
 
 
+#: The spellings of the one jurisdiction this tax and levy code implements (#1882). Compared
+#: case-insensitively after trimming. ``LK`` and ``LKA`` are the ISO 3166-1 codes.
+SRI_LANKA_JURISDICTION_NAMES = frozenset({"sri lanka", "lk", "lka"})
+
+
+def require_sri_lanka_jurisdiction(cfg: Mapping[str, Any], ctx: str) -> None:
+    """Refuse a scenario that declares a jurisdiction other than Sri Lanka (#1882).
+
+    This module and :mod:`finance.import_levies` implement Sri Lanka rules: the
+    corporate rate schedule, the six-year loss window, interest WHT, SSCL and the
+    import-levy cascade. A scenario whose ``project.jurisdiction`` names another
+    country must not inherit them silently (DBAY-FRC-001 section 3: fail closed, no
+    implicit fallback). Until the #1841 pack resolver is wired into the engine, the
+    engine therefore refuses such a scenario rather than run it on Sri Lanka law.
+
+    An absent or null ``project.jurisdiction`` is accepted and behaves exactly as
+    before; making the key required is #1841's PR 3.
+
+    Raises:
+        ValueError: ``project.jurisdiction`` is present and is not a Sri Lanka
+            spelling, or is not a string.
+    """
+    project = _lookup_case_insensitive(cfg, "project")
+    if not isinstance(project, Mapping):
+        return
+    declared = _lookup_case_insensitive(project, "jurisdiction")
+    if declared is None:
+        return
+    if not isinstance(declared, str):
+        raise ValueError(
+            f"{ctx}: project.jurisdiction must be a string naming the jurisdiction "
+            f"(got {type(declared).__name__})"
+        )
+    if declared.strip().lower() in SRI_LANKA_JURISDICTION_NAMES:
+        return
+    raise ValueError(
+        f"{ctx}: project.jurisdiction is {declared!r}, but this engine implements "
+        "Sri Lanka tax and levy rules only. It refuses to apply them to another "
+        "jurisdiction (no silent fallback). Other jurisdictions need a pack wired "
+        "through the jurisdiction resolver (#1841)."
+    )
+
+
 def _require_section(cfg: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     """Return a named subsection or raise if missing.
 
@@ -221,6 +264,7 @@ class TaxConfig:
         rather than silently substituting a default. The single optional field
         is ``interest_deductibility`` (documented default ``True``).
         """
+        require_sri_lanka_jurisdiction(cfg, "tax")
         tax = _require_section(cfg, "tax")
 
         # Required + range-validated; canonical/compact/deprecated aliases are
@@ -538,11 +582,17 @@ def calculate_tax(
     tax_profile: TaxProfile,
     prior_year_losses: float = 0.0,
     prior_loss_vintages: Optional[Sequence[Tuple[int, float]]] = None,
+    interest_paid: Optional[float] = None,
 ) -> TaxResult:
     """Per-year tax. When ``prior_loss_vintages`` is supplied (the live path) losses are
     tracked per vintage so they EXPIRE after ``loss_carryforward_years`` and are PRESERVED
     through holiday years. When it is ``None`` the legacy scalar carry-forward applies
-    (no expiry) — kept byte-identical for direct scalar callers."""
+    (no expiry) — kept byte-identical for direct scalar callers.
+
+    ``interest_paid`` is the interest settled in cash in the year, the base of the
+    reported withholding tax (``wht_on_interest``): WHT arises on payment, whatever the
+    income-tax basis of ``interest_expense`` (#1539 DOM-4). ``None`` takes
+    ``interest_expense``, which is the same figure on the default ``paid`` basis."""
     is_holiday = tax_profile.tax_holidays_by_year.get(year, False)
     taxable = ebit
     if tax_profile.interest_deductibility:
@@ -577,7 +627,8 @@ def calculate_tax(
     # would report a misleadingly low rate). Reporting-only — CFADS uses tax_liability
     # directly — so this is KPI-neutral, but the lender-audit figure must be honest.
     effective_rate = tax_liability / taxable_income if taxable_income > 0.0 else 0.0
-    wht_on_interest = interest_expense * tax_profile.withholding_tax_rate
+    wht_base = interest_expense if interest_paid is None else interest_paid
+    wht_on_interest = wht_base * tax_profile.withholding_tax_rate
 
     return TaxResult(
         year=year,
@@ -634,4 +685,6 @@ __all__ = [
     "build_tax_series",
     "calculate_tax",
     "build_tax_holiday_map",
+    "require_sri_lanka_jurisdiction",
+    "SRI_LANKA_JURISDICTION_NAMES",
 ]

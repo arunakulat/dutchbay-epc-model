@@ -106,11 +106,14 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # Re-pinned for v0.10 (#1578 L-11: the battery's fade and its year-14 augmentation, with the
 # price's augmentation reserve removed; the size is unchanged). Before (v0.9): project NPV
 # -4477786.514808497, equity NPV -4557056.390826946, min DSCR 0.8716987467623586.
+# Re-pinned at 15.32.0 for #1874 (revenue SSCL dropped: IPP supply to CEB is exempt, #738).
+# Before (15.31.0): project NPV -4479213.671770833, equity NPV -4557963.632064052, min DSCR
+# 0.8719255106683012.
 SOLAR_BESS_PINS = {
-    "project_npv": -4479213.671770833,
-    "equity_npv": -4557963.632064052,
+    "project_npv": -4416118.556138609,
+    "equity_npv": -4503027.071554722,
     "equity_irr": None,
-    "min_dscr": 0.8719255106683012,
+    "min_dscr": 0.8711416420697218,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -132,10 +135,16 @@ SOLAR_BESS_PINS = {
 # 2027 draw; opex and the PUCSL O&M index escalated from 2026, two years before the 2028 COD).
 # Before, at 15.24.0 (v0.5): project IRR 0.13126573271197758, equity IRR 0.11548743505017844,
 # min DSCR 0.8668689564723109.
+# Re-pinned for #1823 (wind v0.7: the held 0.5 MW / 0.5 MWh battery joins the headline KPIs,
+# capex and O&M only, built as the wind battery options analysis builds it; these equal that
+# analysis's figures for the held_0_5_0_5 option). Before (v0.6): project IRR
+# 0.12408437995891264, equity IRR 0.10545894876814677, min DSCR 0.8671021075351333.
+# Re-pinned at 15.32.0 for #1874 (revenue SSCL dropped). Before (15.31.0): project IRR
+# 0.12313073791413345, equity IRR 0.10415918282280123, min DSCR 0.8678182687044798.
 WIND_PINS = {
-    "project_irr": 0.12408437995891264,
-    "equity_irr": 0.10545894876814677,
-    "min_dscr": 0.8671021075351333,
+    "project_irr": 0.12764205206673865,
+    "equity_irr": 0.11034537510601128,
+    "min_dscr": 0.867338551390403,
 }
 
 

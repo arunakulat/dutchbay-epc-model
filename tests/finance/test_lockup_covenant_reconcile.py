@@ -46,7 +46,7 @@ def test_falls_back_to_125_when_neither_declared() -> None:
     assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.25)
 
 
-def test_reconcile_locks_only_the_year_1_fold_on_the_sculpted_canonical() -> None:
+def test_reconcile_locks_no_scheduled_year_on_the_sculpted_canonical() -> None:
     """The 1.30 sculpt locks exactly one canonical year, and only through the year-1 fold.
 
     This asserted zero until #1397. Sizing on levered-tax CFADS buys nine 0.0025 gearing
@@ -60,11 +60,28 @@ def test_reconcile_locks_only_the_year_1_fold_on_the_sculpted_canonical() -> Non
 
     The point of the guard is unchanged: the reconcile must not lock years it has no
     reason to. The companion test below proves it still engages on a genuine breach.
+
+    #1779: the refinanced balloon tranche's three years now lock on its own coverage
+    (below the threshold in each), so the case locks four years in all, and the
+    scheduled test still only the year-1 fold.
+
+    #1845 (owner decision 2026-11-22) sizes the lender case to the annual covenant, so
+    the year-1 fold reads 1.30 and the scheduled test locks no year: back to zero, as
+    before #1397. Only the refinanced tranche's three years lock.
     """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
-    kpis = evaluate_with_overrides(str(LENDER), overrides={})
-    assert kpis["equity_covenant_locked_years"] == 1
+    full = evaluate_with_overrides(str(LENDER), overrides={}, return_full_result=True)
+    kpis = full["kpis"]
+    # #1779: the lock-up also tests the refinanced balloon tranche, whose coverage is below
+    # the threshold in all three of its years (15 to 17). The scheduled test still locks
+    # only the year-1 fold, so the phase-bug guard reads the scheduled locks alone.
+    rows = full["equity_distribution"]["annual_distributions"]
+    locked = [int(r["year"]) for r in rows if r["covenant_locked"]]
+    tranche = [int(r["year"]) for r in rows if r["refinance_tranche_locked"]]
+    assert locked == [15, 16, 17]  # #1845: no scheduled year (was [1, 15, 16, 17])
+    assert tranche == [15, 16, 17]
+    assert kpis["equity_covenant_locked_years"] == len(locked)
     assert kpis["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 

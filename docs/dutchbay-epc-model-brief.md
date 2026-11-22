@@ -116,7 +116,8 @@ clones shallow, and `scripts/list_session_handover_records.py` fails closed on a
   ("4 of 4 required status checks are expected"), so a batch cannot land together: update from
   `main`, push, wait for CI, merge, one at a time. Merges are squashes titled `subject (#NNNN)`.
 - **Changelog fragments** go in `changelog.d/` as `<id>.<category>.md`, never as an edit to
-  `CHANGELOG.md`. `VERSION` and the changelog move when committed financial behaviour changes.
+  `CHANGELOG.md`. A PR that changes committed financial behaviour bumps `VERSION` in the same
+  PR (`DOC-02`); `CHANGELOG.md` moves only at release cuts.
 - **Architecture guardrails**: config-first (no hidden constants), strict schema validation,
   evaluate only through `evaluate_with_overrides()`, IRR/NPV/WACC defined only in `finance/`,
   units in field names (`*_pct`, `*_usd`, `*_mw`), Hydra and JSON-first for new CLIs (`argparse`

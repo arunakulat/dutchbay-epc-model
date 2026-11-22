@@ -315,16 +315,18 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
 @pytest.mark.parametrize(
     ("scenario_name", "expected_min_dscr", "expected_fold_min"),
     [
+        # Re-baselined in v15.32.0 (#1874: revenue SSCL dropped, IPP supply to CEB is
+        # exempt). Before: 0.9011847533626354 and 0.9387210732131591.
         # Re-baselined in v15.24.0 (#1570: both run on the one-year build their timeline
         # declares; the engine had defaulted to two periods). Before: 0.9019916469950849 and
         # 0.8942466976990286.
         # Re-baselined in v15.11.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
         # -> 50.10 / 15 y). Before: 0.9069456485322224 and 0.8724193845452927.
-        ("ceb_bess_10mw_capacity_charge.yaml", 0.9011847533626354, 0.9011847533626354),
+        ("ceb_bess_10mw_capacity_charge.yaml", 0.9022464554800647, 0.9022464554800647),
         (
             "ceb_solar_bess_nightpeak_10mw.yaml",
-            0.9387210732131591,
-            0.9387210732131591,
+            0.9443970914635553,
+            0.9443970914635553,
         ),
     ],
 )
@@ -368,12 +370,14 @@ def _hostile_negative_year_one_config() -> Dict[str, Any]:
     return {
         "project": {"capacity_mw": 100.0, "life_years": 15},
         "capex": {"usd_total": 100_000_000.0},
+        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
         "Financing_Terms": {
             "debt_ratio": 0.7,
             "target_dscr": 1.3,
             "interest_only_years": 1,
             "amortization_style": "annuity",
             "construction_periods": 2,
+            "dsra_months": 6,  # no code default since #1429; the engine used to fill in 6
             "tenor_years": 10,
             "mix": {"lkr": 0.0, "usd": 1.0, "dfi": 0.0},
             "rates": {"lkr_nominal": 0.12, "usd_nominal": 0.07, "dfi_nominal": 0.05},
@@ -444,15 +448,19 @@ def test_lender_case_min_dscr_and_series_shape_are_pinned() -> None:
     #1577 (14 turbines, 2026-11-08): row 0 now holds ``2.5922041122119635`` and the folded
     year-1 covenant coverage ``1.2961020561059817`` sits under the 1.30 sculpt target
     (it was 1.3024 at 15 turbines), so ``min_dscr`` is that fold, not 1.3.
+
+    #1845 (annual-covenant sizing, 2026-11-22): the smaller facility puts row 0 at
+    ``2.6120900199254375`` and the year-1 fold is sized to the target, so ``min_dscr`` is
+    1.30 to the last bit (``1.2999999999999998``).
     """
     _cfg, debt_result = _plan_for(LENDER_CONFIG)
 
     assert debt_result["timeline_periods"] == 23
     assert len(debt_result["dscr_series"]) == 23
     assert debt_result["first_operating_period"] == 3
-    assert debt_result["dscr_series"][3] == 2.5922041122119635
+    assert debt_result["dscr_series"][3] == 2.6120900199254375
     assert debt_result["dscr_periods"][3]["operating_year"] == 1
-    assert float(debt_result["min_dscr"]) == 1.2961020561059817
+    assert float(debt_result["min_dscr"]) == 1.2999999999999998
 
 
 # ---------------------------------------------------------------------------
@@ -602,7 +610,9 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
         # on sculpt-at-target years. Year 1 remains a real sub-target breach (folded
         # coverage 1.2961 < 1.30). Year 5 (1.2999999999999996) is on target and no longer
         # falsely counted as a breach.
-        ("dutchbay_lendercase_2025Q4.yaml", 1, 1, 1, "REVIEW"),
+        # Re-baselined by #1845 (annual-covenant sizing, 2026-11-22): the year-1 fold is
+        # sized to 1.30, so the lender case has no breach year. Before: (1, 1, 1, REVIEW).
+        ("dutchbay_lendercase_2025Q4.yaml", 0, None, None, "PASS"),
         # Re-baselined in v15.24.0 (#1570: one construction period, as the timeline
         # declares). Before: CEB (1, 1, 1, REVIEW) unchanged, solar+BESS (4, 1, 9, FAIL).
         # Re-baselined in v15.11.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).

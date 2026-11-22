@@ -37,6 +37,7 @@ ONE_POINT = {"pv_tables": [107], "pv_ac_mw": [3.5], "bess_power_mw": [0.1]}
 VOLATILE_SPEC = (
     "git_sha",
     "code_sha256",
+    "inputs_digest",
     "runtime_s",
     "result_sha256",
     "sizing_config_sha256",
@@ -358,3 +359,57 @@ def test_cli_refuses_a_wrong_method_schema(tmp_path: Path) -> None:
         cli.run({"schema_version": cli.METHOD_SCHEMA, "method": {}, "scenario": None})
     with pytest.raises(ValueError, match="method must be a mapping"):
         cli.run({"schema_version": cli.METHOD_SCHEMA, "method": None, "scenario": "x"})
+
+
+# ------------------------------------------------- #1820: provenance (#1801 A-4, A-5)
+
+
+class _Stub:
+    """A sizing result with no points: the tests below read the summary's own fields."""
+
+    spec: Dict[str, Any] = {}
+    recommendation: Dict[str, Any] = {}
+    points: list[Any] = []
+    curtailment: Dict[str, Any] = {}
+
+
+def test_the_result_site_is_the_scenario_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A-4: ``site`` comes from the scenario's block, not from a site config."""
+    monkeypatch.setattr(runner, "run", lambda cfg, **kwargs: {"spec": {}})
+    scenario = _yaml(SCENARIO)
+    scenario[runner.BLOCK]["site"] = {
+        "name": "Somewhere Else 1",
+        "location": "Another district",
+    }
+    out = runner.run_solar_bess_sizing_for_scenario(
+        scenario, _method(), scenario_label=_rel(SCENARIO), script=SCRIPT
+    )
+    assert out["status"] == "completed"
+    assert out["site"] == {"name": "Somewhere Else 1", "location": "Another district"}
+
+
+@pytest.mark.parametrize(
+    "config_name, project",
+    [
+        ("blue_whale_solar_bess_project_sizing", True),
+        ("blue_whale_pv_bess_sizing", False),
+    ],
+)
+def test_the_single_site_script_states_its_limitations_and_names_itself(
+    monkeypatch: pytest.MonkeyPatch, config_name: str, project: bool
+) -> None:
+    """A-5: the shim's run lists its limitations and digests its own script (MRM-02)."""
+    monkeypatch.setattr(runner, "run_project_sizing", lambda *a, **k: _Stub())
+    monkeypatch.setattr(runner, "run_sizing", lambda *a, **k: _Stub())
+    cli = _load(SINGLE_SITE_SCRIPT)
+    cfg = _yaml(REPO_ROOT / "conf" / f"{config_name}.yaml")
+    cfg.pop("defaults", None)
+    out = cli.run(cfg, config_name=config_name)
+    want = [*cli.LIMITATIONS, *(cli.PROJECT_LIMITATIONS if project else ())]
+    assert out["spec"]["limitations"] == want
+    assert out["config"] == f"conf/{config_name}.yaml"
+    files = out["spec"]["code_sha256"]["files"]
+    assert "scripts/run_blue_whale_pv_bess_sizing_v14.py" in files
+    assert "solar_resource/pv_bess_sizing_runner.py" in files

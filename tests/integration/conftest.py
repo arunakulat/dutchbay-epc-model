@@ -138,7 +138,8 @@ def mc_sampling_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
     so per-trial evaluation falls back to the engine's deterministic toy-metric
     path. That exercises the sampler -> aggregator -> result-contract flow end
     to end *without* weakening production schema validation — the documented
-    fallback behaviour in ``analytics/mc/engine.py``. The parameter names use
+    fallback behaviour in ``analytics/mc/engine.py``, which a config must opt in to
+    (``allow_toy_fallback: true``; off by default since #962). The parameter names use
     the engine's recognised override keys so sampling produces non-degenerate
     (std > 0) distributions for every aggregated KPI (``project_npv``,
     ``project_irr``, ``dscr_min``, ``llcr``, ``plcr``).
@@ -150,6 +151,8 @@ def mc_sampling_config(dutchbay_base_config: Dict[str, Any]) -> OmegaConf:
         OmegaConf configuration object with a ``monte_carlo.parameters`` block.
     """
     cfg = OmegaConf.create(dutchbay_base_config)
+    # The toy path is off by default (#962): this smoke config opts in explicitly.
+    cfg.monte_carlo.allow_toy_fallback = True
     cfg.monte_carlo.parameters = [
         {"name": "capex", "distribution": "uniform", "low": 90.0, "high": 110.0},
         {"name": "tariff", "distribution": "uniform", "low": 0.09, "high": 0.11},

@@ -291,7 +291,11 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1577 (2026-11-08, owner decision): DutchBay drops to 14 turbines
+    # Re-baselined by #1845 (2026-11-22, owner decision and KPI sign-off): the lender case
+    # sizes to the annual covenant DSCR, so the year-1 fold holds 1.30. min_dscr 1.2214 ->
+    # 1.30, LLCR 1.2910 -> 1.3795, equity IRR -23.37% -> -7.76%, project IRR -0.251% ->
+    # -0.138%, NPV -88.03M -> -87.98M, CFADS 155.46M -> 157.10M, facility 58.87M -> 55.29M.
+    # Prior: re-baselined by #1577 (2026-11-08, owner decision): DutchBay drops to 14 turbines
     # because the Blue Whale turbine stands on T2. 148.9 MW, wake 7.28% -> 7.32%, bankable
     # P50 464.3 -> 433.2 GWh, per-turbine capex/opex lines x 14/15. Project IRR -0.060% ->
     # -0.251%, equity IRR -23.01% -> -23.37%, NPV -91.40M -> -88.03M, min_dscr 1.2196 ->

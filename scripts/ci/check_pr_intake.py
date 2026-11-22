@@ -62,6 +62,65 @@ def _specific(text: str) -> bool:
     )
 
 
+def _sweep_omissions(
+    sweep_text: str, open_prs: list[dict[str, Any]], pr_number: int, created_at: str
+) -> list[int]:
+    """Open PRs the sweep must name but does not.
+
+    INTAKE-01 asks for the sweep "before opening a PR", so it covers the PRs that were
+    open when this one was opened. A PR opened later is not required here: its own
+    sweep must name this one, so every pair is still recorded once. Without this, each
+    new PR failed every older PR's intake on its next run. A PR whose creation time is
+    missing or unreadable is still required (fail closed), as is every open PR when this
+    PR's own creation time cannot be read.
+    """
+    try:
+        opened = _timestamp(created_at)
+    except (TypeError, ValueError):
+        opened = None
+
+    def _required(pr: dict[str, Any]) -> bool:
+        if opened is None or not pr.get("created_at"):
+            return True
+        try:
+            return _timestamp(str(pr["created_at"])) <= opened
+        except (TypeError, ValueError):
+            return True
+
+    return sorted(
+        int(pr["number"])
+        for pr in open_prs
+        if int(pr["number"]) != pr_number
+        and _required(pr)
+        and not _references(sweep_text, int(pr["number"]))
+    )
+
+
+def _last_opened(created_at: str, events: list[dict[str, Any]]) -> str:
+    """When this PR last became open: its latest ``reopened`` event, else ``created_at``.
+
+    ``created_at`` does not move when a PR is reopened, so without this a reopened PR
+    would not have to name PRs opened while it was closed (#1877). An unreadable
+    ``created_at`` is returned unchanged, and an unreadable ``reopened`` time returns
+    "", so the sweep then requires every open PR (fail closed).
+    """
+    try:
+        latest = _timestamp(created_at)
+    except (TypeError, ValueError):
+        return created_at
+    opened = created_at
+    for event in events:
+        if event.get("event") != "reopened":
+            continue
+        try:
+            reopened = _timestamp(str(event["created_at"]))
+        except (KeyError, TypeError, ValueError):
+            return ""
+        if reopened > latest:
+            latest, opened = reopened, str(event["created_at"])
+    return opened
+
+
 def evaluate(
     body: str,
     author: str,
@@ -183,12 +242,7 @@ def evaluate(
     sweep = _SWEEP.search(body)
     if sweep is None or sweep.group(1).strip().lower() in {"", "...", "tbd", "todo"}:
         return 1, "INTAKE-01: describe the open-PR sweep and overlap dispositions."
-    missing = sorted(
-        int(pr["number"])
-        for pr in open_prs
-        if int(pr["number"]) != pr_number
-        and not _references(sweep.group(1), int(pr["number"]))
-    )
+    missing = _sweep_omissions(sweep.group(1), open_prs, pr_number, created_at)
     if missing:
         return 1, "INTAKE-01: open-PR sweep omits " + ", ".join(
             f"#{n}" for n in missing
@@ -382,13 +436,25 @@ def main() -> int:
                             break
                     else:
                         raise ValueError("open PR list exceeds bounded ten-page sweep")
+                    events: list[dict[str, Any]] = []
+                    for page in range(1, 11):
+                        batch = _get_json(
+                            repository,
+                            f"issues/{pr_number}/events?per_page=100&page={page}",
+                            token,
+                        )
+                        events.extend(batch)
+                        if len(batch) < 100:
+                            break
+                    else:
+                        raise ValueError("PR event list exceeds bounded ten-page read")
                     sweep = _SWEEP.search(body)
                     assert sweep is not None
-                    missing = sorted(
-                        int(pr["number"])
-                        for pr in open_prs
-                        if int(pr["number"]) != pr_number
-                        and not _references(sweep.group(1), int(pr["number"]))
+                    missing = _sweep_omissions(
+                        sweep.group(1),
+                        open_prs,
+                        pr_number,
+                        _last_opened(created_at, events),
                     )
                     if missing:
                         code = 1

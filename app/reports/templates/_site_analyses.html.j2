@@ -1,0 +1,72 @@
+{#- Site-analysis sections (#1824): one per analysis the scenario declares, built by
+    app/reports/site_analysis_sections.py. Included by report.html.j2 only when
+    ctx.site_analyses is set, so other reports are byte-identical. -#}
+{%- set sa = ctx.site_analyses %}
+  <section class="page site-analyses">
+    <h2>Site Analyses (Screening)</h2>
+    <p class="muted">{{ sa.intro }}</p>
+    {% for s in sa.shown %}
+    <h3>{{ s.title }}
+      {%- if s.status == "completed" %} <span class="badge pass">completed</span>
+      {%- elif s.status == "stale" %} <span class="badge fail">stale</span>
+      {%- elif s.status == "failed" %} <span class="badge fail">failed</span>
+      {%- else %} <span class="badge">not run</span>{% endif %}</h3>
+    {% if s.reason %}
+    <p class="fx-warning"><strong>{% if s.status == "failed" %}Failed{% else %}Not run{% endif %}:</strong> {{ s.reason }}</p>
+    {% endif %}
+    {% if s.stale_reasons %}
+    <div class="fx-warning"><strong>Stale summary.</strong> The figures below were written
+      from code or inputs that have since changed:
+      <ul class="notes">
+        {% for r in s.stale_reasons %}
+        <li>{{ r }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if s.site %}
+    <p><strong>Site:</strong> {{ s.site }}</p>
+    {% endif %}
+    {% for label in s.labels %}
+    <p class="fx-warning">{{ label }}</p>
+    {% endfor %}
+    {% if s.hold %}
+    <p class="fx-warning"><strong>Hold:</strong> {{ s.hold }}</p>
+    {% endif %}
+    {% if s.figures %}
+    <table>
+      <thead><tr><th>Figure</th><th>Value</th></tr></thead>
+      <tbody>
+        {% for name, value in s.figures %}
+        <tr><td>{{ name }}</td><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% for t in s.tables %}
+    <table>
+      <caption>{{ t.caption }}</caption>
+      <thead><tr>{% for c in t.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in t.rows %}
+        <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if s.notes %}
+    <p class="muted"><strong>Scenario notes:</strong> {{ s.notes }}</p>
+    {% endif %}
+    {% if s.source or s.provenance %}
+    <p class="muted">Source: {{ s.source or "n/a" }}{% if s.provenance %} ({{ s.provenance }}){% endif %}.</p>
+    {% endif %}
+    {% endfor %}
+    {% if sa.not_applicable %}
+    <h3>Not applicable to this scenario</h3>
+    <ul class="notes">
+      {% for s in sa.not_applicable %}
+      <li><strong>{{ s.title }}</strong>: {{ s.reason }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>

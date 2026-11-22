@@ -77,8 +77,8 @@ network and a resolve - so the numbers above stay in the pull request's receipts
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: all are pure functions over text, exercised against mutated
-copies rather than trusted - 101 controls: 15 over the ``Makefile``, 44 over the main audit
-workflow, 12 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
+copies rather than trusted - 107 controls: 15 over the ``Makefile``, 47 over the main audit
+workflow, 15 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
 hygiene (twelve shapes against each workflow file: cache, pins and canary), and 6 over the
 tooling pins against the lock. The canary's own verdict function carries its negative
 controls inline in one test, against crafted pip-audit reports. The claim is deliberately not
@@ -122,6 +122,19 @@ check had from the start. The lesson, recorded because it has now recurred four 
 repository in two days: controls drawn from the list of shapes a reviewer handed over will
 cover exactly those shapes. Derive them from the construct's grammar instead - every value
 GitHub Actions accepts in that field, every key it accepts in that trigger.
+
+**What no test in this tree can pin (#1413).** The invocation is pinned here by exact
+equality, so ``make -i security`` (failing audits exit 0) and ``make security
+PIP_AUDIT_IGNORES=...`` (a suppression injected from the command line, which overrides the
+Makefile's empty assignment) are both refused, each with its own control in both workflow
+guards. But whether a red gate actually blocks a merge, and whether a draft is refused, is
+decided outside the tree, by repository ruleset 17414541 ("main branch protection"). Read
+through the API on 2026-11-21, its required checks were ``Test Summary``, ``fastlane``,
+``smoke``, ``Verification receipts (VERIFY-01)`` and ``Verification intake (INTAKE-01)``. Only
+the last two were bound to the GitHub Actions integration; the first three accepted a status
+of that name from any source. ``Security Scan`` reaches the merge only through ``Test
+Summary``'s ``needs``. Binding the three is the owner's change to make, and no in-tree test can
+observe it either way.
 """
 
 from __future__ import annotations
@@ -172,7 +185,7 @@ DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
 # PyYAML parses a bare `on:` key as the boolean True (YAML 1.1 truthiness).
 ON_KEYS = (True, "on")
-TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 6}
+TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 8}
 # The one runner both committed gate jobs use. Exact equality, so a label list, a runner
 # group or a self-hosted label fails closed rather than being judged harmless.
 GATE_RUNNER = "ubuntu-latest"
@@ -1383,6 +1396,25 @@ def _with_duplicated_gate_step() -> Workflow:
             "must run `make security` itself",
             id="gate swallowed by a shell or-true",
         ),
+        # #1413: the two invocation-surface bypasses the issue names. Neither can be seen from
+        # inside the Makefile, so only the workflow guard can refuse them.
+        pytest.param(
+            lambda: _mutate_gate_step(run="make -i security"),
+            "must run `make security` itself",
+            id="make ignore-errors flag lets failing audits exit 0",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(run="make --ignore-errors security"),
+            "must run `make security` itself",
+            id="make long ignore-errors flag lets failing audits exit 0",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(
+                run="make security PIP_AUDIT_IGNORES=--ignore-vuln=GHSA-0000-0000-0000"
+            ),
+            "must run `make security` itself",
+            id="command-line variable injects an audit suppression",
+        ),
         pytest.param(
             lambda: _mutate_workflow(env={"MAKEFLAGS": "-n"}),
             "workflow environment must be exactly",
@@ -1868,6 +1900,24 @@ def _merge_gate_with_duplicated_step() -> Workflow:
             lambda: _mutate_merge_gate_step(run="make security || true"),
             "exactly once",
             id="gate swallowed by a shell or-true",
+        ),
+        # #1413: the same two invocation-surface bypasses on the pull-request gate.
+        pytest.param(
+            lambda: _mutate_merge_gate_step(run="make -i security"),
+            "exactly once",
+            id="make ignore-errors flag lets failing audits exit 0",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate_step(run="make --ignore-errors security"),
+            "exactly once",
+            id="make long ignore-errors flag lets failing audits exit 0",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate_step(
+                run="make security PIP_AUDIT_IGNORES=--ignore-vuln=GHSA-0000-0000-0000"
+            ),
+            "exactly once",
+            id="command-line variable injects an audit suppression",
         ),
         pytest.param(
             _merge_gate_with_duplicated_step,

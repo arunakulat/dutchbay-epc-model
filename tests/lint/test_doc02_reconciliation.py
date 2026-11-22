@@ -80,3 +80,116 @@ def test_changelog_readme_documents_fragment_architecture() -> None:
     readme = CHANGELOG_README_PATH.read_text(encoding="utf-8")
     assert "scripts/compile_changelog.py" in readme
     assert "Do **not** edit `CHANGELOG.md` directly for routine changes" in readme
+
+
+# #1826, owner ruling 2026-11-21 option B: a KPI-moving PR bumps VERSION; CHANGELOG.md is
+# compiled only at release cuts. The CSV is the authority; these files restate it.
+GATEWAYS = ("CLAUDE.md", "AGENTS.md", "Rules to follow.md", "RELEASING.md")
+# The stale wording each gateway carried before #1826: a PR edits both files.
+STALE_GATEWAY_WORDING = (
+    "Update `VERSION` and `CHANGELOG.md` when",
+    "also need\n    `VERSION` and `CHANGELOG.md`",
+    "updates the model [`CHANGELOG.md`](CHANGELOG.md) (via `changelog.d/`) and bumps",
+)
+
+
+# Files that restate DOC-02 in passing rather than as a gateway: they need not repeat the
+# whole rule, but must not carry the pre-#1826 wording that a PR updates both files.
+PASSING_MENTIONS = (
+    ".claude/skills/steward/SKILL.md",
+    ".agents/skills/steward/SKILL.md",
+    "docs/dutchbay-epc-model-brief.md",
+)
+STALE_PASSING_WORDING = (
+    "impact disclosure, `VERSION` and `CHANGELOG.md`",
+    "`VERSION` and the changelog move when",
+)
+
+
+def _flat(text: str) -> str:
+    """Collapse whitespace so a wrapped line reads as one sentence."""
+    return " ".join(text.split())
+
+
+def gateway_problems(texts: dict[str, str], description: str) -> list[str]:
+    """Return one message per gateway that disagrees with the DOC-02 row.
+
+    Args:
+        texts: Gateway file name to its full text.
+        description: The DOC-02 CSV description.
+
+    Returns:
+        Human-readable problems; empty when every gateway agrees with the row.
+    """
+    problems = []
+    if "bump VERSION in the same PR" not in description:
+        problems.append("CSV: DOC-02 no longer says a KPI-moving PR bumps VERSION")
+    if "A PR never edits CHANGELOG.md" not in description:
+        problems.append("CSV: DOC-02 no longer says a PR never edits CHANGELOG.md")
+    for name, text in texts.items():
+        flat = _flat(text)
+        if "DOC-02" not in flat:
+            problems.append(f"{name}: does not cite DOC-02")
+        if "bumps `VERSION`" not in flat and "bumps [`VERSION`](VERSION)" not in flat:
+            problems.append(f"{name}: does not say a KPI-moving PR bumps VERSION")
+        if (
+            "never edits" not in flat
+            or "release cuts compile the fragments" not in flat
+        ):
+            problems.append(
+                f"{name}: does not say CHANGELOG.md is compiled at release cuts"
+            )
+        for stale in STALE_GATEWAY_WORDING:
+            if _flat(stale) in flat:
+                problems.append(
+                    f"{name}: still carries the pre-#1826 wording {stale!r}"
+                )
+    return problems
+
+
+def _gateway_texts() -> dict[str, str]:
+    return {name: (REPO_ROOT / name).read_text(encoding="utf-8") for name in GATEWAYS}
+
+
+def test_gateways_restate_doc02_option_b() -> None:
+    """CLAUDE.md, AGENTS.md, Rules to follow.md and RELEASING.md agree with the DOC-02 row."""
+    assert gateway_problems(_gateway_texts(), _get_doc02_row()["description"]) == []
+
+
+def test_gateway_check_fires_on_drift() -> None:
+    """VERIFY-01(5): each way a gateway or the row can drift is observed failing."""
+    description = _get_doc02_row()["description"]
+    texts = _gateway_texts()
+    old_line = "\n- Update `VERSION` and `CHANGELOG.md` when it moves a KPI.\n"
+    stale = {**texts, "AGENTS.md": texts["AGENTS.md"] + old_line}
+    assert any("pre-#1826" in p for p in gateway_problems(stale, description))
+    no_bump = {**texts, "CLAUDE.md": texts["CLAUDE.md"].replace("bumps `VERSION`", "x")}
+    assert any("bumps VERSION" in p for p in gateway_problems(no_bump, description))
+    no_cut = {
+        **texts,
+        "RELEASING.md": texts["RELEASING.md"].replace("never edits", "may edit"),
+    }
+    assert any("release cuts" in p for p in gateway_problems(no_cut, description))
+    option_a = description.replace("bump VERSION in the same PR, ", "")
+    assert any("CSV:" in p for p in gateway_problems(texts, option_a))
+
+
+def stale_passing_mentions(texts: dict[str, str]) -> list[str]:
+    """Return one message per passing mention that still says a PR edits CHANGELOG.md."""
+    return [
+        f"{name}: still carries the pre-#1826 wording {stale!r}"
+        for name, text in texts.items()
+        for stale in STALE_PASSING_WORDING
+        if _flat(stale) in _flat(text)
+    ]
+
+
+def test_passing_mentions_drop_the_pre_1826_wording() -> None:
+    """The steward skill (both copies) and the brief no longer say a PR edits both files."""
+    texts = {
+        name: (REPO_ROOT / name).read_text(encoding="utf-8")
+        for name in PASSING_MENTIONS
+    }
+    assert stale_passing_mentions(texts) == []
+    for stale in STALE_PASSING_WORDING:
+        assert stale_passing_mentions({"probe": f"x {stale} y"}), stale

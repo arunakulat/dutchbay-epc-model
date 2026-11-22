@@ -29,7 +29,9 @@ Protected surfaces
    - ``finance/`` (all modules — ZERO exceptions)
    - ``api/`` (all modules — ZERO exceptions)
    - ``wind_resource/`` (all modules — ZERO exceptions since #1615)
-   - ``app/`` (all modules — ZERO exceptions since #1615)
+   - ``app/`` (all modules — ZERO exceptions since #1615, except the one report seam
+     ``app/reports/aep_resource_sensitivity.py``, which may import ``aep_tornado`` and
+     ``mc_aep_weibull`` only: #1615 step B, ``REPORT_SEAM_ALLOWLIST``)
 3. Production evaluation & loader core (ZERO exceptions):
    - ``analytics/evaluation_v14.py``
    - ``analytics/pipeline_v14_enhanced.py``
@@ -91,6 +93,25 @@ PROTECTED_PACKAGE_DIRS: Tuple[str, ...] = (
 #: (``aep_summary.py`` and ``aep_integral.py``) and repointed all three, so the list is now
 #: empty. No entries may be added.
 PHASE_0_LEGACY_ALLOWLIST: Dict[str, frozenset[str]] = {}
+
+#: The one report seam that may consume the cluster (#1615 step B; owner ruling 2026-11-16
+#: "wire into reports", ADR section 5). It builds the lender report's labelled wind-resource
+#: sensitivity from the AEP tornado and the Monte Carlo AEP, beside the committed basis and
+#: never in place of it. Finance, the API, ``wind_resource/`` and the runners stay closed, and
+#: no other ``app/`` file may import the cluster. No entries may be added without an owner
+#: ruling.
+REPORT_SEAM_ALLOWLIST: Dict[str, frozenset[str]] = {
+    "app/reports/aep_resource_sensitivity.py": frozenset(
+        {"analytics.wind.aep_tornado", "analytics.wind.mc_aep_weibull"}
+    ),
+}
+
+
+def _allowed(rel: str) -> frozenset[str]:
+    """The cluster modules a protected file may import (legacy plus the report seam)."""
+    return PHASE_0_LEGACY_ALLOWLIST.get(rel, frozenset()) | REPORT_SEAM_ALLOWLIST.get(
+        rel, frozenset()
+    )
 
 
 def _dotted(node: Optional[cst.BaseExpression]) -> str:
@@ -193,7 +214,7 @@ def _scan_protected_surfaces() -> Tuple[int, List[Tuple[str, List[str]]]]:
         try:
             hits, mods = _collect(full_path.read_text(encoding="utf-8"), rel_path)
             scanned += 1
-            allowed = PHASE_0_LEGACY_ALLOWLIST.get(rel_path, frozenset())
+            allowed = _allowed(rel_path)
             unauthorized = mods - allowed
             if unauthorized:
                 violations.append((rel_path, hits))
@@ -213,7 +234,7 @@ def _scan_protected_surfaces() -> Tuple[int, List[Tuple[str, List[str]]]]:
             try:
                 hits, mods = _collect(path.read_text(encoding="utf-8"), rel)
                 scanned += 1
-                allowed = PHASE_0_LEGACY_ALLOWLIST.get(rel, frozenset())
+                allowed = _allowed(rel)
                 unauthorized = mods - allowed
                 if unauthorized:
                     violations.append((rel, hits))
@@ -277,6 +298,34 @@ def test_protected_live_surfaces_never_import_orphaned_aep_cluster() -> None:
 def test_legacy_allowlist_is_minimal() -> None:
     """The Phase 0 allowlist is empty: #1615 repointed the three legacy sites."""
     assert PHASE_0_LEGACY_ALLOWLIST == {}
+
+
+def test_report_seam_allowlist_is_the_one_ruled_file() -> None:
+    """#1615 step B: exactly one report file may import exactly the tornado and the MC AEP."""
+    assert REPORT_SEAM_ALLOWLIST == {
+        "app/reports/aep_resource_sensitivity.py": frozenset(
+            {"analytics.wind.aep_tornado", "analytics.wind.mc_aep_weibull"}
+        )
+    }
+    assert (REPO_ROOT / "app/reports/aep_resource_sensitivity.py").is_file()
+
+
+def test_the_report_seam_is_still_closed_to_the_rest_of_the_cluster() -> None:
+    """Negative control: the seam may not import any other cluster module."""
+    rel = "app/reports/aep_resource_sensitivity.py"
+    _hits, mods = _collect(
+        "from analytics.wind.pipeline_aep_v14 import run_aep_pipeline\n", rel
+    )
+    assert mods - _allowed(rel) == {"analytics.wind.pipeline_aep_v14"}
+
+
+def test_another_report_file_is_still_closed_to_the_cluster() -> None:
+    """Negative control: the allowance is per file, not per package."""
+    rel = "app/reports/report_model.py"
+    _hits, mods = _collect(
+        "from analytics.wind.aep_tornado import run_aep_tornado\n", rel
+    )
+    assert mods - _allowed(rel) == {"analytics.wind.aep_tornado"}
 
 
 def test_moved_helpers_are_one_implementation() -> None:
