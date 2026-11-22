@@ -107,6 +107,21 @@ def test_shard_matrix_list_matches_total_shards() -> None:
     )
 
 
+def test_ordinary_shards_use_every_logical_cpu() -> None:
+    """`-n auto` counts physical cores when psutil is present: 2 workers on 4 vCPUs (#1878)."""
+    workflow = _workflow()
+    steps = workflow["jobs"]["test"]["steps"]
+    run = next(
+        step["run"]
+        for step in steps
+        if step.get("name", "").startswith("Run test shard")
+    )
+
+    pinned = re.search(r"(?m)^\s*-n logical \\$", run)
+    assert pinned, "shard pytest must run with -n logical"
+    assert "-n auto" not in run
+
+
 def test_coverage_gate_matrix_is_single_legged() -> None:
     """`enforced` is a JOB output, and matrix legs overwrite each other's job outputs.
 
