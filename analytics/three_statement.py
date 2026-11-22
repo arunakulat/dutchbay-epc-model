@@ -44,7 +44,7 @@ shield); distributions assume a 100% sweep; equity is the balancing item.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 #: Default tie-out tolerance, in the presentation currency (USD). The articulation invariants
 #: hold to FP rounding; the independent debt-retirement check allows the same small slack.
@@ -472,12 +472,22 @@ class CashflowWaterfallRow:
     scheduled DSCR); ``cash_to_equity`` is the engine's project-basis residual.
 
     The reconciliation to the DSCR covenant (#1897), set when the row publishes the coverage
-    CFADS: ``coverage_cfads`` (``cfads_coverage_usd``), ``tax_basis_difference``
-    (coverage minus project basis: the interest tax shield, the only difference between the
-    two passes), ``senior_fee`` (the period's senior fee, which the covenant deducts) and
-    ``covenant_dscr`` = (coverage CFADS - senior fee) / scheduled debt service, the annual
-    covenant DSCR (``debt_result['dscr_by_year']``). None where a figure is not published, or
-    where no scheduled debt service falls in the year.
+    CFADS and a debt result is given. The two CFADS bases differ in two ways, shown apart:
+
+    - ``fee_in_project_basis``: the project basis deducts the senior fee inside EBITDA, so
+      after the risk haircut (``senior_fee_lkr`` / ``fx_rate`` x (1 - ``risk_haircut_pct``));
+      the coverage CFADS is before the fee.
+    - ``tax_basis_difference``: what remains, the levered-tax difference (the interest tax
+      shield, and the tax effect of the fee). It is zero in a year with no tax.
+
+    So ``coverage_cfads`` (``cfads_coverage_usd``) = ``cfads`` + ``fee_in_project_basis`` +
+    ``tax_basis_difference``. The covenant then deducts the full ``senior_fee`` once:
+    ``covenant_cfads`` = coverage - senior fee. ``covenant_debt_service`` is the debt service
+    the covenant divides: the row's own debt period's service and, in operating year 1, the
+    bridge period's service whatever the bridge treatment, as the engine's ``dscr_by_year``
+    does. It can differ from ``scheduled_debt_service`` (the waterfall's), for example when the
+    bridge is capitalised. ``covenant_dscr`` = covenant CFADS / covenant debt service. None
+    where a figure is not published, or where no debt service falls in the year.
     """
 
     year: int
@@ -486,8 +496,11 @@ class CashflowWaterfallRow:
     balloon_sweep: float
     cash_to_equity: float
     coverage_cfads: Optional[float] = None
+    fee_in_project_basis: Optional[float] = None
     tax_basis_difference: Optional[float] = None
     senior_fee: Optional[float] = None
+    covenant_cfads: Optional[float] = None
+    covenant_debt_service: Optional[float] = None
     covenant_dscr: Optional[float] = None
 
 
@@ -520,24 +533,57 @@ class CashflowWaterfall:
     total_coverage_cfads: Optional[float] = None
 
 
-def _senior_fee_by_row(
-    debt_result: Optional[Mapping[str, Any]], n_rows: int
-) -> List[Optional[float]]:
-    """The senior fee charged in each operating row, from the debt period it maps to."""
-    out: List[Optional[float]] = [None] * n_rows
-    if not isinstance(debt_result, Mapping):
-        return out
-    fees = debt_result.get("senior_fee_usd")
-    if not isinstance(fees, (list, tuple)):
-        return out
+def _period_by_row(debt_result: Mapping[str, Any], n_rows: int) -> Dict[int, int]:
+    out: Dict[int, int] = {}
     for mapping in debt_result.get("annual_row_debt_period_map") or []:
         try:
             row, period = int(mapping["annual_row_index"]), int(mapping["debt_period"])
         except (KeyError, TypeError, ValueError):
             continue
-        if 0 <= row < n_rows and 0 <= period < len(fees):
-            out[row] = float(fees[period] or 0.0)
+        if 0 <= row < n_rows:
+            out[row] = period
     return out
+
+
+def _covenant_terms_by_row(
+    debt_result: Optional[Mapping[str, Any]], n_rows: int
+) -> List[Tuple[Optional[float], Optional[float]]]:
+    """(senior fee, covenant debt service) per operating row, from the debt result.
+
+    Both come from the debt period the row maps to. Operating year 1's covenant debt service
+    also carries the bridge period's service when that period maps to no row, whatever the
+    bridge treatment, as ``dscr_by_year`` does (``finance/debt/layer.py``).
+    """
+    out: List[Tuple[Optional[float], Optional[float]]] = [(None, None)] * n_rows
+    if not isinstance(debt_result, Mapping):
+        return out
+    fees = debt_result.get("senior_fee_usd")
+    service = debt_result.get("debt_service_total")
+    if not isinstance(fees, (list, tuple)) or not isinstance(service, (list, tuple)):
+        return out
+    periods = _period_by_row(debt_result, n_rows)
+    bridge = 0.0
+    bridge_period = debt_result.get("cfads_bridge_debt_period")
+    if bridge_period is not None:
+        bp = int(bridge_period)
+        if bp not in set(periods.values()) and 0 <= bp < len(service):
+            bridge = float(service[bp] or 0.0)
+    for row, period in periods.items():
+        if not (0 <= period < len(fees) and period < len(service)):
+            continue
+        svc = float(service[period] or 0.0) + (bridge if row == 0 else 0.0)
+        out[row] = (float(fees[period] or 0.0), svc)
+    return out
+
+
+def _fee_in_project_basis(row: Mapping[str, Any]) -> Optional[float]:
+    """The senior fee as the project basis carries it: in USD, after the risk haircut."""
+    fee_lkr = row.get("senior_fee_lkr")
+    fx = row.get("fx_rate")
+    if fee_lkr is None or not fx:
+        return None
+    retained = 1.0 - float(row.get("risk_haircut_pct") or 0.0)
+    return float(fee_lkr) / float(fx) * retained
 
 
 def build_cashflow_waterfall(
@@ -566,9 +612,8 @@ def build_cashflow_waterfall(
             ``cf_after_debt`` columns.
         currency: Presentation-currency label (the engine figures are USD).
         debt_result: The run's debt result. When given, with rows that publish
-            ``cfads_coverage_usd``, each row carries its senior fee (from
-            ``senior_fee_usd`` through ``annual_row_debt_period_map``) and its covenant DSCR,
-            (coverage CFADS - senior fee) / scheduled debt service (#1897).
+            ``cfads_coverage_usd``, each row carries the reconciliation to its covenant DSCR
+            (see :class:`CashflowWaterfallRow`; #1897).
 
     Returns:
         A :class:`CashflowWaterfall` with the per-year cascade rows and project-life totals.
@@ -582,7 +627,7 @@ def build_cashflow_waterfall(
     has_coverage = bool(annual_rows) and all(
         row.get("cfads_coverage_usd") is not None for row in annual_rows
     )
-    fees = _senior_fee_by_row(debt_result, len(annual_rows))
+    terms = _covenant_terms_by_row(debt_result, len(annual_rows))
     for i, row in enumerate(annual_rows):
         cfads = _f(row, "cf_pre_debt")
         scheduled = _f(row, "debt_service_total")
@@ -590,15 +635,21 @@ def build_cashflow_waterfall(
         # cf_after_debt is the engine's own residual; reconstruct it only if a row omits it.
         cash_to_equity = _f(row, "cf_after_debt", cfads - scheduled - balloon)
         coverage: Optional[float] = None
+        in_project: Optional[float] = None
         difference: Optional[float] = None
+        covenant_cfads: Optional[float] = None
         dscr: Optional[float] = None
-        fee = fees[i]
+        fee, covenant_service = terms[i] if has_coverage else (None, None)
         if has_coverage:
             coverage = _f(row, "cfads_coverage_usd")
-            difference = coverage - cfads
             total_coverage += coverage
-            if fee is not None and scheduled > 0.0:
-                dscr = (coverage - fee) / scheduled
+            if fee is not None:
+                in_project = _fee_in_project_basis(row)
+                if in_project is not None:
+                    difference = coverage - cfads - in_project
+                covenant_cfads = coverage - fee
+                if covenant_service is not None and covenant_service > 0.0:
+                    dscr = covenant_cfads / covenant_service
         rows.append(
             CashflowWaterfallRow(
                 year=int(_f(row, "year", i + 1)),
@@ -607,8 +658,11 @@ def build_cashflow_waterfall(
                 balloon_sweep=balloon,
                 cash_to_equity=cash_to_equity,
                 coverage_cfads=coverage,
+                fee_in_project_basis=in_project,
                 tax_basis_difference=difference,
-                senior_fee=fee if has_coverage else None,
+                senior_fee=fee,
+                covenant_cfads=covenant_cfads,
+                covenant_debt_service=covenant_service,
                 covenant_dscr=dscr,
             )
         )

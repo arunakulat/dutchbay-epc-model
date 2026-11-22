@@ -554,10 +554,14 @@ class WaterfallRow(BaseModel):
     scheduled_debt_service: float
     balloon_sweep: float
     cash_to_equity: float
-    #: #1897: the reconciliation to the covenant DSCR (None when not published).
+    #: #1897: the reconciliation to the covenant DSCR (None when not published). See
+    #: analytics.three_statement.CashflowWaterfallRow for each figure's source.
     coverage_cfads: Optional[float] = None
+    fee_in_project_basis: Optional[float] = None
     tax_basis_difference: Optional[float] = None
     senior_fee: Optional[float] = None
+    covenant_cfads: Optional[float] = None
+    covenant_debt_service: Optional[float] = None
     covenant_dscr: Optional[float] = None
 
 
@@ -583,6 +587,17 @@ class WaterfallBlock(BaseModel):
     total_cash_to_equity: float
     has_coverage_basis: bool = False
     total_coverage_cfads: Optional[float] = None
+    #: #1897: the years where project-basis CFADS falls short of the waterfall's scheduled
+    #: debt service, and the lowest and highest covenant DSCR in those years. The report
+    #: states these figures; it never asserts the covenant is met.
+    shortfall_years: List[int] = Field(default_factory=list)
+    shortfall_dscr_min: Optional[float] = None
+    shortfall_dscr_max: Optional[float] = None
+    #: Years whose covenant DSCR is below 1.00x.
+    below_one_years: List[int] = Field(default_factory=list)
+    #: Years whose covenant debt service differs from the waterfall's scheduled debt
+    #: service (a capitalised bridge period, for example).
+    service_differs_years: List[int] = Field(default_factory=list)
 
 
 class ResourceTrendRow(BaseModel):
@@ -2847,6 +2862,12 @@ def _waterfall_block(
     if result is None or not annual_rows:
         return None
     wf = build_cashflow_waterfall(annual_rows, debt_result=debt_result)
+    short = [
+        r
+        for r in wf.rows
+        if r.scheduled_debt_service > 0.0 and r.cfads < r.scheduled_debt_service
+    ]
+    short_dscrs = [r.covenant_dscr for r in short if r.covenant_dscr is not None]
     return WaterfallBlock(
         currency=wf.currency,
         rows=[
@@ -2857,8 +2878,11 @@ def _waterfall_block(
                 balloon_sweep=r.balloon_sweep,
                 cash_to_equity=r.cash_to_equity,
                 coverage_cfads=r.coverage_cfads,
+                fee_in_project_basis=r.fee_in_project_basis,
                 tax_basis_difference=r.tax_basis_difference,
                 senior_fee=r.senior_fee,
+                covenant_cfads=r.covenant_cfads,
+                covenant_debt_service=r.covenant_debt_service,
                 covenant_dscr=r.covenant_dscr,
             )
             for r in wf.rows
@@ -2869,6 +2893,20 @@ def _waterfall_block(
         total_cash_to_equity=wf.total_cash_to_equity,
         has_coverage_basis=wf.has_coverage_basis,
         total_coverage_cfads=wf.total_coverage_cfads,
+        shortfall_years=[r.year for r in short],
+        shortfall_dscr_min=min(short_dscrs) if short_dscrs else None,
+        shortfall_dscr_max=max(short_dscrs) if short_dscrs else None,
+        below_one_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_dscr is not None and r.covenant_dscr < 1.0
+        ],
+        service_differs_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_debt_service is not None
+            and abs(r.covenant_debt_service - r.scheduled_debt_service) > 0.005
+        ],
     )
 
 

@@ -1534,12 +1534,26 @@
       operating year N (post-COD); the DSCR-profile section indexes from financial close, so its
       construction and bridge periods precede operating year&nbsp;1.</p>
     {% if ctx.cashflow_waterfall.has_coverage_basis %}
+    {% set wf = ctx.cashflow_waterfall %}
     <p class="fx-warning"><strong>Basis.</strong> The debt is sized, and the DSCR covenant is
       tested, on the <em>coverage</em> CFADS, which carries the lower tax the project pays once
-      interest is deducted, less the senior fee. In a year where the project-basis CFADS below
-      falls short of debt service, cash to equity shows negative while the covenant DSCR is
-      still met. The reconciliation table after this one ties each year to the covenant
-      DSCR.</p>
+      interest is deducted, less the senior fee.
+      {% if wf.shortfall_years %}
+      {% if wf.shortfall_years|length == 1 %}In year {{ wf.shortfall_years[0] }}{% else %}In {{ wf.shortfall_years|length }} years ({{ wf.shortfall_years|join(", ") }}){% endif %}
+      the project-basis CFADS below falls short of debt service, so cash to equity shows
+      negative.
+      {% if wf.shortfall_dscr_min is not none %}
+      In {{ "that year" if wf.shortfall_years|length == 1 else "those years" }} the covenant
+      DSCR is {% if fmt_x(wf.shortfall_dscr_min) == fmt_x(wf.shortfall_dscr_max) %}{{ fmt_x(wf.shortfall_dscr_min) }}{% else %}{{ fmt_x(wf.shortfall_dscr_min) }} to {{ fmt_x(wf.shortfall_dscr_max) }}{% endif %}.
+      {% endif %}
+      {% else %}
+      In no year does the project-basis CFADS fall short of the scheduled debt service.
+      {% endif %}
+      {% if wf.below_one_years %}
+      The covenant DSCR is below 1.00x in year{{ "s" if wf.below_one_years|length != 1 }}
+      {{ wf.below_one_years|join(", ") }}.
+      {% endif %}
+      The reconciliation table after this one ties each year to the covenant DSCR.</p>
     {% endif %}
     <table>
       <thead>
@@ -1572,20 +1586,31 @@
     </table>
     {% if ctx.cashflow_waterfall.has_coverage_basis %}
     <h3>Reconciliation to the DSCR covenant</h3>
-    <p class="muted">Covenant DSCR = (coverage CFADS &minus; senior fee) &divide; scheduled debt
-      service. Coverage CFADS = project-basis CFADS + the tax-basis difference (the interest tax
-      shield). A year with no scheduled debt service (for example a refinanced balloon year)
-      has no covenant DSCR here; the refinanced balloon's coverage is reported in its own
-      section.</p>
+    <p class="muted">Coverage CFADS = project-basis CFADS + the senior fee as the project basis
+      carries it (deducted inside EBITDA, so after the risk haircut) + the tax-basis difference
+      (levered against unlevered tax: the interest tax shield and the tax effect of the fee;
+      zero in a year with no tax). Covenant DSCR = (coverage CFADS &minus; senior fee)
+      &divide; covenant debt service. The covenant debt service is the year's own debt service
+      and, in operating year&nbsp;1, the bridge period's service, as the engine's annual DSCR
+      counts it.
+      {% if ctx.cashflow_waterfall.service_differs_years %}
+      In year{{ "s" if ctx.cashflow_waterfall.service_differs_years|length != 1 }}
+      {{ ctx.cashflow_waterfall.service_differs_years|join(", ") }} it differs from the
+      waterfall's scheduled debt service, which leaves out a capitalised bridge period.
+      {% endif %}
+      A year with no debt service (for example a refinanced balloon year) has no covenant
+      DSCR here; the refinanced balloon's coverage is reported in its own section.</p>
     <table>
       <thead>
         <tr>
           <th>Year</th>
           <th style="text-align:right;">Project-basis CFADS</th>
+          <th style="text-align:right;">Senior fee in project basis</th>
           <th style="text-align:right;">Tax-basis difference</th>
           <th style="text-align:right;">Coverage CFADS</th>
           <th style="text-align:right;">Senior fee</th>
-          <th style="text-align:right;">Scheduled debt service</th>
+          <th style="text-align:right;">Covenant CFADS</th>
+          <th style="text-align:right;">Covenant debt service</th>
           <th style="text-align:right;">Covenant DSCR</th>
         </tr>
       </thead>
@@ -1594,10 +1619,12 @@
         <tr>
           <td>{{ r.year }}</td>
           <td class="num">{{ fmt_usd(r.cfads) }}</td>
+          <td class="num">{{ fmt_usd(r.fee_in_project_basis) }}</td>
           <td class="num">{{ fmt_usd(r.tax_basis_difference) }}</td>
           <td class="num">{{ fmt_usd(r.coverage_cfads) }}</td>
           <td class="num">{{ fmt_usd(r.senior_fee) }}</td>
-          <td class="num">{{ fmt_usd(r.scheduled_debt_service) }}</td>
+          <td class="num">{{ fmt_usd(r.covenant_cfads) }}</td>
+          <td class="num">{{ fmt_usd(r.covenant_debt_service) }}</td>
           <td class="num">{{ fmt_x(r.covenant_dscr) }}</td>
         </tr>
         {% endfor %}
