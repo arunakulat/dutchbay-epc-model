@@ -174,3 +174,44 @@ def test_labelling_touches_only_storage_options_and_labels_an_unrecorded_basis()
         f"not_a_recorded_basis [{unrecorded}]"
     )
     assert labelled.sections[1].tables[0].caption == f"c [{unrecorded}]"
+
+
+def test_the_section_prints_conditions_open_questions_and_window_flags_once(
+    wind_result: Mapping[str, Any],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real = lre.build_tariff_status
+
+    def signed_early(scenario: Mapping[str, Any], name: str, *a: Any, **k: Any) -> Any:
+        ppa = {**(scenario.get("ppa") or {}), "signing_date": "2026-05-01"}
+        return real({**scenario, "ppa": ppa}, name, *a, **k)
+
+    monkeypatch.setattr(lre, "build_tariff_status", signed_early)
+    out = _emit(wind_result, WIND, tmp_path)
+    html = out.html_path.read_text(encoding="utf-8")
+    start = html.index("<h2>Tariff Basis and Legal Status</h2>")
+    section = html[start : html.index("</section>", start)]
+    assert "<strong>Outside the effective window.</strong>" in section
+    assert (
+        "pucsl_fit_2026_wind: the assumed SPPA signing date 2026-05-01 is before the "
+        "rate takes effect (2026-08-25)." in section
+    )
+    assert "SPPA signing 2026-05-01" in section
+    assert (
+        "<strong>Condition (pucsl_fit_2026_wind):</strong> Applies only to an SPPA "
+        "signed on or after 25 August 2026 (Decision Annex 3 s.7(d))" in section
+    )
+    assert section.count("<strong>Open question (pucsl_fit_2026_wind):</strong>") == 1
+    # Three storage bases share one rate: its notes print once, not once per basis.
+    analogy = "wind_bess_on_solar_bess_formula"
+    assert section.count(f"<strong>Condition ({analogy}):</strong>") == 1
+    assert section.count(f"<strong>Open question ({analogy}):</strong>") == 1
+
+
+def test_the_section_has_no_window_flag_block_when_the_dates_are_inside(
+    wind_result: Mapping[str, Any], tmp_path: Path
+) -> None:
+    out = _emit(wind_result, WIND, tmp_path)
+    html = out.html_path.read_text(encoding="utf-8")
+    assert "Outside the effective window." not in html

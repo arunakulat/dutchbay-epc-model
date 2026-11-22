@@ -34,6 +34,7 @@ sources:
     verbatim:
       - "s.1: This decision, made on August 21, 2026, as per the powers vested with the Commission, in terms of the Section 29 (3) of Sri Lanka Electricity Act No. 36 of 2024 (Amended), considered the approved Tariff Methodology, the Government Policy, submissions by the stakeholders and other related legal provisions."
       - "s.1: The approved Feed in tariffs (Annex – 2) are effective from August 25, 2026, until the next tariff revision."
+      - "Annex 3 s.7(d): Independent Power Producers (IPPs) operating under SPPAs shall be eligible to execute Standard Power Purchase Agreements (SPPAs) using the Feed-in Tariff approved under this decision, provided that such SPPAs are signed on or after the effective date of this tariff decision."
   PUCSL-ANNEX2-2026-08:
     cited_in: conf/blue_whale_pucsl_fit_2026.yaml
     url: "https://www.pucsl.gov.lk/wp-content/uploads/2026/08/Annex-2-Summary-of-Approved-Feed-in-Tariffs.pdf"
@@ -65,6 +66,7 @@ rates:
     review: "until the next tariff revision"
     review_source: PUCSL-DECISION-2026-08
     conditions:
+      - "Applies only to an SPPA signed on or after 25 August 2026 (Decision Annex 3 s.7(d)). The effective window governs the SPPA signing date, not the operating period."
       - "The non-escalable component is adjusted once, 12 months after SPPA signing, for LKR/USD (70%) and CCPI (30%) (Annex 2 note; Methodology s.3.1). The model does not apply this adjustment."
     open_questions:
       - "Standardised-PPA eligibility: the Electricity Act No. 36 of 2024 s.11(3) caps standardised PPAs at 10 MW on a cumulative basis per contiguous location. Whether other capacity on the same location counts against that cap is open (conf/blue_whale_pucsl_fit_2026.yaml, standardised_ppa_limit)."
@@ -81,6 +83,7 @@ rates:
     review: "until the next tariff revision"
     review_source: PUCSL-DECISION-2026-08
     conditions:
+      - "Applies only to an SPPA signed on or after 25 August 2026 (Decision Annex 3 s.7(d)). The effective window governs the SPPA signing date, not the operating period."
       - "The non-escalable component is adjusted once, 12 months after SPPA signing, for LKR/USD (70%) and CCPI (30%) (Annex 2 note; Methodology s.3.1). The model does not apply this adjustment."
     open_questions:
       - "Standardised-PPA eligibility: the Electricity Act No. 36 of 2024 s.11(3) caps standardised PPAs at 10 MW on a cumulative basis per contiguous location. Whether other capacity on the same location counts against that cap is open (conf/blue_whale_pucsl_fit_2026.yaml, standardised_ppa_limit)."

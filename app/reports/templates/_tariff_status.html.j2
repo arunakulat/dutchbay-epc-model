@@ -18,7 +18,9 @@
         {% endfor %}
       </tbody>
     </table>
-    {% for r in ts.rows %}
+    {% set shown = namespace(ids=[]) %}
+    {% for r in ts.rows if r.rate_id not in shown.ids %}
+    {% set shown.ids = shown.ids + [r.rate_id] %}
     {% for c in r.conditions %}
     <p class="muted"><strong>Condition ({{ r.rate_id }}):</strong> {{ c }}</p>
     {% endfor %}

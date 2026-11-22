@@ -236,8 +236,7 @@
     {% endif %}
   </section>
 
-  {%- if ctx.tariff_legal_status %}{% include "_tariff_status.html.j2" %}{% endif %}
-
+  {% if ctx.tariff_legal_status %}{% include "_tariff_status.html.j2" %}{% endif %}
   {# 4b. Energy production (P50/P90) — RPT-1 #}
   {% if ctx.finance %}
   <section class="page">

@@ -4,8 +4,9 @@ Reads ``conf/tariff_legal_status.yaml``, the one shared registry of the tariffs 
 price, and resolves the record for one scenario. Every rate in the registry carries a
 ``status`` (``published``, ``analogy_unpublished`` or ``unconfirmed``), the instrument and
 clause that set it, and its effective window. The reader is strict: an unknown key, a missing
-key, a rate without a status, an unknown status, a malformed date or a reference to a rate or
-source that does not exist is an error that names the path (``FRAMEWORK-02``).
+key, a rate without a status, an unknown status, a malformed date, a reference to a rate or
+source that does not exist, or a cited source whose PDF hash differs from the one its config
+pins is an error that names the path (``FRAMEWORK-02``).
 
 Nothing here holds a site name, a rate or a date (``ARCH-01``): every value comes from the
 registry and the scenario. A scenario the registry does not list resolves to
@@ -242,6 +243,26 @@ _RATE_OPTIONAL = (
 )
 
 
+def _check_cited_pin(
+    sid: str, sha: Any, cited: str, path: str, errors: List[str]
+) -> None:
+    """A source cited from another config must carry the PDF hash that config pins."""
+    try:
+        with open(REPO_ROOT / cited, encoding="utf-8") as handle:
+            other = yaml.safe_load(handle)
+    except (OSError, yaml.YAMLError):
+        other = None
+    pinned = None
+    if isinstance(other, Mapping):
+        node = (other.get("sources") or {}).get(sid)
+        if isinstance(node, Mapping):
+            pinned = node.get("pdf_sha256")
+    if pinned is None:
+        errors.append(f"{path}.cited_in: {cited} pins no pdf_sha256 for {sid}")
+    elif pinned != sha:
+        errors.append(f"{path}.pdf_sha256: differs from the hash {cited} pins")
+
+
 def _read_sources(raw: Any, errors: List[str]) -> Dict[str, Mapping[str, Any]]:
     if not isinstance(raw, Mapping) or not raw:
         errors.append("sources: expected a non-empty mapping")
@@ -265,6 +286,8 @@ def _read_sources(raw: Any, errors: List[str]) -> Dict[str, Mapping[str, Any]]:
                 errors.append(
                     f"{path}.cited_in: not a file in the repository: {cited!r}"
                 )
+            else:
+                _check_cited_pin(str(sid), sha, cited, path, errors)
         elif not node.get("url") or not node.get("verbatim"):
             errors.append(
                 f"{path}: a source not cited from another config needs url and verbatim"
