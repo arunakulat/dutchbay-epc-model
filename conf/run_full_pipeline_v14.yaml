@@ -218,3 +218,16 @@ lender_report:
   # Target .html path. When null, defaults to '<export_dir>/lender_report.html'.
   # The PDF is written beside it with a .pdf suffix.
   path: null
+  # #1825 slice (i): capital-structure screening section (debt mix, capex contingency and
+  # gearing searches around the committed case, held to the scenario's constraints.*
+  # covenants). OPT-IN: off unless enabled. The lattice below is an analysis setting, not a
+  # site input; about 50 model evaluations at these defaults.
+  capital_structure:
+    enabled: false
+    lkr_bounds: [0.0, 0.6]
+    dfi_bounds: [0.0, 0.4]
+    mix_steps: 6
+    contingency_bounds: [0.0, 0.20]
+    contingency_steps: 11
+    gearing_bounds: [0.30, 0.80]
+    gearing_steps: 11

@@ -417,6 +417,73 @@
   </section>
   {% endif %}
 
+  {# 4d-ii. Capital-structure screening (#1825 slice i): debt mix, contingency and gearing
+     searches around the committed case, held to the scenario's covenants. Opt-in; never
+     replaces the committed structure. #}
+  {% if ctx.capital_structure %}
+  {% set cs = ctx.capital_structure %}
+  <section class="page capital-structure">
+    <h2>Capital Structure Screening</h2>
+    <p class="muted"><strong>Screening of alternatives, not the committed structure.</strong>
+      Each candidate re-runs the model with one financing choice changed and is ranked on
+      equity NPV; the committed case and every figure elsewhere in this report are unchanged.
+      Covenants held: {{ cs.covenants | join("; ") }}. Committed case: equity NPV
+      {{ fmt_usd(cs.committed_objective) }}, minimum period DSCR {{ fmt_x(cs.committed_dscr) }},
+      headline minimum DSCR {{ fmt_x(cs.committed_headline_dscr) }}.</p>
+    {% if cs.dscr_held_note %}<p class="muted capital-structure-dscr-held">{{ cs.dscr_held_note }}</p>{% endif %}
+    {% if cs.covenants_not_screened %}
+    <p class="muted">Declared covenants not screened on:</p>
+    <ul class="notes capital-structure-not-screened">
+      {% for line in cs.covenants_not_screened %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% for search in cs.searches %}
+    <h3>{{ search.kind }}</h3>
+    <p class="muted">Searched: {{ search.searched }}.
+      {%- if search.current %} Committed: {{ search.current }}.{% endif %}
+      {{ search.n_feasible }} of {{ search.n_evaluated }} candidates clear every covenant.
+      {%- if search.best_label %} Named: <strong>{{ search.best_label }}</strong>
+      {%- if search.best_objective is not none %} (equity NPV {{ fmt_usd(search.best_objective) }}){% endif %}.{% endif %}</p>
+    {% if search.note %}<p class="muted capital-structure-note">{{ search.note }}</p>{% endif %}
+    {% if search.infeasibility %}
+    <ul class="notes capital-structure-infeasible">
+      {% for line in search.infeasibility %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <table>
+      <thead>
+        <tr>
+          <th>Candidate</th>
+          <th style="text-align:right;">Equity NPV</th>
+          {% for key in cs.covenant_keys %}<th style="text-align:right;">{{ key }}</th>{% endfor %}
+          {% for key in cs.shown_keys %}<th style="text-align:right;">{{ key }} (shown)</th>{% endfor %}
+          <th>Covenants</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in search.candidates %}
+        <tr{% if c.best %} class="named"{% endif %}>
+          <td>{% if c.best %}<strong>{{ c.label }}</strong>{% else %}{{ c.label }}{% endif %}</td>
+          <td class="num">{{ fmt_usd(c.objective) }}</td>
+          {% for key in cs.covenant_keys %}<td class="num">{% if c.constraints.get(key) is not none %}{{ "%.3f" | format(c.constraints.get(key)) }}{% else %}&ndash;{% endif %}</td>{% endfor %}
+          {% for key in cs.shown_keys %}<td class="num">{% if c.constraints.get(key) is none %}&ndash;{% elif key.endswith("_usd") %}{{ fmt_usd(c.constraints.get(key)) }}{% else %}{{ "%.3f" | format(c.constraints.get(key)) }}{% endif %}</td>{% endfor %}
+          <td>{% if c.feasible %}clear{% else %}fail: {{ c.binding | join(", ") }}{% endif %}{% if c.also_clears %}; also within {{ c.also_clears | join(", ") }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endfor %}
+    {% if cs.searches_not_run %}
+    <ul class="notes capital-structure-not-run">
+      {% for line in cs.searches_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
   <section class="page">
@@ -463,6 +530,93 @@
     <p class="muted tornado-not-computed-note">&ldquo;not computed&rdquo; marks a driver
       whose shock the model refused, so it has no bar; the other drivers are unaffected.
       {% for r in ctx.tornado.not_computed_rows %}{{ r.label }}: not computed: {{ r.not_computed }}.{% if not loop.last %} {% endif %}{% endfor %}</p>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    {# #1818: the F-5 non-reliance line beside the sensitivities. #}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% elif ctx.tornado_not_computed %}
+  {# #1818: a tornado that was not computed is said so, not left out silently. #}
+  <section class="page">
+    <h2>Sensitivity Tornado</h2>
+    <p class="tornado-not-computed"><strong>Not computed.</strong> {{ ctx.tornado_not_computed }}.
+      This report therefore shows no one-at-a-time sensitivity; that is not a finding that
+      the drivers have no effect.</p>
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# 4e-ii. Wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+     Carlo, a labelled resource sensitivity beside the committed basis, never in place of it. #}
+  {% if ctx.aep_resource_sensitivity %}
+  {% set aep = ctx.aep_resource_sensitivity %}
+  <section class="page aep-resource-sensitivity">
+    <h2>Wind Resource Sensitivity &mdash; Net AEP</h2>
+    <p class="muted"><strong>Model output: resource sensitivity, not the report basis.</strong>
+      The energy and every financial figure in this report stay on the committed net P50/P90.
+      There is no measured site wind data and no P90 evidence, so these figures support no
+      bankable resource claim.</p>
+    <h3>AEP tornado (one at a time)</h3>
+    <p class="muted">Net AEP when each resource driver moves alone, from a base of
+      {{ fmt_gwh(aep.base_net_aep_gwh) }}; widest swing first.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Driver</th>
+          <th>Low case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th>High case</th>
+          <th style="text-align:right;">Net AEP</th>
+          <th style="text-align:right;">Swing</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in aep.tornado %}
+        <tr>
+          <td>{{ r.driver }}</td>
+          <td>{{ r.low_label }}</td>
+          <td class="num">{{ fmt_gwh(r.low_gwh) }}</td>
+          <td>{{ r.high_label }}</td>
+          <td class="num">{{ fmt_gwh(r.high_gwh) }}</td>
+          <td class="num">{{ fmt_gwh(r.swing_gwh) }} ({{ "%.1f"|format(r.swing_pct) }}%)</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% set aep_committed = aep.committed_p50_gwh is not none or aep.committed_p90_gwh is not none %}
+    <h3>AEP Monte Carlo</h3>
+    <p class="muted">{{ "{:,}".format(aep.mc_n_samples) }} draws of the Weibull A and k, each
+      with a {{ "%g"|format(aep.weibull_uncertainty_pct) }}% one-sigma (seed {{ aep.mc_seed }}).
+      P-values use the exceedance convention: P90 is exceeded in 90% of draws.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Net AEP</th>
+          <th style="text-align:right;">Resource Monte Carlo</th>
+          {% if aep_committed %}<th style="text-align:right;">Committed basis</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>P50</td><td class="num">{{ fmt_gwh(aep.mc_p50_gwh) }}</td>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p50_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P75</td><td class="num">{{ fmt_gwh(aep.mc_p75_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+        <tr><td>P90</td><td class="num">{{ fmt_gwh(aep.mc_p90_gwh) }}</td>
+          {% if aep_committed %}<td class="num">{{ fmt_gwh(aep.committed_p90_gwh) }}</td>{% endif %}</tr>
+        <tr><td>P99</td><td class="num">{{ fmt_gwh(aep.mc_p99_gwh) }}</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+        <tr><td>Mean (CV)</td><td class="num">{{ fmt_gwh(aep.mc_mean_gwh) }} ({{ "%.1f"|format(aep.mc_cv * 100) }}%)</td>{% if aep_committed %}<td class="num">&mdash;</td>{% endif %}</tr>
+      </tbody>
+    </table>
+    {% if aep.reconciliation %}
+    <h3>Why the figures differ</h3>
+    <ul class="notes aep-reconciliation">
+      {% for line in aep.reconciliation %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
     {% endif %}
   </section>
   {% endif %}

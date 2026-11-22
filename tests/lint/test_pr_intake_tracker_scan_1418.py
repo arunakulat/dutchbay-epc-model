@@ -104,6 +104,8 @@ class FakeGitHub:
             return self.comments[(page - 1) * 100 : page * 100]
         if path.startswith("pulls?state=open"):
             return OPEN_PRS if path.endswith("page=1") else []
+        if path.startswith(f"issues/{PR_NUMBER}/events?"):
+            return []
         raise AssertionError(f"unexpected path {path}")
 
 

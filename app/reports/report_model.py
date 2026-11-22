@@ -941,6 +941,108 @@ class YieldReconciliationBlock(BaseModel):
     rows: List[YieldReconciliationRow] = Field(default_factory=list)
 
 
+class AepTornadoRow(BaseModel):
+    """One driver of the resource-side AEP tornado (#1615 step B)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    driver: str
+    low_label: str
+    high_label: str
+    low_gwh: float
+    high_gwh: float
+    swing_gwh: float
+    swing_pct: float
+
+
+class AepResourceSensitivityBlock(BaseModel):
+    """The wind-resource AEP sensitivity: cluster tornado and Monte Carlo (#1615 step B).
+
+    A labelled resource sensitivity beside the report's basis, never in place of it: the
+    energy and every financial figure stay on the committed IEC P50/P90. ``reconciliation``
+    says why the cluster's figures differ from the committed ones.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    base_net_aep_gwh: float
+    tornado: List[AepTornadoRow]
+    mc_p50_gwh: float
+    mc_p75_gwh: float
+    mc_p90_gwh: float
+    mc_p99_gwh: float
+    mc_mean_gwh: float
+    mc_cv: float
+    mc_n_samples: int
+    mc_seed: int
+    weibull_uncertainty_pct: float
+    committed_p50_gwh: Optional[float] = None
+    committed_p90_gwh: Optional[float] = None
+    reconciliation: List[str] = Field(default_factory=list)
+
+
+class CapitalStructureCandidate(BaseModel):
+    """One candidate of a capital-structure search (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    objective: Optional[float] = None
+    constraints: Dict[str, float] = Field(default_factory=dict)
+    feasible: bool
+    binding: List[str] = Field(default_factory=list)
+    #: The candidate the search names: the best feasible one.
+    best: bool = False
+    #: Declared covenants the committed case fails (not screened on) that this candidate
+    #: nevertheless clears.
+    also_clears: List[str] = Field(default_factory=list)
+
+
+class CapitalStructureSearch(BaseModel):
+    """One capital-structure search around the committed case (#1825 slice i)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: str
+    searched: str
+    current: Optional[str] = None
+    best_label: Optional[str] = None
+    best_objective: Optional[float] = None
+    candidates: List[CapitalStructureCandidate]
+    n_evaluated: int
+    n_feasible: int
+    #: The infeasibility register (#741) when no candidate clears the covenants.
+    infeasibility: List[str] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
+class CapitalStructureBlock(BaseModel):
+    """Capital-structure screening: debt mix, contingency and gearing (#1825 slice i).
+
+    A screening of alternatives around the committed case, scored through the canonical
+    evaluation gateway; it never replaces the committed structure or moves a KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    objective_key: str
+    committed_objective: Optional[float] = None
+    committed_dscr: Optional[float] = None
+    #: The committed case's headline minimum DSCR (min_dscr, #790).
+    committed_headline_dscr: Optional[float] = None
+    covenants: List[str]
+    #: The KPI keys of the held covenants, in column order for the candidate tables.
+    covenant_keys: List[str] = Field(default_factory=list)
+    #: KPIs shown beside the held covenants for every candidate, never screened on.
+    shown_keys: List[str] = Field(default_factory=list)
+    #: Declared covenants the committed case itself fails, shown and not screened on.
+    covenants_not_screened: List[str] = Field(default_factory=list)
+    #: Set when the screened DSCR is held by construction on every candidate.
+    dscr_held_note: Optional[str] = None
+    searches: List[CapitalStructureSearch]
+    searches_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1089,6 +1191,18 @@ class ReportContext(BaseModel):
     #: lender report fills it, so a reader can tell "no sensitivity" from "sensitivity not
     #: run". Empty (the default) omits the list, so every other report stays byte-identical.
     sections_not_run: List[SectionNotRun] = Field(default_factory=list)
+    #: Why the tornado section has no rows to print (#1818), for example "not computed: ...
+    #: (outcome: degraded)". When set, the report prints the section heading with this line
+    #: instead of leaving the section out silently. None (the default) changes nothing.
+    tornado_not_computed: Optional[str] = None
+    #: The wind-resource AEP sensitivity (#1615 step B): the AEP cluster's tornado and Monte
+    #: Carlo, a labelled resource sensitivity beside the committed basis. The command-line
+    #: lender report fills it; None (the default) omits the section.
+    aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None
+    #: Capital-structure screening (#1825 slice i): the debt-mix, contingency and gearing
+    #: searches. The command-line lender report fills it when switched on; None (the
+    #: default) omits the section.
+    capital_structure: Optional[CapitalStructureBlock] = None
 
 
 def _build_kpi_rows(
