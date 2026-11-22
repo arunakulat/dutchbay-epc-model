@@ -221,15 +221,26 @@ def test_what_is_left_is_released_in_the_first_year_not_locked(
             )
 
 
-def test_the_lender_case_still_calls_the_sponsor_in_its_refinance_years(
+def test_the_lender_case_locks_its_refinance_years_and_applies_what_it_trapped(
     runs: Dict[str, Dict[str, Any]],
 ) -> None:
-    """Locked, but no trapped cash is left by year 15, so its calls stand (the issue's note)."""
+    """Locked in all three years; the cash trapped in year 15 meets the later shortfalls.
+
+    Before #1845 the lender case's refinanced balloon was large enough that no trapped
+    cash was left by year 15 and the sponsor was called in each year (the issue's note).
+    #1845 sizes the lender case to the annual covenant: the balloon falls USD 26.56M ->
+    11.05M, year 15 covers 0.96x (locked, so its cash is trapped), and that cash is
+    applied in years 16 and 17, so no year calls the sponsor.
+    """
     rows = _by_year(runs["lender"])
     for year in REFINANCE_YEARS:
         assert rows[year]["covenant_locked"] is True
-        assert rows[year]["equity_distribution_usd"] < 0.0
-        assert rows[year]["spv_cash_applied_usd"] == pytest.approx(0.0, abs=TOL)
+        assert rows[year]["equity_distribution_usd"] == pytest.approx(0.0, abs=TOL)
+    first, *later = REFINANCE_YEARS
+    trapped = rows[first]["retained_cash_usd"] - rows[first]["spv_cash_applied_usd"]
+    assert trapped > 0.0
+    applied = sum(rows[y]["spv_cash_applied_usd"] for y in later)
+    assert 0.0 < applied <= trapped + TOL
 
 
 # ── The schedule, on synthetic inputs ──────────────────────────────────────────────

@@ -574,3 +574,32 @@ def resolve_bridge_period_treatment(config: Mapping[str, Any]) -> str:
             f"expected one of {sorted(_BRIDGE_VALID_TREATMENTS)}"
         )
     return treatment
+
+
+#: Values of ``Financing_Terms.sizing_dscr_basis`` (#1845).
+SIZING_DSCR_BASES = ("period", "annual_covenant")
+
+
+def resolve_sizing_dscr_basis(config: Mapping[str, Any]) -> str:
+    """The DSCR basis debt is sized to (#1845): ``'period'`` or ``'annual_covenant'``.
+
+    ``period`` (absent key, the behaviour before #1845) sculpts and solves the gearing on
+    each debt period's own DSCR. ``annual_covenant`` sizes to the basis the covenant is
+    tested on, ``dscr_by_year``, which folds the synthetic half-year bridge period's
+    service into operating year 1: the sculpt reduces year 1's service by the bridge's,
+    and the gearing solve also requires every covenant year to meet the target, so an
+    interest-only year 1 that cannot be sculpted is met by less debt.
+
+    Raises:
+        ValueError: On any other value (CESSPIT fail-loud).
+    """
+    fin = _section_case_insensitive(config, "Financing_Terms") or {}
+    raw = (
+        fin.get("sizing_dscr_basis", "period") if isinstance(fin, Mapping) else "period"
+    )
+    basis = str(raw).strip().lower()
+    if basis not in SIZING_DSCR_BASES:
+        raise ValueError(
+            f"Financing_Terms.sizing_dscr_basis={raw!r} is not one of {SIZING_DSCR_BASES}"
+        )
+    return basis

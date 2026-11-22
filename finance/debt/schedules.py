@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from finance.debt.helpers import _as_float, _pmt, _rate_decimal
 
@@ -71,15 +71,30 @@ def _sculpted_schedule(
     cfads: List[float],
     dscr_target: float,
     senior_fee_rate: float = 0.0,
+    folded_index: Optional[int] = None,
 ) -> Dict[str, List[Tuple[float, float, float]]]:
+    """Sculpt each amortising period's service to ``(CFADS - fee) / dscr_target``.
+
+    ``folded_index`` (#1845) names the sculpt index whose service the covenant test folds
+    into the NEXT index (the synthetic half-year bridge, folded into operating year 1 by
+    ``finance.debt.layer``'s ``dscr_by_year``). When set, the next period's target service
+    is reduced by the folded period's service, so the annual covenant DSCR of that year,
+    not only each period's own, meets ``dscr_target``. ``None`` sculpts every period on
+    its own (the behaviour before #1845).
+    """
     obals = {k: tr.principal for k, tr in tranches.items()}
+    folded_service = 0.0
     schedules: Dict[str, List[Tuple[float, float, float]]] = {k: [] for k in tranches}
     io_years = max(tr.years_io for tr in tranches.values())
     year_index = 0
     for _ in range(io_years):
+        io_service = 0.0
         for k, tr in tranches.items():
             interest = obals[k] * tr.rate
             schedules[k].append((interest, 0.0, interest))
+            io_service += interest
+        if folded_index is not None and year_index == folded_index:
+            folded_service = io_service
         year_index += 1
     for _ in range(amort_years):
         cf = cfads[year_index] if cfads and year_index < len(cfads) else 0.0
@@ -97,6 +112,9 @@ def _sculpted_schedule(
         fee = senior_fee_rate * sum(obals.values())
         cf_net = cf - fee
         target_svc = max(0.0, cf_net / dscr_target) if dscr_target > 0 else 0.0
+        if folded_index is not None and year_index == folded_index + 1:
+            # #1845: the covenant year covers this period's service plus the folded one.
+            target_svc = max(0.0, target_svc - folded_service)
         interest_map = {k: obals[k] * tranches[k].rate for k in tranches}
         principal_total = max(0.0, target_svc - sum(interest_map.values()))
         total_bal = sum(obals.values()) or 1.0
@@ -115,5 +133,7 @@ def _sculpted_schedule(
             schedules[k].append(
                 (interest_map[k], principal_k, interest_map[k] + principal_k)
             )
+        if folded_index is not None and year_index == folded_index:
+            folded_service = sum(schedules[k][-1][2] for k in tranches)
         year_index += 1
     return schedules

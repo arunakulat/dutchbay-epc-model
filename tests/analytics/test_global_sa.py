@@ -770,10 +770,42 @@ def test_cli_method_pawn_covenant_metric_is_flagged_flat(capsys) -> None:
     assert "FLAT" in err
 
 
-def test_cli_method_pawn_fold_headline_ranks_real_drivers(capsys) -> None:
-    """#790: the min_dscr HEADLINE responds to shocks, so PAWN emits a real
-    driver ranking (not the FLAT disclosure) on the lender case."""
+def test_cli_method_pawn_fold_headline_ranks_real_drivers(capsys, tmp_path) -> None:
+    """#790: the min_dscr HEADLINE responds to shocks when the sizing does not bind the
+    year-1 fold, so PAWN emits a real driver ranking (not the FLAT disclosure).
+
+    #1845 sizes the committed lender case to the annual covenant, which pins the fold
+    (see the next test), so this runs the lender case on the per-period basis."""
     assert Path(LENDER).exists(), f"committed lendercase scenario missing: {LENDER}"
+    text = Path(LENDER).read_text(encoding="utf-8")
+    old = "  sizing_dscr_basis: annual_covenant"
+    assert text.count(old) == 1, "the lender case must declare the annual basis once"
+    period = tmp_path / Path(LENDER).name
+    period.write_text(
+        text.replace(old, "  sizing_dscr_basis: period"), encoding="utf-8"
+    )
+    cli = _load_global_sa_cli()
+    rc = cli.main(
+        [
+            "--config",
+            str(period),
+            "--method",
+            "pawn",
+            "--metric",
+            "min_dscr",
+            "--n",
+            "16",
+        ]
+    )
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "[min_dscr] PAWN median-KS ranking" in err
+    assert "FLAT" not in err
+
+
+def test_cli_method_pawn_annual_covenant_headline_is_flat(capsys) -> None:
+    """#1845: on the annual-covenant basis the lender case's min_dscr HEADLINE is
+    covenant-pinned, so PAWN gives the FLAT disclosure, as for min_dscr_period."""
     cli = _load_global_sa_cli()
     rc = cli.main(
         ["--config", LENDER, "--method", "pawn", "--metric", "min_dscr", "--n", "16"]
@@ -781,7 +813,7 @@ def test_cli_method_pawn_fold_headline_ranks_real_drivers(capsys) -> None:
     assert rc == 0
     err = capsys.readouterr().err
     assert "[min_dscr] PAWN median-KS ranking" in err
-    assert "FLAT" not in err
+    assert "FLAT" in err
 
 
 def test_cli_method_choices_include_pawn_and_default_morris() -> None:

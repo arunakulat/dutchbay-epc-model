@@ -50,7 +50,8 @@ HYBRID_BESS_SCENARIO = SCEN / "dutchbay_hybrid_bess_2025Q4.yaml"
 #: binding period is not the one the extra shield relieves).
 #: #1577: 14 turbines shrink the levy-inclusive capex and CFADS, and the solver lands three
 #: steps lower, 0.3775 -> 0.37.
-_CANON_GEARING = 0.37
+#: #1845: annual-covenant sizing binds the year-1 fold too, 0.37 -> 0.3475.
+_CANON_GEARING = 0.3475
 
 
 # --------------------------------------------------------------------------- #
