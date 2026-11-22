@@ -1474,6 +1474,11 @@ modules:
     role_description: Extracts configured IRR search bounds from scenario YAML configurations.
     excel_representation: governance_metadata
 
+  - module_path: finance.monthly_cascade_v14
+    pipeline_stage: core_finance
+    role_description: Computes an opt-in monthly CFADS cascade (energy shape, revenue, statutory charges, opex, CFADS) that reconciles to the annual engine.
+    excel_representation: formula
+
   - module_path: finance.native_cost_inputs
     pipeline_stage: cost_levies_epc
     role_description: Converts opt-in native-currency CAPEX lines to USD with auditable FX provenance.

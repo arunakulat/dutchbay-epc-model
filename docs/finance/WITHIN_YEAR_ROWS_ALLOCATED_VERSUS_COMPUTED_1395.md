@@ -26,6 +26,16 @@ No pipeline, API, report or workbook output reads these modules today. The v14 p
 `tests/finance/` call them directly. A within-year figure exists only for a caller that builds
 one.
 
+**A fifth module computes some lines per month (#1893).** `finance/monthly_cascade_v14.py`, opted into with
+`cashflow.monthly`, is the first dolphin of the monthly CFADS cascade. It is separate from the
+grid above and does not use `cashflow.resolution`. Energy follows a scenario-declared
+calendar-month shape, and generation revenue, statutory charges and CFADS are computed from
+that month's energy. Fixed opex, the senior fee and a BESS capacity charge accrue by days. Tax
+and augmentation capex are still the annual figures spread by days. Its `LINE_BASIS` labels
+each line `computed`, `time_accrued` or `allocated`, and every line still adds back to the
+annual figure. The rule in section 2 therefore describes the four modules above, not this
+one. Nothing reads it yet, and F-5 applies to it as to the others.
+
 ## 2. The rule: allocated from the annual engine, never re-computed
 
 Every within-year figure is the annual engine's figure divided across the year. No sub-period
