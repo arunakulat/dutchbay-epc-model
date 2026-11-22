@@ -138,9 +138,12 @@ def _assert_reconciles(cascade: mc.MonthlyCascade) -> int:
         assert months[-1]["is_year_end"] == 1.0
         scale = max(abs(annual["revenue_lkr"]), 1.0)
         for line in LINE_BASIS:
+            # A line the annual engine does not carry (the receivables change with
+            # no lag set) must be zero in every month.
+            expected = float(annual.get(line, 0.0))
             total = math.fsum(m[line] for m in months)
-            tol = RECONCILIATION_REL_TOLERANCE * max(scale, abs(annual[line]))
-            assert abs(total - annual[line]) <= tol, (y, line, total, annual[line])
+            tol = RECONCILIATION_REL_TOLERANCE * max(scale, abs(expected))
+            assert abs(total - expected) <= tol, (y, line, total, expected)
             checked += 1
     return checked
 
