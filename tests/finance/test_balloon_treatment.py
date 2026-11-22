@@ -70,8 +70,10 @@ def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None
     # ($34.3M/0.413 -> $38.4M/0.487).
     # #1577 (14 turbines): the smaller facility leaves a smaller balloon, $28.63M ->
     # $26.56M, at much the same fraction (0.391 -> 0.390).
-    assert dr["balloon_remaining"] == pytest.approx(26_560_552, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.390, abs=0.01)
+    # #1845 (annual-covenant sizing, 2026-11-22): the smaller facility amortises more of
+    # itself, $26.56M -> $11.05M (0.390 -> 0.173). Still over the 10% cap.
+    assert dr["balloon_remaining"] == pytest.approx(11_049_154, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.173, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -112,16 +114,21 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
     legacy = results["legacy_ignore"]["kpis"]["equity_irr"]
     sweep = results["cash_sweep"]["kpis"]["equity_irr"]
     dr = results["cash_sweep"]["debt_result"]
-    # Partial retirement: some balloon swept, a residual remains (CFADS now insufficient).
-    assert 0.0 < dr["balloon_residual"] < dr["balloon_remaining"]
-    assert sum(dr["balloon_resolution"]) > 0.0
+    # #1845 (annual-covenant sizing): the balloon is now small enough ($11.05M) that the
+    # sweep retires all of it, balloon and accrued interest, with no residual. Before,
+    # the sweep retired part of a $26.56M balloon and left a residual.
+    assert dr["balloon_remaining"] > 0.0
+    assert dr["balloon_residual"] == pytest.approx(0.0, abs=1.0)
+    assert sum(dr["balloon_resolution"]) > dr["balloon_remaining"]
     # Cash conserves: total swept + residual == the structural balloon plus the
     # interest it accrued after maturity (#1503: the balloon is not interest-free).
     assert sum(dr["balloon_interest"]) > 0.0
     assert sum(dr["balloon_resolution"]) + dr["balloon_residual"] == pytest.approx(
         dr["balloon_remaining"] + sum(dr["balloon_interest"]), rel=1e-9
     )
-    assert sweep < legacy - 0.025  # materially below the free pass, honest
+    # materially below the free pass, honest (#1845: the gap narrows with the smaller
+    # balloon, 6.3 points -> 2.1)
+    assert sweep < legacy - 0.015
     # #738 re-baseline: cash_sweep was the committed default until #1396 part B, so this
     # was the canonical equity IRR, re-baselined by #1397 (-7.85% -> -9.99%). #1503 and
     # #1504 (2026-10-31) move it to -10.03%: the swept balloon accrues interest, which
@@ -130,8 +137,9 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
     # equity waterfall holds, so the reserve released at maturity (USD 1.90M) and the
     # cash the fee's tax deduction leaves (about USD 0.12M a year) go to the balloon
     # instead of to equity while the balloon is unpaid; the residual falls from USD
-    # 18.92M to 14.89M.
-    assert sweep == pytest.approx(-0.1184, abs=0.003)
+    # 18.92M to 14.89M. #1577 (14 turbines) and #1845 (annual-covenant sizing, a
+    # smaller facility whose balloon the sweep now retires in full): -7.61%.
+    assert sweep == pytest.approx(-0.0761, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -146,8 +154,10 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     # -26.44%: the senior fee after maturity is charged on the refinanced balance
     # actually outstanding. #1505 (2026-11-01) moves it to -23.01%: the refinance
     # interest is deducted in the levered tax pass. It is still the worst of the five,
-    # which is the ordering this test pins.
-    assert refi == pytest.approx(-0.2301, abs=0.005)
+    # which is the ordering this test pins. #1577 (14 turbines): -23.37%. #1845
+    # (annual-covenant sizing, 2026-11-22): the balloon being refinanced falls $26.56M ->
+    # $11.05M, -23.37% -> -7.76%; still the worst of the five.
+    assert refi == pytest.approx(-0.0776, abs=0.005)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:

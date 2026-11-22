@@ -555,7 +555,7 @@ def test_dscr_index_space_collision_is_resolved() -> None:
     # And the value at a mapped period is that PERIOD's DSCR, which is the substance of
     # the fix — not merely two lists that happen to be equal.
     assert public[period] == debt_result["dscr_periods"][period]["dscr"]
-    assert public[period] == pytest.approx(2.5922041122119635)  # #1577 (was 2.6047)
+    assert public[period] == pytest.approx(2.6120900199254375)  # #1845 (was 2.5922)
 
 
 def test_cfads_timeline_pads_zero_when_tenor_outruns_operating_life() -> None:

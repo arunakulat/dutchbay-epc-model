@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from analytics.scenario_loader import load_scenario_config
 from app.api.responses import CaseResult
 from app.reports.renderer import render_report_html
 from app.reports.report_config import load_report_config
@@ -108,7 +109,12 @@ def test_a_min_dscr_between_the_two_floors_now_breaches() -> None:
 
 def test_lender_case_report_tests_the_scenario_covenant() -> None:
     scenario = yaml.safe_load(_LENDER_CFG.read_text(encoding="utf-8"))
-    full = evaluate_with_overrides(str(_LENDER_CFG), return_full_result=True)
+    # #1845 sizes the lender case to the annual covenant, which meets 1.30. This test is
+    # about reporting a breach, so it runs the lender case on the per-period sizing basis
+    # that motivated #1668 (year-1 fold below the covenant).
+    config = load_scenario_config(_LENDER_CFG)
+    config["Financing_Terms"]["sizing_dscr_basis"] = "period"
+    full = evaluate_with_overrides(raw_config=config, return_full_result=True)
     case = CaseResult.from_pipeline_result(full, scenario_variant="lendercase")
     min_dscr = case.kpis["min_dscr"]
     assert 1.20 <= min_dscr < 1.30, "the case that motivated #1668"

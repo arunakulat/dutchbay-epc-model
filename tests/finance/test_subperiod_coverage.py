@@ -160,11 +160,30 @@ def test_lender_quarters_reaggregate_to_the_debt_engine_and_dscr_by_year(
     assert any(q["dscr"] is None for q in view.periods), "the tail is past the tenor"
 
 
+@pytest.fixture(scope="module")
+def sized_lender_period_basis(
+    lender_config: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """The lender case sized on the per-period basis, where year 1's fold sits under it.
+
+    #1845 sizes the committed lender case to the annual covenant, which holds the fold at
+    or above the target, so the fold no longer sets the headline there.
+    """
+    config = copy.deepcopy(lender_config)
+    config["Financing_Terms"]["sizing_dscr_basis"] = "period"
+    debt_result, sizing_rows, _ = _size_debt_on_levered_cfads(
+        config,
+        build_annual_rows=build_annual_rows,
+        forbid_toy_fallback=False,
+    )
+    return debt_result, sizing_rows
+
+
 def test_the_folded_year_one_is_the_headline_and_the_quarters_carry_it(
-    sized_lender,
+    sized_lender_period_basis,
 ) -> None:
     """Even debt cash and profile CFADS give each year-1 quarter the folded ratio."""
-    debt, rows = sized_lender
+    debt, rows = sized_lender_period_basis
     view = build_subperiod_coverage(rows, debt, _calendar(ALL_EVEN))
     folded = debt["dscr_by_year"][debt["annual_row_debt_period_map"][0]["year"]]
     assert folded == debt["min_dscr"], "year 1's fold sets the lender headline"

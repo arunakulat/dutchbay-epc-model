@@ -17,6 +17,7 @@ from finance.debt.helpers import (
     _truthy_flag,
 )
 from finance.debt.layer import apply_debt_layer
+from finance.debt.terms import resolve_sizing_dscr_basis
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
 # log filters and caplog assertions still see these records.
@@ -48,6 +49,7 @@ def _solve_gearing_for_dscr(
     # One deep copy per solve isolates the caller's config; each trial gearing then
     # path-copies only the two mappings it changes (see _config_at_debt_ratio).
     base = copy.deepcopy(config)
+    covenant_basis = resolve_sizing_dscr_basis(config) == "annual_covenant"
 
     def _min_dscr_at(ratio: float) -> float:
         cfg = _config_at_debt_ratio(base, ratio)
@@ -70,6 +72,17 @@ def _solve_gearing_for_dscr(
         # and the solve degenerates to a near-zero facility. plan_debt's conservative
         # min_dscr (round-5 #3) still REPORTS the fold honestly.
         public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+        if covenant_basis:
+            # #1845 (owner, 2026-11-22): also hold every covenant year (dscr_by_year,
+            # bridge folded into year 1) at the target. The #737 degeneration below
+            # does not arise here: on this basis the sculpt already lands an amortising
+            # year 1's fold on target, so the fold binds only where year 1 is
+            # interest-only, and there it falls with gearing.
+            public = public + [
+                float(v)
+                for v in (core.get("dscr_by_year") or {}).values()
+                if v is not None
+            ]
         return min(public) if public else float(core.get("dscr_min", 0.0))
 
     # Scan gearing high -> low and return the MAX gearing whose achieved min DSCR meets

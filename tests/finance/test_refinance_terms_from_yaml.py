@@ -349,8 +349,10 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
         c["coverage"] for c in refi["coverage_by_period"]
     )
     assert refi["coverage_floor"] == 1.3
-    # The assumed refinance is not covered by project cash: equity funds most of it.
-    assert refi["min_coverage"] < 0.5
+    # The assumed refinance is not covered by project cash: equity funds part of it.
+    # #1845 (annual-covenant sizing): the smaller balloon lifts the minimum coverage from
+    # about 0.3 to 0.77, still under 1.0 and the 1.30 floor.
+    assert refi["min_coverage"] < 1.0
     assert refi["coverage_breach"] is True
 
 
