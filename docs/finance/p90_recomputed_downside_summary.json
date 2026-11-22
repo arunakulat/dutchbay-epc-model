@@ -1,0 +1,1330 @@
+{
+  "issue": 1836,
+  "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+  "scenarios": {
+    "scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.3007925295901595,
+          "llcr": 1.3997901824094676,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.1329386459242088,
+          "llcr": 1.2191616708750972,
+          "min_dscr": 1.13224838411819
+        },
+        "recomputed": {
+          "avg_dscr": 1.0988587572148323,
+          "llcr": 1.1862042185088446,
+          "min_dscr": 1.0833107453711324
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.098925503893398,
+          "llcr": 1.1863480138722196,
+          "min_dscr": 1.0833107453711324
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.0406340236721277,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.1198321459275737,
+          "min_dscr": 1.04,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3110954142622322,
+          "operating_year": 1,
+          "ratio_method": 1.1419120494024473,
+          "recomputed": 1.1185800256579315,
+          "sizing_downside": 1.0488763314097858
+        },
+        {
+          "base": 1.3,
+          "operating_year": 2,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.107408081235073,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1055590008303784,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1035517681087441,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1013696037376306,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 6,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0989934119220655,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.096401367072146,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 8,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0935684083366723,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0904656171011005,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0870594445485087,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 11,
+          "ratio_method": 1.13224838411819,
+          "recomputed": 1.0833107453711324,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.105020628825376,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 13,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0995193739074818,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 14,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0932151243534105,
+          "sizing_downside": 1.04
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234377,
+      "net_aep_p50_gwh": 433.2,
+      "net_aep_p90_gwh": 377.3,
+      "p90_over_p50": 0.870960295475531,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.034079888709376505,
+        "llcr": -0.03295745236625258,
+        "min_dscr": -0.0489376387470577
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.05822473354270463,
+        "llcr": 0.06637207258127087,
+        "min_dscr": 0.04331074537113233
+      },
+      "scenario_sha256": "54e3c45364cace4195e988504c4d466cb45740f949ba4f351c871a9eec31f0ab",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": -6.674667856576555e-05,
+        "llcr": -0.00014379536337494336,
+        "min_dscr": 0.0
+      }
+    },
+    "scenarios/dutchbay_capex_sinohydro_lean_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.3000981698572829,
+          "llcr": 1.3785235706478518,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.1323338861660963,
+          "llcr": 1.2006392964114372,
+          "min_dscr": 1.1322483841181903
+        },
+        "recomputed": {
+          "avg_dscr": 1.1220987751717864,
+          "llcr": 1.1777799211429465,
+          "min_dscr": 1.0904656171011005
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.1184634341291193,
+          "llcr": 1.1766242869329366,
+          "min_dscr": 1.0787196631634715
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.0400785358858264,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.1028188565182815,
+          "min_dscr": 1.04,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3013743780019615,
+          "operating_year": 1,
+          "ratio_method": 1.1334454127888738,
+          "recomputed": 1.1102863828984884,
+          "sizing_downside": 1.0410995024015692
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 2,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.107408081235073,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1055590008303784,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 4,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.1035517681087443,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1013696037376306,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 6,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.0989934119220657,
+          "sizing_downside": 1.0400000000000005
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 7,
+          "ratio_method": 1.1322483841181907,
+          "recomputed": 1.0964013670721462,
+          "sizing_downside": 1.0400000000000005
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 8,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0935684083366723,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0904656171011005,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 10,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1419147963077532,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 11,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.360582562773323,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.1050230721242702,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 13,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0999841665022951,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 14,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0942746134550672,
+          "sizing_downside": 1.04
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234378,
+      "net_aep_p50_gwh": 433.2,
+      "net_aep_p90_gwh": 377.3,
+      "p90_over_p50": 0.870960295475531,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.01023511099430996,
+        "llcr": -0.02285937526849069,
+        "min_dscr": -0.04178276701708983
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.08202023928595992,
+        "llcr": 0.07496106462466501,
+        "min_dscr": 0.050465617101100424
+      },
+      "scenario_sha256": "097d9c734d9e7cac10d1bcda8203083997a1728d3bca1a83bb65766f1b38f4a4",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0036353410426670507,
+        "llcr": 0.0011556342100098593,
+        "min_dscr": 0.011745953937629006
+      }
+    },
+    "scenarios/dutchbay_hybrid_bess_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.4091231370179753,
+          "llcr": 1.5657492837678726,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.233747062174121,
+          "llcr": 1.3708798955908452,
+          "min_dscr": 1.1382051282051278
+        },
+        "recomputed": {
+          "avg_dscr": 1.3030888569580918,
+          "llcr": 1.3784532148505206,
+          "min_dscr": 1.121328683310871
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.3030888569580918,
+          "llcr": 1.3844354842552196,
+          "min_dscr": 1.121328683310871
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.2337464896309922,
+          "binds_gearing": true,
+          "factor": 0.875542,
+          "llcr": 1.3708792594086905,
+          "min_dscr": 1.1382046,
+          "source": "p90_aep"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.4882887801177025,
+          "operating_year": 1,
+          "ratio_method": 1.3030599398308642,
+          "recomputed": 1.2993683800994953,
+          "sizing_downside": 1.3030593351218136
+        },
+        {
+          "base": 1.3,
+          "operating_year": 2,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1337387020040535,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1382051282051284,
+          "recomputed": 1.1323893526537525,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1382051282051284,
+          "recomputed": 1.1309218583392604,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.138205128205128,
+          "recomputed": 1.1293241623731796,
+          "sizing_downside": 1.1382046
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 6,
+          "ratio_method": 1.1382051282051284,
+          "recomputed": 1.1275826227617234,
+          "sizing_downside": 1.1382046000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1256817433363777,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 8,
+          "ratio_method": 1.1382051282051278,
+          "recomputed": 1.1236038479723514,
+          "sizing_downside": 1.1382046
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.121328683310871,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1382051282051284,
+          "recomputed": 1.3029807379587242,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 2.312065727080026,
+          "operating_year": 11,
+          "ratio_method": 2.0243115902383106,
+          "recomputed": 2.7070573357292207,
+          "sizing_downside": 2.0243106508191
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234377,
+      "net_aep_p50_gwh": 507.0,
+      "net_aep_p90_gwh": 443.9,
+      "p90_over_p50": 0.875542406311637,
+      "recomputed_minus_ratio": {
+        "avg_dscr": 0.06934179478397096,
+        "llcr": 0.007573319259675415,
+        "min_dscr": -0.01687644489425666
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.06934236732709964,
+        "llcr": 0.007573955441830149,
+        "min_dscr": -0.0168759166891288
+      },
+      "scenario_sha256": "a4adcc8a8d29d1811d7255c421c6afcf5e397b13d880faf407550a83c915b4eb",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.0059822694046989255,
+        "min_dscr": 0.0
+      }
+    },
+    "scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.3814939804461748,
+          "llcr": 1.5615241167316307,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.2095565639448855,
+          "llcr": 1.3671805826768657,
+          "min_dscr": 1.138205128205128
+        },
+        "recomputed": {
+          "avg_dscr": 1.2460787482971158,
+          "llcr": 1.3488868739379467,
+          "min_dscr": 1.0973920045050292
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.2460787482971158,
+          "llcr": 1.3560713148511832,
+          "min_dscr": 1.0973920045050292
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.209556002627805,
+          "binds_gearing": true,
+          "factor": 0.875542,
+          "llcr": 1.3671799482114457,
+          "min_dscr": 1.1382046,
+          "source": "p90_aep"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.4956028557068133,
+          "operating_year": 1,
+          "ratio_method": 1.3094637231720994,
+          "recomputed": 1.2836630404117402,
+          "sizing_downside": 1.3094631154912548
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 2,
+          "ratio_method": 1.138205128205128,
+          "recomputed": 1.1141044678334195,
+          "sizing_downside": 1.1382046
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1122875655230988,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1103131553769081,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1081642805426082,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 6,
+          "ratio_method": 1.138205128205128,
+          "recomputed": 1.1058216063136372,
+          "sizing_downside": 1.1382046
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.1032629888623613,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 8,
+          "ratio_method": 1.1382051282051284,
+          "recomputed": 1.1004629462048032,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1382051282051282,
+          "recomputed": 1.0973920045050292,
+          "sizing_downside": 1.1382046000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.138205128205128,
+          "recomputed": 1.2874495809734436,
+          "sizing_downside": 1.1382046
+        },
+        {
+          "base": 2.000830929201109,
+          "operating_year": 11,
+          "ratio_method": 1.751812326375488,
+          "recomputed": 2.283944594721227,
+          "sizing_downside": 1.7518115134145977
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234378,
+      "net_aep_p50_gwh": 507.0,
+      "net_aep_p90_gwh": 443.9,
+      "p90_over_p50": 0.875542406311637,
+      "recomputed_minus_ratio": {
+        "avg_dscr": 0.036522184352230314,
+        "llcr": -0.018293708738919,
+        "min_dscr": -0.04081312370009882
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.03652274566931091,
+        "llcr": -0.01829307427349902,
+        "min_dscr": -0.04081259549497074
+      },
+      "scenario_sha256": "a9efa59e49424bd6b2c54b0bf2b142e1dee46ed471f2a25f823b8774e6e90f3d",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.007184440913236445,
+        "min_dscr": 0.0
+      }
+    },
+    "scenarios/dutchbay_lendercase_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.3004317864259085,
+          "llcr": 1.379512325009476,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.122484318634296,
+          "llcr": 1.19001227915239,
+          "min_dscr": 1.1203104209689292
+        },
+        "recomputed": {
+          "avg_dscr": 1.083529443566705,
+          "llcr": 1.1503161149092853,
+          "min_dscr": 1.0644800829934082
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.0817359849830237,
+          "llcr": 1.1498292305454672,
+          "min_dscr": 1.064046793256677
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.0246291279381572,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.0858042038456492,
+          "min_dscr": 1.0214972249149916,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3060450099627188,
+          "operating_year": 1,
+          "ratio_method": 1.1264199940743909,
+          "recomputed": 1.0964449065947641,
+          "sizing_downside": 1.027642301974083
+        },
+        {
+          "base": 1.3,
+          "operating_year": 2,
+          "ratio_method": 1.1203104209689292,
+          "recomputed": 1.0880531343830675,
+          "sizing_downside": 1.0214972249149916
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.12053318701001,
+          "recomputed": 1.0858469710981415,
+          "sizing_downside": 1.0218424923532603
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 4,
+          "ratio_method": 1.1207889939483777,
+          "recomputed": 1.083464526135159,
+          "sizing_downside": 1.022238970226967
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1210838427981225,
+          "recomputed": 1.0808901013028718,
+          "sizing_downside": 1.0226959595711866
+        },
+        {
+          "base": 1.3,
+          "operating_year": 6,
+          "ratio_method": 1.1214249658927447,
+          "recomputed": 1.0781065226607343,
+          "sizing_downside": 1.0232246698559464
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1218211003435732,
+          "recomputed": 1.0750950345748083,
+          "sizing_downside": 1.0238386428223107
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 8,
+          "ratio_method": 1.1222828257219823,
+          "recomputed": 1.0718352070051629,
+          "sizing_downside": 1.024554275859616
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.122822981462562,
+          "recomputed": 1.0683048684515823,
+          "sizing_downside": 1.0253914689430481
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1234571830761604,
+          "recomputed": 1.0644800829934082,
+          "sizing_downside": 1.0263744247176838
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 11,
+          "ratio_method": 1.1235219819509494,
+          "recomputed": 1.1502982615779835,
+          "sizing_downside": 1.026474857177643
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1228560968756705,
+          "recomputed": 1.0816545456811857,
+          "sizing_downside": 1.025442794871343
+        },
+        {
+          "base": 1.3,
+          "operating_year": 13,
+          "ratio_method": 1.1234072383738867,
+          "recomputed": 1.0757825141554473,
+          "sizing_downside": 1.0262970148964854
+        },
+        {
+          "base": 1.3,
+          "operating_year": 14,
+          "ratio_method": 1.1240496483827869,
+          "recomputed": 1.0691555333195564,
+          "sizing_downside": 1.0272926929496358
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234378,
+      "net_aep_p50_gwh": 433.2,
+      "net_aep_p90_gwh": 377.3,
+      "p90_over_p50": 0.870960295475531,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.03895487506759099,
+        "llcr": -0.039696164243104626,
+        "min_dscr": -0.05583033797552095
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.05890031562854792,
+        "llcr": 0.06451191106363607,
+        "min_dscr": 0.04298285807841662
+      },
+      "scenario_sha256": "147c697659f7eb17b82c1934e41edb36041888c13e2df335a8bdb69ce46f3bfe",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0017934585836814065,
+        "llcr": 0.000486884363818163,
+        "min_dscr": 0.00043328973673117943
+      }
+    },
+    "scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.3005060853305073,
+          "llcr": 1.3150817733677593,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.1326891643471846,
+          "llcr": 1.1453840099068693,
+          "min_dscr": 1.13224838411819
+        },
+        "recomputed": {
+          "avg_dscr": 1.0606051981785019,
+          "llcr": 1.0884880755231223,
+          "min_dscr": 1.0150323067025753
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.0552198621842355,
+          "llcr": 1.0873306256103086,
+          "min_dscr": 0.9991533247585945
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.040404868264406,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.0520654186942076,
+          "min_dscr": 1.04,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3070851946271012,
+          "operating_year": 1,
+          "ratio_method": 1.138419307324112,
+          "recomputed": 1.1032744970876995,
+          "sizing_downside": 1.045668155701681
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 2,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0933837663340393,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0889425535232555,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.083875005519758,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0780622218724363,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 6,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.0713541418434593,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0635586009383893,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 8,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0544254200575507,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0436226813301899,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.0307003152347372,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 11,
+          "ratio_method": 1.13224838411819,
+          "recomputed": 1.0150323067025753,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.0565381617517202,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 13,
+          "ratio_method": 1.1322483841181905,
+          "recomputed": 1.0417765654006017,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 14,
+          "ratio_method": 1.1322483841181903,
+          "recomputed": 1.023926536902614,
+          "sizing_downside": 1.0400000000000003
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234377,
+      "net_aep_p50_gwh": 433.2,
+      "net_aep_p90_gwh": 377.3,
+      "p90_over_p50": 0.870960295475531,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.07208396616868273,
+        "llcr": -0.05689593438374696,
+        "min_dscr": -0.1172160774156148
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.020200329914095816,
+        "llcr": 0.03642265682891477,
+        "min_dscr": -0.024967693297424765
+      },
+      "scenario_sha256": "6af9a38b88abc493bdef00f6f9810b2903f512fe670d07874b845e642117f9d1",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0053853359942663825,
+        "llcr": 0.001157449912813746,
+        "min_dscr": 0.01587898194398074
+      }
+    },
+    "scenarios/dutchbay_solar_only_2025Q4.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.325485358980397,
+          "llcr": 1.5463316281859951,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.1913802458766893,
+          "llcr": 1.38988253843276,
+          "min_dscr": 1.1684733514001804
+        },
+        "recomputed": {
+          "avg_dscr": 1.1630745199716437,
+          "llcr": 1.3598310048629172,
+          "min_dscr": 1.132077428750774
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.1630745199716437,
+          "llcr": 1.3651265854565586,
+          "min_dscr": 1.132077428750774
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.1913807032709143,
+          "binds_gearing": true,
+          "factor": 0.898826,
+          "llcr": 1.389883072035905,
+          "min_dscr": 1.1684738,
+          "source": "p90_aep"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.4480551897901397,
+          "operating_year": 1,
+          "ratio_method": 1.3015491543280837,
+          "recomputed": 1.2806377133664526,
+          "sizing_downside": 1.301549654018312
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 2,
+          "ratio_method": 1.1684733514001804,
+          "recomputed": 1.1483328485819582,
+          "sizing_downside": 1.1684738
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1684733514001806,
+          "recomputed": 1.1468518328724504,
+          "sizing_downside": 1.1684738000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1684733514001808,
+          "recomputed": 1.1452452328031524,
+          "sizing_downside": 1.1684738000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1684733514001808,
+          "recomputed": 1.1434997863808785,
+          "sizing_downside": 1.1684738000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 6,
+          "ratio_method": 1.1684733514001806,
+          "recomputed": 1.1416004050601751,
+          "sizing_downside": 1.1684738
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 7,
+          "ratio_method": 1.1684733514001808,
+          "recomputed": 1.1395298484897582,
+          "sizing_downside": 1.1684738000000001
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 8,
+          "ratio_method": 1.1684733514001806,
+          "recomputed": 1.1372683269253863,
+          "sizing_downside": 1.1684738
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1684733514001808,
+          "recomputed": 1.1347930118071998,
+          "sizing_downside": 1.1684738000000001
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1684733514001806,
+          "recomputed": 1.132077428750774,
+          "sizing_downside": 1.1684738
+        },
+        {
+          "base": 1.4322837589942279,
+          "operating_year": 11,
+          "ratio_method": 1.2873733877138724,
+          "recomputed": 1.243983284649895,
+          "sizing_downside": 1.287373881961746
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234375,
+      "net_aep_p50_gwh": 221.4,
+      "net_aep_p90_gwh": 199.0,
+      "p90_over_p50": 0.8988256549232159,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.028305725905045653,
+        "llcr": -0.030051533569842803,
+        "min_dscr": -0.03639592264940639
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": -0.028306183299270593,
+        "llcr": -0.030052067172987806,
+        "min_dscr": -0.0363963712492259
+      },
+      "scenario_sha256": "b6956b975ed33e27b6ce556b0e467b85ef33c0ea669f2a3ad68d5004a57943db",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.005295580593641436,
+        "min_dscr": 0.0
+      }
+    },
+    "scenarios/kalpitiya_lendercase_160m_fitted.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.300100475960484,
+          "llcr": 1.37766315094999,
+          "min_dscr": 1.2999999999999998
+        },
+        "ratio_method": {
+          "avg_dscr": 1.132485109960172,
+          "llcr": 1.2000480223184666,
+          "min_dscr": 1.132397587856103
+        },
+        "recomputed": {
+          "avg_dscr": 1.132505573203876,
+          "llcr": 1.1829501595054095,
+          "min_dscr": 1.093282402945331
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.1274634570905815,
+          "llcr": 1.1813407039596684,
+          "min_dscr": 1.0747525934570157
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.0400803807683872,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.102130520759992,
+          "min_dscr": 1.04,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3014066634467754,
+          "operating_year": 1,
+          "ratio_method": 1.1336228973130675,
+          "recomputed": 1.1118196271157588,
+          "sizing_downside": 1.0411253307574204
+        },
+        {
+          "base": 1.3,
+          "operating_year": 2,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.1090241056245775,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.132397587856103,
+          "recomputed": 1.1072982414652868,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.105426944889156,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 5,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.1033951349852364,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 6,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.101185707025971,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 7,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.098779182109092,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 8,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.0961532810844141,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.093282402945331,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 10,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.2530598905186061,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 11,
+          "ratio_method": 1.132397587856103,
+          "recomputed": 1.3661588710533952,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.1080861879932156,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 13,
+          "ratio_method": 1.132397587856103,
+          "recomputed": 1.1033716505316278,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 14,
+          "ratio_method": 1.1323975878561032,
+          "recomputed": 1.0980367975125944,
+          "sizing_downside": 1.04
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234378,
+      "net_aep_p50_gwh": 480.9,
+      "net_aep_p90_gwh": 418.9,
+      "p90_over_p50": 0.8710750675816178,
+      "recomputed_minus_ratio": {
+        "avg_dscr": 2.046324370397201e-05,
+        "llcr": -0.01709786281305714,
+        "min_dscr": -0.03911518491077204
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.09242519243548886,
+        "llcr": 0.08081963874541742,
+        "min_dscr": 0.05328240294533093
+      },
+      "scenario_sha256": "d8929551da5fad995476e16a74ec0f21dc03d44f5758ad9b3a9807d72e4c3d0f",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.005042116113294526,
+        "llcr": 0.0016094555457411008,
+        "min_dscr": 0.018529809488315285
+      }
+    },
+    "scenarios/mullikulam_2x50mw_mannar.yaml": {
+      "cases": {
+        "base": {
+          "avg_dscr": 1.301082337632765,
+          "llcr": 1.3295788164714992,
+          "min_dscr": 1.2999999999999996
+        },
+        "ratio_method": {
+          "avg_dscr": 1.1339260042479393,
+          "llcr": 1.158761402785078,
+          "min_dscr": 1.132982719759579
+        },
+        "recomputed": {
+          "avg_dscr": 1.0462330366554677,
+          "llcr": 1.0832282930568016,
+          "min_dscr": 0.9996293311419441
+        },
+        "recomputed_own_debt_tax": {
+          "avg_dscr": 1.045718462193734,
+          "llcr": 1.0830763751116916,
+          "min_dscr": 0.9996293311419441
+        },
+        "sizing_downside": {
+          "avg_dscr": 1.040865870106212,
+          "binds_gearing": false,
+          "factor": 0.8,
+          "llcr": 1.0636630531771993,
+          "min_dscr": 1.0399999999999998,
+          "source": "flat_factor"
+        }
+      },
+      "dscr_by_operating_year": [
+        {
+          "base": 1.3151527268587089,
+          "operating_year": 1,
+          "ratio_method": 1.1461887025966209,
+          "recomputed": 1.0933431965709972,
+          "sizing_downside": 1.0521221814869672
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 2,
+          "ratio_method": 1.1329827197595792,
+          "recomputed": 1.0762518959344758,
+          "sizing_downside": 1.0399999999999998
+        },
+        {
+          "base": 1.3,
+          "operating_year": 3,
+          "ratio_method": 1.1329827197595794,
+          "recomputed": 1.0712622079971468,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 4,
+          "ratio_method": 1.1329827197595794,
+          "recomputed": 1.0657016927029301,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 5,
+          "ratio_method": 1.132982719759579,
+          "recomputed": 1.0594792407961933,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 6,
+          "ratio_method": 1.1329827197595794,
+          "recomputed": 1.0524835876796297,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3000000000000003,
+          "operating_year": 7,
+          "ratio_method": 1.1329827197595796,
+          "recomputed": 1.0445774043219294,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 8,
+          "ratio_method": 1.1329827197595794,
+          "recomputed": 1.0355891785305795,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 9,
+          "ratio_method": 1.1329827197595792,
+          "recomputed": 1.0253018585539098,
+          "sizing_downside": 1.0399999999999998
+        },
+        {
+          "base": 1.2999999999999996,
+          "operating_year": 10,
+          "ratio_method": 1.132982719759579,
+          "recomputed": 1.0134366454446697,
+          "sizing_downside": 1.0399999999999998
+        },
+        {
+          "base": 1.3,
+          "operating_year": 11,
+          "ratio_method": 1.1329827197595792,
+          "recomputed": 0.9996293311419441,
+          "sizing_downside": 1.04
+        },
+        {
+          "base": 1.3,
+          "operating_year": 12,
+          "ratio_method": 1.1329827197595794,
+          "recomputed": 1.049349388356405,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.3,
+          "operating_year": 13,
+          "ratio_method": 1.1329827197595792,
+          "recomputed": 1.0373407362043052,
+          "sizing_downside": 1.0400000000000003
+        },
+        {
+          "base": 1.2999999999999998,
+          "operating_year": 14,
+          "ratio_method": 1.1329827197595792,
+          "recomputed": 1.0235161489414344,
+          "sizing_downside": 1.04
+        }
+      ],
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "llcr_discount_rate": 0.10178143097234378,
+      "net_aep_p50_gwh": 133.1,
+      "net_aep_p90_gwh": 116.0,
+      "p90_over_p50": 0.8715251690458302,
+      "recomputed_minus_ratio": {
+        "avg_dscr": -0.08769296759247158,
+        "llcr": -0.07553310972827654,
+        "min_dscr": -0.1333533886176349
+      },
+      "recomputed_minus_sizing_downside": {
+        "avg_dscr": 0.005367166549255842,
+        "llcr": 0.019565239879602236,
+        "min_dscr": -0.040370668858055736
+      },
+      "scenario_sha256": "45d0a5272e3c5f0ee138fc2201708dc1735bfe1f0588214004eacc31a24b17de",
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0005145744617336412,
+        "llcr": 0.00015191794510993617,
+        "min_dscr": 0.0
+      }
+    }
+  },
+  "scenarios_glob": "scenarios/**/*.yaml"
+}

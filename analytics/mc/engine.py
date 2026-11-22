@@ -45,6 +45,7 @@ from analytics.mc.covenant import (
     resolve_min_dscr_covenant as _resolve_min_dscr_covenant,
 )
 from analytics.mc.degradation import apply_degradation_if_enabled
+from analytics.mc.fixed_debt_coverage import fixed_debt_coverage_by_row
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
 from analytics.run_modes import POLICIES, resolve_run_mode
 
@@ -228,78 +229,17 @@ def _trial_fixed_debt_min_dscr(
     per-trial pipeline RE-SIZES debt (DSCR sculpting), pinning every trial's min_dscr at the
     covenant target and reporting ZERO breach probability. This tests each trial's CFADS
     against the BASE case's committed debt instead, on the basis the covenant is tested on
-    (#1728): the per-year ``dscr_by_year`` table that ``plan_debt`` publishes.
-
-    For each operating row of the base ``annual_row_debt_period_map`` (operating periods
-    only; construction, the bridge and post-tenor padding map to no row), the coverage is
-
-        (trial row CFADS - base senior fee of that period) / base debt service of that period
-
-    and operating year 1 also carries the base bridge period's service, exactly as
-    ``finance.debt.layer`` folds it into ``dscr_by_year``. A row whose base period carries
-    no service is not a covenant observation (``dscr_by_year`` holds ``None`` there). With
-    trial = base the result is the minimum of the base ``dscr_by_year``.
-
-    The senior fee is the BASE (committed-debt) fee, not the fee the trial charged on its
-    own re-sized debt, so a committed loan's fee does not shrink with the trial (#1728 L-1).
-    Stated limits: the trial's CFADS is its own pipeline's figure, so any CFADS term that
-    depends on the trial's own debt is not re-based; and the base debt service is zero
-    after the balloon period, so a refinanced balloon falls outside the stress (#1728 L-2;
-    its coverage is disclosed separately under ``debt_result.refinance``).
-
-    Reads ``annual_row_debt_period_map``, ``debt_service_total``, ``senior_fee_usd`` and
-    ``bridge_debt_period``; never the deprecated ``raw_dscr_series`` alias (REFACTOR-04).
-    Returns ``None`` when no operating row carries base service or the trial publishes no
-    CFADS for those rows.
+    (#1728). The per-row coverage, its basis and its stated limits are
+    :func:`analytics.mc.fixed_debt_coverage.fixed_debt_coverage_by_row` (moved there
+    unchanged for #1836). Returns ``None`` when no operating row carries base service or the
+    trial publishes no CFADS for those rows.
     """
-    base_map = base_debt_result.get("annual_row_debt_period_map") or []
-    base_svc = list(base_debt_result.get("debt_service_total") or [])
-    base_fee = list(base_debt_result.get("senior_fee_usd") or [])
-
-    mapped_periods = set()
-    for entry in base_map:
-        if isinstance(entry, Mapping) and _finite(entry.get("debt_period")) is not None:
-            mapped_periods.add(int(entry["debt_period"]))
-    bridge = _finite(base_debt_result.get("bridge_debt_period"))
-    bridge_extra = 0.0
-    if (
-        bridge is not None
-        and int(bridge) not in mapped_periods
-        and 0 <= int(bridge) < len(base_svc)
-    ):
-        bridge_extra = _finite(base_svc[int(bridge)]) or 0.0
-
-    trial_cfads: Dict[int, float] = {}
-    for entry in trial_debt_result.get("annual_row_debt_period_map") or []:
-        if not isinstance(entry, Mapping):
-            continue
-        row = _finite(entry.get("annual_row_index"))
-        cfads = _finite(entry.get("cfads_usd"))
-        if row is not None and cfads is not None:
-            trial_cfads[int(row)] = cfads
-
-    vals: List[float] = []
-    for row_i, entry in enumerate(base_map):
-        if not isinstance(entry, Mapping):
-            continue
-        period = _finite(entry.get("debt_period"))
-        row = _finite(entry.get("annual_row_index"))
-        if period is None or row is None or not 0 <= int(period) < len(base_svc):
-            continue
-        svc = _finite(base_svc[int(period)]) or 0.0
-        if svc <= 0.0:
-            continue  # no base service: not a covenant observation
-        if row_i == 0 and bridge_extra > 0.0:
-            svc += bridge_extra
-        cfads = trial_cfads.get(int(row))
-        if cfads is None:
-            continue
-        fee = (
-            _finite(base_fee[int(period)]) or 0.0
-            if int(period) < len(base_fee)
-            else 0.0
+    vals = [
+        dscr
+        for _, _, dscr in fixed_debt_coverage_by_row(
+            base_debt_result, trial_debt_result
         )
-        vals.append((cfads - fee) / svc)
+    ]
     return min(vals) if vals else None
 
 
