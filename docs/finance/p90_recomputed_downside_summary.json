@@ -1,6 +1,6 @@
 {
   "issue": 1836,
-  "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+  "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
   "scenarios": {
     "scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml": {
       "cases": {
@@ -15,6 +15,11 @@
           "min_dscr": 1.13224838411819
         },
         "recomputed": {
+          "avg_dscr": 1.0988587572148323,
+          "llcr": 1.1862042185088446,
+          "min_dscr": 1.0833107453711324
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.098925503893398,
           "llcr": 1.1863480138722196,
           "min_dscr": 1.0833107453711324
@@ -110,41 +115,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.1012334375451318,
+          "recomputed": 1.105020628825376,
           "sizing_downside": 1.0400000000000003
         },
         {
           "base": 1.3,
           "operating_year": 13,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0995512308695192,
+          "recomputed": 1.0995193739074818,
           "sizing_downside": 1.04
         },
         {
           "base": 1.3,
           "operating_year": 14,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0979049121715374,
+          "recomputed": 1.0932151243534105,
           "sizing_downside": 1.04
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234377,
       "net_aep_p50_gwh": 433.2,
       "net_aep_p90_gwh": 377.3,
       "p90_over_p50": 0.870960295475531,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.03401314203081074,
-        "llcr": -0.03281365700287764,
+        "avg_dscr": -0.034079888709376505,
+        "llcr": -0.03295745236625258,
         "min_dscr": -0.0489376387470577
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.0582914802212704,
-        "llcr": 0.06651586794464581,
+        "avg_dscr": 0.05822473354270463,
+        "llcr": 0.06637207258127087,
         "min_dscr": 0.04331074537113233
       },
       "scenario_sha256": "54e3c45364cace4195e988504c4d466cb45740f949ba4f351c871a9eec31f0ab",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": -6.674667856576555e-05,
+        "llcr": -0.00014379536337494336,
+        "min_dscr": 0.0
+      }
     },
     "scenarios/dutchbay_capex_sinohydro_lean_2025Q4.yaml": {
       "cases": {
@@ -159,6 +169,11 @@
           "min_dscr": 1.1322483841181903
         },
         "recomputed": {
+          "avg_dscr": 1.1220987751717864,
+          "llcr": 1.1777799211429465,
+          "min_dscr": 1.0904656171011005
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.1184634341291193,
           "llcr": 1.1766242869329366,
           "min_dscr": 1.0787196631634715
@@ -254,41 +269,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0867460701643652,
+          "recomputed": 1.1050230721242702,
           "sizing_downside": 1.04
         },
         {
           "base": 1.2999999999999998,
           "operating_year": 13,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0829213441564578,
+          "recomputed": 1.0999841665022951,
           "sizing_downside": 1.04
         },
         {
           "base": 1.2999999999999998,
           "operating_year": 14,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0787196631634715,
+          "recomputed": 1.0942746134550672,
           "sizing_downside": 1.04
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234378,
       "net_aep_p50_gwh": 433.2,
       "net_aep_p90_gwh": 377.3,
       "p90_over_p50": 0.870960295475531,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.01387045203697701,
-        "llcr": -0.02401500947850055,
-        "min_dscr": -0.053528720954718834
+        "avg_dscr": -0.01023511099430996,
+        "llcr": -0.02285937526849069,
+        "min_dscr": -0.04178276701708983
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.07838489824329287,
-        "llcr": 0.07380543041465515,
-        "min_dscr": 0.03871966316347142
+        "avg_dscr": 0.08202023928595992,
+        "llcr": 0.07496106462466501,
+        "min_dscr": 0.050465617101100424
       },
       "scenario_sha256": "097d9c734d9e7cac10d1bcda8203083997a1728d3bca1a83bb65766f1b38f4a4",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0036353410426670507,
+        "llcr": 0.0011556342100098593,
+        "min_dscr": 0.011745953937629006
+      }
     },
     "scenarios/dutchbay_hybrid_bess_2025Q4.yaml": {
       "cases": {
@@ -303,6 +323,11 @@
           "min_dscr": 1.1382051282051278
         },
         "recomputed": {
+          "avg_dscr": 1.3030888569580918,
+          "llcr": 1.3784532148505206,
+          "min_dscr": 1.121328683310871
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.3030888569580918,
           "llcr": 1.3844354842552196,
           "min_dscr": 1.121328683310871
@@ -395,23 +420,28 @@
           "sizing_downside": 2.0243106508191
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234377,
       "net_aep_p50_gwh": 507.0,
       "net_aep_p90_gwh": 443.9,
       "p90_over_p50": 0.875542406311637,
       "recomputed_minus_ratio": {
         "avg_dscr": 0.06934179478397096,
-        "llcr": 0.01355558866437434,
+        "llcr": 0.007573319259675415,
         "min_dscr": -0.01687644489425666
       },
       "recomputed_minus_sizing_downside": {
         "avg_dscr": 0.06934236732709964,
-        "llcr": 0.013556224846529075,
+        "llcr": 0.007573955441830149,
         "min_dscr": -0.0168759166891288
       },
       "scenario_sha256": "a4adcc8a8d29d1811d7255c421c6afcf5e397b13d880faf407550a83c915b4eb",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.0059822694046989255,
+        "min_dscr": 0.0
+      }
     },
     "scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml": {
       "cases": {
@@ -426,6 +456,11 @@
           "min_dscr": 1.138205128205128
         },
         "recomputed": {
+          "avg_dscr": 1.2460787482971158,
+          "llcr": 1.3488868739379467,
+          "min_dscr": 1.0973920045050292
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.2460787482971158,
           "llcr": 1.3560713148511832,
           "min_dscr": 1.0973920045050292
@@ -518,23 +553,28 @@
           "sizing_downside": 1.7518115134145977
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234378,
       "net_aep_p50_gwh": 507.0,
       "net_aep_p90_gwh": 443.9,
       "p90_over_p50": 0.875542406311637,
       "recomputed_minus_ratio": {
         "avg_dscr": 0.036522184352230314,
-        "llcr": -0.011109267825682556,
+        "llcr": -0.018293708738919,
         "min_dscr": -0.04081312370009882
       },
       "recomputed_minus_sizing_downside": {
         "avg_dscr": 0.03652274566931091,
-        "llcr": -0.011108633360262576,
+        "llcr": -0.01829307427349902,
         "min_dscr": -0.04081259549497074
       },
       "scenario_sha256": "a9efa59e49424bd6b2c54b0bf2b142e1dee46ed471f2a25f823b8774e6e90f3d",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.007184440913236445,
+        "min_dscr": 0.0
+      }
     },
     "scenarios/dutchbay_lendercase_2025Q4.yaml": {
       "cases": {
@@ -549,6 +589,11 @@
           "min_dscr": 1.1203104209689292
         },
         "recomputed": {
+          "avg_dscr": 1.083529443566705,
+          "llcr": 1.1503161149092853,
+          "min_dscr": 1.0644800829934082
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.0817359849830237,
           "llcr": 1.1498292305454672,
           "min_dscr": 1.064046793256677
@@ -644,41 +689,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1228560968756705,
-          "recomputed": 1.0702485876076815,
+          "recomputed": 1.0816545456811857,
           "sizing_downside": 1.025442794871343
         },
         {
           "base": 1.3,
           "operating_year": 13,
           "ratio_method": 1.1234072383738867,
-          "recomputed": 1.06718879212029,
+          "recomputed": 1.0757825141554473,
           "sizing_downside": 1.0262970148964854
         },
         {
           "base": 1.3,
           "operating_year": 14,
           "ratio_method": 1.1240496483827869,
-          "recomputed": 1.064046793256677,
+          "recomputed": 1.0691555333195564,
           "sizing_downside": 1.0272926929496358
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234378,
       "net_aep_p50_gwh": 433.2,
       "net_aep_p90_gwh": 377.3,
       "p90_over_p50": 0.870960295475531,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.040748333651272395,
-        "llcr": -0.04018304860692279,
-        "min_dscr": -0.05626362771225213
+        "avg_dscr": -0.03895487506759099,
+        "llcr": -0.039696164243104626,
+        "min_dscr": -0.05583033797552095
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.05710685704486651,
-        "llcr": 0.06402502669981791,
-        "min_dscr": 0.04254956834168544
+        "avg_dscr": 0.05890031562854792,
+        "llcr": 0.06451191106363607,
+        "min_dscr": 0.04298285807841662
       },
       "scenario_sha256": "147c697659f7eb17b82c1934e41edb36041888c13e2df335a8bdb69ce46f3bfe",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0017934585836814065,
+        "llcr": 0.000486884363818163,
+        "min_dscr": 0.00043328973673117943
+      }
     },
     "scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml": {
       "cases": {
@@ -693,6 +743,11 @@
           "min_dscr": 1.13224838411819
         },
         "recomputed": {
+          "avg_dscr": 1.0606051981785019,
+          "llcr": 1.0884880755231223,
+          "min_dscr": 1.0150323067025753
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.0552198621842355,
           "llcr": 1.0873306256103086,
           "min_dscr": 0.9991533247585945
@@ -788,41 +843,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 1.0311163159009802,
+          "recomputed": 1.0565381617517202,
           "sizing_downside": 1.04
         },
         {
           "base": 1.3,
           "operating_year": 13,
           "ratio_method": 1.1322483841181905,
-          "recomputed": 1.0165769194756307,
+          "recomputed": 1.0417765654006017,
           "sizing_downside": 1.0400000000000003
         },
         {
           "base": 1.3,
           "operating_year": 14,
           "ratio_method": 1.1322483841181903,
-          "recomputed": 0.9991533247585945,
+          "recomputed": 1.023926536902614,
           "sizing_downside": 1.0400000000000003
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234377,
       "net_aep_p50_gwh": 433.2,
       "net_aep_p90_gwh": 377.3,
       "p90_over_p50": 0.870960295475531,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.07746930216294912,
-        "llcr": -0.058053384296560706,
-        "min_dscr": -0.13309505935959554
+        "avg_dscr": -0.07208396616868273,
+        "llcr": -0.05689593438374696,
+        "min_dscr": -0.1172160774156148
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.014814993919829433,
-        "llcr": 0.03526520691610102,
-        "min_dscr": -0.040846675241405506
+        "avg_dscr": 0.020200329914095816,
+        "llcr": 0.03642265682891477,
+        "min_dscr": -0.024967693297424765
       },
       "scenario_sha256": "6af9a38b88abc493bdef00f6f9810b2903f512fe670d07874b845e642117f9d1",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0053853359942663825,
+        "llcr": 0.001157449912813746,
+        "min_dscr": 0.01587898194398074
+      }
     },
     "scenarios/dutchbay_solar_only_2025Q4.yaml": {
       "cases": {
@@ -837,6 +897,11 @@
           "min_dscr": 1.1684733514001804
         },
         "recomputed": {
+          "avg_dscr": 1.1630745199716437,
+          "llcr": 1.3598310048629172,
+          "min_dscr": 1.132077428750774
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.1630745199716437,
           "llcr": 1.3651265854565586,
           "min_dscr": 1.132077428750774
@@ -929,23 +994,28 @@
           "sizing_downside": 1.287373881961746
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234375,
       "net_aep_p50_gwh": 221.4,
       "net_aep_p90_gwh": 199.0,
       "p90_over_p50": 0.8988256549232159,
       "recomputed_minus_ratio": {
         "avg_dscr": -0.028305725905045653,
-        "llcr": -0.024755952976201367,
+        "llcr": -0.030051533569842803,
         "min_dscr": -0.03639592264940639
       },
       "recomputed_minus_sizing_downside": {
         "avg_dscr": -0.028306183299270593,
-        "llcr": -0.02475648657934637,
+        "llcr": -0.030052067172987806,
         "min_dscr": -0.0363963712492259
       },
       "scenario_sha256": "b6956b975ed33e27b6ce556b0e467b85ef33c0ea669f2a3ad68d5004a57943db",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0,
+        "llcr": -0.005295580593641436,
+        "min_dscr": 0.0
+      }
     },
     "scenarios/kalpitiya_lendercase_160m_fitted.yaml": {
       "cases": {
@@ -960,6 +1030,11 @@
           "min_dscr": 1.132397587856103
         },
         "recomputed": {
+          "avg_dscr": 1.132505573203876,
+          "llcr": 1.1829501595054095,
+          "min_dscr": 1.093282402945331
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.1274634570905815,
           "llcr": 1.1813407039596684,
           "min_dscr": 1.0747525934570157
@@ -1055,41 +1130,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1323975878561032,
-          "recomputed": 1.0843387374287872,
+          "recomputed": 1.1080861879932156,
           "sizing_downside": 1.04
         },
         {
           "base": 1.3,
           "operating_year": 13,
           "ratio_method": 1.132397587856103,
-          "recomputed": 1.0798136795655149,
+          "recomputed": 1.1033716505316278,
           "sizing_downside": 1.04
         },
         {
           "base": 1.3,
           "operating_year": 14,
           "ratio_method": 1.1323975878561032,
-          "recomputed": 1.0747525934570157,
+          "recomputed": 1.0980367975125944,
           "sizing_downside": 1.04
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234378,
       "net_aep_p50_gwh": 480.9,
       "net_aep_p90_gwh": 418.9,
       "p90_over_p50": 0.8710750675816178,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.005021652869590554,
-        "llcr": -0.01870731835879824,
-        "min_dscr": -0.057644994399087324
+        "avg_dscr": 2.046324370397201e-05,
+        "llcr": -0.01709786281305714,
+        "min_dscr": -0.03911518491077204
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.08738307632219433,
-        "llcr": 0.07921018319967632,
-        "min_dscr": 0.034752593457015646
+        "avg_dscr": 0.09242519243548886,
+        "llcr": 0.08081963874541742,
+        "min_dscr": 0.05328240294533093
       },
       "scenario_sha256": "d8929551da5fad995476e16a74ec0f21dc03d44f5758ad9b3a9807d72e4c3d0f",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.005042116113294526,
+        "llcr": 0.0016094555457411008,
+        "min_dscr": 0.018529809488315285
+      }
     },
     "scenarios/mullikulam_2x50mw_mannar.yaml": {
       "cases": {
@@ -1104,6 +1184,11 @@
           "min_dscr": 1.132982719759579
         },
         "recomputed": {
+          "avg_dscr": 1.0462330366554677,
+          "llcr": 1.0832282930568016,
+          "min_dscr": 0.9996293311419441
+        },
+        "recomputed_own_debt_tax": {
           "avg_dscr": 1.045718462193734,
           "llcr": 1.0830763751116916,
           "min_dscr": 0.9996293311419441
@@ -1199,41 +1284,46 @@
           "base": 1.3,
           "operating_year": 12,
           "ratio_method": 1.1329827197595794,
-          "recomputed": 1.0421206936445007,
+          "recomputed": 1.049349388356405,
           "sizing_downside": 1.0400000000000003
         },
         {
           "base": 1.3,
           "operating_year": 13,
           "ratio_method": 1.1329827197595792,
-          "recomputed": 1.0345381361703816,
+          "recomputed": 1.0373407362043052,
           "sizing_downside": 1.0400000000000003
         },
         {
           "base": 1.2999999999999998,
           "operating_year": 14,
           "ratio_method": 1.1329827197595792,
-          "recomputed": 1.0263434012229906,
+          "recomputed": 1.0235161489414344,
           "sizing_downside": 1.04
         }
       ],
-      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt. Not a lender P90 claim. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
+      "label": "Modelled 1-year exceedance (P90) on the scenario's own resource basis, against the base case's committed debt and taxed on its interest. Not a lender P90 claim and not the dscr_p90 KPI. Annual figures only (F-5). Sizing, inputs and KPIs are unchanged (#1836).",
       "llcr_discount_rate": 0.10178143097234378,
       "net_aep_p50_gwh": 133.1,
       "net_aep_p90_gwh": 116.0,
       "p90_over_p50": 0.8715251690458302,
       "recomputed_minus_ratio": {
-        "avg_dscr": -0.08820754205420522,
-        "llcr": -0.07568502767338647,
+        "avg_dscr": -0.08769296759247158,
+        "llcr": -0.07553310972827654,
         "min_dscr": -0.1333533886176349
       },
       "recomputed_minus_sizing_downside": {
-        "avg_dscr": 0.004852592087522201,
-        "llcr": 0.0194133219344923,
+        "avg_dscr": 0.005367166549255842,
+        "llcr": 0.019565239879602236,
         "min_dscr": -0.040370668858055736
       },
       "scenario_sha256": "45d0a5272e3c5f0ee138fc2201708dc1735bfe1f0588214004eacc31a24b17de",
-      "status": "ok"
+      "status": "ok",
+      "tax_rebase_effect": {
+        "avg_dscr": 0.0005145744617336412,
+        "llcr": 0.00015191794510993617,
+        "min_dscr": 0.0
+      }
     }
   },
   "scenarios_glob": "scenarios/**/*.yaml"

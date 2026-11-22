@@ -119,7 +119,10 @@ ALLOWLIST: dict[str, str] = {
         "engine's single list of billed capacity-factor paths), finance.tech_types "
         "(is_storage_type) and finance.irr (npv) to build the P90 case on exactly what "
         "the cashflow bills (#1836). Pure leaf contracts and the canonical NPV, no "
-        "engine logic; every evaluation still goes through evaluate_with_overrides."
+        "engine logic; every evaluation still goes through evaluate_with_overrides. "
+        "One function-scoped finance.cashflow_v14.build_annual_rows call re-taxes the "
+        "P90 case on the committed loan's interest, and is checked against the "
+        "engine's published covenant CFADS before use."
     ),
     "analytics/portfolio/generation_aggregator.py": (
         "[PERMANENT] Imports finance.tech_types (GENERATION_TYPES) — a pure leaf "

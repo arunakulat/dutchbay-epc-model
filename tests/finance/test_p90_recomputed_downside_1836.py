@@ -8,6 +8,10 @@ Oracles do not come from the code under test (TEST-01):
   ``dscr_by_year`` and ``llcr``, the P90 case bills r x the base year-1 energy, and the
   sizing downside is the factor the engine's ``dual_dscr`` detail publishes (the lender
   case's declared flat factor, not P90/P50, because it does not bind the downside);
+* the tax re-basing: the recomputed case's CFADS is rebuilt here, independently, with
+  the engine's cashflow builder and the committed loan's interest read straight off the
+  base rows (interest_usd x fx_rate), and the P90 case's own-debt figure equals the
+  engine's published covenant CFADS; a rebuild that disagrees with the engine is refused;
 * identity: when P90 = P50 the recomputed and ratio cases equal the base case;
 * the committed summary is regenerated in full and compared, with the SHA-256 of every
   scenario's bytes, so a stale summary fails here.
@@ -38,6 +42,7 @@ from analytics.scenario_loader import load_scenario_config
 
 REPO = Path(__file__).resolve().parents[2]
 LENDER = REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+KALPITIYA = REPO / "scenarios" / "kalpitiya_lendercase_160m_fitted.yaml"
 HYBRID = REPO / "scenarios" / "dutchbay_hybrid_bess_2025Q4.yaml"
 SUMMARY = REPO / "docs" / "finance" / "p90_recomputed_downside_summary.json"
 SCRIPT = REPO / "scripts" / "run_p90_recomputed_downside_v14.py"
@@ -204,9 +209,85 @@ def test_p90_equal_to_p50_reproduces_the_base_case() -> None:
     er["net_aep_p90_gwh"] = er["net_aep_p50_gwh"]
     result = p90.recomputed_p90_downside(config)
     base = result["cases"]["base"]
-    for case in ("ratio_method", "recomputed"):
+    for case in ("ratio_method", "recomputed", "recomputed_own_debt_tax"):
         for key in ("min_dscr", "avg_dscr", "llcr"):
             assert result["cases"][case][key] == pytest.approx(base[key], abs=1e-9)
+    for key in ("min_dscr", "avg_dscr", "llcr"):
+        assert result["tax_rebase_effect"][key] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_recomputed_case_is_taxed_on_the_committed_loans_interest() -> None:
+    from analytics.evaluation_v14 import evaluated_scenario_config
+    from finance.cashflow_v14 import build_annual_rows
+
+    config = load_scenario_config(KALPITIYA)
+    assert (config.get("tax") or {}).get("balloon_interest_tax_basis") in (None, "paid")
+    ratio = p90.p90_energy_ratio(config)
+    assert ratio is not None
+    result = p90.recomputed_p90_downside(config)
+    base = evaluate_with_overrides(raw_config=config, return_full_result=True)
+    p90_config = p90.p90_production_config(config, ratio[2])
+    down = evaluate_with_overrides(raw_config=p90_config, return_full_result=True)
+    debt = base["debt_result"]
+
+    # Oracle: the committed loan's deductible interest, read off the base rows.
+    interest = [
+        (float(r["interest_usd"]) + float(r.get("balloon_interest_paid_usd") or 0.0))
+        * float(r["fx_rate"])
+        for r in base["annual_rows"]
+    ]
+    rows = build_annual_rows(
+        evaluated_scenario_config(p90_config), interest_expense_series=interest
+    )
+    view = {
+        "annual_row_debt_period_map": [
+            {**m, "cfads_usd": float(rows[int(m["annual_row_index"])]["cfads_usd"])}
+            for m in debt["annual_row_debt_period_map"]
+        ]
+    }
+    expected = [d for _, _, d in fixed_debt_coverage_by_row(debt, view)]
+    recomputed = result["cases"]["recomputed"]
+    assert recomputed["min_dscr"] == pytest.approx(min(expected), abs=1e-12)
+    assert recomputed["avg_dscr"] == pytest.approx(
+        sum(expected) / len(expected), abs=1e-12
+    )
+
+    # The own-debt figure is the engine's published covenant CFADS of the P90 case.
+    own = [d for _, _, d in fixed_debt_coverage_by_row(debt, down["debt_result"])]
+    assert result["cases"]["recomputed_own_debt_tax"]["min_dscr"] == pytest.approx(
+        min(own), abs=1e-12
+    )
+    # Non-vacuous: the P90 case carries less debt here, so taxing it on the committed
+    # (larger) loan's interest raises its coverage.
+    effect = result["tax_rebase_effect"]["min_dscr"]
+    assert effect > 1e-3
+    assert effect == pytest.approx(recomputed["min_dscr"] - min(own), abs=1e-12)
+
+
+def test_a_rebuild_that_disagrees_with_the_engine_is_refused() -> None:
+    debt = {"annual_row_debt_period_map": _rows([300.0, 300.0, 300.0])}
+    p90._rebuild_matches_engine(debt, [300.0, 300.0, 300.0], "case")
+    with pytest.raises(RuntimeError, match="row 1"):
+        p90._rebuild_matches_engine(debt, [300.0, 300.01, 300.0], "case")
+    with pytest.raises(RuntimeError, match="row 2"):
+        p90._rebuild_matches_engine(debt, [300.0, 300.0], "case")
+    with pytest.raises(RuntimeError, match="no covenant CFADS"):
+        p90._rebuild_matches_engine({}, [300.0], "case")
+
+
+def test_binds_gearing_follows_the_engines_binding_case() -> None:
+    detail = {
+        "downside_ratio": 0.87,
+        "downside_source": "p90_aep",
+        "solved_gearing_p90": 0.6,
+        "binding_production_case": "P50",
+    }
+    sizing = p90._sizing_downside({"dual_dscr": detail})
+    assert sizing is not None and sizing["binds_gearing"] is False
+    sizing = p90._sizing_downside(
+        {"dual_dscr": {**detail, "binding_production_case": "P90"}}
+    )
+    assert sizing is not None and sizing["binds_gearing"] is True
 
 
 def _script() -> ModuleType:
