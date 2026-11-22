@@ -87,7 +87,7 @@ def runs(tmp_path_factory: pytest.TempPathFactory) -> Dict[str, Dict[str, Any]]:
         "lean_off": _run(LEAN, tmp, lockup=0.0),
         "eia": _run(EIA, tmp),
         "eia_off": _run(EIA, tmp, lockup=0.0),
-        "eia_110": _run(EIA, tmp, lockup=1.10),
+        "lean_090": _run(LEAN, tmp, lockup=0.90),
         "lender": _run(LENDER, tmp),
     }
 
@@ -115,10 +115,11 @@ def test_each_row_carries_the_published_tranche_coverage(
 @pytest.mark.parametrize(
     ("name", "locked"),
     [
-        # Covered 1.02x, 0.92x and 0.82x: every refinance year breaches 1.30x.
+        # Covered 0.97x, 0.87x and 0.78x: every refinance year breaches 1.30x.
         ("lean", {15: True, 16: True, 17: True}),
-        # Covered 1.33x in year 15 (the control: it meets 1.30x), then 1.20x and 1.08x.
-        ("eia", {15: False, 16: True, 17: True}),
+        # Covered 1.45x and 1.32x in years 15 and 16 (the controls: they meet 1.30x),
+        # then 1.18x. Before #1874 dropped revenue SSCL: 1.33x, 1.20x and 1.08x.
+        ("eia", {15: False, 16: False, 17: True}),
         # Covered 0.42x, 0.37x and 0.33x.
         ("lender", {15: True, 16: True, 17: True}),
     ],
@@ -142,32 +143,38 @@ def test_a_refinance_year_below_the_lockup_threshold_is_locked(
 def test_the_tranche_is_tested_against_the_lockup_threshold_not_the_floor(
     runs: Dict[str, Dict[str, Any]],
 ) -> None:
-    """A 1.10x lock-up locks year 17 (1.08x) but not year 16 (1.20x).
+    """A 0.90x lock-up locks years 16 and 17 (0.87x, 0.78x) but not year 15 (0.97x).
 
-    The refinance coverage floor stays 1.30x, so a year locked at 1.20x would mean the
-    floor, not the lock-up threshold, decided it.
+    The refinance coverage floor stays 1.30x, so a year locked at 0.97x would mean the
+    floor, not the lock-up threshold, decided it. Until #1874 dropped revenue SSCL this
+    case was the EIA-prudent variant at 1.10x; its year 17 now covers 1.18x, so no year
+    falls between a lower threshold and the floor with one below it.
     """
-    run = runs["eia_110"]
+    run = runs["lean_090"]
     assert run["debt_result"]["refinance"]["coverage_floor"] == pytest.approx(1.30)
     rows = _by_year(run)
-    assert [rows[y]["covenant_locked"] for y in REFINANCE_YEARS] == [False, False, True]
+    assert [rows[y]["covenant_locked"] for y in REFINANCE_YEARS] == [False, True, True]
 
 
 def test_lockup_switched_off_reproduces_the_issue_figures(
     runs: Dict[str, Dict[str, Any]],
 ) -> None:
-    """The control the issue's table was taken from: no lock-up, equity paid in breach."""
+    """The control the issue's table was taken from: no lock-up, equity paid in breach.
+
+    Re-pinned by #1874 (revenue SSCL dropped): the issue's figures were lean
+    1,793,706 / -363,215 / -836,168 and EIA 2,713,499 / 625,373 / 244,359.
+    """
     lean = _by_year(runs["lean_off"])
     eia = _by_year(runs["eia_off"])
     assert [round(lean[y]["equity_distribution_usd"]) for y in REFINANCE_YEARS] == [
-        1_793_706,
-        -363_215,
-        -836_168,
+        1_640_302,
+        -638_455,
+        -1_131_846,
     ]
     assert [round(eia[y]["equity_distribution_usd"]) for y in REFINANCE_YEARS] == [
-        2_713_499,
-        625_373,
-        244_359,
+        3_053_159,
+        910_139,
+        526_105,
     ]
     for rows in (lean, eia):
         assert not any(rows[y]["covenant_locked"] for y in REFINANCE_YEARS)

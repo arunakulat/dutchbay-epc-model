@@ -137,6 +137,14 @@ documented v1 interpretation, not a change to D1.
 The following remain visible work, not implied conformance:
 
 - There is no global `ProjectCase` input contract or canonical per-section result contract yet.
+  *Status note, 2026-11-22 (#1882), added after this charter merged; the sentence above records
+  the state when Dolphin 2 was written and is no longer current.* A typed `ProjectCase` v1 input
+  contract now exists (`analytics/feasibility_report_contract/project_case.py`, #1191), with
+  per-subject `JurisdictionBinding` records. A jurisdiction pack schema and the Sri Lanka
+  reference pack (#1842) and an effective-dated, fail-closed pack resolver (#1843) exist under
+  tracker #1841. Still missing: the v14 engine does not read `ProjectCase` or call the resolver,
+  and Sri Lanka tax and levy rules remain in the engine, which refuses a scenario that declares
+  another jurisdiction (#1882) rather than apply them to it.
 - Existing evaluation/orchestration does not yet build `FeasibilityReportPackage`; current optional
   `None` paths have not been mapped into dispositions.
 - Applicability/materiality policy, grade aggregation, grade ceilings and release policy remain

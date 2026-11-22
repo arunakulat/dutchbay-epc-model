@@ -67,6 +67,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
+from finance.cashflow_v14_tax import require_sri_lanka_jurisdiction
+
 __all__ = [
     "IndirectTaxes",
     "capex_uplift_from_config",
@@ -198,6 +200,7 @@ def resolve_indirect_taxes(
     block = _find_block(config)
     if block is None:
         return None
+    require_sri_lanka_jurisdiction(config, "taxes_indirect")
     if not isinstance(block, Mapping):
         raise ValueError(
             "taxes_indirect must be a mapping of levy/VAT keys "
