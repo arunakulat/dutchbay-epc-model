@@ -289,11 +289,16 @@ def long_run_depreciation_band(
     :func:`calibrate_fx` sets ``fx.annual_depr`` from the annualised mean log-return over
     the usable regimes, ``mu``. That mean is an estimate: over ``T`` usable years with an
     annualised volatility ``sigma``, its standard error is ``sigma / sqrt(T)``. The same
-    quantity is the spread of a realised ``T``-year average depreciation around ``mu``
-    under a random walk, which is what a lifetime-constant ``fx.annual_depr`` stands for.
-    This returns ``exp(mu) - 1`` with a symmetric decimal interval of ``z`` standard
+    quantity is also the spread of a realised ``T``-year average around ``mu`` under a
+    random walk. This returns ``exp(mu) - 1`` with a symmetric decimal interval of ``z`` standard
     errors, carried through ``d(exp(mu)) = exp(mu) * d(mu)``, so its midpoint is the drift
     the scenario uses. It reads the same returns and exclusions as :func:`calibrate_fx`.
+
+    The interval is parameter uncertainty only: how well ``T`` years of history fix the
+    mean. The spread of the realised average over a project's own life ``H`` is a second,
+    independent variance, so the lifetime interval is wider, ``sigma * sqrt(1/T + 1/H)``
+    (about 1.41 times this one at ``T = H = 20``). A Monte Carlo that samples this band
+    therefore understates lifetime FX risk: read it as a lower bound (#1917).
 
     Args:
         series: The provenance-bearing history (LKR per USD).
