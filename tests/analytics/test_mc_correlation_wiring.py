@@ -147,9 +147,12 @@ def test_correlation_changes_trial_outcomes() -> None:
             n_trials=64
         )
         corr = MonteCarloEngine(_with_correlation(_load()), seed=123).run(n_trials=64)
-        a = [x for x in (indep.trials or {}).get("project_irr", []) if x is not None]
-        b = [x for x in (corr.trials or {}).get("project_irr", []) if x is not None]
+        # Every trial is kept, undefined IRRs included: since #1898 the lender case
+        # samples fx.annual_depr, and at a high draw no rate solves the cash flows.
+        a = list((indep.trials or {}).get("project_irr", []))
+        b = list((corr.trials or {}).get("project_irr", []))
         assert len(a) == len(b) == 64
+        assert sum(v is not None for v in a) > 64 // 2
         assert a != b  # correlation rearranged the joint sample -> outcomes differ
     finally:
         logging.disable(logging.NOTSET)
@@ -296,9 +299,12 @@ def test_engine_gaussian_copula_changes_trial_outcomes_vs_iman_conover() -> None
         gc = MonteCarloEngine(_with_method(_load(), "gaussian_copula"), seed=123).run(
             n_trials=32
         )
-        a = [x for x in (ic.trials or {}).get("project_irr", []) if x is not None]
-        b = [x for x in (gc.trials or {}).get("project_irr", []) if x is not None]
+        # Every trial is kept, undefined IRRs included: since #1898 the lender case
+        # samples fx.annual_depr, and at a high draw no rate solves the cash flows.
+        a = list((ic.trials or {}).get("project_irr", []))
+        b = list((gc.trials or {}).get("project_irr", []))
         assert len(a) == len(b) == 32
+        assert sum(v is not None for v in a) > 32 // 2
         assert a != b  # the copula rearranged the joint sample -> outcomes differ
     finally:
         logging.disable(logging.NOTSET)

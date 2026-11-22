@@ -647,6 +647,18 @@ monte_carlo:
       low: 0.0                         # in CF; 0-13% incremental = 2-15% total grid curtailment.
       high: 0.13                       # Deliberately downside-weighted: the flat 2% is an
       distribution: uniform            # unvalidated optimistic placeholder for a constrained grid.
+    # FX depreciation (#1898, #924 study O-7): the main risk driver of LKR revenue against
+    # USD debt, held fixed at the base 5.89%/yr until now. Normal; low/high are the 95%
+    # interval of the 20-year mean depreciation from the same BIS vintage that sets
+    # fx.annual_depr: base +/- 1.96 standard errors (sigma 7.91%/yr over 20.0 usable years,
+    # the 2020-22 peg excluded). One draw holds for the whole life. A test re-derives the
+    # band from the vintage. Not in the correlation matrix below, so it is sampled
+    # independently of the start-rate draw.
+    - name: fx.annual_depr
+      low: 0.0222
+      high: 0.0957
+      distribution: normal
+      source: "BIS weekly USD/LKR 2005-01 to 2026-06, the vintage behind fx.annual_depr: analytics.fx.fx_calibration.long_run_depreciation_band (exp(mu) - 1 +/- 1.96 x exp(mu) x sigma / sqrt(T))"
 
   # ── Inter-driver correlation (MC-7, #487) ──────────────────────────────────
   # Default ON. The Iman-Conover rank-correlation machinery (analytics.mc.correlation)
