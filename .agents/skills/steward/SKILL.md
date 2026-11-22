@@ -115,7 +115,8 @@ Green means every *required* check reports success on the exact current head wit
   `sha256sum -c MANIFEST.sha256` must exit 0. Refresh parent manifests with
   `scripts/analysis/refresh_corpus_manifest.py`.
 - **Financial-model changes.** Follow `AGENTS.md` "Financial-model changes": regression tests,
-  impact disclosure, `VERSION` and `CHANGELOG.md`, and `TEST-01`'s independent oracle.
+  impact disclosure, a `VERSION` bump in the same PR (`DOC-02`; `CHANGELOG.md` is compiled
+  only at release cuts), and `TEST-01`'s independent oracle.
 - **Local runs.** Use `PYTHONDONTWRITEBYTECODE=1` and `-p no:cacheprovider`. Some failures in
   `tests/lint/test_cloud_audit_review_sandbox.py` are local to cloud containers and
   pre-existing; `CLAUDE.md` "Known local-only failures" says which and how many. Declare the
