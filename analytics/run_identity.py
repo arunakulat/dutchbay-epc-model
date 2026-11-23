@@ -66,8 +66,10 @@ RELIANCE_LABELS: tuple[str, ...] = (
 _RELIANCE_LABEL_SET: frozenset[str] = frozenset(RELIANCE_LABELS)
 
 #: Canonical unit contract per KPI/column key across API, report, and workbook surfaces.
+#: ``pct`` denotes a 0..1 decimal ratio (formatted as ``0.00%``, i.e. x100);
+#: ``pct_points`` denotes a 0..100 percentage-point scalar (formatted as ``0.00"%"``).
 KPI_UNIT_CONTRACTS: Mapping[str, str] = {
-    # Decimal percentages (displayed as 0.00%, e.g. 0.0146 -> 1.46%)
+    # Decimal percentages (0..1 ratio, displayed as 0.00%, e.g. 0.0146 -> 1.46%)
     "project_irr": "pct",
     "equity_irr": "pct",
     "irr": "pct",
@@ -79,6 +81,17 @@ KPI_UNIT_CONTRACTS: Mapping[str, str] = {
     "effective_tax_rate": "pct",
     "gearing": "pct",
     "capacity_factor": "pct",
+    # Percentage points (0..100 scale, displayed without x100 multiplication)
+    "avg_debt_rate_pct": "pct_points",
+    "accuracy_low_pct": "pct_points",
+    "accuracy_high_pct": "pct_points",
+    "share_of_aep_pct": "pct_points",
+    "share_of_cfads_pct": "pct_points",
+    "share_of_capex_pct": "pct_points",
+    "poi_curtailment_pct": "pct_points",
+    "coverage_pct": "pct_points",
+    "deviation_pct": "pct_points",
+    "tolerance_pct": "pct_points",
     # US Dollars
     "project_npv": "usd",
     "equity_npv": "usd",
@@ -129,8 +142,10 @@ KPI_UNIT_CONTRACTS: Mapping[str, str] = {
     "equity_debt_service_shortfall_years": "count",
 }
 
+# Note: ``_pct`` is intentionally NOT inferred by suffix because the codebase mixes
+# 0..1 decimal ratios (``pct``) and 0..100 percentage points (``pct_points``);
+# percentage keys must be explicitly declared in KPI_UNIT_CONTRACTS.
 _UNIT_SUFFIX_RULES: tuple[tuple[str, str], ...] = (
-    ("_pct", "pct"),
     ("_usd", "usd"),
     ("_lkr", "lkr"),
     ("_mw", "mw"),
@@ -142,11 +157,12 @@ _UNIT_SUFFIX_RULES: tuple[tuple[str, str], ...] = (
 #: Canonical openpyxl number formats keyed by unit identifier.
 UNIT_EXCEL_NUMBER_FORMATS: Mapping[str, str] = {
     "pct": "0.00%",
-    "usd": '$#,##0;-$#,##0;"$0"',
-    "lkr": '"LKR "#,##0;-"LKR "#,##0;"LKR 0"',
+    "pct_points": '0.00"%"',
+    "usd": "$#,##0;-$#,##0;$0",
+    "lkr": '"LKR "#,##0;-"LKR "#,##0;"LKR "0',
     "lkr_per_usd": "#,##0.00",
     "mw": '#,##0.0" MW"',
-    "gwh": '#,##0.1" GWh"',
+    "gwh": '#,##0.0" GWh"',
     "kwh": '#,##0" kWh"',
     "years": '0.0" years"',
     "multiple": '0.00"x"',
@@ -200,6 +216,7 @@ _ALLOWED_NON_RELIANCE_EXEMPT_PHRASE = re.compile(
     r"|\bnot\s+the\s+utility-accepted\s+bankable\b"
     r"|\bthe\s+bankable\s+connection\s+study\s+is\b"
     r"|\bnon[-\s_]+bankable\b"
+    r"|\bnot\s+bankable\b"
     r"|\bbankable\s*=\s*false\b",
     re.IGNORECASE,
 )
@@ -287,8 +304,8 @@ def validate_display_matches_unit(
     """Verify that a formatted display string matches the metric's declared unit contract.
 
     Raises:
-        ValueError: Missing unit, unknown unit, or a display string whose suffix/prefix
-            disagrees with the unit contract.
+        ValueError: Missing unit, unknown unit, scale mismatch, or a display string
+            whose suffix/prefix disagrees with the unit contract.
     """
     if not unit or unit not in UNIT_EXCEL_NUMBER_FORMATS:
         raise ValueError(
@@ -296,10 +313,25 @@ def validate_display_matches_unit(
         )
     if value is None and display in ("undefined", "—", ""):
         return
-    if unit == "pct" and not display.endswith("%"):
-        raise ValueError(
-            f"{surface}: pct metric {key!r} display {display!r} must end with '%'"
-        )
+    if unit in ("pct", "pct_points"):
+        if not display.endswith("%"):
+            raise ValueError(
+                f"{surface}: {unit} metric {key!r} display {display!r} must end with '%'"
+            )
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            try:
+                rendered = float(display[:-1].replace(",", "").strip())
+            except ValueError as exc:
+                raise ValueError(
+                    f"{surface}: {unit} metric {key!r} display {display!r} is not numeric"
+                ) from exc
+            expected = float(value) * 100.0 if unit == "pct" else float(value)
+            tolerance = max(0.055, abs(expected) * 1e-4)
+            if abs(rendered - expected) > tolerance:
+                raise ValueError(
+                    f"{surface}: {unit} metric {key!r} value {value!r} conflicts with "
+                    f"display {display!r} (expected ~{expected:.2f}%)"
+                )
     if unit == "multiple" and not display.endswith("x"):
         raise ValueError(
             f"{surface}: multiple metric {key!r} display {display!r} must end with 'x'"
@@ -524,6 +556,9 @@ def require_reliance_labels(
                     f"{surface}: allocated within-year figures are not distinguished from approved covenant metrics"
                 )
             cov_notice = str(payload.get("covenant_distinction_notice") or notice)
+            check_no_hold_withdrawal(
+                cov_notice, f"{surface}.covenant_distinction_notice"
+            )
             lowered_cov = cov_notice.lower()
             if "covenant" not in lowered_cov or (
                 "intra-year" not in lowered_cov

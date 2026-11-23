@@ -43,6 +43,7 @@ from analytics.run_identity import (
     RUN_IDENTITY_FIELDS,
     UNIT_EXCEL_NUMBER_FORMATS,
     check_no_hold_withdrawal,
+    excel_number_format,
     metric_unit,
     require_consistent_section_dispositions,
     require_reliance_labels,
@@ -310,12 +311,44 @@ def test_executive_workbook_applies_explicit_unit_number_formats(
 ) -> None:
     formats = read_workbook_unit_formats(lender_surfaces["exec_wb_path"])
     assert formats["Summary"]["project_irr"] == "0.00%"
-    assert formats["Summary"]["project_npv"] == '$#,##0;-$#,##0;"$0"'
+    assert formats["Summary"]["project_npv"] == "$#,##0;-$#,##0;$0"
     assert formats["Summary"]["min_dscr"] == '0.00"x"'
     assert formats["Ratios"]["min_dscr"] == '0.00"x"'
     assert formats["Ratios"]["min_dscr_period"] == '0.00"x"'
     assert formats["ScenarioSummary"]["project_irr"] == "0.00%"
-    assert formats["ScenarioSummary"]["max_debt_usd"] == '$#,##0;-$#,##0;"$0"'
+    assert formats["ScenarioSummary"]["max_debt_usd"] == "$#,##0;-$#,##0;$0"
+
+
+def test_all_excel_unit_formats_are_valid_under_dfi_workbook_grammar() -> None:
+    assert UNIT_EXCEL_NUMBER_FORMATS["gwh"] == '#,##0.0" GWh"'
+    assert excel_number_format("net_p50_gwh") == '#,##0.0" GWh"'
+    for unit, fmt in UNIT_EXCEL_NUMBER_FORMATS.items():
+        item = WorkbookInputItem(
+            key=f"unit_probe_{unit}",
+            section="Units",
+            label=f"Probe {unit}",
+            value=1.25,
+            unit=unit,
+            number_format=fmt,
+            provenance="consumer_matrix_unit_contract",
+        )
+        assert item.number_format == fmt
+
+
+def test_percentage_unit_distinguishes_decimal_ratios_from_pct_points() -> None:
+    assert metric_unit("project_irr") == "pct"
+    assert metric_unit("balloon_pct") == "pct"
+    assert metric_unit("avg_debt_rate_pct") == "pct_points"
+    assert metric_unit("share_of_aep_pct") == "pct_points"
+    assert metric_unit("coverage_pct") == "pct_points"
+    assert metric_unit("deviation_pct") == "pct_points"
+    # Uncalibrated *_pct keys must not be silently guessed as 0..1 decimal ratios.
+    assert metric_unit("uncalibrated_foo_pct") is None
+    assert excel_number_format("uncalibrated_foo_pct") is None
+    assert excel_number_format("avg_debt_rate_pct") == '0.00"%"'
+
+    validate_display_matches_unit("project_irr", "pct", 0.0146, "1.46%")
+    validate_display_matches_unit("avg_debt_rate_pct", "pct_points", 7.25, "7.25%")
 
 
 def test_hybrid_run_marks_multi_tech_section_as_allocated_not_computed(
@@ -395,7 +428,13 @@ def test_synthetic_grid_screening_reliance_passes_only_with_non_bankable_disclos
                 "synthetic_grid_notice": (
                     f"{MANDATORY_SCREENING_CAVEAT} {SYNTHETIC_PROCESS_PROVENANCE_WARNING}"
                 ),
-            }
+            },
+            "grid_screening_not_bankable_phrase": {
+                "reliance_label": "screening_only_synthetic_grid",
+                "notice": EXECUTIVE_WORKBOOK_F5_CAVEAT,
+                "synthetic_grid_screening_only": True,
+                "synthetic_grid_notice": "Screening-only output; not bankable.",
+            },
         },
         require_f5=True,
         require_synthetic_grid_screening=True,
@@ -420,6 +459,14 @@ def test_hostile_unit_contract_mismatch_fails_loudly() -> None:
 def test_hostile_display_unit_mismatch_fails_loudly() -> None:
     with pytest.raises(ValueError, match="must end with '%'"):
         validate_display_matches_unit("project_irr", "pct", 0.0146, "1.46x")
+    with pytest.raises(ValueError, match="conflicts with display"):
+        validate_display_matches_unit("project_irr", "pct", 1.46, "1.46%")
+    with pytest.raises(ValueError, match="conflicts with display"):
+        validate_display_matches_unit("project_irr", "pct", 0.0146, "0.01%")
+    with pytest.raises(ValueError, match="conflicts with display"):
+        validate_display_matches_unit(
+            "avg_debt_rate_pct", "pct_points", 0.0725, "7.25%"
+        )
     with pytest.raises(ValueError, match="must end with 'x'"):
         validate_display_matches_unit("min_dscr", "multiple", 1.29, "129.00%")
     with pytest.raises(ValueError, match="accounting sign"):
@@ -489,4 +536,30 @@ def test_hostile_reliance_hold_stripping_and_withdrawal_fail_loudly() -> None:
                 }
             },
             require_allocated_covenant_distinction=True,
+        )
+    with pytest.raises(ValueError, match="contradicting the active HOLD union"):
+        require_reliance_labels(
+            {
+                "workbook": {
+                    "reliance_label": "allocated_within_year_non_covenant",
+                    "notice": F5_NON_RELIANCE_NOTICE,
+                    "allocated_covenant_distinct": True,
+                    "covenant_distinction_notice": (
+                        "Intra-year covenant approved for lender reliance."
+                    ),
+                }
+            },
+            require_allocated_covenant_distinction=True,
+        )
+    with pytest.raises(ValueError, match="contradicting the active HOLD union"):
+        require_reliance_labels(
+            {
+                "grid_report": {
+                    "reliance_label": "screening_only_synthetic_grid",
+                    "notice": F5_NON_RELIANCE_NOTICE,
+                    "synthetic_grid_screening_only": True,
+                    "synthetic_grid_notice": "Screening-only output; bankable.",
+                }
+            },
+            require_synthetic_grid_screening=True,
         )
