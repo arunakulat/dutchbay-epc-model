@@ -594,11 +594,24 @@ def test_committed_summary_carries_a_truthful_spec_and_the_recommendation() -> N
         rec["dc_ac_ratio"],
         rec["bess_energy_mwh"],
     )
-    # The committed summary was produced from the committed pricing config.
+    # The committed PR 3 summary (superseded hybrid; STATUS.md:1305-1316) is not
+    # regenerated here so its hybrid recommendation does not shift. Its raw pricing-file
+    # pin records the pre-redaction file bytes before #1820 replaced a supplier name in a
+    # YAML comment with "a generic battery supplier"; verify both that recorded pre-redaction
+    # digest and that the parsed pricing YAML structure is semantically identical to it.
     import hashlib
 
-    digest = hashlib.sha256(PRICING_CONF.read_bytes()).hexdigest()
-    assert spec["inputs_sha256"]["conf/blue_whale_pv_bess_pricing.yaml"] == digest
+    assert (
+        spec["inputs_sha256"]["conf/blue_whale_pv_bess_pricing.yaml"]
+        == "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9"
+    )
+    pricing_canonical = json.dumps(
+        _yaml(PRICING_CONF), sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    assert (
+        hashlib.sha256(pricing_canonical).hexdigest()
+        == "f01bf7be580ed227d815f7c0a029bd2e3aa3796cb33d4444c256b85f1a3ab8ea"
+    )
 
 
 def test_scenario_carries_the_recommended_base_case() -> None:
