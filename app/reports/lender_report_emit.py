@@ -78,6 +78,11 @@ from app.reports.lender_sensitivity_section import (
 from app.reports.lender_sensitivity_section import (
     settings_from_config as lender_sensitivity_settings_from_config,
 )
+from app.reports.recomputed_p90_section import (
+    SECTION_RECOMPUTED_P90,
+    RecomputedP90Block,
+    build_recomputed_p90_block,
+)
 from app.reports.renderer import render_report_html
 from app.reports.report_model import (
     AepResourceSensitivityBlock,
@@ -149,6 +154,7 @@ LenderSensitivityBuilder = Callable[..., Union[LenderSensitivityBlock, str]]
 #: Returns the section block, or a "not run: ..." reason (#1825 slice iii).
 CostStorageBuilder = Callable[..., Union[CostStorageBlock, str]]
 SiteAnalysesBuilder = Callable[..., Optional[SiteAnalysesBlock]]
+RecomputedP90Builder = Callable[..., Union[RecomputedP90Block, str]]
 
 
 @dataclass(frozen=True)
@@ -574,6 +580,7 @@ def emit_lender_report_from_pipeline(
     cost_storage: CostStorageSettings = DEFAULT_COST_STORAGE_SETTINGS,
     cost_storage_builder: CostStorageBuilder = build_cost_storage_section,
     site_analyses_builder: Optional[SiteAnalysesBuilder] = None,
+    recomputed_p90_builder: RecomputedP90Builder = build_recomputed_p90_block,
 ) -> LenderReportOutput:
     """Write the combined lender report for a finance run, as HTML and a DBPL PDF (#1752).
 
@@ -616,6 +623,9 @@ def emit_lender_report_from_pipeline(
             :func:`~app.reports.cost_storage_section.build_cost_storage_section`.
         site_analyses_builder: Seam for tests; production uses
             :func:`~app.reports.site_analysis_sections.build_site_analyses_block`.
+        recomputed_p90_builder: Seam for tests; production uses
+            :func:`~app.reports.recomputed_p90_section.build_recomputed_p90_block`, the
+            recomputed P90 cover of the committed debt (#1895).
 
     Returns:
         The paths written, the sections left out, and the PDF's print provenance.
@@ -736,6 +746,18 @@ def emit_lender_report_from_pipeline(
                 )
             )
             site_analyses = None
+    try:
+        p90_built: Union[RecomputedP90Block, str] = recomputed_p90_builder(
+            scenario, result
+        )
+    except Exception as exc:  # noqa: BLE001 - listed with its reason, never silent
+        logger.exception("Recomputed P90 cover could not be built")
+        p90_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
+    p90_block = p90_built if isinstance(p90_built, RecomputedP90Block) else None
+    if p90_block is None:
+        left_out.append(
+            SectionNotRun(section=SECTION_RECOMPUTED_P90, reason=str(p90_built))
+        )
     case = report_case_from_pipeline_result(
         result,
         scenario_config=scenario,
@@ -753,7 +775,11 @@ def emit_lender_report_from_pipeline(
         lender_sensitivities=ls_block,
         cost_storage=csx_block,
     ).model_copy(
-        update={"site_analyses": site_analyses, "tariff_legal_status": tariff_status}
+        update={
+            "site_analyses": site_analyses,
+            "tariff_legal_status": tariff_status,
+            "recomputed_p90": p90_block,
+        }
     )
     html = render_report_html(context)
     html_path.parent.mkdir(parents=True, exist_ok=True)

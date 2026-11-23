@@ -156,6 +156,12 @@ class DebtBlock(BaseModel):
     target_dscr_p90: Optional[float] = None
     downside_ratio: Optional[float] = None
     downside_source: Optional[str] = None
+    # #1895: the opt-in Financing_Terms.p90_cover_min_dscr, from debt_result['p90_cover'].
+    # None when the scenario declares no cover, so the report rows are omitted.
+    p90_cover_min_dscr: Optional[float] = None
+    p90_cover_binding: Optional[bool] = None
+    p90_cover_target_dscr: Optional[float] = None
+    p90_cover_declared_target_dscr: Optional[float] = None
     sizing_mode: Optional[str] = None
     tenor_years: Optional[int] = None
     construction_years: Optional[int] = None
@@ -381,6 +387,7 @@ def _extract_aep(cfg: Mapping[str, Any]) -> AepBlock:
 
 def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
     dual = _as_map(debt.get("dual_dscr"))
+    cover = _as_map(debt.get("p90_cover"))
     principals = _as_map(debt.get("principal_by_tranche"))
     idcs = _as_map(debt.get("idc_by_tranche"))
     tranches = {
@@ -456,6 +463,12 @@ def _extract_debt(debt: Mapping[str, Any]) -> DebtBlock:
         target_dscr_p90=_f(dual.get("target_dscr_p90")),
         downside_ratio=_f(dual.get("downside_ratio")),
         downside_source=dual.get("downside_source"),
+        p90_cover_min_dscr=_f(cover.get("declared_min_dscr")),
+        p90_cover_binding=(
+            bool(cover["binding"]) if cover.get("binding") is not None else None
+        ),
+        p90_cover_target_dscr=_f(cover.get("target_dscr")),
+        p90_cover_declared_target_dscr=_f(cover.get("declared_target_dscr")),
         sizing_mode=dual.get("sizing_mode"),
         tenor_years=(
             int(debt["tenor_years"]) if debt.get("tenor_years") is not None else None

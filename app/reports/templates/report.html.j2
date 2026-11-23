@@ -344,8 +344,19 @@
         <tr><td>Downside CFADS ratio (P90/P50)</td><td class="num">{{ fmt_ratio_pct(ctx.finance.debt.downside_ratio) }}{% if ctx.finance.debt.downside_source %} ({{ {"p90_aep": "P90 AEP", "explicit_factor": "explicit factor", "flat_factor": "flat proxy"}.get(ctx.finance.debt.downside_source, ctx.finance.debt.downside_source) }}){% endif %}</td></tr>
         {% endif %}
         {% endif %}
+        {# #1895: the recomputed P90 cover of the committed debt, and the opt-in cover term.
+           Each renders only when present. #}
+        {% if ctx.recomputed_p90 %}
+        <tr><td>Recomputed P90 minimum / average DSCR (committed debt)</td><td class="num">{{ fmt_x(ctx.recomputed_p90.min_dscr) }} / {{ fmt_x(ctx.recomputed_p90.avg_dscr) }}</td></tr>
+        <tr><td>Recomputed P90 LLCR</td><td class="num">{{ fmt_x(ctx.recomputed_p90.llcr) }}</td></tr>
+        <tr><td>P90 minimum DSCR by the P90/P50 ratio ({{ fmt_ratio_pct(ctx.recomputed_p90.p90_over_p50) }})</td><td class="num">{{ fmt_x(ctx.recomputed_p90.ratio_method_min_dscr) }}</td></tr>
+        {% endif %}
+        {% if ctx.finance.debt.p90_cover_min_dscr is not none %}
+        <tr><td>P90 cover term (Financing_Terms.p90_cover_min_dscr)</td><td class="num">{{ fmt_x(ctx.finance.debt.p90_cover_min_dscr) }}{% if ctx.finance.debt.p90_cover_binding %}: binds; P50 sizing target raised from {{ fmt_x(ctx.finance.debt.p90_cover_declared_target_dscr) }} to {{ fmt_x(ctx.finance.debt.p90_cover_target_dscr) }}{% else %}: met at the P50 sizing{% endif %}</td></tr>
+        {% endif %}
       </tbody>
     </table>
+    {% if ctx.recomputed_p90 %}<p class="muted">{{ ctx.recomputed_p90.label }}</p>{% endif %}
     {% if ctx.finance.debt.schedule %}
     <h3>Annual DSCR profile</h3>
     <table>

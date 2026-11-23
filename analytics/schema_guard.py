@@ -478,6 +478,20 @@ def _validate_debt_covenant_terms(
             errors.append(str(exc))
 
 
+def _validate_p90_cover(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Refuse a bad opt-in ``Financing_Terms.p90_cover_min_dscr`` (#1895).
+
+    Delegates to the pipeline's own resolver, so pre-flight and the run cannot disagree.
+    An absent term is not an error: it has no default and sizes nothing.
+    """
+    from analytics.finance.p90_cover import resolve_p90_cover
+
+    try:
+        resolve_p90_cover(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_bridge_period_treatment(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -783,6 +797,7 @@ def validate_config_for_v14(
     if "debt" in module_list:
         _validate_debt_sizing_terms(raw_config, errors)
         _validate_debt_covenant_terms(raw_config, errors)
+        _validate_p90_cover(raw_config, errors)
 
     # 3. Collect and validate registered specs for requested modules
     specs: list[Any] = []

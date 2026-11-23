@@ -97,6 +97,7 @@ from finance.debt.schema import (  # noqa: F401
     _register_debt_schema,
 )
 from finance.debt.sizing import (  # noqa: F401
+    _DSCR_SIZING_MODES,
     _ft_tenor,
     _gearing_hint,
     _maybe_autosolve_dscr,
