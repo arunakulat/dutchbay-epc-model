@@ -121,7 +121,27 @@ def run_capex_mc(
     # overruns — correct). Grossing here would write a levy-inclusive total back
     # as the base and levy it AGAIN per trial. base_capex_usd in the result is
     # therefore the PRE-LEVY base.
-    base = _extract_capex_usd(cfg, include_import_levies=False)
+    # #1899: each trial perturbs the STATED (price-year) capex and the pipeline then
+    # applies a declared capex.price_basis to it (and adds a declared headline battery,
+    # #1823). The capex percentiles and base_capex_usd are reported on the FINANCED basis:
+    # each trial's configuration passed through evaluated_scenario_config, the capex its
+    # KPIs were computed on.
+    from analytics.evaluation_v14 import evaluated_scenario_config
+    from finance.capex_price_basis import PRICE_BASIS_KEY
+
+    def financed_capex(run: Dict[str, Any]) -> float:
+        return float(
+            _extract_capex_usd(
+                evaluated_scenario_config(copy.deepcopy(run)),
+                include_import_levies=False,
+            )
+        )
+
+    stated_cfg = copy.deepcopy(cfg)
+    stated_capex = stated_cfg.get("capex")
+    if isinstance(stated_capex, dict):
+        stated_capex.pop(PRICE_BASIS_KEY, None)
+    base = _extract_capex_usd(stated_cfg, include_import_levies=False)
     if base <= 0:
         raise ValueError("base CAPEX must be > 0 for a probabilistic run")
 
@@ -147,7 +167,7 @@ def run_capex_mc(
             cap["usd_total"] = base * float(factor)
         run_cfg["capex"] = cap
         kpis = run_v14_pipeline(config=run_cfg)["kpis"]
-        capex_s.append(base * float(factor))
+        capex_s.append(financed_capex(run_cfg))
         if kpis.get("project_irr") is None:
             # #1494: an undefined project IRR has no number to put in a percentile;
             # refuse rather than coerce it to 0.0 (break-even) or drop the trial.
@@ -176,7 +196,7 @@ def run_capex_mc(
     return CapexMcResult(
         n_samples=int(n_samples),
         sigma_pct=sigma,
-        base_capex_usd=base,
+        base_capex_usd=financed_capex(cfg),
         seed=int(seed),
         capex_usd=pcts(capex_s),
         project_irr=pcts(irr),

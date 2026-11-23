@@ -751,12 +751,15 @@ class MonteCarloEngine:
         """
         from analytics.evaluation_v14 import _deep_merge_config
         from analytics.schema_guard import validate_config_for_v14
+        from finance.capex_price_basis import apply_capex_price_basis
         from finance.debt_v14 import _extract_capex_usd
         from finance.native_cost_inputs import normalize_native_capex
 
         def _check(overrides: Mapping[str, Any]) -> None:
-            cfg = normalize_native_capex(
-                _deep_merge_config(self._base_config, overrides)
+            # As each trial's pipeline run does: a declared capex.price_basis is
+            # applied before capex is read (#1899).
+            cfg = apply_capex_price_basis(
+                normalize_native_capex(_deep_merge_config(self._base_config, overrides))
             )
             validate_config_for_v14(
                 raw_config=cfg,

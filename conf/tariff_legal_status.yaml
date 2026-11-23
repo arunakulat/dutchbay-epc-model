@@ -1,0 +1,118 @@
+# Tariff legal status: what each tariff a scenario prices actually rests on (#1837).
+#
+# One shared registry for every scenario (universal; nothing here is read by site-specific
+# code). For each rate a scenario prices, it records:
+#
+#   status          published | analogy_unpublished | unconfirmed
+#   instrument      the document that sets the rate, and its clause
+#   effective_from  ISO date, or null with effective_note quoting why no date is stated
+#   effective_to    ISO date, or null with review quoting what ends the rate
+#
+# DATA-01: each "verbatim" entry quotes the source as converted with MarkItDown (R26); the
+# converted text is not committed. Square-bracketed words are editorial. A source already
+# frozen in another config is cited there by config path and id (one fact, one home); a new
+# source is frozen here with its URL and the SHA-256 of the PDF read.
+#
+# Read by analytics.tariff_legal_status (strict: unknown keys are refused, and a rate without
+# a status is refused; FRAMEWORK-02). The command-line lender report prints each recorded
+# rate's status beside the revenue that uses it, and labels any figure built on an
+# analogy_unpublished or unconfirmed rate. A scenario that is not listed under `scenarios`
+# is reported as "legal status not recorded", never as published.
+#
+# This is not a legal opinion. Eligibility stays a question for PUCSL, the NSO or counsel.
+
+schema_version: tariff_legal_status_v1
+retrieved: "2026-11-22"
+
+sources:
+  PUCSL-DECISION-2026-08:
+    title: "Decision on Feed in Tariffs, Effective from August 25, 2026"
+    publisher: "Public Utilities Commission of Sri Lanka"
+    url: "https://www.pucsl.gov.lk/wp-content/uploads/2026/08/Full-Final-Decision-on-Feed-in-Tariffs-August-2026.pdf"
+    pdf_sha256: "1151efd22a797eca174d06c1b1c6af9380193a8ecba121362bbf9a5879f16c45"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.1: This decision, made on August 21, 2026, as per the powers vested with the Commission, in terms of the Section 29 (3) of Sri Lanka Electricity Act No. 36 of 2024 (Amended), considered the approved Tariff Methodology, the Government Policy, submissions by the stakeholders and other related legal provisions."
+      - "s.1: The approved Feed in tariffs (Annex – 2) are effective from August 25, 2026, until the next tariff revision."
+      - "Annex 3 s.7(d): Independent Power Producers (IPPs) operating under SPPAs shall be eligible to execute Standard Power Purchase Agreements (SPPAs) using the Feed-in Tariff approved under this decision, provided that such SPPAs are signed on or after the effective date of this tariff decision."
+  PUCSL-ANNEX2-2026-08:
+    cited_in: conf/blue_whale_pucsl_fit_2026.yaml
+    url: "https://www.pucsl.gov.lk/wp-content/uploads/2026/08/Annex-2-Summary-of-Approved-Feed-in-Tariffs.pdf"
+    pdf_sha256: "ff505687c80af7d1863dd287ecc45aff6dbe356fd7eb97d81481db6151e13218"
+    verbatim:
+      - "*Note: The non-escalable component is required to be adjusted once after 12 months from the SPPA signing date, in accordance with Clause 3.1 of the Methodology."
+    note: "Frozen in the cited config, which had no download URL for it; the URL is recorded here and the PDF read at it has the SHA-256 the cited config pins."
+  PUCSL-METHOD-2026:
+    cited_in: conf/blue_whale_pucsl_fit_2026.yaml
+    pdf_sha256: "7ee0f6d6a42459e53f91bf38a40194464edabbd18bac647bd1a2a8d8a79866dd"
+    verbatim:
+      - "s.1: This document may be cited as the Methodology for determining feed in tariffs for Renewable Energy based electricity generation and shall come into effect on the date on which this document is issued."
+    note: "The converted text states no issue date."
+  SL-ELECTRICITY-ACT-36-2024:
+    cited_in: conf/blue_whale_pucsl_fit_2026.yaml
+    pdf_sha256: "91a223273adfe4a89540e7627833a4d923ddf16bdccff2f4b23904ca29b2f8de"
+
+rates:
+  pucsl_fit_2026_wind:
+    status: published
+    lkr_per_kwh: 25.73
+    components_lkr_per_kwh: [20.80, 4.93]
+    instrument: "PUCSL Decision on Feed in Tariffs, effective from 25 August 2026, Annex 2"
+    clause: "Annex 2 s.1 [Power Plants]: Wind 20.80 4.93 [non-escalable, base O&M]"
+    source: PUCSL-ANNEX2-2026-08
+    effective_from: "2026-08-25"
+    effective_from_source: PUCSL-DECISION-2026-08
+    effective_to: null
+    review: "until the next tariff revision"
+    review_source: PUCSL-DECISION-2026-08
+    conditions:
+      - "Applies only to an SPPA signed on or after 25 August 2026 (Decision Annex 3 s.7(d)). The effective window governs the SPPA signing date, not the operating period."
+      - "The non-escalable component is adjusted once, 12 months after SPPA signing, for LKR/USD (70%) and CCPI (30%) (Annex 2 note; Methodology s.3.1). The model does not apply this adjustment."
+    open_questions:
+      - "Standardised-PPA eligibility: the Electricity Act No. 36 of 2024 s.11(3) caps standardised PPAs at 10 MW on a cumulative basis per contiguous location. Whether other capacity on the same location counts against that cap is open (conf/blue_whale_pucsl_fit_2026.yaml, standardised_ppa_limit)."
+  pucsl_fit_2026_ground_solar_other_period:
+    status: published
+    lkr_per_kwh: 20.72
+    components_lkr_per_kwh: [18.00, 2.72]
+    instrument: "PUCSL Decision on Feed in Tariffs, effective from 25 August 2026, Annex 2"
+    clause: "Annex 2 s.1 [Power Plants]: Ground Mounted Solar PV 18.00 2.72; s.3 [Power Plants with BESS], At Other Periods"
+    source: PUCSL-ANNEX2-2026-08
+    effective_from: "2026-08-25"
+    effective_from_source: PUCSL-DECISION-2026-08
+    effective_to: null
+    review: "until the next tariff revision"
+    review_source: PUCSL-DECISION-2026-08
+    conditions:
+      - "Applies only to an SPPA signed on or after 25 August 2026 (Decision Annex 3 s.7(d)). The effective window governs the SPPA signing date, not the operating period."
+      - "The non-escalable component is adjusted once, 12 months after SPPA signing, for LKR/USD (70%) and CCPI (30%) (Annex 2 note; Methodology s.3.1). The model does not apply this adjustment."
+    open_questions:
+      - "Standardised-PPA eligibility: the Electricity Act No. 36 of 2024 s.11(3) caps standardised PPAs at 10 MW on a cumulative basis per contiguous location. Whether other capacity on the same location counts against that cap is open (conf/blue_whale_pucsl_fit_2026.yaml, standardised_ppa_limit)."
+  wind_bess_on_solar_bess_formula:
+    status: analogy_unpublished
+    lkr_per_kwh: null
+    instrument: "PUCSL Methodology for Renewable Energy Feed-in Tariffs 2026, s.5.1.2 (the solar PV + BESS prioritized-feed-in-time formula), applied to wind by analogy"
+    clause: "s.5.1: Solar PV plants (Ground mounted & Floating) ... connected along with a Battery Energy Storage System (BESS) is considered here for feed in tariff determination."
+    source: PUCSL-METHOD-2026
+    effective_from: null
+    effective_note: "shall come into effect on the date on which this document is issued (no issue date stated)"
+    effective_to: null
+    review: "no published tariff for wind + BESS: the formula's s.5 names solar PV only"
+    review_source: PUCSL-METHOD-2026
+    conditions:
+      - "A working assumption for screening, not a published tariff (conf/wind_bess_options.yaml, method.hold)."
+    open_questions:
+      - "Whether PUCSL would offer any storage tariff to a wind plant. Until it does, every figure on this basis is screening only."
+
+# Which recorded rate each scenario's revenue uses, keyed by scenario file stem.
+#   headline_revenue: the rate behind tariff.lkr_per_kwh (checked against the scenario at run
+#                     time: a different value is reported as a mismatch, not as this rate)
+#   storage_options:  the rate behind each revenue basis of the wind battery options analysis
+scenarios:
+  blue_whale_wind_lot5b_2026:
+    headline_revenue: pucsl_fit_2026_wind
+    storage_options:
+      whole_wind_peak_rate: wind_bess_on_solar_bess_formula
+      stacked: wind_bess_on_solar_bess_formula
+      whole_wind_peak_rate_on_all_window_exports: wind_bess_on_solar_bess_formula
+  blue_whale_solar_bess_lot5b_2026:
+    headline_revenue: pucsl_fit_2026_ground_solar_other_period

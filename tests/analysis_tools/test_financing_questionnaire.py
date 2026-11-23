@@ -49,8 +49,8 @@ def test_each_reference_matches_independent_yaml_and_preserves_source(
     result = build_questionnaire(cfg, raw)
     assert base64.b64decode(result["source"]["raw_yaml_base64"]) == raw
     assert result["source"]["sha256"] == hashlib.sha256(raw).hexdigest()
-    assert len(cfg["fields"]) == 18
-    for question, field in zip(result["questions"][:18], cfg["fields"], strict=True):
+    assert len(cfg["fields"]) == 19
+    for question, field in zip(result["questions"][:19], cfg["fields"], strict=True):
         value = oracle
         for part in field["path"].split("."):
             value = value[part]

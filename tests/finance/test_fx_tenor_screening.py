@@ -29,6 +29,7 @@ from analytics.finance.fx_tenor_screening import (
     run_fx_tenor_screening_for_scenario,
     scenario_screening_inputs,
 )
+from finance.capex_price_basis import apply_capex_price_basis
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SITE_CONF = REPO_ROOT / "conf" / "blue_whale_fx_tenor_screening.yaml"
@@ -175,7 +176,8 @@ def _two_part_with_block() -> Dict[str, Any]:
     block = copy.deepcopy(_basecase()["financing_screening"])
     del block["tariff_om_escalation_decimal"]
     scenario["financing_screening"] = block
-    return scenario
+    # #1899: the screening reads the capex the engine finances.
+    return apply_capex_price_basis(scenario)
 
 
 def test_an_indexed_om_part_is_split_and_escalated_as_the_engine_does() -> None:
