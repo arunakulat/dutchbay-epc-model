@@ -230,6 +230,7 @@ def _capex_mc(
     capex_mc: Callable[..., Any],
     pipeline: Callable[..., Mapping[str, Any]],
 ) -> Union[CapexMcBlock, str]:
+    from finance.capex_price_basis import PRICE_BASIS_KEY
     from finance.debt_v14 import _extract_capex_usd
 
     sigma = _sigma(scenario, band)
@@ -253,7 +254,13 @@ def _capex_mc(
             f"not run: {result.n_samples} trials is under the lender floor of "
             f"{LENDER_GRADE_MIN_TRIALS}"
         )
-    base = float(_extract_capex_usd(cfg, include_import_levies=False))
+    # Match analytics/cost/mc_capex.py: extract the un-escalated stated base while
+    # keeping capex.price_basis on cfg so _base_point_config scales like one MC trial.
+    stated_cfg = copy.deepcopy(cfg)
+    stated_capex = stated_cfg.get("capex")
+    if isinstance(stated_capex, dict):
+        stated_capex.pop(PRICE_BASIS_KEY, None)
+    base = float(_extract_capex_usd(stated_cfg, include_import_levies=False))
     rows = []
     for attr, kpi, label, unit in _MC_ROWS:
         pct = getattr(result, attr)

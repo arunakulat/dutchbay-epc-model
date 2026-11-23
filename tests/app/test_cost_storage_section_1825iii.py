@@ -327,6 +327,28 @@ def test_a_factor_one_trial_that_reproduces_the_committed_case_says_so(
     assert capex["usd_total"] == CAPEX and "derive_from_breakdown" not in capex
 
 
+def test_capex_mc_succeeds_with_price_basis(fakes: _Fakes) -> None:
+    scenario = _scenario(
+        estimate_class=3,
+        derive_from_breakdown=True,
+        breakdown={"turbines_usd": 60e6, "civil_usd": 40e6},
+        price_basis={"price_year": 2026, "escalation_pct": 5.0},
+    )
+    scenario["project"] = {"cod_year": 2028}
+    scenario["Financing_Terms"] = {"construction_periods": 1}
+    block = fakes.build(scenario)
+    assert isinstance(block, CostStorageBlock)
+    assert block.capex_mc is not None
+    assert not any(
+        entry.startswith("CAPEX Monte Carlo:") for entry in block.parts_not_run
+    )
+    # The base-point run keeps price_basis and writes the un-escalated base, like one MC trial.
+    capex = fakes.pipeline_calls[0]["config"]["capex"]
+    assert capex["usd_total"] == CAPEX
+    assert capex["price_basis"] == {"price_year": 2026, "escalation_pct": 5.0}
+    assert "derive_from_breakdown" not in capex
+
+
 def test_a_factor_one_trial_that_misses_the_committed_case_says_so(
     fakes: _Fakes,
 ) -> None:
@@ -447,7 +469,11 @@ def test_lcos_prices_the_battery_on_the_financed_capex(fakes: _Fakes) -> None:
     financed = compute_lcos_suite(
         evaluated_scenario_config(scenario), wacc=0.08, project_years=20
     )
-    stated = compute_lcos_suite(scenario, wacc=0.08, project_years=20)
+    stated_cfg = dict(scenario)
+    stated_cfg["capex"] = {
+        k: v for k, v in scenario["capex"].items() if k != "price_basis"
+    }
+    stated = compute_lcos_suite(stated_cfg, wacc=0.08, project_years=20)
     got = [r.lcos_usd_per_mwh for r in block.lcos]
     assert got == [r.lcos_usd_per_mwh for r in financed]
     # Non-vacuity: the stated (unescalated) CAPEX would give a different figure.
