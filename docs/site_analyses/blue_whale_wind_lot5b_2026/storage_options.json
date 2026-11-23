@@ -122,7 +122,7 @@
   },
   "hold": "SCREENING ONLY, not lender-grade. A wind + BESS revenue basis built from a solar + BESS tariff formula is a working assumption, not a published tariff. The hourly shape is a generic Cp-limited curve on a reanalysis, calibrated to the scenario's committed yield, which keeps its own resource holds. F-5 (no quarterly CFADS or intra-year DSCR figure supports a lender representation), #1110 and v15.6.1 stand.",
   "method_sha256": "5a1ca9505c1745ee2389e457b75ed8fd56e5190448003c8dd6b70c033cf0ca1e",
-  "model_version": "15.36.0",
+  "model_version": "15.35.0",
   "monte_carlo_base_basis": {
     "cycled_0_5_2|B": {
       "delta_project_npv_vs_wind_only": {
@@ -1049,7 +1049,7 @@
       },
       "tree": "7ce6f7e9348a15666e4c8efe3f4dbcc318668f08d1e0c42bd66e005b5b747506"
     },
-    "model_version": "15.36.0",
+    "model_version": "15.35.0",
     "schema": "dutchbay.site_analysis_provenance.v1"
   },
   "recommended_option_reading_A": "held_0_5_0_5",

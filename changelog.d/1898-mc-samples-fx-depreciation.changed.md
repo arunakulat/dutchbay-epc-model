@@ -1,4 +1,4 @@
-- **The Monte Carlo samples FX depreciation (#1898, #924 study O-7; 15.36.0).** Each
+- **The Monte Carlo samples FX depreciation (#1898, #924 study O-7; 15.35.0).** Each
   scenario's Monte Carlo held its FX depreciation fixed. The DutchBay lender case now draws
   `fx.annual_depr` per trial from a normal band of 2.22% to 9.57% (95%) around its 5.89%/yr
   base: the standard-error interval of the 20-year mean depreciation from the BIS vintage

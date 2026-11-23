@@ -74,7 +74,10 @@ def load_governed_basecase_inputs(scenario_path: Path | str) -> Dict[str, Any]:
     data = yaml.safe_load(resolved.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"Expected mapping in governed scenario YAML: {resolved}")
-    return scenario_screening_inputs(data)
+    from analytics.evaluation_v14 import evaluated_scenario_config
+
+    # #1899: the capex the engine finances, with a declared price date applied.
+    return scenario_screening_inputs(evaluated_scenario_config(data))
 
 
 def run_comprehensive_screening(raw_cfg: Dict[str, Any]) -> Dict[str, Any]:
