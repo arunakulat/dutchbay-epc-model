@@ -102,6 +102,39 @@ rates:
       - "A working assumption for screening, not a published tariff (conf/wind_bess_options.yaml, method.hold)."
     open_questions:
       - "Whether PUCSL would offer any storage tariff to a wind plant. Until it does, every figure on this basis is screening only."
+  pucsl_fit_2026_wind_solar_blended_hybrid:
+    status: analogy_unpublished
+    lkr_per_kwh: 24.97345
+    components_lkr_per_kwh: [20.377179, 4.596271]
+    instrument: "Energy-weighted blend of PUCSL Decision on Feed in Tariffs, effective from 25 August 2026, Annex 2 s.1 Wind (25.73) and Ground Mounted Solar PV other-period (20.72) rates"
+    clause: "Annex 2 s.1 [Power Plants]: Wind 20.80 4.93 and Ground Mounted Solar PV 18.00 2.72, blended on the scenario's 9.5 MW wind (CF 0.487560) and 5.0 MW AC solar + BESS unit export (CF 0.164771)"
+    source: PUCSL-ANNEX2-2026-08
+    effective_from: "2026-08-25"
+    effective_from_source: PUCSL-DECISION-2026-08
+    effective_to: null
+    review: "no single-SPPA blended hybrid tariff is published in Annex 2; the component rates run until the next tariff revision"
+    review_source: PUCSL-DECISION-2026-08
+    conditions:
+      - "Superseded combined screening view (scenarios/blue_whale_hybrid_lot5b_2026.yaml): the owner split the wind project and the solar + BESS project into separate scenarios (#1353 comment 6556854201)."
+      - "Applies the two-part PUCSL Annex 2 component rates as an energy-weighted single generation tariff for the engine, while bess_1 adds the 29.38 LKR/kWh priority-window premium for 15 years."
+    open_questions:
+      - "Standardised-PPA eligibility: the combined 14.5 MW plant exceeds the 10 MW standardised-PPA threshold under the Electricity Act No. 36 of 2024 s.11(3) and s.52 unless the limit applies separately per technology (conf/blue_whale_pucsl_fit_2026.yaml, standardised_ppa_limit)."
+  ceb_sppa_unexecuted_wind_assumption:
+    status: unconfirmed
+    lkr_per_kwh: 20.30
+    instrument: "CEB Standardized Power Purchase Agreement (BOO, 20-year flat LKR/kWh draft template, unexecuted)"
+    clause: "Modelled flat nominal LKR/kWh assumption (scenarios/dutchbay_lendercase_2025Q4.yaml, evidence_register.entries.tariff); the standardized PPA template carries no filled tariff and no PPA is executed; the August 2026 PUCSL Decision Annex 2 wind rate for standardized PPAs <= 10 MW is 25.73 LKR/kWh"
+    source: PUCSL-DECISION-2026-08
+    effective_from: null
+    effective_note: "no executed SPPA and no published tariff decision at 20.30 LKR/kWh in the repository corpus"
+    effective_to: null
+    review: "unexecuted modelling assumption pending a signed PPA or tender award (20-year term from COD assumed)"
+    review_source: PUCSL-DECISION-2026-08
+    conditions:
+      - "Flat nominal LKR/kWh for 20 years from COD with no escalation and no FX indexation (scenarios/dutchbay_lendercase_2025Q4.yaml, ppa and tariff blocks)."
+      - "Recorded in evidence_register.entries.tariff as tier assumption and in development_readiness.items.ppa as amber (template only; tariff not yet executed)."
+    open_questions:
+      - "Large-scale procurement basis: at 148.9 MW (14 turbines), DutchBay exceeds the 10 MW standardised-PPA ceiling in the Electricity Act No. 36 of 2024 s.11(3) and s.52, and awaits an executed PPA or competitive-procurement determination."
 
 # Which recorded rate each scenario's revenue uses, keyed by scenario file stem.
 #   headline_revenue: the rate behind tariff.lkr_per_kwh (checked against the scenario at run
@@ -116,3 +149,7 @@ scenarios:
       whole_wind_peak_rate_on_all_window_exports: wind_bess_on_solar_bess_formula
   blue_whale_solar_bess_lot5b_2026:
     headline_revenue: pucsl_fit_2026_ground_solar_other_period
+  blue_whale_hybrid_lot5b_2026:
+    headline_revenue: pucsl_fit_2026_wind_solar_blended_hybrid
+  dutchbay_lendercase_2025Q4:
+    headline_revenue: ceb_sppa_unexecuted_wind_assumption

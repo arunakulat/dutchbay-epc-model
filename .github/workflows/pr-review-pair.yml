@@ -8,7 +8,8 @@
 # tests/lint/test_pr_review_pair_policy.py pins it and this workflow.
 #
 # Where it runs: `pull_request_target`, so GitHub takes this workflow file from `main`, not from
-# the pull request, and the checkout below is the base commit, so the script is main's as well.
+# the pull request, and the checkout below omits `ref` so it checks out `main`'s tip (avoiding a
+# potentially stale `base.sha`), so the script is main's as well.
 # A pull request therefore cannot edit the check that judges it. No pull-request code is checked
 # out or executed: the body, number, author, head SHA and head branch reach the script only
 # through `env`, the token is read-only and is not persisted. A change to this workflow or the
@@ -46,10 +47,10 @@ jobs:
     name: "${{ github.event.pull_request.draft && 'Independent review (draft: deferred)' || 'Independent review (RECRUIT-01)' }}"
     runs-on: ubuntu-latest
     steps:
-      # The BASE commit, never the pull request's head or merge ref.
+      # No explicit ref: under pull_request_target, checks out main's tip (never the PR head,
+      # merge ref, or a lagging base.sha).
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v7
         with:

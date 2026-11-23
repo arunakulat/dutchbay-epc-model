@@ -226,12 +226,12 @@ def test_workflow_runs_the_check_from_the_base_commit() -> None:
     job = _workflow()["jobs"]["review-pair"]
     checkout = job["steps"][0]
     assert checkout["uses"].startswith("actions/checkout@")
-    assert checkout["with"]["ref"] == "${{ github.event.pull_request.base.sha }}"
+    assert "ref" not in checkout["with"]
     assert checkout["with"]["persist-credentials"] is False
     text = WORKFLOW.read_text(encoding="utf-8")
-    assert "pull_request.head.sha }}" not in "".join(
-        str(s.get("with", {})) for s in job["steps"]
-    )
+    step_with = "".join(str(s.get("with", {})) for s in job["steps"])
+    assert "pull_request.head.sha }}" not in step_with
+    assert "pull_request.base.sha }}" not in step_with
     assert "run: python scripts/ci/check_pr_review_pair.py" in text
     assert set(_workflow()["permissions"].values()) == {"read"}
     run = [s for s in job["steps"] if "run" in s]
@@ -304,7 +304,65 @@ def test_a_veto_on_an_older_head_does_not_block() -> None:
         _record("domain", THIRD, disposition="REJECT", commit=OLD_HEAD, comment_id=1),
         *_pair(),
     ]
-    assert _verdict(comments)[0] == 0
+    code, message = _verdict(comments)
+    assert code == 0
+    assert "Notes:" in message and OLD_HEAD[:12] in message
+
+
+def test_a_malformed_trusted_record_on_the_head_blocks_even_beside_a_pair() -> None:
+    """N2 (#1857): a malformed trusted record naming the head fails closed."""
+    missing_session = {
+        "id": 9,
+        "author_association": "OWNER",
+        "body": (
+            f"Review-Record: 1\nRole: domain\nPR: #{PR}\n"
+            f"Commit: {HEAD}\nDisposition: REJECT\n"
+        ),
+    }
+    cases = [
+        (
+            _record(
+                "domain", THIRD, disposition="REJECT", digest="0" * 64, comment_id=9
+            ),
+            "SHA-256 does not match",
+        ),
+        (
+            _record("domain", THIRD, disposition="REJECT", car="10", comment_id=9),
+            "`Car:` is only for train pull requests",
+        ),
+        (missing_session, "8<"),
+    ]
+    for bad, expected in cases:
+        code, message = _verdict([*_pair(), bad])
+        assert code == 1, message
+        assert "malformed review record" in message and expected in message, message
+
+
+def test_untrusted_or_older_malformed_records_do_not_block_and_notes_print(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Untrusted or older-head malformed records warn in pass Notes without blocking."""
+    untrusted = _record(
+        "domain", THIRD, disposition="REJECT", association="NONE", comment_id=8
+    )
+    older_bad = _record(
+        "domain",
+        THIRD,
+        disposition="REJECT",
+        commit=OLD_HEAD,
+        digest="0" * 64,
+        comment_id=9,
+    )
+    _env(monkeypatch)
+    _stub(
+        monkeypatch,
+        {"commits": [COMMITS], "comments": [[untrusted, older_bad, *_pair()]]},
+    )
+    assert check.main() == 0
+    out = capsys.readouterr().out
+    assert "Notes:" in out
+    assert "not the owner or a collaborator" in out
+    assert "SHA-256 does not match" in out
 
 
 # --- Record shape (mutation survivors on the first head) --------------------------------------
@@ -455,6 +513,29 @@ def test_a_car_field_off_a_train_does_not_count() -> None:
     """`Car:` belongs to train records only."""
     code, message = _verdict(_car_pair("10", 1))
     assert code == 1 and "only for train pull requests" in message
+
+
+def test_a_train_with_repeated_car_numbers_fails_closed() -> None:
+    """N3 (#1857): two train commits ending with the same car number cannot collapse."""
+    commits = [*TRAIN_COMMITS, {"commit": {"message": "fix: duplicate car (#10)"}}]
+    assert check.train_cars(TRAIN_REF, commits) is None
+    comments = _car_pair("10", 1) + _car_pair("11", 3)
+    code, message = _verdict(comments, commits=commits, head_ref=TRAIN_REF)
+    assert code == 1 and "cannot be judged per car" in message
+
+
+def test_a_train_malformed_car_record_on_head_blocks_beside_valid_pairs() -> None:
+    """N2 (#1857): a train record naming the head with a missing/unknown Car fails closed."""
+    comments = [
+        *_car_pair("10", 1),
+        *_car_pair("11", 3),
+        _record("domain", THIRD, disposition="REJECT", car="99", comment_id=9),
+    ]
+    code, message = _train(comments)
+    assert code == 1
+    assert (
+        "malformed review record" in message and "must name one of the cars" in message
+    )
 
 
 # --- main(): environment, paging and fail-closed reads ----------------------------------------

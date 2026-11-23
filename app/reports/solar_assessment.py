@@ -32,6 +32,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
+from app.reports.report_config import declared_lockup_threshold
+
 #: The gearing and DSCR-target optimisations rank on equity NPV (#1456, #1522 A-3):
 #: ``optimize_parameter`` warns when a caller ranks on IRR.
 OPTIMISATION_OBJECTIVE = "equity_npv"
@@ -516,12 +518,14 @@ def _dscr_targets(cfg: Mapping[str, Any], work_dir: Path) -> Dict[str, Any]:
         if opt.best
         else None
     )
+    lockup_declared = declared_lockup_threshold(cfg) is not None
     lockups = [d["lockup"] for d in sweep if d["lockup"] is not None]
     return {
         "sweep": sweep,
         "objective_key": OPTIMISATION_OBJECTIVE,
         "best": best,
         "lockup_covenant": lockups[0] if lockups else None,
+        "lockup_declared": lockup_declared,
     }
 
 
@@ -959,7 +963,7 @@ def optimisation_caption(opt: Mapping[str, Any]) -> str:
 
 def dscr_target_caption(dscr: Mapping[str, Any]) -> str:
     """The DSCR sizing-target finding, flagged when it sits at the sweep's edge or below the
-    scenario's lock-up covenant (#1785 domain D-3)."""
+    lock-up / minimum DSCR threshold (#1785 domain D-3, #1900)."""
     best = dscr.get("best")
     if not best:
         return "No DSCR target in the sweep gives a defined equity NPV optimum."
@@ -973,10 +977,17 @@ def dscr_target_caption(dscr: Mapping[str, Any]) -> str:
         )
     lockup = _number(dscr.get("lockup_covenant"))
     if lockup is not None and target < lockup:
-        text += (
-            f" It is below the scenario's {lockup:.2f}x lock-up covenant, so distributions "
-            "lock up in the years shown; the target is not a recommended sizing."
-        )
+        if dscr.get("lockup_declared") is False:
+            text += (
+                f" It is below the model's {lockup:.2f}x default minimum DSCR covenant, "
+                "so distributions lock up in the years shown; the target is not a "
+                "recommended sizing."
+            )
+        else:
+            text += (
+                f" It is below the scenario's {lockup:.2f}x lock-up covenant, so distributions "
+                "lock up in the years shown; the target is not a recommended sizing."
+            )
     return text
 
 

@@ -45,8 +45,9 @@ pull-request number (the last number when the subject ends with a list, such as
 carry-forward records on the train pull request, bound to the train head, with ``Car: #<car>``.
 
 Where it runs. The workflow triggers on ``pull_request_target``, so GitHub runs the workflow
-file from ``main``, and it checks out the base commit, so the script is ``main``'s too: a pull
-request cannot edit the check that judges it. No pull-request code is executed. GitHub blocks
+file from ``main``, and it checks out ``main``'s tip (with no explicit ``ref``, avoiding
+``base.sha`` lag), so the script is ``main``'s too: a pull request cannot edit the check that
+judges it. No pull-request code is executed. GitHub blocks
 ``pull_request_target`` in public repositories from 2 December 2026 unless an Actions event
 policy allows it, so the owner must allow it for this workflow before (or with) making the
 check required. Under
@@ -125,19 +126,23 @@ def train_cars(head_ref: str, commits: list[dict[str, Any]]) -> list[str] | None
 
     A car commit's subject ends with its car's pull-request number (``TRAIN-01``), as
     ``(#N)`` or as the last number of a list such as ``(#1578, #1800)``. Returns ``None``
-    when any commit on a train branch names no car, so an unnumbered car cannot slip
-    through unreviewed.
+    when any commit on a train branch names no car or repeats an earlier car number, so
+    an unnumbered or duplicate car cannot slip through unreviewed.
     """
     if not head_ref.startswith(TRAIN_BRANCH_PREFIX):
         return []
+    seen: set[str] = set()
     cars: list[str] = []
     for commit in commits:
         message = ((commit.get("commit") or {}).get("message")) or ""
         found = _CAR_SUBJECT.search(message.split("\n", 1)[0].rstrip())
         if not found:
             return None
-        if found.group(1) not in cars:
-            cars.append(found.group(1))
+        car = found.group(1)
+        if car in seen:
+            return None
+        seen.add(car)
+        cars.append(car)
     return cars or None
 
 
@@ -240,19 +245,30 @@ def evaluate(
     if found_cars is None:
         return 1, (
             "RECRUIT-01 (#1486): every commit on a train branch must end its subject "
-            "with its car's pull-request number, '(#<number>)'; one does not, so the "
-            "train cannot be judged per car."
+            "with a distinct car pull-request number, '(#<number>)'; one is "
+            "unnumbered or repeats an earlier car, so the train cannot be judged per "
+            "car."
         )
     cars = found_cars
     # (car, role, reviewer) -> (position, record, where); the latest record wins.
     latest: dict[tuple[str, str, str], tuple[int, dict[str, str], str]] = {}
     notes: list[str] = []
+    malformed_head: list[str] = []
+    head_lower = head_sha.lower()
     for position, comment in enumerate(comments):
         record, reason = parse_record(comment)
         where = f"comment {comment.get('id')}"
         if record is None:
             if reason != "not a review record":
-                notes.append(f"{where}: {reason}")
+                note = f"{where}: {reason}"
+                notes.append(note)
+                body_text = comment.get("body") or ""
+                if (
+                    comment.get("author_association") in TRUSTED_ASSOCIATIONS
+                    and head_lower
+                    and head_lower in body_text.lower()
+                ):
+                    malformed_head.append(note)
             continue
         if record["PR"].lstrip("#") != str(pr_number):
             notes.append(f"{where}: bound to {record['PR']}, not #{pr_number}")
@@ -265,9 +281,13 @@ def evaluate(
                 f"{where}: reviewer {record['Reviewer-Session']} wrote a commit here"
             )
         elif cars and record["Car"] not in cars:
-            notes.append(f"{where}: a train record must name one of the cars {cars}")
+            note = f"{where}: a train record must name one of the cars {cars}"
+            notes.append(note)
+            malformed_head.append(note)
         elif not cars and record["Car"]:
-            notes.append(f"{where}: `Car:` is only for train pull requests")
+            note = f"{where}: `Car:` is only for train pull requests"
+            notes.append(note)
+            malformed_head.append(note)
         else:
             key = (record["Car"], record["Role"], record["Reviewer-Session"])
             latest[key] = (position, record, where)
@@ -282,6 +302,11 @@ def evaluate(
             f"RECRUIT-01 (#1486): {level} head {head_sha[:12]} carries a withheld "
             f"acceptance, and one veto blocks acceptance (module 3 section 1): "
             f"{'; '.join(vetoes)}."
+        )
+    if malformed_head:
+        return 1, (
+            f"RECRUIT-01 (#1486): {level} head {head_sha[:12]} carries a malformed "
+            f"review record, which fails closed: {'; '.join(malformed_head)}."
         )
     passed: list[str] = []
     missing: list[str] = []
@@ -309,9 +334,10 @@ def evaluate(
             ]
             missing.append(f"{label}{', '.join(lacking)}")
     if not missing:
+        note_suffix = f" Notes: {'; '.join(notes)}." if notes else ""
         return 0, (
             f"RECRUIT-01 (#1486): {level} pair on head {head_sha[:12]}: "
-            f"{'; '.join(passed)}."
+            f"{'; '.join(passed)}.{note_suffix}"
         )
     detail = "; ".join(notes) if notes else "no review record found"
     return 1, (
