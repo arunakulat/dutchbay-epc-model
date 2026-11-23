@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
-from finance.debt.constants import _AMORT_ANNUITY_STYLES
-from finance.debt.schedules import Tranche
 from finance.monthly_cascade_v14 import (
     _DAYS_IN_CALENDAR_MONTH,
     DEFAULT_BRIDGE_MONTHS,
@@ -34,6 +32,9 @@ from finance.monthly_cascade_v14 import (
     build_monthly_cascade_from_annual_rows,
     resolve_monthly_spec,
 )
+
+if TYPE_CHECKING:
+    from finance.debt_v14 import Tranche
 
 __all__ = [
     "COVENANT_USE",
@@ -271,6 +272,8 @@ def build_quarterly_sculpted_schedule(
             if ``amortization_style`` is an annuity style, or if ``senior_fee_rate > 0``
             when ``annual_rows`` already carry non-zero ``senior_fee_lkr``.
     """
+    from finance.debt_v14 import _AMORT_ANNUITY_STYLES, resolve_sizing_dscr_basis
+
     spec = resolve_monthly_spec(config)
     if (
         spec is None
@@ -302,6 +305,12 @@ def build_quarterly_sculpted_schedule(
         spec
     )
     instalment_set = frozenset(instalment_quarters)
+    if QUARTERS_PER_YEAR not in instalment_set and tenor_years > 0:
+        q_assumptions.append(
+            f"{MONTHLY_KEY}.quarterly_sculpting.instalment_quarters does not include "
+            "quarter 4: the final quarter at loan maturity settles remaining accrued "
+            "interest and sculpted principal so no stub interest leaks at maturity."
+        )
 
     cascade = build_monthly_cascade_from_annual_rows(
         config,
@@ -346,6 +355,17 @@ def build_quarterly_sculpted_schedule(
     else:
         dt_bridge = 0.0
 
+    covenant_basis = resolve_sizing_dscr_basis(config) == "annual_covenant"
+    bridge_service = (
+        float(bridge_row["debt_service_usd"]) if bridge_row is not None else 0.0
+    )
+    # #1845: on the annual-covenant basis, dscr_by_year folds the bridge's service
+    # into operating year 1. Deduct it across year 1's amortising instalment quarters
+    # so year 1's covenant DSCR lands on target_dscr rather than below it.
+    bridge_fold_remaining = (
+        bridge_service if (covenant_basis and bridge_service > 0.0) else 0.0
+    )
+
     io_quarters = max(0, min(tenor_years, years_io)) * QUARTERS_PER_YEAR
     operating_quarters: List[Dict[str, Any]] = []
     annual_service_by_year_idx: List[float] = []
@@ -384,7 +404,8 @@ def build_quarterly_sculpted_schedule(
                 window_interest[k] += accrued_q[k]
             window_quarters += 1
 
-            is_instalment = quarter_num in instalment_set
+            is_maturity = y == tenor_years - 1 and quarter_num == QUARTERS_PER_YEAR
+            is_instalment = (quarter_num in instalment_set) or is_maturity
             if not is_instalment:
                 int_paid = {k: 0.0 for k in tranches}
                 princ_paid = {k: 0.0 for k in tranches}
@@ -394,13 +415,20 @@ def build_quarterly_sculpted_schedule(
             else:
                 int_paid = {k: window_interest[k] for k in tranches}
                 int_sum = sum(int_paid.values())
+                unfolded_target_svc = 0.0
                 if op_q_idx < io_quarters:
                     princ_paid = {k: 0.0 for k in tranches}
                 else:
                     cf_net = window_cfads - window_fee
-                    target_svc = (
+                    unfolded_target_svc = (
                         max(0.0, cf_net / target_dscr) if target_dscr > 0.0 else 0.0
                     )
+                    if y == 0 and bridge_fold_remaining > 0.0:
+                        target_svc = max(
+                            0.0, unfolded_target_svc - bridge_fold_remaining
+                        )
+                    else:
+                        target_svc = unfolded_target_svc
                     princ_total = max(0.0, target_svc - int_sum)
                     total_bal = sum(obals.values())
                     princ_paid = {}
@@ -410,6 +438,9 @@ def build_quarterly_sculpted_schedule(
                         obals[k] = max(0.0, obals[k] - p_k)
                         princ_paid[k] = p_k
                 svc_paid = int_sum + sum(princ_paid.values())
+                if y == 0 and op_q_idx >= io_quarters and bridge_fold_remaining > 0.0:
+                    absorbed = max(0.0, unfolded_target_svc - svc_paid)
+                    bridge_fold_remaining = max(0.0, bridge_fold_remaining - absorbed)
                 dscr_q = (
                     (window_cfads - window_fee) / svc_paid if svc_paid > 0.0 else None
                 )
@@ -463,9 +494,6 @@ def build_quarterly_sculpted_schedule(
         annual_cfads_usd.append(math.fsum(quarter_cfads[y]))
 
     # Annual covenant DSCR beside quarterly DSCR (bridge folded into operating year 1).
-    bridge_service = (
-        float(bridge_row["debt_service_usd"]) if bridge_row is not None else 0.0
-    )
     annual_covenant_dscr_by_year: Dict[Any, Optional[float]] = {}
     for y in range(n_years):
         year_key = annual_rows[y].get("year", y + 1)

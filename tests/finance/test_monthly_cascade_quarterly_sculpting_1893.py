@@ -714,3 +714,215 @@ def test_default_off_leaves_lendercase_unchanged_and_opt_in_runs_end_to_end(
     assert spec_no_cod is not None
     assert true_bridge_length_years(spec_no_cod, 6) == pytest.approx(0.5, rel=1e-12)
     assert true_bridge_length_years(spec_no_cod, 0) == 0.0
+
+
+# --- 5. Remediation regression guards (P90 bind, #1845 io=0 fold, maturity stub) -------
+
+
+def test_p90_dscr_bind_quarterly_sculpting_no_double_scaling_and_exact_reconciliation(
+    lender_config: Dict[str, Any],
+) -> None:
+    """P90 ``bind_downside`` + ``quarterly_sculpting.enabled=True`` must reconcile
+    cleanly without double-scaling by ``downside_ratio**2`` (both < 1.0 and == 1.0)."""
+    # Zero-fee synthetic oracle: 0.90 * CFADS / DS >= 1.25 is mathematically
+    # equivalent to 1.00 * CFADS / DS >= 1.25 / 0.90. Double-scaling (0.81) would
+    # instead solve to the much lower gearing for 1.25 / 0.81.
+    cfg_p90_090 = _synthetic_config(
+        tenor_years=4,
+        years_io=0,
+        debt_ratio=0.70,
+        target_dscr=1.30,
+        rate=0.10,
+        guarantee_fee=0.0,
+        pri_fee=0.0,
+        cod_month=1,
+        energy_shape=SEASONAL_SHAPE,
+        bridge_months=0,
+    )
+    cfg_p90_090["project"]["capacity_factor"] = 0.15
+    cfg_p90_090["Financing_Terms"].update(
+        {
+            "debt_sizing": "dual_dscr",
+            "interest_rate_nominal": 0.10,
+            "bind_downside": True,
+            "downside_cfads_factor": 0.90,
+            "target_dscr_p90": 1.25,
+            "dscr_p99_downside_factor": 0.80,
+        }
+    )
+    cfg_oracle = copy.deepcopy(cfg_p90_090)
+    cfg_oracle["Financing_Terms"].update(
+        {
+            "downside_cfads_factor": 1.0,
+            "target_dscr": 1.30 / 0.90,
+            "target_dscr_p90": 1.25 / 0.90,
+        }
+    )
+    cfg_p90_100 = copy.deepcopy(cfg_p90_090)
+    cfg_p90_100["Financing_Terms"].update(
+        {
+            "downside_cfads_factor": 1.0,
+            "target_dscr_p90": 1.25,
+        }
+    )
+
+    rows = build_annual_rows(cfg_p90_090)
+    res_090 = plan_debt(annual_rows=rows, config=cfg_p90_090)
+    res_oracle = plan_debt(annual_rows=rows, config=cfg_oracle)
+    res_100 = plan_debt(annual_rows=rows, config=cfg_p90_100)
+
+    d_090 = res_090["dual_dscr"]
+    d_oracle = res_oracle["dual_dscr"]
+    d_100 = res_100["dual_dscr"]
+
+    assert d_090["binding_production_case"] == "P90"
+    assert d_090["solved_gearing_p90"] < d_090["solved_gearing_p50"]
+    assert d_090["solved_gearing_p90"] == pytest.approx(
+        d_oracle["solved_gearing_p90"], abs=1e-6
+    )
+    assert d_100["downside_ratio"] == pytest.approx(1.0, abs=1e-6)
+    assert d_100["solved_gearing_p90"] > d_090["solved_gearing_p90"]
+
+    # End-to-end lender case with P90 AEP bind (< 1.0) and quarterly sculpting enabled
+    opt_p90 = _with_monthly(
+        lender_config,
+        {
+            "cod_month": 7,
+            "energy_shape": SEASONAL_SHAPE,
+            "quarterly_sculpting": {"enabled": True},
+        },
+    )
+    opt_p90["Financing_Terms"] = {
+        **opt_p90["Financing_Terms"],
+        "bind_downside": True,
+        "target_dscr_p90": 1.20,
+    }
+    out = run_v14_pipeline(config=opt_p90)
+    dd = out["debt_result"]["dual_dscr"]
+    assert dd["binding_production_case"] == "P90"
+    assert dd["downside_source"] == "p90_aep"
+    assert dd["downside_ratio"] < 1.0
+    assert dd["solved_gearing_p90"] < dd["solved_gearing_p50"]
+    assert out["kpis"]["min_dscr"] >= 1.30 - 1e-6
+
+
+def test_annual_covenant_folds_bridge_into_year1_when_years_io_zero(
+    lender_config: Dict[str, Any],
+) -> None:
+    """Under ``sizing_dscr_basis: annual_covenant`` with ``years_io == 0`` and
+    ``bridge_months > 0``, Year 1 quarterly sculpting deducts the folded bridge
+    service so ``annual_covenant_dscr_by_year[1] >= target_dscr`` with no #737
+    solver degeneration."""
+    target_dscr = 1.30
+    cfg_cov = _synthetic_config(
+        tenor_years=4,
+        years_io=0,
+        debt_ratio=0.70,
+        target_dscr=target_dscr,
+        rate=0.08,
+        guarantee_fee=0.01,
+        pri_fee=0.01,
+        cod_month=7,
+        energy_shape=SEASONAL_SHAPE,
+        instalment_quarters=[1, 2, 3, 4],
+        bridge_months=6,
+    )
+    cfg_cov["Financing_Terms"].update(
+        {
+            "debt_sizing": "dual_dscr",
+            "interest_rate_nominal": 0.08,
+            "dscr_p99_downside_factor": 0.80,
+            "sizing_dscr_basis": "annual_covenant",
+        }
+    )
+    rows = build_annual_rows(cfg_cov)
+    res_cov = plan_debt(annual_rows=rows, config=cfg_cov)
+    qs_cov = res_cov["quarterly_sculpting"]
+
+    assert qs_cov["annual_covenant_dscr_by_year"][1] >= target_dscr - 1e-6
+    assert qs_cov["annual_covenant_dscr_min"] >= target_dscr - 1e-6
+    assert qs_cov["quarterly_dscr_min"] >= target_dscr - 1e-6
+    assert res_cov["dual_dscr"]["solved_gearing"] > 0.15
+    assert res_cov["audit_status"] == "PASS"
+
+    # Contrast: under 'period' basis, Year 1 does not deduct the folded bridge service.
+    cfg_period = copy.deepcopy(cfg_cov)
+    cfg_period["Financing_Terms"]["sizing_dscr_basis"] = "period"
+    res_period = plan_debt(annual_rows=rows, config=cfg_period)
+    assert (
+        res_period["quarterly_sculpting"]["annual_covenant_dscr_by_year"][1]
+        < target_dscr
+    )
+
+    # Also verify lender case overridden to interest_only_years=0
+    opt_io0 = _with_monthly(
+        lender_config,
+        {
+            "cod_month": 7,
+            "energy_shape": SEASONAL_SHAPE,
+            "quarterly_sculpting": {"enabled": True},
+        },
+    )
+    opt_io0["Financing_Terms"] = {
+        **opt_io0["Financing_Terms"],
+        "interest_only_years": 0,
+    }
+    out_io0 = run_v14_pipeline(config=opt_io0)
+    qs_io0 = out_io0["debt_result"]["quarterly_sculpting"]
+    assert qs_io0["annual_covenant_dscr_by_year"][1] >= 1.30 - 1e-6
+    assert out_io0["debt_result"]["dual_dscr"]["solved_gearing"] > 0.15
+    assert out_io0["debt_result"]["audit_status"] == "PASS"
+
+
+@pytest.mark.parametrize(
+    ("instalment_quarters", "expected_maturity_calc_q"),
+    [
+        ([1, 3], 1),
+        ([2], 2),
+    ],
+)
+def test_maturity_stub_settled_when_q4_not_in_instalment_quarters(
+    instalment_quarters: List[int],
+    expected_maturity_calc_q: int,
+) -> None:
+    """When 4 is absent from ``instalment_quarters``, the final quarter at loan
+    maturity settles remaining accrued stub interest and sculpted principal so no
+    accrued interest leaks unpaid."""
+    cfg = _synthetic_config(
+        tenor_years=3,
+        years_io=0,
+        debt_ratio=0.55,
+        target_dscr=1.30,
+        rate=0.08,
+        guarantee_fee=0.01,
+        pri_fee=0.01,
+        cod_month=1,
+        energy_shape=SEASONAL_SHAPE,
+        instalment_quarters=instalment_quarters,
+        bridge_months=0,
+    )
+    rows = build_annual_rows(cfg)
+    tranches = {"USD": Tranche("USD", 0.08, 55_000_000.0, 0)}
+    qs = build_quarterly_sculpted_schedule(
+        config=cfg,
+        annual_rows=rows,
+        tranches=tranches,
+        tenor_years=3,
+        years_io=0,
+        target_dscr=1.30,
+        senior_fee_rate=0.02,
+    )
+
+    total_accrued = math.fsum(q["interest_accrued_usd"] for q in qs.operating_quarters)
+    total_paid = math.fsum(q["interest_paid_usd"] for q in qs.operating_quarters)
+    assert total_paid == pytest.approx(total_accrued, rel=1e-12)
+
+    maturity_q = qs.operating_quarters[-1]
+    assert maturity_q["operating_year"] == 3
+    assert maturity_q["quarter_in_year"] == 4
+    assert maturity_q["is_instalment"] is True
+    assert maturity_q["calculation_quarters"] == expected_maturity_calc_q
+    assert maturity_q["interest_paid_usd"] > 0.0
+    assert maturity_q["debt_service_usd"] > 0.0
+    assert maturity_q["dscr"] is not None
+    assert any("quarter 4" in a for a in qs.assumptions)

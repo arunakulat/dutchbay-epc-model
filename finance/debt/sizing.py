@@ -54,11 +54,14 @@ def _solve_gearing_for_dscr(
 
     def _min_dscr_at(ratio: float) -> float:
         cfg = _config_at_debt_ratio(base, ratio)
-        core = apply_debt_layer(
-            params=cfg,
-            annual_rows=annual_rows,
-            quarterly_cfads_scale=quarterly_cfads_scale,
-        )
+        if quarterly_cfads_scale != 1.0:
+            core = apply_debt_layer(
+                params=cfg,
+                annual_rows=annual_rows,
+                quarterly_cfads_scale=quarterly_cfads_scale,
+            )
+        else:
+            core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
         # Target the minimum over every DEFINED period, bridge included. This is NOT
         # plan_debt's published min_dscr: since F-2/F-3 that headline excludes
         # non-operating periods and folds dscr_by_year, whereas the solve deliberately
@@ -387,20 +390,35 @@ def _maybe_autosolve_dscr(
     solved_p90: Optional[float] = None
     target_p90: Optional[float] = None
     if bind_downside:
+        from finance.quarterly_sculpting_v14 import is_quarterly_sculpting_enabled
+
         downside_ratio, downside_source = _resolve_downside_ratio(config, fin)
         target_p90 = _as_float(fin.get("target_dscr_p90"), target)
-        p90_rows = [
-            {**r, "cfads_usd": _as_float(r.get("cfads_usd"), 0.0) * downside_ratio}
-            for r in annual_rows
-        ]
-        solved_p90 = _solve_gearing_for_dscr(
-            config,
-            p90_rows,
-            target_p90,
-            max_ratio,
-            start_hint=_gearing_hint(gearing_hints, "P90", max_ratio, target_p90),
-            quarterly_cfads_scale=downside_ratio,
-        )
+        if is_quarterly_sculpting_enabled(config):
+            # Pass unscaled annual_rows so build_monthly_cascade_from_annual_rows
+            # reconciles against the full cascade lines and scales quarterly CFADS
+            # once by downside_ratio (avoiding p90_rows reconciliation conflict or
+            # downside_ratio**2 double-scaling).
+            solved_p90 = _solve_gearing_for_dscr(
+                config,
+                annual_rows,
+                target_p90,
+                max_ratio,
+                start_hint=_gearing_hint(gearing_hints, "P90", max_ratio, target_p90),
+                quarterly_cfads_scale=downside_ratio,
+            )
+        else:
+            p90_rows = [
+                {**r, "cfads_usd": _as_float(r.get("cfads_usd"), 0.0) * downside_ratio}
+                for r in annual_rows
+            ]
+            solved_p90 = _solve_gearing_for_dscr(
+                config,
+                p90_rows,
+                target_p90,
+                max_ratio,
+                start_hint=_gearing_hint(gearing_hints, "P90", max_ratio, target_p90),
+            )
         if gearing_hints is not None:
             gearing_hints["P90"] = (max_ratio, target_p90, solved_p90)
         if solved_p90 < binding_gearing:
