@@ -33,6 +33,7 @@ def _solve_gearing_for_dscr(
     step: float = 0.0025,
     fp_eps: float = 1e-6,
     start_hint: Optional[float] = None,
+    quarterly_cfads_scale: float = 1.0,
 ) -> float:
     """Largest gearing whose REAL-schedule min DSCR still meets ``target_dscr``.
 
@@ -53,7 +54,11 @@ def _solve_gearing_for_dscr(
 
     def _min_dscr_at(ratio: float) -> float:
         cfg = _config_at_debt_ratio(base, ratio)
-        core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
+        core = apply_debt_layer(
+            params=cfg,
+            annual_rows=annual_rows,
+            quarterly_cfads_scale=quarterly_cfads_scale,
+        )
         # Target the minimum over every DEFINED period, bridge included. This is NOT
         # plan_debt's published min_dscr: since F-2/F-3 that headline excludes
         # non-operating periods and folds dscr_by_year, whereas the solve deliberately
@@ -71,7 +76,18 @@ def _solve_gearing_for_dscr(
         # gearing (year 1 is sculpt-targeted, so extra de-leveraging cannot lift it)
         # and the solve degenerates to a near-zero facility. plan_debt's conservative
         # min_dscr (round-5 #3) still REPORTS the fold honestly.
-        public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
+        qs_detail = core.get("quarterly_sculpting")
+        if isinstance(qs_detail, Mapping):
+            public = [
+                float(q["dscr"])
+                for q in qs_detail.get("operating_quarters", [])
+                if q.get("dscr") is not None
+            ]
+            bridge = qs_detail.get("bridge_period")
+            if isinstance(bridge, Mapping) and bridge.get("dscr") is not None:
+                public.append(float(bridge["dscr"]))
+        else:
+            public = _clean_public_dscr_series(core.get("dscr_series", []) or [])
         if covenant_basis:
             # #1845 (owner, 2026-11-22): also hold every covenant year (dscr_by_year,
             # bridge folded into year 1) at the target. The #737 degeneration below
@@ -119,7 +135,13 @@ def _solve_gearing_for_dscr(
             # The hint is not a point of this grid (a caller passed a value this
             # scan would never return): fall back to the cold scan.
             return _solve_gearing_for_dscr(
-                config, annual_rows, target_dscr, max_ratio, step=step, fp_eps=fp_eps
+                config,
+                annual_rows,
+                target_dscr,
+                max_ratio,
+                step=step,
+                fp_eps=fp_eps,
+                quarterly_cfads_scale=quarterly_cfads_scale,
             )
 
         def _meets(index: int) -> bool:
@@ -377,6 +399,7 @@ def _maybe_autosolve_dscr(
             target_p90,
             max_ratio,
             start_hint=_gearing_hint(gearing_hints, "P90", max_ratio, target_p90),
+            quarterly_cfads_scale=downside_ratio,
         )
         if gearing_hints is not None:
             gearing_hints["P90"] = (max_ratio, target_p90, solved_p90)
