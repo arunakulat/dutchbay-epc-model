@@ -58,6 +58,10 @@ from app.reports.report_config import (
     ReportConfig,
     ReportMeta,
     RiskItem,
+    _lookup_key_as_engine,
+    _scenario_number,
+    declared_lockup_threshold,
+    dscr_threshold_name,
     load_report_config,
 )
 from app.reports.site_analysis_model import SiteAnalysesBlock
@@ -1617,34 +1621,6 @@ def _dscr_against(value: float, threshold: Optional[float]) -> str:
     return text
 
 
-def _scenario_number(value: Any) -> Optional[float]:
-    """A declared covenant value as a finite float, or ``None`` (bools are not numbers)."""
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
-
-
-def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
-    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
-
-    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
-    restated here because the report layer takes no import on the finance package (the
-    debt-package boundary lint and the architecture diagram both refuse one). A test pins
-    the two to the same answers (#1862).
-    """
-    if key in mapping:
-        return mapping[key]
-    key_lower = key.lower()
-    for existing_key, value in mapping.items():
-        if str(existing_key).lower() == key_lower:
-            return value
-    return None
-
-
 def _scenario_covenants(
     defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
 ) -> Covenants:
@@ -1680,6 +1656,10 @@ def _scenario_covenants(
     if floor is not None:
         update["min_dscr_floor"] = floor
         update["min_dscr_floor_source"] = "scenario"
+        lockup = declared_lockup_threshold(scenario_config)
+        update["min_dscr_floor_is_lockup"] = lockup is not None and math.isclose(
+            lockup, floor, rel_tol=0.0, abs_tol=1e-9
+        )
     ceiling = _scenario_number(constraints.get("max_balloon_pct"))
     if ceiling is not None:
         update["max_balloon_pct"] = ceiling
@@ -1774,7 +1754,7 @@ def _build_verdict(
         notes.append(
             f"Minimum DSCR {_dscr_against(min_dscr, covenants.min_dscr_floor)}x {rel} the "
             f"{covenants.min_dscr_floor:.2f}x "
-            f"{_DSCR_THRESHOLD_NAME[covenants.min_dscr_floor_source]} "
+            f"{covenants.min_dscr_floor_name} "
             f"({_COVENANT_SOURCE_NOTE[covenants.min_dscr_floor_source]}; "
             f"report-default target {covenants.min_dscr_target:.2f}x)."
         )
@@ -1826,6 +1806,7 @@ def _build_ic_summary(
     readiness_rows: Sequence[ReadinessRow],
     dscr_threshold_source: CovenantSource = "report_defaults",
     dscr_threshold: Optional[float] = None,
+    dscr_threshold_is_lockup: bool = False,
 ) -> IcSummaryBlock:
     """Project the run's explicit negative signals into the IC red-flag block (#706).
 
@@ -1851,7 +1832,7 @@ def _build_ic_summary(
                 severity="high",
                 detail=(
                     f"Minimum DSCR {_dscr_against(min_dscr, dscr_threshold)}x breaches the "
-                    f"{_DSCR_THRESHOLD_NAME[dscr_threshold_source]}."
+                    f"{dscr_threshold_name(dscr_threshold_source, is_lockup=dscr_threshold_is_lockup)}."
                 ),
                 source="engine KPI min_dscr vs configured DSCR covenant",
             )
@@ -3607,6 +3588,7 @@ def build_report_context(
             readiness_rows,
             dscr_threshold_source=covenants.min_dscr_floor_source,
             dscr_threshold=covenants.min_dscr_floor,
+            dscr_threshold_is_lockup=covenants.min_dscr_floor_is_lockup,
         ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(
