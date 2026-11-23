@@ -78,6 +78,8 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
+# #1899 (capex price date in every capex reader, 15.34.0): the digest equals main's engine
+# with only the VERSION bump, so only the engine identity moved. Before that by
 # #1845 (annual-covenant lender sizing, 15.33.0): the digest equals main's engine with only
 # the VERSION bump, so only the engine identity moved. Before that by
 # #1874's revenue-SSCL removal from 15 scenarios (15.32.0): only the engine identity moved
@@ -125,7 +127,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "d331506aa8ca00037b0f3dfbcb851b28f52f57abdac6194d9241b7d87cb6cc51"
+    "360bfe895f7e13ae4b9ac4bb12cff8bd0e6fc72af34d7b5fe36b36ed921905bf"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

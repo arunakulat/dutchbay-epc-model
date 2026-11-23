@@ -391,6 +391,33 @@ def apply_capex_price_basis(config: Mapping[str, Any]) -> Dict[str, Any]:
     return out
 
 
+class UnappliedCapexPriceBasisError(ValueError):
+    """A capex amount was read before the declared ``capex.price_basis`` was applied."""
+
+
+def refuse_unapplied_price_basis(config: Mapping[str, Any], reader: str) -> None:
+    """Refuse a capex amount read before a declared price date was applied (#1899).
+
+    ``capex.price_basis`` is resolved once, by :func:`apply_capex_price_basis`, which
+    replaces it with ``capex.price_basis_applied``. A reader that still sees the declared
+    block holds the stated, price-year capex, not the capex the engine finances. Before
+    #1899 such a reader used the stated figure silently. The fix is to read the scenario
+    through :func:`analytics.evaluation_v14.evaluated_scenario_config` (or the pipeline).
+    A configuration without the block, or with it already applied, passes.
+    """
+    capex = _section_case_insensitive(dict(config), "capex") if config else None
+    if not isinstance(capex, Mapping):
+        return
+    if any(isinstance(key, str) and key.lower() == PRICE_BASIS_KEY for key in capex):
+        raise UnappliedCapexPriceBasisError(
+            f"{reader} read capex from a configuration whose capex.price_basis has not "
+            "been applied, so it would use the stated price-year amount instead of the "
+            "capex escalated to the construction draws (#1569, #1899). Pass the "
+            "scenario through analytics.evaluation_v14.evaluated_scenario_config() "
+            "or the pipeline first."
+        )
+
+
 def automatic_escalation_message(
     price_year: int, factor: float, keys: List[str]
 ) -> str:
@@ -433,5 +460,7 @@ __all__ = [
     "apply_capex_price_basis",
     "automatic_escalation",
     "automatic_escalation_message",
+    "refuse_unapplied_price_basis",
+    "UnappliedCapexPriceBasisError",
     "capex_escalation_factor",
 ]

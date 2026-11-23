@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.cashflow_v14_params import _build_cashflow_params
 from finance.cost_input_currency import validate_cost_input_currencies
@@ -22,7 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 def scenario(request: pytest.FixtureRequest) -> dict[str, Any]:
     """Load each committed Blue Whale scenario without editing its input data."""
     path = ROOT / "scenarios" / f"blue_whale_{request.param}_lot5b_2026.yaml"
-    return dict(yaml.safe_load(path.read_text()))
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    return apply_capex_price_basis(dict(yaml.safe_load(path.read_text())))
 
 
 @pytest.mark.parametrize("amount", [0.0, 1.0, None, float("nan")])
