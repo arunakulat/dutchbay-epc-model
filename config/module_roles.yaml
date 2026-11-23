@@ -616,6 +616,12 @@ modules:
     excel_representation: governance_metadata
     notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
 
+  - module_path: analytics.jurisdiction_packs.scenario_binding
+    pipeline_stage: cost_levies_epc
+    role_description: Binds a scenario's project.jurisdiction to one registered jurisdiction pack version and returns its per-subject bindings; fails closed.
+    excel_representation: governance_metadata
+    notes: Not wired (#1841 PR 3); every committed scenario must bind, but no engine path calls it until later #1841 slices.
+
   - module_path: analytics.loader.aep_loader
     pipeline_stage: resource_yield
     role_description: Loads approved EPC annual energy production summaries with manifest provenance validation.
