@@ -49,7 +49,8 @@ def test_executive_workbook_emits_five_finance_sheets_per_technology(
     sheetnames = openpyxl.load_workbook(out).sheetnames
     # Exactly the five finance sheets: tech-agnostic, and no ResourceTrend when no
     # wind_export is supplied (a hybrid/solar/BESS run must not fabricate one).
-    assert sheetnames == _FINANCE_SHEETS
+    # The run's manifest adds the Manifest sheet after the finance sheets (#1815).
+    assert sheetnames == [*_FINANCE_SHEETS, "Manifest"]
 
 
 @pytest.mark.parametrize("scenario", _MULTI_TECH_SCENARIOS)

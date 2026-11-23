@@ -246,6 +246,12 @@ def _trial_fixed_debt_min_dscr(
 #: Distribution shapes the sampler can honor (besides the calibrated FX driver). A declared
 #: shape outside this set is a config error (previously silently sampled uniform — decorative).
 _SUPPORTED_DISTRIBUTIONS = frozenset({"uniform", "triangular", "normal", "lognormal"})
+#: Parameters whose band must name where it comes from (#1898). An FX depreciation band
+#: sets the main risk driver of an LKR-revenue project, so an unsourced one is refused
+#: rather than sampled. ``source`` is a free-text citation on the parameter mapping.
+_SOURCED_BAND_PARAMS = frozenset(
+    {"fx.annual_depr", "opex.currency_split.usd_lkr_depreciation_pct"}
+)
 _Z975 = (
     1.959963984540054  # Phi^-1(0.975): low/high read as a 95% CI for normal/lognormal
 )
@@ -413,6 +419,16 @@ class MonteCarloEngine:
         self._fx_calibration: Any = None
         if "fx_calibrated" in self._param_kinds:
             self._init_fx_calibration()
+        # #1898: a calibrated FX driver that also drives the drift writes fx.annual_depr on
+        # every trial, so a separately sampled fx.annual_depr would be silently overwritten.
+        if self._fx_calibration is not None and self._fx_drive_drift:
+            if "fx.annual_depr" in self._param_names:
+                raise MonteCarloConfigError(
+                    "monte_carlo.parameters samples fx.annual_depr while the fx_calibrated "
+                    "driver also sets it (monte_carlo.fx_calibration.drive_drift is true), "
+                    "so the sampled draw would be overwritten. Remove one, or set "
+                    "drive_drift: false."
+                )
 
         # Hybrid CF coupling: when project.capacity_factor is swept on a multi-tech scenario,
         # the per-tech capacity factors must move WITH it or the in-cashflow ±1% reconciliation
@@ -751,12 +767,15 @@ class MonteCarloEngine:
         """
         from analytics.evaluation_v14 import _deep_merge_config
         from analytics.schema_guard import validate_config_for_v14
+        from finance.capex_price_basis import apply_capex_price_basis
         from finance.debt_v14 import _extract_capex_usd
         from finance.native_cost_inputs import normalize_native_capex
 
         def _check(overrides: Mapping[str, Any]) -> None:
-            cfg = normalize_native_capex(
-                _deep_merge_config(self._base_config, overrides)
+            # As each trial's pipeline run does: a declared capex.price_basis is
+            # applied before capex is read (#1899).
+            cfg = apply_capex_price_basis(
+                normalize_native_capex(_deep_merge_config(self._base_config, overrides))
             )
             validate_config_for_v14(
                 raw_config=cfg,
@@ -878,6 +897,16 @@ class MonteCarloEngine:
                     f"monte_carlo.parameters[{idx}].name {name!r}: low ({low}) > high ({high}) "
                     "— MC bounds must be well-ordered (low <= high)."
                 )
+
+            # #1898: an FX depreciation band must cite its source.
+            if name in _SOURCED_BAND_PARAMS:
+                source = p.get("source")
+                if not isinstance(source, str) or not source.strip():
+                    raise MonteCarloConfigError(
+                        f"monte_carlo.parameters[{idx}].name {name!r}: an FX depreciation "
+                        "band must declare a non-empty 'source' naming where its low and "
+                        "high come from (#1898). Refusing to sample an unsourced band."
+                    )
 
             # A param name that does not resolve to an EXISTING dotted path in the base
             # config is a likely DEAD lever. Contrary to the toy-fallback story, the

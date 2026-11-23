@@ -388,7 +388,15 @@ def _canned_pipeline_result() -> Dict[str, Any]:
         "annual_rows": [],
         "debt_result": {},
         "scenario_result": {},
-        "run_manifest": {"commit": "abc123"},
+        "run_manifest": {
+            "config_sha256": "a" * 64,
+            "engine_version": "0.0.0-test",
+            "git_sha": "abc123",
+            "generated_at": "2026-11-22T00:00:00+00:00",
+            "manifest_schema_version": "1.0",
+            "validation_mode": None,
+            "seed": None,
+        },
     }
 
 

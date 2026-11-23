@@ -186,6 +186,11 @@ modules:
     role_description: Resolves CLI emitter selection flags controlling optional pipeline report and workbook outputs.
     excel_representation: non_model_adapter
 
+  - module_path: analytics.equity_irr_caveat
+    pipeline_stage: reporting_delivery
+    role_description: Words the equity IRR ranking caveat from the waterfall's published flag for every surface that prints equity IRR (#1688).
+    excel_representation: non_model_adapter
+
   - module_path: analytics.evaluate_scenario
     pipeline_stage: core_finance
     role_description: Coordinator entry point loading a scenario config, applying overrides, and running v14 pipeline.
@@ -616,6 +621,12 @@ modules:
     excel_representation: governance_metadata
     notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
 
+  - module_path: analytics.jurisdiction_packs.scenario_binding
+    pipeline_stage: cost_levies_epc
+    role_description: Binds a scenario's project.jurisdiction to one registered jurisdiction pack version and returns its per-subject bindings; fails closed.
+    excel_representation: governance_metadata
+    notes: Not wired (#1841 PR 3); every committed scenario must bind, but no engine path calls it until later #1841 slices.
+
   - module_path: analytics.loader.aep_loader
     pipeline_stage: resource_yield
     role_description: Loads approved EPC annual energy production summaries with manifest provenance validation.
@@ -750,6 +761,12 @@ modules:
     pipeline_stage: governance
     role_description: Frozen resource-assessment export contracts shared across wind and solar adapters.
     excel_representation: governance_metadata
+
+  - module_path: analytics.run_identity
+    pipeline_stage: reporting_delivery
+    role_description: Checks that the API response, report context and executive workbook carry one and the same run identity; refuses a mismatch and names each differing field.
+    excel_representation: governance_metadata
+    notes: Called by the executive workbook to write its Manifest sheet (#1815).
 
   - module_path: analytics.run_manifest
     pipeline_stage: governance
@@ -1134,6 +1151,11 @@ modules:
   - module_path: app.reports.climate_risk_disclosure
     pipeline_stage: reporting_delivery
     role_description: Bounded TCFD-aligned climate-risk disclosure contract and standalone Jinja2 partial renderer.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.cost_storage_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in cost and storage section (AACE estimate class, CAPEX Monte Carlo under the lender guards, storage dispatch, battery LCOS, battery-project economics, EPC margin) beside the committed case.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.dbpl.fonts

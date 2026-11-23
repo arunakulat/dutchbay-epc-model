@@ -10,6 +10,7 @@ so a degenerate run is detectable.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -236,9 +237,19 @@ def test_absent_percentiles_falls_back_to_default_levels() -> None:
     assert set(result.percentiles) == {1, 5, 10, 50, 90, 95, 99}
     # Raw-percentile monotonicity across the new tail levels: the downside
     # (lender-P99 = raw 1st) sits at or below every other level, the raw 99th
-    # at or above.
+    # at or above. A trial with no defined value (an IRR with no root) ranks below
+    # every defined trial, so a level that falls on one reports None, read as "at or
+    # below the lowest defined value" (``percentile_basis``); it can only sit at the
+    # bottom of the ordering.
     for metric, levels in result.summary.items():
         pct = levels["percentiles"]
-        assert (
-            pct[1] <= pct[5] <= pct[50] <= pct[95] <= pct[99]
+        if any(pct[level] is None for level in pct):
+            assert levels["percentile_basis"] == "excluded_trials_ranked_worst"
+        ordered = [
+            -math.inf if pct[level] is None else pct[level]
+            for level in (1, 5, 50, 95, 99)
+        ]
+        assert ordered == sorted(
+            ordered
         ), f"{metric} percentile ordering violated: {pct}"
+        assert pct[99] is not None, f"{metric}: the upside tail must be defined"

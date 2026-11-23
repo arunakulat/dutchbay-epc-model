@@ -33,6 +33,7 @@ from app.models.inputs import WindFarmInputs
 from app.reports.report_model import (
     AepResourceSensitivityBlock,
     CapitalStructureBlock,
+    CostStorageBlock,
     LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
@@ -364,11 +365,13 @@ def build_report_context_from_case(
     aep_resource_sensitivity: Optional[AepResourceSensitivityBlock] = None,
     capital_structure: Optional[CapitalStructureBlock] = None,
     lender_sensitivities: Optional[LenderSensitivityBlock] = None,
+    cost_storage: Optional[CostStorageBlock] = None,
 ) -> ReportContext:
     """Assemble a render-ready context from already-computed typed inputs.
 
     ``capital_risk``, ``sections_not_run``, ``aep_resource_sensitivity`` (#1615 step B),
-    ``capital_structure`` (#1825 slice i) and ``lender_sensitivities`` (#1825 slice ii) are
+    ``capital_structure`` (#1825 slice i), ``lender_sensitivities`` (#1825 slice ii) and
+    ``cost_storage`` (#1825 slice iii) are
     supplied only by the batch CLI's lender report (#1752); the API route passes none.
 
     Every lender report built through this seam carries the F-5 non-reliance notice on its
@@ -400,4 +403,6 @@ def build_report_context_from_case(
         update["capital_structure"] = capital_structure
     if lender_sensitivities is not None:
         update["lender_sensitivities"] = lender_sensitivities
+    if cost_storage is not None:
+        update["cost_storage"] = cost_storage
     return context.model_copy(update=update)

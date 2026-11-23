@@ -1,0 +1,1 @@
+- Add `docs/SESSION_HANDOVER_2026-11-22_GATES_AND_VERSION_LINE.md`, the `PERSIST-01` successor to the 13 November handover record (#1903). It names the startup record and the carried-forward state, and records the gates now enforced in CI, the 15.28.0 to 15.33.0 version line and where open work is tracked. Docs only: no code, scenario or KPI change.

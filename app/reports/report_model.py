@@ -26,6 +26,7 @@ from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteractionGrid
 from analytics.development_readiness import build_readiness_report
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
@@ -555,18 +556,28 @@ class WaterfallRow(BaseModel):
     scheduled_debt_service: float
     balloon_sweep: float
     cash_to_equity: float
+    #: #1897: the reconciliation to the covenant DSCR (None when not published). See
+    #: analytics.three_statement.CashflowWaterfallRow for each figure's source.
+    coverage_cfads: Optional[float] = None
+    bridge_cfads_credit: Optional[float] = None
+    fee_in_project_basis: Optional[float] = None
+    tax_basis_difference: Optional[float] = None
+    senior_fee: Optional[float] = None
+    covenant_cfads: Optional[float] = None
+    covenant_debt_service: Optional[float] = None
+    covenant_dscr: Optional[float] = None
 
 
 class WaterfallBlock(BaseModel):
     """Cash-flow waterfall (CFADS → scheduled debt service → balloon → equity) + totals (#481, RPT-2).
 
-    Sourced from the engine's own published per-row figures, so the cascade ties line-for-line to
-    the rest of the report (CCCDIR — one source of truth): ``cfads`` equals the CFADS the DSCR
-    numerator uses (``total_cfads`` = the report's headline CFADS) and ``scheduled_debt_service``
-    equals the Debt Structure & DSCR Profile section's debt service. The balloon is a SEPARATE line
-    (senior to equity but excluded from the scheduled DSCR, so the two sections do not present
-    contradictory coverage). The model sweeps 100% of post-senior cash to equity, so
-    ``cash_to_equity`` is the distribution (no reserve build-up beyond the DSRA funded at close).
+    Sourced from the engine's own published per-row figures (CCCDIR — one source of truth).
+    ``cfads`` is the PROJECT-basis CFADS (unlevered tax), and ``scheduled_debt_service`` is the
+    debt service the DSCR divides. The balloon is a SEPARATE line (senior to equity but excluded
+    from the scheduled DSCR). #1897: the DSCR numerator is the coverage CFADS (levered tax) less
+    the senior fee; when the run publishes it, ``has_coverage_basis`` is set and each row carries
+    the reconciliation, so the waterfall and the DSCR profile do not read as a contradiction.
+    ``cash_to_equity`` is the project-basis residual, not the sponsors' distributions.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -577,6 +588,19 @@ class WaterfallBlock(BaseModel):
     total_scheduled_debt_service: float
     total_balloon_sweep: float
     total_cash_to_equity: float
+    has_coverage_basis: bool = False
+    total_coverage_cfads: Optional[float] = None
+    #: #1897: the years where project-basis CFADS falls short of the waterfall's scheduled
+    #: debt service, and the lowest and highest covenant DSCR in those years. The report
+    #: states these figures; it never asserts the covenant is met.
+    shortfall_years: List[int] = Field(default_factory=list)
+    shortfall_dscr_min: Optional[float] = None
+    shortfall_dscr_max: Optional[float] = None
+    #: Years whose covenant DSCR is below 1.00x.
+    below_one_years: List[int] = Field(default_factory=list)
+    #: Years whose covenant debt service differs from the waterfall's scheduled debt
+    #: service (a capitalised bridge period, for example).
+    service_differs_years: List[int] = Field(default_factory=list)
 
 
 class ResourceTrendRow(BaseModel):
@@ -1217,6 +1241,130 @@ class TariffLegalStatusBlock(BaseModel):
     registry: str
 
 
+class EstimateClassBand(BaseModel):
+    """The scenario's AACE estimate class and its expected accuracy band (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    estimate_class: int
+    low_pct: float
+    high_pct: float
+    implied_sigma_pct: float
+    #: Whether the scenario declares ``capex.estimate_class`` (else the repository default).
+    declared: bool
+
+
+class CapexMcRow(BaseModel):
+    """One KPI's CAPEX Monte Carlo percentiles beside the committed figure."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    unit: str
+    committed: Optional[float] = None
+    p10: float
+    p50: float
+    p90: float
+
+
+class CapexMcBlock(BaseModel):
+    """CAPEX Monte Carlo under the lender guards (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    n_trials: int
+    seed: int
+    sigma_pct: float
+    #: Where the 1-sigma came from, in words.
+    sigma_basis: str
+    base_capex_usd: float
+    rows: List[CapexMcRow] = Field(default_factory=list)
+    #: Whether a factor-1.0 trial reproduces the committed KPIs, in words.
+    base_point: str
+    #: Set when each trial re-sizes the debt, which damps the minimum DSCR's spread.
+    debt_sizing_note: Optional[str] = None
+
+
+class DispatchSummary(BaseModel):
+    """Totals of a chronological storage dispatch ledger (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    hours: int
+    charged_mwh: float
+    discharged_mwh: float
+    exported_mwh: float
+    curtailed_mwh: float
+    losses_mwh: float
+    unmet_mwh: float
+
+
+class LcosRow(BaseModel):
+    """One battery's levelised cost of storage (#1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technology: str
+    lcos_usd_per_mwh: Optional[float] = None
+    pv_costs_usd: float
+    pv_discharged_mwh: float
+    cycles_per_year: float
+    depth_of_discharge: float
+    round_trip_efficiency: float
+    benchmark_note: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
+
+
+class BessEconomicsRow(BaseModel):
+    """One battery as its own project (``bess_project_economics``, #1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    technology: str
+    landed_capex_usd: Optional[float] = None
+    npv_usd: float
+    irr_usd: Optional[float] = None
+    discount_rate: float
+    horizon_years: int
+    currency_basis: str
+
+
+class EpcMarginSummary(BaseModel):
+    """The EPC construction margin (``epc_margin``, #1825 slice iii)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    contract_value: float
+    total_cost: float
+    gross_margin: float
+    gross_margin_pct: float
+    return_on_cost_pct: float
+    construction_months: int
+    peak_working_capital: float
+    annualized_irr: Optional[float] = None
+    irr_note: Optional[str] = None
+
+
+class CostStorageBlock(BaseModel):
+    """Cost and storage analytics beside the committed case (#1825 slice iii).
+
+    Each part either runs or is listed in ``parts_not_run`` with its reason. None of it moves
+    a committed figure or KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    estimate_class: Optional[EstimateClassBand] = None
+    capex_mc: Optional[CapexMcBlock] = None
+    dispatch: Optional[DispatchSummary] = None
+    lcos: List[LcosRow] = Field(default_factory=list)
+    lcos_discount_rate: Optional[float] = None
+    bess_economics: List[BessEconomicsRow] = Field(default_factory=list)
+    epc_margin: Optional[EpcMarginSummary] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1361,6 +1509,11 @@ class ReportContext(BaseModel):
     #: ``debt_result['refinance']`` is present; ``None`` otherwise (non-refinance cases stay
     #: byte-identical).
     refinance_coverage: Optional[RefinanceCoverageBlock] = None
+    #: The #1456 equity IRR ranking caveat (#1688), from the run's equity summary. Set only
+    #: when the waterfall marks the equity IRR as unable to rank the case; the Executive
+    #: Summary then shows equity NPV beside equity IRR, with this note. ``None`` otherwise,
+    #: and for a caller that passes no run result.
+    equity_irr_caveat: Optional[str] = None
     manifest: Dict[str, Any]
     #: The run's yield reconciliation (#1768). None when the caller supplies no run result
     #: or the result carries no record; the audit section then omits the table.
@@ -1393,6 +1546,10 @@ class ReportContext(BaseModel):
     #: command-line lender report fills it; None (the default) omits it, so every other
     #: report stays byte-identical.
     tariff_legal_status: Optional[TariffLegalStatusBlock] = None
+    #: Cost and storage (#1825 slice iii): estimate class, CAPEX Monte Carlo, storage
+    #: dispatch, LCOS, battery-project economics and EPC margin. The command-line lender
+    #: report fills it when switched on; None (the default) omits the section.
+    cost_storage: Optional[CostStorageBlock] = None
 
 
 def _build_kpi_rows(
@@ -1471,6 +1628,23 @@ def _scenario_number(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
+def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
+    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
+
+    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
+    restated here because the report layer takes no import on the finance package (the
+    debt-package boundary lint and the architecture diagram both refuse one). A test pins
+    the two to the same answers (#1862).
+    """
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
 def _scenario_covenants(
     defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
 ) -> Covenants:
@@ -1492,14 +1666,17 @@ def _scenario_covenants(
         The covenants to test, with their sources.
     """
     constraints = (
-        scenario_config.get("constraints")
+        _lookup_key_as_engine(scenario_config, "constraints")
         if isinstance(scenario_config, Mapping)
         else None
     )
     if not isinstance(constraints, Mapping):
         return defaults
     update: Dict[str, Any] = {}
-    floor = _scenario_number(constraints.get("min_dscr_covenant"))
+    # Each key is read as the engine reads it (#1862, DOM-4 on #1860): the section name
+    # in any case; ``min_dscr_covenant`` in any case, as the equity lock-up reads it;
+    # ``max_balloon_pct`` exactly, as ``finance.debt.plan.resolve_max_balloon_pct`` does.
+    floor = _scenario_number(_lookup_key_as_engine(constraints, "min_dscr_covenant"))
     if floor is not None:
         update["min_dscr_floor"] = floor
         update["min_dscr_floor_source"] = "scenario"
@@ -2881,6 +3058,7 @@ def _three_statement_block(
 def _waterfall_block(
     result: Optional[ThreeStatementResult],
     annual_rows: Optional[Sequence[Mapping[str, Any]]],
+    debt_result: Optional[Mapping[str, Any]] = None,
 ) -> Optional[WaterfallBlock]:
     """Project the cash-flow waterfall (by payment priority) into a report block (#481, RPT-2).
 
@@ -2892,7 +3070,13 @@ def _waterfall_block(
     """
     if result is None or not annual_rows:
         return None
-    wf = build_cashflow_waterfall(annual_rows)
+    wf = build_cashflow_waterfall(annual_rows, debt_result=debt_result)
+    short = [
+        r
+        for r in wf.rows
+        if r.scheduled_debt_service > 0.0 and r.cfads < r.scheduled_debt_service
+    ]
+    short_dscrs = [r.covenant_dscr for r in short if r.covenant_dscr is not None]
     return WaterfallBlock(
         currency=wf.currency,
         rows=[
@@ -2902,6 +3086,14 @@ def _waterfall_block(
                 scheduled_debt_service=r.scheduled_debt_service,
                 balloon_sweep=r.balloon_sweep,
                 cash_to_equity=r.cash_to_equity,
+                coverage_cfads=r.coverage_cfads,
+                bridge_cfads_credit=r.bridge_cfads_credit,
+                fee_in_project_basis=r.fee_in_project_basis,
+                tax_basis_difference=r.tax_basis_difference,
+                senior_fee=r.senior_fee,
+                covenant_cfads=r.covenant_cfads,
+                covenant_debt_service=r.covenant_debt_service,
+                covenant_dscr=r.covenant_dscr,
             )
             for r in wf.rows
         ],
@@ -2909,6 +3101,22 @@ def _waterfall_block(
         total_scheduled_debt_service=wf.total_scheduled_debt_service,
         total_balloon_sweep=wf.total_balloon_sweep,
         total_cash_to_equity=wf.total_cash_to_equity,
+        has_coverage_basis=wf.has_coverage_basis,
+        total_coverage_cfads=wf.total_coverage_cfads,
+        shortfall_years=[r.year for r in short],
+        shortfall_dscr_min=min(short_dscrs) if short_dscrs else None,
+        shortfall_dscr_max=max(short_dscrs) if short_dscrs else None,
+        below_one_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_dscr is not None and r.covenant_dscr < 1.0
+        ],
+        service_differs_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_debt_service is not None
+            and abs(r.covenant_debt_service - r.scheduled_debt_service) > 0.005
+        ],
     )
 
 
@@ -3421,7 +3629,7 @@ def build_report_context(
         multi_tech=_build_multi_tech(case_result, scenario_config),
         per_tech_chapters=_build_per_tech_chapters(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
-        cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
+        cashflow_waterfall=_waterfall_block(ts_result, annual_rows, debt_result),
         resource_trend=_build_resource_trend(resource_trend),
         site_analyses=site_analyses,
         irr_bridge=_irr_bridge_block(run_result),
@@ -3429,6 +3637,7 @@ def build_report_context(
         fx_fallback_note=_build_fx_fallback_note(run_result),
         capex_price_basis_note=_build_capex_price_basis_note(run_result),
         refinance_coverage=_build_refinance_coverage(debt_result, run_result),
+        equity_irr_caveat=equity_irr_caveat_from_run(run_result),
         manifest=dict(case_result.run_manifest or {}),
         yield_reconciliation=_build_yield_reconciliation(run_result),
     )

@@ -276,6 +276,74 @@ def calibrate_from_config(
     )
 
 
+def long_run_depreciation_band(
+    series: FXHistorySeries,
+    *,
+    frequency: str = "weekly",
+    z: float = 1.959963984540054,
+    regimes: Sequence[tuple[str, str, str | None]] = DEFAULT_REGIMES,
+    excluded_regimes: frozenset[str] = DEFAULT_EXCLUDED_REGIMES,
+) -> dict[str, float]:
+    """The interval around the long-run depreciation that a Monte Carlo may sample (#1898).
+
+    :func:`calibrate_fx` sets ``fx.annual_depr`` from the annualised mean log-return over
+    the usable regimes, ``mu``. That mean is an estimate: over ``T`` usable years with an
+    annualised volatility ``sigma``, its standard error is ``sigma / sqrt(T)``. The same
+    quantity is also the spread of a realised ``T``-year average around ``mu`` under a
+    random walk. This returns ``exp(mu) - 1`` with a symmetric decimal interval of ``z`` standard
+    errors, carried through ``d(exp(mu)) = exp(mu) * d(mu)``, so its midpoint is the drift
+    the scenario uses. It reads the same returns and exclusions as :func:`calibrate_fx`.
+
+    The interval is parameter uncertainty only: how well ``T`` years of history fix the
+    mean. The spread of the realised average over a project's own life ``H`` is a second,
+    independent variance, so the lifetime interval is wider, ``sigma * sqrt(1/T + 1/H)``
+    (about 1.41 times this one at ``T = H = 20``). A Monte Carlo that samples this band
+    therefore understates lifetime FX risk: read it as a lower bound (#1917).
+
+    Args:
+        series: The provenance-bearing history (LKR per USD).
+        frequency: Return frequency, as in :func:`calibrate_fx`.
+        z: Standard errors on each side (default: the two-sided 95% normal quantile).
+        regimes: Ordered regime windows.
+        excluded_regimes: Regimes left out of the estimate.
+
+    Returns:
+        ``annual_depr``, ``low`` and ``high`` (decimals), ``sigma_annual``,
+        ``usable_years`` and ``n_returns``.
+
+    Raises:
+        ValueError: If fewer than two usable returns remain or ``z`` is not positive.
+    """
+    if z <= 0:
+        raise ValueError("z must be > 0")
+    keys, vals = to_periodic(series, frequency)
+    ppy = _annualization_factor(frequency)
+    usable = [
+        r
+        for (d, r) in _log_returns(keys, vals)
+        if not any(
+            _in_window(d, start, end)
+            for name, start, end in regimes
+            if name in excluded_regimes
+        )
+    ]
+    if len(usable) < 2:
+        raise ValueError("need at least two usable returns to estimate a band")
+    mu = _mean(usable) * ppy
+    sigma = _stdev(usable) * math.sqrt(ppy)
+    years = len(usable) / ppy
+    centre = math.exp(mu) - 1.0
+    half = math.exp(mu) * z * sigma / math.sqrt(years)
+    return {
+        "annual_depr": centre,
+        "low": centre - half,
+        "high": centre + half,
+        "sigma_annual": sigma,
+        "usable_years": years,
+        "n_returns": float(len(usable)),
+    }
+
+
 class CalibratedFXSampler:
     """Maps a unit draw ``u ∈ [0,1]`` to a calibrated 1-yr spot (mixture inverse-CDF).
 
@@ -337,4 +405,5 @@ __all__ = [
     "CalibratedFXSampler",
     "calibrate_fx",
     "calibrate_from_config",
+    "long_run_depreciation_band",
 ]

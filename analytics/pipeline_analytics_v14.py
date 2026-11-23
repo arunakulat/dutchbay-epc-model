@@ -358,7 +358,15 @@ def run_v14_pipeline_with_analytics(
     # config is guaranteed path-based (guarded above); resolve for analytics.
     # The finance result does not echo the input config, so load it explicitly.
     config_path = str(config)
+    # #1899: as the engine evaluated it, so a declared capex.price_basis is applied. A
+    # native-CAPEX scenario (capex.input) keeps its authored form: its returns block
+    # stays omitted, a declared boundary (DOM-1645-R4-03).
+    from analytics.evaluation_v14 import evaluated_scenario_config
+
     cfg = dict(load_scenario_config(config_path))
+    authored_capex = cfg.get("capex")
+    if not (isinstance(authored_capex, Mapping) and "input" in authored_capex):
+        cfg = evaluated_scenario_config(cfg)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 2. Calculate optional analytics

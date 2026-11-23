@@ -224,9 +224,11 @@ def _derive_capex_usd(config: Optional[Mapping[str, Any]]) -> float:
     if not config:
         return 0.0
 
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.native_cost_inputs import normalize_native_capex
 
     config = normalize_native_capex(config)
+    refuse_unapplied_price_basis(config, "the KPI capex resolver")
     from finance.import_levies import has_taxes_indirect
 
     capex_section = _section_case_insensitive(config, "capex")
