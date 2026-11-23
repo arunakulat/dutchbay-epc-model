@@ -1,0 +1,10 @@
+{
+  "status": "R3_UNREVIEWED_F5_HOLD",
+  "source_safe": true,
+  "pages": 13,
+  "module_count": 25,
+  "CP_and_feasibility_count": 33,
+  "inputs_in_register": 21,
+  "sha256": "46d252b0a596e6d42f85b10bae99ca0415f6584256d1253ec392c2765121e976",
+  "fonts_embedded": true
+}
