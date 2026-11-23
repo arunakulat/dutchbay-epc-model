@@ -132,8 +132,11 @@ def test_morris_smoke_lendercase_ranks_dominant_drivers() -> None:
     assert res["n_runs"] == 4 * (res["problem"]["num_vars"] + 1)
     assert res["optimal_trajectories"] is None
     ranking = res["metrics"]["project_irr"]["ranking"]
-    # tariff and capex are the model's known dominant project-IRR drivers; one should top it.
-    assert ranking[0] in {"tariff.lkr_per_kwh", "capex.usd_total"}
+    # Tariff, capex and (since #1898 samples it) the FX depreciation rate are the
+    # lender case's dominant project-IRR drivers: across its sourced band the
+    # depreciation rate alone moves project IRR by about 9 points, against about 5 for
+    # the tariff band, so one of the three should top the ranking.
+    assert ranking[0] in {"tariff.lkr_per_kwh", "capex.usd_total", "fx.annual_depr"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
