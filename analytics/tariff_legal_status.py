@@ -165,6 +165,73 @@ class ScenarioTariffStatus:
         return self.storage_options.get(str(basis))
 
 
+def _use_summary(use: RevenueUse) -> Dict[str, Any]:
+    """One revenue use in strict JSON-ready form, for a committed site-analysis summary."""
+    rate = use.rate
+    return {
+        "use": use.use,
+        "rate_id": use.rate_id,
+        "lkr_per_kwh": rate.lkr_per_kwh if rate is not None else None,
+        "status": use.status,
+        "status_label": use.label,
+        "needs_label": use.needs_label,
+        "instrument": rate.instrument if rate is not None else None,
+        "clause": rate.clause if rate is not None else use.detail,
+        "source": rate.source if rate is not None else None,
+        "effective_from": (
+            rate.effective_from.isoformat()
+            if rate is not None and rate.effective_from is not None
+            else None
+        ),
+        "effective_to": (
+            rate.effective_to.isoformat()
+            if rate is not None and rate.effective_to is not None
+            else None
+        ),
+        "effective_note": rate.effective_note if rate is not None else None,
+        "review": rate.review if rate is not None else None,
+        "window": rate.window_text() if rate is not None else None,
+        "conditions": list(rate.conditions) if rate is not None else [],
+        "open_questions": list(rate.open_questions) if rate is not None else [],
+    }
+
+
+def storage_options_tariff_legal_status(
+    scenario: Mapping[str, Any],
+    scenario_name: str,
+    bases: Sequence[str],
+    registry: Optional[TariffRegistry] = None,
+) -> Dict[str, Any]:
+    """Machine-readable tariff legal status for a storage-options summary (#1837).
+
+    Records the scenario's headline revenue rate status alongside the legal status of each
+    storage-options revenue basis ``bases`` evaluates, plus any effective-window flags. An
+    unrecorded basis resolves to :data:`STATUS_NOT_RECORDED` (never published).
+    """
+    status = resolve_scenario_status(scenario, scenario_name, registry)
+    basis_entries: Dict[str, Dict[str, Any]] = {}
+    for basis in bases:
+        key = str(basis)
+        use = status.storage_label(key) or RevenueUse(
+            use=f"{USE_STORAGE_OPTIONS}.{key}",
+            rate_id=None,
+            status=STATUS_NOT_RECORDED,
+            detail=(
+                f"no legal status is recorded for the revenue basis {key} of this scenario "
+                f"in {REGISTRY_PATH.as_posix()}"
+            ),
+        )
+        basis_entries[key] = _use_summary(use)
+    return {
+        "registry": REGISTRY_PATH.as_posix(),
+        "scenario": status.scenario,
+        "recorded": status.recorded,
+        "headline_revenue": _use_summary(status.headline),
+        "revenue_bases": basis_entries,
+        "window_flags": list(status.window_flags),
+    }
+
+
 # --------------------------------------------------------------------------- reading
 
 
@@ -641,5 +708,6 @@ __all__ = [
     "load_registry",
     "read_registry",
     "resolve_scenario_status",
+    "storage_options_tariff_legal_status",
     "window_flags",
 ]
