@@ -857,6 +857,7 @@ def build_annual_cfads(
     )
 
     cfads_list: List[float] = []
+    results: List[Dict[str, float]] = []
     carried_losses = 0.0
 
     for year in range(1, years + 1):
@@ -882,8 +883,14 @@ def build_annual_cfads(
             senior_fee_lkr=senior_fee_series[year_index],
         )
 
-        cfads_list.append(result["cfads_final_lkr"])
+        results.append(result)
         carried_losses = result["carried_forward_losses"]
+
+    # #1893 dolphin 2: the same receivables lag as build_annual_rows, so the two agree.
+    from .monthly_cascade_v14 import apply_receivables_lag
+
+    results = apply_receivables_lag(results, config, fx_hedge)
+    cfads_list = [float(r["cfads_final_lkr"]) for r in results]
 
     if cfads_list:
         logger.info(
@@ -998,6 +1005,12 @@ def build_annual_rows(
         )
     else:
         logger.info("Built annual cashflow rows for 0 years")
+
+    # #1893 dolphin 2: deduct the change in offtaker receivables when the scenario
+    # declares cashflow.monthly.receivable_days. Absent or 0, rows are untouched.
+    from .monthly_cascade_v14 import apply_receivables_lag
+
+    rows = apply_receivables_lag(rows, config, fx_hedge)
 
     return rows
 
@@ -1211,6 +1224,12 @@ def build_annual_rows_efficient(
         )
     else:
         logger.info("Built annual cashflow rows (efficient) for 0 years")
+
+    # #1893 dolphin 2: deduct the change in offtaker receivables when the scenario
+    # declares cashflow.monthly.receivable_days. Absent or 0, rows are untouched.
+    from .monthly_cascade_v14 import apply_receivables_lag
+
+    rows = apply_receivables_lag(rows, config, fx_hedge)
 
     return rows
 
