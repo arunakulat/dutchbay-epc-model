@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -23,6 +24,12 @@ from analytics.reproducible_workbook import (
     freeze_workbook_reproducible,
     normalize_xlsx_reproducible,
 )
+from app.reports.module_ledger import (
+    _REASON_REQUIRED_STATUSES,
+    ModuleExecutionLedger,
+    ModuleExecutionRecord,
+    ModuleExecutionStatus,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from openpyxl.worksheet.worksheet import Worksheet
@@ -41,15 +48,18 @@ DFI_WORKBOOK_F5_CAVEAT: str = (
     "for covenant purposes."
 )
 
-CANONICAL_LEDGER_STATUSES: tuple[str, ...] = (
-    "executed",
-    "guard_passed",
-    "guard_refused",
-    "not_applicable",
-    "skipped_missing_inputs",
-    "skipped_optional_extra",
-    "skipped_sync_profile",
-    "failed",
+# Canonical status vocabulary derived directly from #1813's contract
+# (app.reports.module_ledger.ModuleExecutionStatus); no second list here (#1827).
+CANONICAL_LEDGER_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in ModuleExecutionStatus
+)
+_CANONICAL_LEDGER_STATUS_SET: frozenset[str] = frozenset(CANONICAL_LEDGER_STATUSES)
+_REASON_REQUIRED_LEDGER_STATUSES: frozenset[str] = frozenset(
+    status.value for status in _REASON_REQUIRED_STATUSES
+)
+
+SCENARIO_NOTE_ROW_LABEL: str = (
+    "scenario_note (informational only; does not modify A1 F-5 hold)"
 )
 
 DEFAULT_FORMULA_BOUNDARY_NOTE: str = (
@@ -67,6 +77,59 @@ _LEDGER_STATUS_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_DATETIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+
+_HOLD_WITHDRAWAL_OR_RELIANCE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "hold withdrawal claim",
+        re.compile(
+            r"\bhold\b[^.?!\n]{0,40}\b"
+            r"(?:lifted|withdrawn|cleared|removed|waived|superseded|suspended|revoked|overridden)\b"
+            r"|\b(?:lift|lifts|lifted|lifting|withdraw|withdraws|withdrew|withdrawn|withdrawing|"
+            r"clear|clears|cleared|clearing|waive|waives|waived|waiving|"
+            r"supersede|supersedes|superseded|superseding|"
+            r"override|overrides|overrode|overridden|overriding|"
+            r"revoke|revokes|revoked|revoking)\b[^.?!\n]{0,30}\bhold\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "non-reliance withdrawal claim",
+        re.compile(
+            r"\bnon[-\s_]+reliance[\s_-]+(?:lifted|withdrawn|cleared|waived|superseded|removed|revoked)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "approval or reliance qualification claim",
+        re.compile(
+            r"\bapproved[\s_-]+for\b"
+            r"|\b(?:lender|dfi|investment|bank|credit|covenant)[\s_-]+grade\b"
+            r"|\bbankab(?:le|ility)\b"
+            r"|\b(?:lender|covenant|board|ic|credit|audit|external|official|formal)[\s_-]+reliance\b"
+            r"|\breliance[\s_-]+(?:granted|approved|authorized|authorised|permitted|confirmed|restored)\b"
+            r"|\b(?:fit|cleared|certified|qualified|usable|suitable|valid)[\s_-]+for[\s_-]+"
+            r"(?:lender|covenant|board|ic|credit)\b"
+            r"|\bfor[\s_-]+(?:lender|covenant|board|ic|credit)[\s_-]+"
+            r"(?:use|purposes|reliance|reporting|submission)\b"
+            r"|\b(?:f[\s_-]?5|covenant)[\s_-]+(?:cleared|waived|lifted|satisfied|approved|compliant)\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _validate_non_contradictory_metadata_text(text: str, field_name: str) -> str:
+    """Refuse hold-withdrawal or reliance-qualification wording in Control_Provenance."""
+    for category, pattern in _HOLD_WITHDRAWAL_OR_RELIANCE_PATTERNS:
+        match = pattern.search(text)
+        if match is not None:
+            raise ValueError(
+                f"DfiWorkbookMetadata.{field_name} contains forbidden {category} "
+                f"{match.group(0)!r}; free-text Control_Provenance metadata cannot "
+                "withdraw, qualify, or contradict the A1 F-5 non-reliance hold."
+            )
+    return text
+
 
 # An allowlist for the entire format. Only an unquoted, unescaped semicolon
 # separates sections. Literal tokens consume their delimiters as a unit.
@@ -480,6 +543,12 @@ class ModuleLedgerEntry(BaseModel):
                 "ModuleLedgerEntry.status 'total' is reserved for the "
                 "Module_Ledger rollup Total row."
             )
+        if normalized not in _CANONICAL_LEDGER_STATUS_SET:
+            allowed = ", ".join(CANONICAL_LEDGER_STATUSES)
+            raise ValueError(
+                f"Invalid ModuleLedgerEntry.status {value!r}: expected one of "
+                f"#1813 ModuleExecutionStatus values ({allowed})."
+            )
         return normalized
 
     @field_validator("reason", "provenance_ref", mode="before")
@@ -503,8 +572,8 @@ class DfiWorkbookMetadata(BaseModel):
     generated_at: str
     non_reliance_notice: str = DFI_WORKBOOK_F5_CAVEAT
     formula_boundary_note: str = DEFAULT_FORMULA_BOUNDARY_NOTE
-    # Free scenario wording lives in its own field and row, never in the F-5
-    # notice cell, so no appended text can qualify or withdraw the hold.
+    # Free scenario wording lives in its own explicitly labelled row and cannot
+    # withdraw or qualify the F-5 non-reliance hold.
     scenario_note: Optional[str] = None
 
     @field_validator(
@@ -516,7 +585,9 @@ class DfiWorkbookMetadata(BaseModel):
     )
     @classmethod
     def _validate_required_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _validate_literal_text(value, str(info.field_name), allow_empty=False)
+        field_name = str(info.field_name)
+        text = _validate_literal_text(value, field_name, allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, field_name)
 
     @field_validator("config_sha256", mode="before")
     @classmethod
@@ -552,14 +623,16 @@ class DfiWorkbookMetadata(BaseModel):
     def _validate_scenario_note(cls, value: object) -> Optional[str]:
         if value is None:
             return None
-        return _validate_literal_text(value, "scenario_note", allow_empty=False)
+        text = _validate_literal_text(value, "scenario_note", allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, "scenario_note")
 
     @field_validator("run_mode", mode="before")
     @classmethod
     def _validate_run_mode(cls, value: object) -> Optional[str]:
         if value is None:
             return None
-        return _validate_literal_text(value, "run_mode", allow_empty=False)
+        text = _validate_literal_text(value, "run_mode", allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, "run_mode")
 
 
 @dataclass(frozen=True)
@@ -662,7 +735,7 @@ def _populate_control_provenance_sheet(
         ("generated_at", metadata.generated_at),
         ("formula_boundary_note", metadata.formula_boundary_note),
         (
-            "scenario_note",
+            SCENARIO_NOTE_ROW_LABEL,
             metadata.scenario_note if metadata.scenario_note is not None else "",
         ),
     )
@@ -678,9 +751,11 @@ def _populate_control_provenance_sheet(
         val_cell.border = styles.thin_border
         if field_name == "formula_boundary_note":
             ws.row_dimensions[row_idx].height = 42
+        elif field_name == SCENARIO_NOTE_ROW_LABEL:
+            ws.row_dimensions[row_idx].height = 30
 
     ws.freeze_panes = "A4"
-    _apply_column_widths(ws, {"A": 26, "B": 96})
+    _apply_column_widths(ws, {"A": 34, "B": 96})
 
 
 def _populate_inputs_sheet(
@@ -795,14 +870,7 @@ def _populate_module_ledger_sheet(
         cell.alignment = styles.header_alignment
         cell.border = styles.thin_border
 
-    extra_statuses = sorted(
-        {
-            entry.status
-            for entry in ledger_entries
-            if entry.status not in CANONICAL_LEDGER_STATUSES
-        }
-    )
-    rollup_statuses = list(CANONICAL_LEDGER_STATUSES) + extra_statuses
+    rollup_statuses = CANONICAL_LEDGER_STATUSES
 
     status_end_row = max(2, 1 + len(ledger_entries))
     status_range = registry.range_ref(
@@ -852,12 +920,161 @@ def _populate_module_ledger_sheet(
     _apply_column_widths(ws, widths)
 
 
+def project_module_execution_record(
+    record: ModuleExecutionRecord | Mapping[str, object],
+) -> ModuleLedgerEntry:
+    """Project one #1813 ``ModuleExecutionRecord`` into a ``ModuleLedgerEntry``."""
+    validated = ModuleExecutionRecord.model_validate(record)
+    reason_text = (
+        validated.reason
+        if validated.reason is not None
+        else (validated.caveat if validated.caveat is not None else "")
+    )
+    provenance_text = ", ".join(validated.provenance_refs)
+    return ModuleLedgerEntry(
+        module_path=validated.module_path,
+        pipeline_stage=validated.pipeline_stage.value,
+        role_description=validated.role_description,
+        status=validated.status.value,
+        excel_representation=validated.excel_representation.value,
+        reason=reason_text,
+        provenance_ref=provenance_text,
+    )
+
+
+def _normalize_execution_records(
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleExecutionRecord, ...]:
+    """Validate an execution ledger or record sequence and enforce unique paths."""
+    if isinstance(execution_records, ModuleExecutionLedger):
+        return ModuleExecutionLedger.model_validate(execution_records).records
+    if isinstance(execution_records, (str, bytes, Mapping, BaseModel)):
+        raise ValueError(
+            "execution_records must be a ModuleExecutionLedger or a sequence of "
+            "ModuleExecutionRecord items."
+        )
+    records = tuple(
+        ModuleExecutionRecord.model_validate(item) for item in execution_records
+    )
+    counts = Counter(record.module_path for record in records)
+    duplicates = sorted(path for path, count in counts.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            "Duplicate module_path entries in execution_records: "
+            f"{', '.join(duplicates)}."
+        )
+    return records
+
+
+def _validate_ledger_entries(
+    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Validate ledger entries and refuse duplicate ``module_path`` rows."""
+    if isinstance(ledger_entries, (str, bytes, Mapping, BaseModel)):
+        raise ValueError(
+            "ledger_entries must be a sequence of ModuleLedgerEntry items."
+        )
+    entries = tuple(ModuleLedgerEntry.model_validate(entry) for entry in ledger_entries)
+    counts = Counter(entry.module_path for entry in entries)
+    duplicates = sorted(path for path, count in counts.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            f"Duplicate module_path entries in ledger_entries: {', '.join(duplicates)}."
+        )
+    return entries
+
+
+def project_module_execution_ledger(
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Project all execution records in a run into ``ModuleLedgerEntry`` rows."""
+    records = _normalize_execution_records(execution_records)
+    return tuple(project_module_execution_record(record) for record in records)
+
+
+def validate_ledger_against_execution_records(
+    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Validate ``Module_Ledger`` rows 1-to-1 against ``ModuleExecutionRecord`` inputs.
+
+    Refuses duplicates, dropped execution records, orphan ledger entries, and any
+    disagreement on ``pipeline_stage``, ``role_description``, ``status``, or
+    ``excel_representation``.
+    """
+    validated_entries = _validate_ledger_entries(ledger_entries)
+    validated_records = _normalize_execution_records(execution_records)
+
+    records_by_path = {record.module_path: record for record in validated_records}
+    entries_by_path = {entry.module_path: entry for entry in validated_entries}
+
+    missing = [
+        record.module_path
+        for record in validated_records
+        if record.module_path not in entries_by_path
+    ]
+    if missing:
+        raise ValueError(
+            "Execution record(s) missing from Module_Ledger: " f"{', '.join(missing)}."
+        )
+
+    orphans = [
+        entry.module_path
+        for entry in validated_entries
+        if entry.module_path not in records_by_path
+    ]
+    if orphans:
+        raise ValueError(
+            "Orphan Module_Ledger entry/entries absent from execution_records: "
+            f"{', '.join(orphans)}."
+        )
+
+    for entry in validated_entries:
+        record = records_by_path[entry.module_path]
+        mismatches: list[str] = []
+        if entry.pipeline_stage != record.pipeline_stage.value:
+            mismatches.append(
+                f"pipeline_stage={entry.pipeline_stage!r} "
+                f"(expected {record.pipeline_stage.value!r})"
+            )
+        if entry.role_description != record.role_description:
+            mismatches.append(
+                f"role_description={entry.role_description!r} "
+                f"(expected {record.role_description!r})"
+            )
+        if entry.status != record.status.value:
+            mismatches.append(
+                f"status={entry.status!r} (expected {record.status.value!r})"
+            )
+        if entry.excel_representation != record.excel_representation.value:
+            mismatches.append(
+                f"excel_representation={entry.excel_representation!r} "
+                f"(expected {record.excel_representation.value!r})"
+            )
+        if mismatches:
+            raise ValueError(
+                f"Module_Ledger entry for {entry.module_path!r} does not match "
+                f"ModuleExecutionRecord: {'; '.join(mismatches)}."
+            )
+
+    return validated_entries
+
+
 def build_dfi_workbook_foundation(
     output_path: PathLike,
     *,
     metadata: DfiWorkbookMetadata | Mapping[str, object],
     inputs: Sequence[WorkbookInputItem | Mapping[str, object]],
-    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+    ledger_entries: Optional[Sequence[ModuleLedgerEntry | Mapping[str, object]]] = None,
+    execution_records: Optional[
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ] = None,
 ) -> tuple[Path, CellRegistry]:
     """Build the macro-free, byte-reproducible DFI workbook foundation.
 
@@ -875,14 +1092,21 @@ def build_dfi_workbook_foundation(
         output_path: Destination ``.xlsx`` path (parent directories created).
         metadata: A :class:`DfiWorkbookMetadata` record or equivalent mapping.
         inputs: Non-empty sequence of :class:`WorkbookInputItem` records or mappings.
-        ledger_entries: Sequence of :class:`ModuleLedgerEntry` records or mappings.
+        ledger_entries: Optional sequence of :class:`ModuleLedgerEntry` records or
+            mappings. When omitted and ``execution_records`` is provided, rows are
+            projected via :func:`project_module_execution_ledger`.
+        execution_records: Optional :class:`ModuleExecutionLedger` or sequence of
+            :class:`ModuleExecutionRecord` items. When provided alongside
+            ``ledger_entries``, every row is strictly cross-checked against it
+            before touching ``output_path``.
 
     Returns:
         Tuple of ``(resolved_output_path, populated_cell_registry)``.
 
     Raises:
         ValueError: If any record fails validation, ``inputs`` is empty,
-            duplicate keys occur, or the output path does not use ``.xlsx``.
+            ``ledger_entries`` disagrees with ``execution_records``, duplicate keys
+            occur, or the output path does not use ``.xlsx``.
     """
     # Revalidate typed records as well as mappings before touching the destination.
     validated_metadata = DfiWorkbookMetadata.model_validate(metadata)
@@ -892,9 +1116,20 @@ def build_dfi_workbook_foundation(
             "inputs must contain at least one WorkbookInputItem; cannot build "
             "an Inputs sheet without registered scalar parameters."
         )
-    validated_ledger = [
-        ModuleLedgerEntry.model_validate(entry) for entry in ledger_entries
-    ]
+    if ledger_entries is None and execution_records is None:
+        raise ValueError(
+            "Must provide execution_records or ledger_entries to "
+            "build_dfi_workbook_foundation."
+        )
+    if ledger_entries is None:
+        assert execution_records is not None
+        validated_ledger = list(project_module_execution_ledger(execution_records))
+    elif execution_records is not None:
+        validated_ledger = list(
+            validate_ledger_against_execution_records(ledger_entries, execution_records)
+        )
+    else:
+        validated_ledger = list(_validate_ledger_entries(ledger_entries))
 
     out_path = Path(output_path).expanduser().resolve()
     if out_path.suffix.lower() != ".xlsx":
@@ -936,6 +1171,10 @@ __all__ = [
     "INPUTS_SHEET_NAME",
     "LEDGER_SHEET_NAME",
     "ModuleLedgerEntry",
+    "SCENARIO_NOTE_ROW_LABEL",
     "WorkbookInputItem",
     "build_dfi_workbook_foundation",
+    "project_module_execution_ledger",
+    "project_module_execution_record",
+    "validate_ledger_against_execution_records",
 ]
