@@ -1,0 +1,28 @@
+schema_version: 1
+classification: ADVISORY_SCREENING_NOT_UTILITY_VALIDATED
+base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+line:
+  description: Private proposed collector-to-Wariyapola 220kV route from EIA Annex III I
+  collector_bus: Wariyapola 220kV Switching Station — PROPOSED ONLY
+  nominal_kv: 220.0
+  route_km: 104.77
+  double_circuit: true
+  conductor: ACSR Zebra
+  conductors_per_phase_bundle: 2
+  conductor_ac_resistance_25C_ohm_per_km: 0.0702
+  conductor_ac_resistance_75C_ohm_per_km: 0.0835
+  assumed_single_circuit_reactance_ohm_per_km: 0.27
+  source: EIA Annex III I (PDF pp. 138–142, 160), preliminary unapproved route
+electrical:
+  plant_rating_mva_screening_assumption: 147.0
+  nameplate_mw: 147.0
+  derated_maximum_active_mw: 133.0
+  screening_source_fault_mva: [500.0, 700.0, 900.0, 1100.0, 1500.0]
+  assumed_source_rx: 0.083
+  assumed_network_thevenin_x_r: 12.0
+  assumptions: No certified CEB fault MVA, P/Q curve or line R/X; study_enabled only for external screening.
+publication:
+  screening_only: true
+  keep_f5_hold: true
+  eia_line_vs_national_norochcholai_line_identity: NOT_ESTABLISHED
+  legacy_2027_COD_vs_NSO_2030_line: UNRESOLVED
