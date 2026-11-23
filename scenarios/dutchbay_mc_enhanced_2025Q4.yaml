@@ -45,6 +45,7 @@ scenario:
 # ════════════════════════════════════════════════════════════════════════
 
 project:
+  jurisdiction: Sri Lanka  # binds the Sri Lanka pack (#1841)
   name: "DutchBay Wind Farm"
   location: "Mannar, Sri Lanka"
   capacity_mw: 30.0
