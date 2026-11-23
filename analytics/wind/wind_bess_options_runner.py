@@ -914,6 +914,7 @@ def run_wind_bess_options_for_scenario(
         STATUS_NOT_APPLICABLE,
         resolve_site_analysis_block,
     )
+    from analytics.tariff_legal_status import storage_options_tariff_legal_status
 
     common: Dict[str, Any] = {
         "schema": SUMMARY_SCHEMA,
@@ -939,6 +940,13 @@ def run_wind_bess_options_for_scenario(
         schema_version=CONFIG_SCHEMA,
         profile_builder=profile_builder or default_profile,
     )
+    bases = [
+        figures["revenue_bases"]["base"],
+        *figures["revenue_bases"]["sensitivities"],
+    ]
+    tariff_status = storage_options_tariff_legal_status(
+        scenario, Path(scenario_label).stem, bases
+    )
     return {
         **common,
         "status": "completed",
@@ -951,5 +959,6 @@ def run_wind_bess_options_for_scenario(
             repo_path(cfg["profile"]["transfer_summary"])
         ),
         "model_version": (REPO_ROOT / "VERSION").read_text().strip(),
+        "tariff_legal_status": tariff_status,
         **figures,
     }
