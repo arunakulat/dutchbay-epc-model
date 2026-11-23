@@ -35,6 +35,7 @@ defaults:
 # ═════════════════════════════════════════════════════════════════════════════
 
 project:
+  jurisdiction: Sri Lanka  # binds the Sri Lanka pack (#1841)
   name: "DutchBay Wind Farm"
   location:
     latitude: 8.5000

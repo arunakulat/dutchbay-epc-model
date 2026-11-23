@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_float_dtype
 
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.reproducible_workbook import normalize_xlsx_reproducible
 
 PathLike = Union[str, Path]
@@ -263,9 +264,26 @@ def _metric_value_df(source: Mapping[str, Any], keys: Sequence[str]) -> pd.DataF
     return pd.DataFrame(rows, columns=["Metric", "Value"])
 
 
-def _pipeline_summary_df(kpis: Mapping[str, Any]) -> pd.DataFrame:
-    """ "Summary" sheet: every scalar KPI as a tidy (Metric, Value) table."""
-    rows = [(k, kpis[k]) for k in sorted(kpis) if _is_scalar(kpis[k])]
+#: Label of the #1456 equity IRR ranking caveat on the "Summary" and "ScenarioSummary"
+#: sheets (#1688). It is a presentation label, not a KPI: it never enters ``kpis``.
+EQUITY_IRR_CAVEAT_LABEL = "equity_irr_caveat"
+
+
+def _pipeline_summary_df(
+    kpis: Mapping[str, Any], equity_irr_caveat: Optional[str] = None
+) -> pd.DataFrame:
+    """ "Summary" sheet: every scalar KPI as a tidy (Metric, Value) table.
+
+    When the equity IRR cannot rank the case (#1688), the caveat follows the
+    ``equity_irr`` row, so the two are read together.
+    """
+    rows: list[tuple[str, Any]] = []
+    for key in sorted(kpis):
+        if not _is_scalar(kpis[key]):
+            continue
+        rows.append((key, kpis[key]))
+        if key == "equity_irr" and equity_irr_caveat is not None:
+            rows.append((EQUITY_IRR_CAVEAT_LABEL, equity_irr_caveat))
     return pd.DataFrame(rows, columns=["Metric", "Value"])
 
 
@@ -337,10 +355,19 @@ def _pipeline_ratios_df(
     return pd.concat([ratios, covenants], ignore_index=True)
 
 
-def _pipeline_scenario_summary_df(kpis: Mapping[str, Any]) -> pd.DataFrame:
-    """ "ScenarioSummary" sheet: one headline row for this single scenario."""
-    row = {"scenario_name": kpis.get("scenario_name")}
-    row.update({k: kpis.get(k) for k in _SCENARIO_SUMMARY_KEYS})
+def _pipeline_scenario_summary_df(
+    kpis: Mapping[str, Any], equity_irr_caveat: Optional[str] = None
+) -> pd.DataFrame:
+    """ "ScenarioSummary" sheet: one headline row for this single scenario.
+
+    The ``equity_irr_caveat`` column follows ``equity_irr`` on every row (#1688). It is
+    empty when the equity IRR ranks the case, so the sheet's columns do not depend on it.
+    """
+    row: dict[str, Any] = {"scenario_name": kpis.get("scenario_name")}
+    for key in _SCENARIO_SUMMARY_KEYS:
+        row[key] = kpis.get(key)
+        if key == "equity_irr":
+            row[EQUITY_IRR_CAVEAT_LABEL] = equity_irr_caveat
     return pd.DataFrame([row])
 
 
@@ -365,12 +392,14 @@ def frames_from_pipeline_result(
     debt_result: Mapping[str, Any] = result.get("debt_result", {}) or {}
     scenario_result: Mapping[str, Any] = result.get("scenario_result", {}) or {}
     debt_covenants: Mapping[str, Any] = scenario_result.get("debt_covenants", {}) or {}
+    # #1688: the #1456 ranking caveat, read from the waterfall's equity summary.
+    caveat = equity_irr_caveat_from_run(result)
     return {
-        "summary": _pipeline_summary_df(kpis),
+        "summary": _pipeline_summary_df(kpis, caveat),
         "cashflow": _pipeline_cashflow_df(annual_rows),
         "debt": _pipeline_debt_df(debt_result),
         "ratios": _pipeline_ratios_df(kpis, debt_covenants),
-        "scenario_summary": _pipeline_scenario_summary_df(kpis),
+        "scenario_summary": _pipeline_scenario_summary_df(kpis, caveat),
     }
 
 

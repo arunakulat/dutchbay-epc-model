@@ -15,6 +15,7 @@ from analytics.contracts_v14 import (
     SensitivitySuite,
     TechnologyBreakdown,
 )
+from analytics.equity_irr_caveat import equity_irr_caveat_from_summary
 
 # Shared, dependency-light covenant-floor resolver (#639): the same 4-path config
 # precedence the MC engine's fixed-debt breach test uses, extracted to
@@ -243,6 +244,10 @@ def _scenario_summary_to_dict(
             # Live shape: a dict {equity_irr, equity_npv, equity_multiple, metadata}.
             ep_dict = dict(ep)
             ep_dict["downside"] = downside_dict
+            # #1688: the #1456 ranking caveat beside equity IRR (equity NPV is in the block).
+            ep_dict["equity_irr_caveat"] = equity_irr_caveat_from_summary(
+                ep_dict.get("metadata")
+            )
             data["equity_performance"] = ep_dict
         else:
             ep_meta: Mapping[str, Any] = (
@@ -259,6 +264,8 @@ def _scenario_summary_to_dict(
                 "average_coc": ep_meta.get("average_coc"),
                 "payback_period_years": ep_meta.get("payback_period_years"),
                 "downside": downside_dict,
+                # #1688: the #1456 ranking caveat, None when the IRR ranks the case.
+                "equity_irr_caveat": equity_irr_caveat_from_summary(ep_meta),
             }
 
     return data
