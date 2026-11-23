@@ -129,7 +129,25 @@ def _summarise_mc_irr(
 
 
 def load_scenario(path: str | Path) -> Dict[str, Any]:
-    """Load a scenario through the canonical loader, as a plain mutable dict."""
+    """Load a scenario as the engine evaluates it, as a plain mutable dict.
+
+    #1899: a declared ``capex.price_basis`` is applied, so the assessment reads the
+    capex the engine finances (``analytics.evaluation_v14.evaluated_scenario_config``).
+    """
+    from analytics.evaluation_v14 import evaluated_scenario_config
+    from analytics.scenario_loader import load_scenario_config
+
+    return copy.deepcopy(
+        evaluated_scenario_config(dict(load_scenario_config(str(path))))
+    )
+
+
+def load_scenario_as_written(path: str | Path) -> Dict[str, Any]:
+    """Load a scenario as authored (no price date applied), as a plain mutable dict.
+
+    Only for a step that runs the full pipeline per trial and lets it apply the declared
+    ``capex.price_basis`` itself: the scenario's Monte Carlo (#1899).
+    """
     from analytics.scenario_loader import load_scenario_config
 
     return copy.deepcopy(dict(load_scenario_config(str(path))))
@@ -166,6 +184,9 @@ def scenario_covenant(cfg: Mapping[str, Any]) -> float:
 
 
 def scenario_capex(cfg: Mapping[str, Any]) -> float:
+    from finance.capex_price_basis import refuse_unapplied_price_basis
+
+    refuse_unapplied_price_basis(cfg, "the solar assessment")
     capex = cfg.get("capex")
     value = _number(capex.get("usd_total")) if isinstance(capex, Mapping) else None
     if value is None or value <= 0:
@@ -337,6 +358,13 @@ def _capex_sweep(cfg: Mapping[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _monte_carlo(cfg: Mapping[str, Any], trials: int) -> Dict[str, Any]:
+    """The scenario's own Monte Carlo, on the scenario AS WRITTEN (``load_scenario_as_written``).
+
+    #1899: a trial may replace ``capex.usd_total`` with a draw from a price-year range;
+    each trial's pipeline run then applies the declared ``capex.price_basis`` to it. Started
+    from the evaluated configuration instead, the draw would replace the escalated figure
+    and never be escalated.
+    """
     from analytics.mc.engine import run_monte_carlo_analysis
 
     block = cfg.get("monte_carlo")
@@ -533,7 +561,11 @@ def run_assessment(
             "breakeven", "Breakeven tariffs", lambda: _breakevens(path, cfg, R["base"])
         )
     step("capex_sweep", "Capex sweep", lambda: _capex_sweep(cfg))
-    step("mc", "Monte Carlo", lambda: _monte_carlo(cfg, trials))
+    step(
+        "mc",
+        "Monte Carlo",
+        lambda: _monte_carlo(load_scenario_as_written(path), trials),
+    )
     step("sensitivity", "One-way sensitivity", lambda: _sensitivity(path, cfg))
     step("optimization", "Gearing optimisation", lambda: _gearing(path, cfg))
     step("dscr", "DSCR sizing-target sweep", lambda: _dscr_targets(cfg, work_dir))

@@ -45,12 +45,20 @@ def resolve_max_balloon_pct(config: Mapping[str, Any]) -> float:
     group D09). It is a lender term with no code default: strict pre-flight and
     :func:`plan_debt` both refuse a scenario that omits it, naming the path.
 
+    The limit is a fraction of the debt, so it must lie between 0 and 1. A limit written
+    as a percentage (``10`` for 10%) is refused, not read as 1000%, which no balloon would
+    ever breach (#1862).
+
     Raises:
-        ValueError: If the limit is absent, a boolean, not numeric or not finite.
+        ValueError: If the limit is absent, a boolean, not numeric, not finite, or outside
+            ``[0, 1]``.
     """
     constraints = _section_case_insensitive(config, "constraints") or {}
     return _required_number(
-        constraints.get("max_balloon_pct"), "constraints.max_balloon_pct"
+        constraints.get("max_balloon_pct"),
+        "constraints.max_balloon_pct",
+        minimum=0.0,
+        maximum=1.0,
     )
 
 

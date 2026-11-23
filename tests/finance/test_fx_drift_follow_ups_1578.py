@@ -29,6 +29,7 @@ import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import _prepare_cashflow_context
 from finance.cashflow_v14_params import (
     USD_FX_DRIFT_OVERRIDE,
@@ -45,7 +46,8 @@ LENDER = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 def _cfg(path: Path = WIND) -> Dict[str, Any]:
     data = yaml.safe_load(path.read_text())
     assert isinstance(data, dict)
-    return data
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    return apply_capex_price_basis(data)
 
 
 def _split(cfg: Dict[str, Any]) -> Dict[str, Any]:

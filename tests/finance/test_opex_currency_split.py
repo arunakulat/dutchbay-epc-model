@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import (
     _prepare_cashflow_context,
     build_annual_rows,
@@ -36,7 +37,8 @@ SOLAR_BESS = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 def _cfg() -> Dict[str, Any]:
     data = yaml.safe_load(WIND.read_text())
     assert isinstance(data, dict)
-    return data
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    return apply_capex_price_basis(data)
 
 
 def _split(cfg: Dict[str, Any]) -> Dict[str, Any]:

@@ -28,6 +28,7 @@ import yaml
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
 from analytics.storage_headline import strip_headline_option
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.cashflow_v14_params import _build_cashflow_params
 from finance.cost_input_currency import validate_cost_input_currencies
@@ -48,7 +49,10 @@ _DIRECT: tuple[Callable[[dict[str, Any]], object], ...] = (
 
 def _load(path: Path) -> dict[str, Any]:
     # Capex-input plumbing on the wind-only case; the headline battery is #1823's subject.
-    return strip_headline_option(yaml.safe_load(path.read_text()))
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    return apply_capex_price_basis(
+        strip_headline_option(yaml.safe_load(path.read_text()))
+    )
 
 
 @pytest.fixture(params=[WIND, SOLAR_BESS], ids=["wind", "solar_bess"])
