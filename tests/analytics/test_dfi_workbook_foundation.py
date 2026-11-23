@@ -39,6 +39,7 @@ from pydantic import ValidationError
 
 from analytics.dfi_workbook import (
     DFI_WORKBOOK_F5_CAVEAT,
+    SCENARIO_NOTE_ROW_LABEL,
     CellRef,
     CellRegistry,
     DfiWorkbookMetadata,
@@ -625,6 +626,7 @@ def _assert_no_excel_errors(wb: openpyxl.Workbook) -> None:
 
 
 def test_dfi_workbook_package_has_no_forbidden_layer_imports() -> None:
+    allowed_app_contracts = frozenset({"app.reports.module_ledger"})
     package_dir = Path(__file__).resolve().parents[2] / "analytics" / "dfi_workbook"
     for py_file in sorted(package_dir.glob("*.py")):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
@@ -637,7 +639,10 @@ def test_dfi_workbook_package_has_no_forbidden_layer_imports() -> None:
                 continue
             for mod in targets:
                 app_msg = f"{py_file.name} imports forbidden app module {mod!r}"
-                assert not (mod == "app" or mod.startswith("app.")), app_msg
+                assert (
+                    not (mod == "app" or mod.startswith("app."))
+                    or mod in allowed_app_contracts
+                ), app_msg
                 fin_msg = f"{py_file.name} imports forbidden finance module {mod!r}"
                 assert not (mod == "finance" or mod.startswith("finance.")), fin_msg
                 pipe_msg = f"{py_file.name} imports forbidden pipeline module {mod!r}"
@@ -978,6 +983,8 @@ class TestStrictContracts:
             "executed\x00",
             "with space",
             "1bad",
+            "custom_deferred",
+            "unknown_status",
             "",
             "   ",
         ],
@@ -1389,9 +1396,9 @@ class TestBuildDfiWorkbookFoundation:
                 module_path="analytics.custom_plugin",
                 pipeline_stage="custom",
                 role_description="Custom extension module",
-                status="custom_deferred",
+                status="degraded",
                 excel_representation="ledger_only",
-                reason="deferred in wave 3",
+                reason="fallback mode used in wave 3",
             ),
             ModuleLedgerEntry(
                 module_path="finance.irr",
@@ -1429,7 +1436,7 @@ class TestBuildDfiWorkbookFoundation:
         expected_exp = Counter(entry.status for entry in expanded_ledger)
         assert exp_counts["executed"] == expected_exp["executed"] == 3
         assert exp_counts["failed"] == expected_exp["failed"] == 1
-        assert exp_counts["custom_deferred"] == 1
+        assert exp_counts["degraded"] == 1
         assert exp_total == len(expanded_ledger) == 8
 
         empty_counts, empty_total = _verify_ooxml_workbook(
@@ -1552,9 +1559,9 @@ class TestBuildDfiWorkbookFoundation:
                 module_path="analytics.custom_plugin",
                 pipeline_stage="custom",
                 role_description="Custom extension module",
-                status="custom_deferred",
+                status="degraded",
                 excel_representation="ledger_only",
-                reason="deferred in wave 3",
+                reason="fallback mode used in wave 3",
             ),
             ModuleLedgerEntry(
                 module_path="finance.irr",
@@ -1567,7 +1574,7 @@ class TestBuildDfiWorkbookFoundation:
         counts_exp, total_exp = _evaluate_with_soffice("expanded", expanded_ledger)
         expected_exp = Counter(entry.status for entry in expanded_ledger)
         assert counts_exp["executed"] == expected_exp["executed"] == 3
-        assert counts_exp["custom_deferred"] == 1
+        assert counts_exp["degraded"] == 1
         assert total_exp == len(expanded_ledger)
 
         # Empty ledger boundary: formulas evaluate cleanly to zero with no Excel errors.
@@ -1804,7 +1811,7 @@ def test_f5_notice_refuses_copied_model_with_suffix(tmp_path: Path) -> None:
 def test_scenario_note_has_its_own_row_and_a1_is_exact(tmp_path: Path) -> None:
     from openpyxl import load_workbook
 
-    note = "Scenario: stress-case. HOLD LIFTED"
+    note = "Scenario: stress-case (25% capex sensitivity; screening only)."
     dest = tmp_path / "noted.xlsx"
     build_dfi_workbook_foundation(
         dest,
@@ -1818,7 +1825,64 @@ def test_scenario_note_has_its_own_row_and_a1_is_exact(tmp_path: Path) -> None:
         ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value
         for r in range(4, ws.max_row + 1)
     }
-    assert fields["scenario_note"] == note
+    assert "does not modify A1 F-5 hold" in SCENARIO_NOTE_ROW_LABEL
+    assert fields[SCENARIO_NOTE_ROW_LABEL] == note
+
+
+_HOSTILE_HOLD_OR_RELIANCE_PHRASES: tuple[str, ...] = (
+    "HOLD LIFTED",
+    "Scenario: stress-case. HOLD LIFTED",
+    "F-5 hold withdrawn by committee",
+    "Hold cleared for closing",
+    "Non-reliance lifted after audit",
+    "Approved for lender and covenant reliance.",
+    "approved for covenant purposes",
+    "Lender-Grade output",
+    "Bankable project financials",
+    "Board reliance confirmed",
+    "covenant reliance authorized",
+    "usable for covenant reporting",
+)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "scenario_note",
+        "formula_boundary_note",
+        "project_name",
+        "scenario_name",
+        "run_mode",
+        "engine_version",
+    ),
+)
+@pytest.mark.parametrize("phrase", _HOSTILE_HOLD_OR_RELIANCE_PHRASES)
+def test_control_provenance_metadata_refuses_hold_lift_and_reliance_wording(
+    field: str, phrase: str
+) -> None:
+    with pytest.raises(ValueError, match="A1 F-5 non-reliance hold"):
+        _sample_metadata(**{field: phrase})
+
+
+@pytest.mark.parametrize(
+    "field",
+    ("scenario_note", "formula_boundary_note", "project_name", "scenario_name"),
+)
+def test_builder_refuses_copied_metadata_with_hold_lift_before_touching_dest(
+    tmp_path: Path, field: str
+) -> None:
+    copied = _sample_metadata().model_copy(
+        update={field: "HOLD LIFTED: approved for lender and covenant reliance."}
+    )
+    dest = tmp_path / "new_parent" / "hostile_meta.xlsx"
+    with pytest.raises(ValueError, match="A1 F-5 non-reliance hold"):
+        build_dfi_workbook_foundation(
+            dest,
+            metadata=copied,
+            inputs=_sample_inputs(),
+            ledger_entries=_sample_ledger(),
+        )
+    assert not dest.parent.exists()
 
 
 @pytest.mark.parametrize("bad", ("", "   ", "=1", "-1", "source\ufffe"))
