@@ -34,6 +34,7 @@ from finance.capex_price_basis import (
     APPLIED_KEY,
     AUTO_KEY,
     TECH_KEY,
+    UnappliedCapexPriceBasisError,
     apply_capex_price_basis,
     automatic_escalation,
     capex_escalation_factor,
@@ -163,6 +164,10 @@ def test_dated_solar_bess_lcos_prices_the_battery_at_the_draws() -> None:
     by_hand = copy.deepcopy(raw)
     stated = float(by_hand["generation"]["technologies"]["bess_1"]["capex_usd"])
     by_hand["generation"]["technologies"]["bess_1"]["capex_usd"] = stated * factor
+    # #1899: the LCOS resolver refuses an unapplied price date, so the hand-escalated
+    # copy escalates the project total too and drops the declaration.
+    by_hand["capex"]["usd_total"] = float(by_hand["capex"]["usd_total"]) * factor
+    del by_hand["capex"]["price_basis"]
     (expected,) = compute_lcos_suite(
         by_hand, wacc=result.discount_rate, project_years=project_years
     )
@@ -170,9 +175,15 @@ def test_dated_solar_bess_lcos_prices_the_battery_at_the_draws() -> None:
     assert view["lcos_usd_per_mwh"] == pytest.approx(
         expected.lcos_usd_per_mwh, rel=1e-12
     )
+    # The stated price-year figures, without the declaration (the pre-#1578 reading).
+    stated_only = copy.deepcopy(raw)
+    del stated_only["capex"]["price_basis"]
     (at_price_year,) = compute_lcos_suite(
-        raw, wacc=result.discount_rate, project_years=project_years
+        stated_only, wacc=result.discount_rate, project_years=project_years
     )
+    # #1899: the raw scenario, with its price date unapplied, is refused.
+    with pytest.raises(UnappliedCapexPriceBasisError):
+        compute_lcos_suite(raw, wacc=result.discount_rate, project_years=project_years)
     assert view["lcos_usd_per_mwh"] > at_price_year.lcos_usd_per_mwh
     # A committed scenario states its capex only through usd_total and the technology
     # blocks, so nothing is escalated automatically and nothing is disclosed.

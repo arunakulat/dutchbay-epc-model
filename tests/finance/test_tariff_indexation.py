@@ -19,6 +19,7 @@ import pytest
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
 from finance.bess_revenue import bess_revenue_lkr_for_year, resolve_bess_specs
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows, build_annual_rows_efficient
 from finance.tariff_indexation import (
     OmIndexation,
@@ -46,7 +47,8 @@ _G = 0.30 * 0.05 + 0.70 * (1.05 / 1.025 - 1.0)
 
 
 def _cfg(path: Path) -> Dict[str, Any]:
-    return copy.deepcopy(load_scenario_config(path))
+    # #1899: as the pipeline evaluates it, with a declared capex price date applied.
+    return apply_capex_price_basis(copy.deepcopy(load_scenario_config(path)))
 
 
 def _with_block(block: Dict[str, Any] | None) -> Dict[str, Any]:

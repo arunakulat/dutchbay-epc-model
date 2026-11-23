@@ -28,6 +28,7 @@ import pytest
 import yaml
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import _prepare_cashflow_context, build_annual_rows
 from finance.cashflow_v14_params import (
     USD_FX_DRIFT_OVERRIDE,
@@ -43,7 +44,8 @@ HORIZON = 60  # drift entries: comfortably more than construction plus operating
 def _cfg() -> Dict[str, Any]:
     data = yaml.safe_load(WIND.read_text())
     assert isinstance(data, dict)
-    return data
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    return apply_capex_price_basis(data)
 
 
 def _split(cfg: Dict[str, Any]) -> Dict[str, Any]:

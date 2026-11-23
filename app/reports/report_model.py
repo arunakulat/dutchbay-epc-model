@@ -1194,6 +1194,51 @@ class LenderSensitivityBlock(BaseModel):
     parts_not_run: List[str] = Field(default_factory=list)
 
 
+class TariffStatusRow(BaseModel):
+    """One recorded rate behind a revenue figure, and its legal status (#1837)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Where the rate is used, in words ("Headline revenue", "Battery options: ...").
+    use: str
+    rate_id: Optional[str] = None
+    #: The rate in LKR/kWh, formatted; "n/a" for a formula with no single value.
+    value: str
+    status: str
+    status_label: str
+    #: Set when every figure built on this rate must print its status beside it.
+    needs_label: bool
+    instrument: str
+    clause: str
+    window: str
+    conditions: List[str] = Field(default_factory=list)
+    open_questions: List[str] = Field(default_factory=list)
+
+
+class TariffLegalStatusBlock(BaseModel):
+    """What the scenario's revenue rests on (#1837): status, instrument, effective window.
+
+    Labelling only. It never changes a tariff value or a KPI, and it is not a legal opinion.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    #: Whether the shared registry lists the scenario at all.
+    recorded: bool
+    #: One line printed beside the revenue in the statements.
+    headline_line: str
+    #: The headline revenue's status, for the badge beside it.
+    headline_status: str
+    headline_status_label: str
+    headline_needs_label: bool
+    rows: List[TariffStatusRow] = Field(default_factory=list)
+    #: Where the scenario's assumed SPPA signing date or COD falls outside a rate's window.
+    window_flags: List[str] = Field(default_factory=list)
+    #: The dates the window check used, in words.
+    dates_checked: str
+    registry: str
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1362,6 +1407,10 @@ class ReportContext(BaseModel):
     #: equity, FX, Pareto and Sobol. The command-line lender report fills it when switched
     #: on; None (the default) omits the section.
     lender_sensitivities: Optional[LenderSensitivityBlock] = None
+    #: Tariff legal status (#1837): what the revenue rests on, printed beside it. The
+    #: command-line lender report fills it; None (the default) omits it, so every other
+    #: report stays byte-identical.
+    tariff_legal_status: Optional[TariffLegalStatusBlock] = None
 
 
 def _build_kpi_rows(
@@ -1440,6 +1489,23 @@ def _scenario_number(value: Any) -> Optional[float]:
     return number if math.isfinite(number) else None
 
 
+def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
+    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
+
+    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
+    restated here because the report layer takes no import on the finance package (the
+    debt-package boundary lint and the architecture diagram both refuse one). A test pins
+    the two to the same answers (#1862).
+    """
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
 def _scenario_covenants(
     defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
 ) -> Covenants:
@@ -1461,14 +1527,17 @@ def _scenario_covenants(
         The covenants to test, with their sources.
     """
     constraints = (
-        scenario_config.get("constraints")
+        _lookup_key_as_engine(scenario_config, "constraints")
         if isinstance(scenario_config, Mapping)
         else None
     )
     if not isinstance(constraints, Mapping):
         return defaults
     update: Dict[str, Any] = {}
-    floor = _scenario_number(constraints.get("min_dscr_covenant"))
+    # Each key is read as the engine reads it (#1862, DOM-4 on #1860): the section name
+    # in any case; ``min_dscr_covenant`` in any case, as the equity lock-up reads it;
+    # ``max_balloon_pct`` exactly, as ``finance.debt.plan.resolve_max_balloon_pct`` does.
+    floor = _scenario_number(_lookup_key_as_engine(constraints, "min_dscr_covenant"))
     if floor is not None:
         update["min_dscr_floor"] = floor
         update["min_dscr_floor_source"] = "scenario"

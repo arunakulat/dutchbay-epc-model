@@ -26,7 +26,13 @@ def _section_case_insensitive(
     return value if isinstance(value, Mapping) else None
 
 
-def _required_number(value: Any, path: str) -> float:
+def _required_number(
+    value: Any,
+    path: str,
+    *,
+    minimum: Optional[float] = None,
+    maximum: Optional[float] = None,
+) -> float:
     """Return a required financing term as a finite float, or refuse naming ``path``.
 
     The debt engine used to fill an absent gearing, target DSCR, flat downside factor,
@@ -37,12 +43,17 @@ def _required_number(value: Any, path: str) -> float:
     Args:
         value: The declared value, or ``None`` when the key is absent.
         path: The YAML path to name in the refusal, e.g. ``Financing_Terms.debt_ratio``.
+        minimum: The smallest value the term may take, inclusive, or ``None`` for no bound.
+        maximum: The largest value the term may take, inclusive, or ``None`` for no bound.
+            A fraction bounded by 1 is not read as a percentage: ``10`` is refused, not
+            taken to mean 10% (#1862).
 
     Returns:
         The declared value as a float.
 
     Raises:
-        ValueError: If the value is absent, a boolean, not numeric or not finite.
+        ValueError: If the value is absent, a boolean, not numeric, not finite, or outside
+            ``[minimum, maximum]``.
     """
     # A YAML boolean is not a number: ``as_float`` would read ``true`` as 1.0.
     number = None if isinstance(value, bool) else as_float(value, None)
@@ -51,6 +62,16 @@ def _required_number(value: Any, path: str) -> float:
             f"{path} is required and must be a finite number (got {value!r}); "
             "there is no code default (#1429). Declare it in the scenario YAML."
         )
+    if (minimum is not None and number < minimum) or (
+        maximum is not None and number > maximum
+    ):
+        if maximum is None:
+            bound = f"at least {minimum:g}"
+        elif minimum is None:
+            bound = f"at most {maximum:g}"
+        else:
+            bound = f"between {minimum:g} and {maximum:g} inclusive"
+        raise ValueError(f"{path} must be {bound} (got {value!r}) (#1862).")
     return float(number)
 
 

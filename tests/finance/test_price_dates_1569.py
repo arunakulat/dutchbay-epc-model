@@ -267,7 +267,8 @@ def test_opex_price_dates_that_cannot_be_used_are_refused(
 
 def test_single_currency_opex_escalates_from_its_price_year() -> None:
     """On the wind scenario without its split: O * 1.05 ** (t + 2028 - 2026), bit-exact."""
-    cfg = _yaml(WIND)
+    # #1899: as the pipeline evaluates it, with the declared capex price date applied.
+    cfg = apply_capex_price_basis(_yaml(WIND))
     del cfg["opex"]["currency_split"]
     total = float(cfg["opex"]["usd_per_year"])
     rows = build_annual_rows(cfg)
