@@ -17,6 +17,7 @@ tests pin that, using the two committed dated scenarios.
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
@@ -29,7 +30,11 @@ from analytics.storage_headline import apply_headline_storage_option
 from analytics.three_statement import build_three_statement_from_run
 from app.api.responses import CaseResult
 from app.reports.report_model import ReportContext, build_report_context
-from finance.capex_price_basis import APPLIED_KEY, apply_capex_price_basis
+from finance.capex_price_basis import (
+    APPLIED_KEY,
+    UnappliedCapexPriceBasisError,
+    apply_capex_price_basis,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WIND = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
@@ -97,14 +102,18 @@ def test_paid_in_equity_carries_the_escalation(
     assert statements is not None
     year1 = statements.balance_sheet[0]
 
-    # Negative control: the statements on the un-escalated YAML (the pre-fix behaviour).
-    unescalated = build_three_statement_from_run(
-        {
-            "annual_rows": list(run["annual_rows"]),
-            "debt_result": dict(run["debt_result"]),
-        },
-        reloaded,
-    )
+    run_parts = {
+        "annual_rows": list(run["annual_rows"]),
+        "debt_result": dict(run["debt_result"]),
+    }
+    # #1899: the statements refuse the re-loaded YAML whose price date is unapplied.
+    with pytest.raises(UnappliedCapexPriceBasisError):
+        build_three_statement_from_run(run_parts, reloaded)
+    # Negative control: the statements on the stated capex (the pre-#1569 behaviour),
+    # reproduced by dropping the price-date declaration.
+    stated_only = copy.deepcopy(dict(reloaded))
+    del stated_only["capex"]["price_basis"]
+    unescalated = build_three_statement_from_run(run_parts, stated_only)
     assert unescalated is not None
     stale = unescalated.balance_sheet[0]
 

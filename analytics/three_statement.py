@@ -356,8 +356,10 @@ def _resolve_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     # stay byte-identical. This adds a call-time finance import (the CCCDIR-pure module
     # otherwise holds none) exactly as metrics._derive_capex_usd and
     # equity_distribution_v14_hydra already do.
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.import_levies import has_taxes_indirect
 
+    refuse_unapplied_price_basis(config, "the three-statement capex resolver")
     capex_section = config.get("capex") if isinstance(config, Mapping) else None
     derive_from_breakdown = isinstance(capex_section, Mapping) and bool(
         capex_section.get("derive_from_breakdown")

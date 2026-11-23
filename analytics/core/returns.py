@@ -89,6 +89,9 @@ class ReturnsConfig(BaseModel):
 
         CESSPIT: Fail-fast if required keys missing.
         """
+        from finance.capex_price_basis import refuse_unapplied_price_basis
+
+        refuse_unapplied_price_basis(config, "ReturnsConfig.from_yaml")
         try:
             capex_usd = float(config["capex"]["usd_total"])
             capex_fx_rate = float(config["fx"]["start_lkr_per_usd"])

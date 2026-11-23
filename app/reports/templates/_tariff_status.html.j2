@@ -1,0 +1,43 @@
+{#- Tariff legal status (#1837): what the scenario's revenue rests on, built by
+    app/reports/tariff_status_section.py. Included by report.html.j2 only when
+    ctx.tariff_legal_status is set, so other reports are byte-identical. -#}
+{%- set ts = ctx.tariff_legal_status %}
+  <section class="page tariff-status">
+    <h2>Tariff Basis and Legal Status</h2>
+    <p>Revenue:
+      {%- if ts.headline_status == "published" %} <span class="badge pass">{{ ts.headline_status_label }}</span>
+      {%- else %} <span class="badge fail">{{ ts.headline_status_label }}</span>{% endif %}
+      {{ ts.headline_line }}</p>
+    <table>
+      <thead><tr><th>Used for</th><th>Rate</th><th>Status</th><th>Instrument and clause</th><th>Effective</th></tr></thead>
+      <tbody>
+        {% for r in ts.rows %}
+        <tr><td>{{ r.use }}</td><td class="num">{{ r.value }}</td>
+          <td>{% if r.needs_label %}<strong>{{ r.status_label }}</strong>{% else %}{{ r.status_label }}{% endif %}</td>
+          <td>{{ r.instrument }}; {{ r.clause }}</td><td>{{ r.window }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% set shown = namespace(ids=[]) %}
+    {% for r in ts.rows if r.rate_id not in shown.ids %}
+    {% set shown.ids = shown.ids + [r.rate_id] %}
+    {% for c in r.conditions %}
+    <p class="muted"><strong>Condition ({{ r.rate_id }}):</strong> {{ c }}</p>
+    {% endfor %}
+    {% for q in r.open_questions %}
+    <p class="fx-warning"><strong>Open question ({{ r.rate_id }}):</strong> {{ q }}</p>
+    {% endfor %}
+    {% endfor %}
+    {% if ts.window_flags %}
+    <div class="fx-warning"><strong>Outside the effective window.</strong>
+      <ul class="notes">
+        {% for f in ts.window_flags %}
+        <li>{{ f }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    <p class="muted">Effective-window check: {{ ts.dates_checked }}. Statuses come from
+      {{ ts.registry }}. This records what each rate rests on; it is not a legal opinion, and
+      eligibility stays a question for the regulator, the system operator or counsel.</p>
+  </section>
