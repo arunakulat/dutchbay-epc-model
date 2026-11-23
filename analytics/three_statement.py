@@ -246,6 +246,7 @@ def build_three_statement(
     cash = opening_cash
     prev_reserve = opening_cash if equity_schedule is not None else 0.0
     wf_spv_cash = opening_cash
+    locked_cash_bal = 0.0
     retained_cash_bal = 0.0
     accum_dep = 0.0
     cum_aug = 0.0
@@ -341,16 +342,22 @@ def build_three_statement(
 
             reserve_mov = wf_reserve_balance - prev_reserve
             prior_retained_bal = retained_cash_bal
+            non_reserve = max(0.0, cash - wf_reserve_balance)
             if t == n_rows - 1 and wf_reserve_balance == 0.0 and abs(cash) <= tolerance:
                 locked_cash_bal = 0.0
                 retained_cash_bal = 0.0
-            elif covenant_locked:
-                locked_cash_bal = max(
-                    0.0, cash - wf_reserve_balance - retained_cash_bal
-                )
+            elif covenant_locked or (
+                locked_cash_bal > 0.0
+                and eq_dist < 0.0
+                and _f(er, "retained_cash_usd") == 0.0
+            ):
+                # Locked cash is exhausted before retained cash, and retained cash never
+                # grows while covenant-locked or in a non-distributing shortfall branch.
+                retained_cash_bal = min(retained_cash_bal, non_reserve)
+                locked_cash_bal = max(0.0, non_reserve - retained_cash_bal)
             else:
                 locked_cash_bal = 0.0
-                retained_cash_bal = max(0.0, cash - wf_reserve_balance)
+                retained_cash_bal = non_reserve
 
             wf_spv_cash += (
                 cf_pre_debt_wf
@@ -362,10 +369,12 @@ def build_three_statement(
                 - eq_dist
                 + terminal_value
             )
+            partition_sum = wf_reserve_balance + locked_cash_bal + retained_cash_bal
             period_wf_res = max(
                 abs((-distributions_cf) - eq_dist),
                 abs(reserve_mov - (wf_reserve_balance - prev_reserve)),
                 abs(cash - wf_spv_cash),
+                abs(partition_sum - cash),
                 abs(service - _f(er, "debt_service_usd")),
                 abs((balloon + refi_interest) - _f(er, "balloon_resolution_usd")),
                 max(0.0, -cash),
@@ -1051,6 +1060,16 @@ def verify_three_statement_waterfall_tieout(
             raise ValueError(
                 f"Year {year}: statement closing_cash {cf.closing_cash:.2f} < "
                 f"DSRA reserve balance {wf_res_bal:.2f}"
+            )
+        partition_sum = (
+            cf.reserve_balance + cf.locked_cash_balance + cf.retained_cash_balance
+        )
+        if abs(partition_sum - cf.closing_cash) > tolerance:
+            raise ValueError(
+                f"Year {year}: SPV cash partition (reserve {cf.reserve_balance:.2f} + "
+                f"locked {cf.locked_cash_balance:.2f} + "
+                f"retained {cf.retained_cash_balance:.2f} = {partition_sum:.2f}) != "
+                f"closing_cash {cf.closing_cash:.2f}"
             )
         if t == n_rows - 1 and abs(cf.closing_cash) > tolerance:
             raise ValueError(

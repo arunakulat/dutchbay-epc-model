@@ -242,3 +242,152 @@ def test_negative_control_diverging_distribution_or_reserve_fails_tieout() -> No
     )
     with pytest.raises(ValueError, match="reserve_balance"):
         verify_three_statement_waterfall_tieout(bad_res_ts, ed)
+
+    # Control 4: Broken SPV cash partition (reserve + locked + retained != closing_cash)
+    # is caught by verify_three_statement_waterfall_tieout even when totals balance.
+    bad_part_cf = replace(
+        ts.cash_flow[0],
+        retained_cash_balance=ts.cash_flow[0].retained_cash_balance + 50_000.0,
+    )
+    bad_part_ts = ThreeStatementResult(
+        currency=ts.currency,
+        income_statement=ts.income_statement,
+        cash_flow=[bad_part_cf, *ts.cash_flow[1:]],
+        balance_sheet=ts.balance_sheet,
+        tie_outs=ts.tie_outs,
+    )
+    with pytest.raises(ValueError, match="SPV cash partition"):
+        verify_three_statement_waterfall_tieout(bad_part_ts, ed)
+
+
+def test_covenant_locked_drawdown_of_prior_retained_cash_preserves_partition() -> None:
+    """Locked drawdown of prior holdback/retained cash keeps partition == closing_cash."""
+    from finance.equity_distribution_v14_hydra import (
+        EquityDistributionConfig,
+        build_equity_distribution_schedule,
+    )
+
+    # Year 1: unlocked, CFADS 40 vs DS 20 -> 50% holdback retains 10, distributes 10.
+    # Year 2: locked (DSCR 1.15 < 1.25), CFADS 23 vs DS 20 -> traps 3 in locked_cash.
+    # Year 3: locked shortfall (DSCR 0.75 < 1.25), CFADS 15 vs DS 20 -> draws locked 3
+    #         first, then 2 from prior retained -> retained drops 10 -> 8, locked -> 0.
+    # Year 4: unlocked, CFADS 30 vs DS 20 -> terminal release of remaining 8.
+    annual_rows = [
+        {
+            "year": 1,
+            "revenue_lkr": 4000.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 4000.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 5.0,
+            "debt_service_total": 20.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 40.0,
+            "dscr": 2.0,
+        },
+        {
+            "year": 2,
+            "revenue_lkr": 2300.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 2300.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 5.0,
+            "debt_service_total": 20.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 23.0,
+            "dscr": 1.15,
+        },
+        {
+            "year": 3,
+            "revenue_lkr": 1500.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 1500.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 5.0,
+            "debt_service_total": 20.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 15.0,
+            "dscr": 0.75,
+        },
+        {
+            "year": 4,
+            "revenue_lkr": 3000.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 3000.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 5.0,
+            "debt_service_total": 20.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 30.0,
+            "dscr": 1.5,
+        },
+    ]
+    debt_result: Dict[str, Any] = {
+        "debt_total": 60.0,
+        "total_idc": 0.0,
+        "balloon_residual": 0.0,
+    }
+    dist_cfg = EquityDistributionConfig(
+        project_life_years=4,
+        min_dscr_threshold=1.25,
+        min_reserve_months=0,
+        holdback_pct=50.0,
+        allow_default_equity_investment=True,
+        default_equity_investment_usd=40.0,
+    )
+    schedule = build_equity_distribution_schedule(
+        annual_rows=annual_rows,
+        debt_result=debt_result,
+        distribution_config=dist_cfg,
+    )
+    pipeline_result = {
+        "annual_rows": annual_rows,
+        "debt_result": debt_result,
+        "equity_distribution": {
+            "status": "computed",
+            "annual_distributions": schedule,
+        },
+    }
+    config: Dict[str, Any] = {
+        "capex": {"usd_total": 100.0},
+        "equity_distribution": {
+            "project_life_years": 4,
+            "min_dscr_threshold": 1.25,
+            "min_reserve_months": 0,
+            "holdback_pct": 50.0,
+        },
+    }
+    ts = build_three_statement_from_run(pipeline_result, config)
+    assert ts is not None and ts.tie_outs is not None
+    assert ts.tie_outs.all_pass is True
+    assert ts.tie_outs.waterfall_reconciles is True
+    verify_three_statement_waterfall_tieout(ts, pipeline_result["equity_distribution"])
+
+    # Verify exact partition at every year:
+    # Yr 1: closing=10 (res=0, locked=0, retained=10)
+    # Yr 2: closing=13 (res=0, locked=3, retained=10)
+    # Yr 3: closing=8  (res=0, locked=0, retained=8)  <- locked exhausted first, then retained
+    # Yr 4: closing=0  (res=0, locked=0, retained=0)
+    assert ts.cash_flow[0].closing_cash == pytest.approx(10.0)
+    assert ts.cash_flow[0].retained_cash_balance == pytest.approx(10.0)
+    assert ts.cash_flow[0].locked_cash_balance == pytest.approx(0.0)
+
+    assert ts.cash_flow[1].closing_cash == pytest.approx(13.0)
+    assert ts.cash_flow[1].locked_cash_balance == pytest.approx(3.0)
+    assert ts.cash_flow[1].retained_cash_balance == pytest.approx(10.0)
+
+    assert ts.cash_flow[2].closing_cash == pytest.approx(8.0)
+    assert ts.cash_flow[2].locked_cash_balance == pytest.approx(0.0)
+    assert ts.cash_flow[2].retained_cash_balance == pytest.approx(8.0)
+
+    assert ts.cash_flow[3].closing_cash == pytest.approx(0.0)
+    assert ts.cash_flow[3].locked_cash_balance == pytest.approx(0.0)
+    assert ts.cash_flow[3].retained_cash_balance == pytest.approx(0.0)
