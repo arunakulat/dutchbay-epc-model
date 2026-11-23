@@ -42,6 +42,7 @@ from app.reports.report_orchestration import (
     compute_report_sensitivity,
     run_report_case,
 )
+from app.reports.what_if_lender_risk_section import SECTION_WHAT_IF_LENDER_RISK
 from app.services.report_global_sa import GlobalSABlock, GlobalSADriver
 from app.services.report_tornado import TornadoBlock, TornadoRow
 
@@ -161,13 +162,13 @@ def test_cli_report_has_the_api_report_sections(
     assert [h for h in cli_h2s if not h.startswith(cli_only)] == _h2s(api_html)
     for section in ("Sensitivity Tornado", "Morris Screening", "PAWN"):
         assert any(section in h for h in _h2s(cli_html)), section
-    # The capital-structure screening, the lender sensitivities and the cost and storage
-    # section (#1825 slices i to iii) are opt-in and off by default.
+    # The #1825 opt-in analytics sections (slices i to iv) are off by default.
     assert [s.section for s in out.sections_not_run] == [
         SECTION_CAPITAL_STRUCTURE,
         SECTION_LENDER_SENSITIVITIES,
         SECTION_COST_STORAGE,
         SECTION_CAPITAL_RISK,
+        SECTION_WHAT_IF_LENDER_RISK,
     ]
 
 
@@ -230,11 +231,13 @@ def test_every_section_left_out_is_listed_with_its_reason(
         SECTION_LENDER_SENSITIVITIES,
         SECTION_COST_STORAGE,
         SECTION_CAPITAL_RISK,
+        SECTION_WHAT_IF_LENDER_RISK,
     ]
     assert "outcome: degraded" in listed[SECTION_TORNADO]
     assert "switched off" in listed[SECTION_CAPITAL_STRUCTURE]
     assert "switched off" in listed[SECTION_LENDER_SENSITIVITIES]
     assert "switched off" in listed[SECTION_COST_STORAGE]
+    assert "switched off" in listed[SECTION_WHAT_IF_LENDER_RISK]
     # The scenario declares no Monte Carlo block, so neither screening nor the
     # capital-risk Monte Carlo has anything to sample (and the builder is never called).
     assert "monte_carlo.parameters" in listed[SECTION_MORRIS]
@@ -348,11 +351,12 @@ def test_a_shared_capital_risk_report_is_used_as_is(
         sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
         capital_risk_builder=_not_called,
     )
-    # Only the opt-in #1825 sections (slices i to iii, off by default) are left out.
+    # Only the opt-in #1825 sections (slices i to iv, off by default) are left out.
     assert [s.section for s in out.sections_not_run] == [
         SECTION_CAPITAL_STRUCTURE,
         SECTION_LENDER_SENSITIVITIES,
         SECTION_COST_STORAGE,
+        SECTION_WHAT_IF_LENDER_RISK,
     ]
     html = out.html_path.read_text(encoding="utf-8")
     assert f"{shared.n_trials}" in html
@@ -486,6 +490,91 @@ def test_a_built_cost_storage_block_reaches_the_report(
     html = out.html_path.read_text(encoding="utf-8")
     assert "<h2>Cost and Storage</h2>" in html
     assert "LCOS: not run: the scenario has no battery" in html
+
+
+def test_a_what_if_lender_risk_builder_failure_is_listed_not_raised(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1825 slice iv: an unexpected builder failure never sinks the report."""
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+
+    def _raises(*_a: Any, **_k: Any) -> Any:
+        raise RuntimeError("what-if block malformed")
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        what_if_lender_risk_builder=_raises,
+    )
+    listed = {s.section: s.reason for s in out.sections_not_run}
+    assert listed[SECTION_WHAT_IF_LENDER_RISK] == (
+        "not run: could not be built (RuntimeError: what-if block malformed)"
+    )
+    assert out.html_path.exists()
+
+
+def test_a_built_what_if_lender_risk_block_reaches_the_report(
+    lender_run: Dict[str, Any], tmp_path: Path
+) -> None:
+    """#1825 slice iv: switched on, the built section renders, not listed as not run."""
+    from app.reports.report_model import (
+        CasperCovenantSummary,
+        CasperLenderRiskBlock,
+        WhatIfLenderRiskBlock,
+    )
+    from app.reports.what_if_lender_risk_section import WhatIfLenderRiskSettings
+
+    shared = build_capital_risk_report_for_scenario(
+        _LENDER_CFG, tmp_path / "cr", n_trials=40, min_trials=20
+    )
+    block = WhatIfLenderRiskBlock(
+        casper_lender_risk=CasperLenderRiskBlock(
+            scenario="DutchBay Wind Farm",
+            method="lhs sampling",
+            n_trials=1000,
+            seed=42,
+            allow_toy_fallback=False,
+            covenant=CasperCovenantSummary(
+                dscr_floor=1.30,
+                prob_breach=0.0,
+                floor_pinned=True,
+                worst_year_dscr_p95_downside=1.30,
+                n_trials=1000,
+                n_total_trials=1000,
+                unavailable_trials=0,
+            ),
+        ),
+        parts_not_run=["What-if cases (#1403): not run: test reason"],
+    )
+
+    def _builder(
+        _path: Any, _scenario: Any, settings: Any, *, mc_result: Any = None
+    ) -> Any:
+        assert settings.enabled is True
+        return block
+
+    out = emit_lender_report_from_pipeline(
+        lender_run,
+        _LENDER_CFG,
+        tmp_path / "lender_report.html",
+        capital_risk=shared,
+        require_pdf=False,
+        sensitivity_computer=lambda scenario, *, profile: _bundle(scenario),
+        capital_risk_builder=_not_called,
+        what_if_lender_risk=WhatIfLenderRiskSettings(enabled=True),
+        what_if_lender_risk_builder=_builder,
+    )
+    assert SECTION_WHAT_IF_LENDER_RISK not in {s.section for s in out.sections_not_run}
+    html = out.html_path.read_text(encoding="utf-8")
+    assert "<h2>What-If Cases &amp; Lender Risk</h2>" in html
+    assert "What-if cases (#1403): not run: test reason" in html
 
 
 def test_a_built_capital_structure_block_reaches_the_report(
@@ -884,6 +973,28 @@ def test_cli_leaves_the_capital_structure_section_off_by_default(
     calls = _run_cli(tmp_path, monkeypatch)
     capsys.readouterr()
     assert calls["capital_structure"].enabled is False
+    assert calls["what_if_lender_risk"].enabled is False
+
+
+def test_cli_passes_the_what_if_lender_risk_settings_to_the_lender_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1825 slice iv: lender_report.what_if_lender_risk reaches the report."""
+    calls = _run_cli(
+        tmp_path,
+        monkeypatch,
+        lender_report={
+            "what_if_lender_risk": {
+                "enabled": True,
+                "mc": {"trials": 1200, "seed": 77},
+            }
+        },
+    )
+    capsys.readouterr()
+    settings = calls["what_if_lender_risk"]
+    assert settings.enabled is True
+    assert settings.mc_trials == 1200
+    assert settings.mc_seed == 77
 
 
 # ── a technology-neutral subtitle (A-4) ───────────────────────────────────────
