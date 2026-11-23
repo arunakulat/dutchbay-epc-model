@@ -1,0 +1,328 @@
+{
+  "schema": "dutchbay.dfi_workbook.libreoffice_display_oracle.v1",
+  "issue": "#1906",
+  "generator": "LibreOffice 26.8.2.2",
+  "csv_filter_options": "44,34,76,1,,0,false,true,true",
+  "cases": [
+    {
+      "id": "text-hidden",
+      "value": "Fund A",
+      "value_type": "str",
+      "number_format": ";;;",
+      "expected_accepted": false,
+      "libreoffice_shown": ""
+    },
+    {
+      "id": "text-replaced",
+      "value": "Fund A",
+      "value_type": "str",
+      "number_format": ";;;\"X\"",
+      "expected_accepted": false,
+      "libreoffice_shown": "X"
+    },
+    {
+      "id": "text-general-control",
+      "value": "Fund A",
+      "value_type": "str",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "Fund A"
+    },
+    {
+      "id": "sign-dropped",
+      "value": -1234.5,
+      "value_type": "float",
+      "number_format": "0.0;0.0",
+      "expected_accepted": false,
+      "libreoffice_shown": "1234.5"
+    },
+    {
+      "id": "neg-0.0-control",
+      "value": -1234.5,
+      "value_type": "float",
+      "number_format": "0.0",
+      "expected_accepted": true,
+      "libreoffice_shown": "-1234.5"
+    },
+    {
+      "id": "neg-explicit-minus",
+      "value": -1234.5,
+      "value_type": "float",
+      "number_format": "0.0;-0.0",
+      "expected_accepted": true,
+      "libreoffice_shown": "-1234.5"
+    },
+    {
+      "id": "neg-parens",
+      "value": -1234.5,
+      "value_type": "float",
+      "number_format": "0.0;(0.0)",
+      "expected_accepted": true,
+      "libreoffice_shown": "(1234.5)"
+    },
+    {
+      "id": "affix-wording",
+      "value": 1.5,
+      "value_type": "float",
+      "number_format": "0.00\" (lender case)\"",
+      "expected_accepted": false,
+      "libreoffice_shown": "1.50 (lender case)"
+    },
+    {
+      "id": "affix-control",
+      "value": 1.5,
+      "value_type": "float",
+      "number_format": "0.00",
+      "expected_accepted": true,
+      "libreoffice_shown": "1.50"
+    },
+    {
+      "id": "unit-m-scaled",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0.0,,\" m\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "1.2 m"
+    },
+    {
+      "id": "unit-mn-scaled",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0.0,,\" mn\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "1.2 mn"
+    },
+    {
+      "id": "unit-usd-m-scaled",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0.0,,\" USD m\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "1.2 USD m"
+    },
+    {
+      "id": "unit-k-scaled",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0,\"k\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "1,235k"
+    },
+    {
+      "id": "unit-lkr-per-kwh",
+      "value": 42.5,
+      "value_type": "float",
+      "number_format": "0.00\" LKR/kWh\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "42.50 LKR/kWh"
+    },
+    {
+      "id": "unit-bps",
+      "value": 25,
+      "value_type": "int",
+      "number_format": "0\" bps\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "25 bps"
+    },
+    {
+      "id": "unit-months",
+      "value": 18,
+      "value_type": "int",
+      "number_format": "0\" months\"",
+      "expected_accepted": true,
+      "libreoffice_shown": "18 months"
+    },
+    {
+      "id": "unit-eur",
+      "value": 1500,
+      "value_type": "int",
+      "number_format": "\"EUR \"#,##0",
+      "expected_accepted": true,
+      "libreoffice_shown": "EUR 1,500"
+    },
+    {
+      "id": "unit-inr",
+      "value": 1500,
+      "value_type": "int",
+      "number_format": "\"INR \"#,##0",
+      "expected_accepted": true,
+      "libreoffice_shown": "INR 1,500"
+    },
+    {
+      "id": "unit-general-control",
+      "value": 1500,
+      "value_type": "int",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "1500"
+    },
+    {
+      "id": "unit-non-iso-zzz",
+      "value": 1500,
+      "value_type": "int",
+      "number_format": "\"ZZZ \"#,##0",
+      "expected_accepted": false,
+      "libreoffice_shown": "ZZZ 1,500"
+    },
+    {
+      "id": "mixed-pct-neg",
+      "value": -0.5,
+      "value_type": "float",
+      "number_format": "0.00;-0.00%",
+      "expected_accepted": false,
+      "libreoffice_shown": "-50.00%"
+    },
+    {
+      "id": "mixed-pct-pos",
+      "value": 0.5,
+      "value_type": "float",
+      "number_format": "0.00;-0.00%",
+      "expected_accepted": false,
+      "libreoffice_shown": "0.50"
+    },
+    {
+      "id": "mixed-comma-scale",
+      "value": -1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0;-#,##0,,\" m\"",
+      "expected_accepted": false,
+      "libreoffice_shown": "-1 m"
+    },
+    {
+      "id": "mixed-general-control",
+      "value": -0.5,
+      "value_type": "float",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "-0.5"
+    },
+    {
+      "id": "uniform-pct",
+      "value": -0.5,
+      "value_type": "float",
+      "number_format": "0.00%;-0.00%",
+      "expected_accepted": true,
+      "libreoffice_shown": "-50.00%"
+    },
+    {
+      "id": "bool-at-true",
+      "value": true,
+      "value_type": "bool",
+      "number_format": "@",
+      "expected_accepted": false,
+      "libreoffice_shown": "1"
+    },
+    {
+      "id": "bool-at-false",
+      "value": false,
+      "value_type": "bool",
+      "number_format": "@",
+      "expected_accepted": false,
+      "libreoffice_shown": "0"
+    },
+    {
+      "id": "bool-general-true",
+      "value": true,
+      "value_type": "bool",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "TRUE"
+    },
+    {
+      "id": "bool-general-false",
+      "value": false,
+      "value_type": "bool",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "FALSE"
+    },
+    {
+      "id": "text-at-control",
+      "value": "USD",
+      "value_type": "str",
+      "number_format": "@",
+      "expected_accepted": true,
+      "libreoffice_shown": "USD"
+    },
+    {
+      "id": "text-general-ccy-control",
+      "value": "USD",
+      "value_type": "str",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "USD"
+    },
+    {
+      "id": "hash-only-blank",
+      "value": 0,
+      "value_type": "int",
+      "number_format": "#.##",
+      "expected_accepted": false,
+      "libreoffice_shown": ""
+    },
+    {
+      "id": "hash-only-dot-zero",
+      "value": 0,
+      "value_type": "int",
+      "number_format": "#.00",
+      "expected_accepted": false,
+      "libreoffice_shown": ".00"
+    },
+    {
+      "id": "zero-section-hash",
+      "value": 0,
+      "value_type": "int",
+      "number_format": "0.0;-0.0;#",
+      "expected_accepted": false,
+      "libreoffice_shown": ""
+    },
+    {
+      "id": "question-marks-spaces",
+      "value": 0,
+      "value_type": "int",
+      "number_format": "???",
+      "expected_accepted": false,
+      "libreoffice_shown": "   "
+    },
+    {
+      "id": "zero-general-control",
+      "value": 0,
+      "value_type": "int",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "0"
+    },
+    {
+      "id": "bare-scaling-commas-int",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "0,,",
+      "expected_accepted": false,
+      "libreoffice_shown": "1"
+    },
+    {
+      "id": "bare-scaling-commas-dec",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0.0,,",
+      "expected_accepted": false,
+      "libreoffice_shown": "1.2"
+    },
+    {
+      "id": "mismatched-scale-token",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "#,##0.0,,\"k\"",
+      "expected_accepted": false,
+      "libreoffice_shown": "1.2k"
+    },
+    {
+      "id": "scaled-general-control",
+      "value": 1234567.5,
+      "value_type": "float",
+      "number_format": "General",
+      "expected_accepted": true,
+      "libreoffice_shown": "1234567.5"
+    }
+  ]
+}
