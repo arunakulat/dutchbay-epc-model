@@ -1,0 +1,32 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Independent PySAM energy cross-check of one committed wind scenario (#1888)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/run_pysam_energy_crosscheck.py. Record:
+# docs/wind/pysam_energy_crosscheck_1888.json; write-up:
+# docs/wind/pysam_energy_crosscheck_1888.md; staleness test:
+# tests/wind/test_pysam_energy_crosscheck_1888.py.
+#
+# PySAM is NOT a dependency of this repository (owner ruling of 2026-11-22: an out-of-repo
+# run pinned by SHA-256). The run happens in a throwaway environment that adds the pinned
+# wheel below; the repository keeps only the runner, this config and the record. The
+# energy inputs all come from the scenario named here and the power-curve store it keys
+# into. Nothing in this file is an energy input.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+crosscheck:
+  # The committed wind scenario whose energy is cross-checked, and the curve store its
+  # resource.power_curve.curve_key indexes.
+  scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+  power_curve_store: wind_resource/config/power_curves.yaml
+  # Agreement band, in percent of the committed figure, for gross, modelled net and
+  # bankable net energy. PySAM's Weibull mode is a midpoint sum on a 0.25 m/s grid and the
+  # repository's integrator a trapezoid on a 0.05 m/s grid; on this resource the two
+  # methods differ by a few hundredths of a percent, so 0.5% is wide enough for method
+  # noise and narrow enough that a missed density correction (about 4%) fails it.
+  tolerance_pct: 0.5
+  # The exact PySAM release the record was produced with. The runner refuses any other.
+  pysam:
+    distribution: NREL-PySAM
+    version: 7.1.1.post1
+  # A path writes the record there as well as printing it.
+  summary_json: null
