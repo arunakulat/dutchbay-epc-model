@@ -31,6 +31,10 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from finance.cashflow_v14_tax import (
+    declared_project_jurisdiction,
+    resolve_direct_tax_from_pack,
+)
 from finance.debt_v14 import DSRA_TARGET_BASIS
 from finance.equity_v14 import (
     calculate_cash_on_cash,
@@ -302,55 +306,76 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     # bears it as a cash cost only when wht_gross_up. Both default off -> byte-identical.
     tax_section = _section_case_insensitive(config, "tax") or {}
     wht_enabled = bool(_lookup_case_insensitive(tax_section, "wht_on_interest_enabled"))
-    # FIN-12 (#482): fail loud on an ENABLED-but-rate-ABSENT inconsistency. With the rate key
-    # missing the gated idiom below silently resolves to 0.0, so the equity waterfall would
-    # under-charge WHT and OVERSTATE equity_irr/npv (the public-API footgun — a raw config can
-    # enable WHT without supplying the rate). An explicit 0.0 rate is legitimate (no charge);
-    # only an absent key while enabled is the bug.
-    if wht_enabled and (
-        _lookup_case_insensitive(tax_section, "wht_on_interest_to_nonresidents") is None
-    ):
-        raise ValueError(
-            "tax.wht_on_interest_enabled is true but tax.wht_on_interest_to_nonresidents "
-            "(the rate) is absent — interest WHT would silently resolve to 0 and the equity "
-            "waterfall would under-charge. Declare the rate (e.g. 0.10) or disable the flag."
-        )
-    wht_rate = (
-        float(
-            _as_float(
-                _lookup_case_insensitive(
-                    tax_section, "wht_on_interest_to_nonresidents"
-                ),
-                0.0,
-            )
-            or 0.0
-        )
-        if wht_enabled
-        else 0.0
-    )
-    wht_gross_up = bool(_lookup_case_insensitive(tax_section, "wht_gross_up"))
-
-    # Dividend WHT (#81): same gated-rate idiom as interest WHT above. Default-off.
     div_wht_enabled = bool(
         _lookup_case_insensitive(tax_section, "wht_on_dividends_enabled")
     )
-    # FIN-12 (#482): symmetric guard — enabled dividend WHT must declare its rate.
-    if div_wht_enabled and (
-        _lookup_case_insensitive(tax_section, "wht_on_dividends") is None
-    ):
-        raise ValueError(
-            "tax.wht_on_dividends_enabled is true but tax.wht_on_dividends (the rate) is "
-            "absent — dividend WHT would silently resolve to 0 and the equity waterfall "
-            "would under-charge the sponsor. Declare the rate (e.g. 0.15) or disable the flag."
-        )
-    div_wht_rate = (
-        float(
-            _as_float(_lookup_case_insensitive(tax_section, "wht_on_dividends"), 0.0)
-            or 0.0
-        )
-        if div_wht_enabled
-        else 0.0
+    resolved_tax = (
+        resolve_direct_tax_from_pack(config)
+        if (wht_enabled or div_wht_enabled)
+        and declared_project_jurisdiction(config) is not None
+        else None
     )
+
+    if resolved_tax is not None:
+        if resolved_tax.wht_on_interest_by_year is not None and wht_enabled:
+            raise ValueError(
+                "equity_distribution does not yet support time-varying "
+                "wht_on_interest_to_nonresidents across operating periods (#1841)"
+            )
+        wht_rate = resolved_tax.wht_on_interest_to_nonresidents if wht_enabled else 0.0
+    else:
+        # FIN-12 (#482): fail loud on an ENABLED-but-rate-ABSENT inconsistency. With the rate key
+        # missing the gated idiom below silently resolves to 0.0, so the equity waterfall would
+        # under-charge WHT and OVERSTATE equity_irr/npv (the public-API footgun — a raw config can
+        # enable WHT without supplying the rate). An explicit 0.0 rate is legitimate (no charge);
+        # only an absent key while enabled is the bug.
+        if wht_enabled and (
+            _lookup_case_insensitive(tax_section, "wht_on_interest_to_nonresidents")
+            is None
+        ):
+            raise ValueError(
+                "tax.wht_on_interest_enabled is true but tax.wht_on_interest_to_nonresidents "
+                "(the rate) is absent — interest WHT would silently resolve to 0 and the equity "
+                "waterfall would under-charge. Declare the rate (e.g. 0.10) or disable the flag."
+            )
+        wht_rate = (
+            float(
+                _as_float(
+                    _lookup_case_insensitive(
+                        tax_section, "wht_on_interest_to_nonresidents"
+                    ),
+                    0.0,
+                )
+                or 0.0
+            )
+            if wht_enabled
+            else 0.0
+        )
+    wht_gross_up = bool(_lookup_case_insensitive(tax_section, "wht_gross_up"))
+
+    # Dividend WHT (#81): same gated-rate idiom as interest WHT above. Default-off.
+    if resolved_tax is not None and resolved_tax.wht_on_dividends is not None:
+        div_wht_rate = resolved_tax.wht_on_dividends if div_wht_enabled else 0.0
+    else:
+        # FIN-12 (#482): symmetric guard — enabled dividend WHT must declare its rate.
+        if div_wht_enabled and (
+            _lookup_case_insensitive(tax_section, "wht_on_dividends") is None
+        ):
+            raise ValueError(
+                "tax.wht_on_dividends_enabled is true but tax.wht_on_dividends (the rate) is "
+                "absent — dividend WHT would silently resolve to 0 and the equity waterfall "
+                "would under-charge the sponsor. Declare the rate (e.g. 0.15) or disable the flag."
+            )
+        div_wht_rate = (
+            float(
+                _as_float(
+                    _lookup_case_insensitive(tax_section, "wht_on_dividends"), 0.0
+                )
+                or 0.0
+            )
+            if div_wht_enabled
+            else 0.0
+        )
 
     # A2b/#33: the distribution-lockup DSCR covenant is the scenario's AUTHORED covenant,
     # not an orphan library default. Resolve a fallback chain:
