@@ -43,6 +43,8 @@ def test_the_block_is_lender_shaped() -> None:
         "capex.usd_total",
         "opex.usd_per_year",
         "fx.start_lkr_per_usd",
+        # #1898 (owner, 2026-11-22): the USD opex share's own FX depreciation.
+        "opex.currency_split.usd_lkr_depreciation_pct",
     }
     assert "correlation" not in mc
 

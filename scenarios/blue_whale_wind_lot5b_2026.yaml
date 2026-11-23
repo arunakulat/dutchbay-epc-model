@@ -346,11 +346,25 @@ monte_carlo:
       high: 505999.2
       distribution: uniform
     # FX. Uniform over fx.start_lkr_per_usd x (1 -/+ fx.uncertainty_pct), the scenario's own
-    # declared 5% FX move. annual_depr stays 0 (fully LKR funded, owner 2026-10-28).
+    # declared 5% FX move. annual_depr stays 0 (fully LKR funded, owner 2026-10-28); the
+    # USD opex share's own depreciation is sampled below (#1898).
     - name: fx.start_lkr_per_usd
       low: 317.1005
       high: 350.4795
       distribution: uniform
+    # FX depreciation of the USD opex share (#1898; owner ruling 2026-11-22 10:38Z). The
+    # project is LKR funded and its reporting rate stays flat (fx.annual_depr 0, owner
+    # 2026-10-28), so its FX risk is the 49% USD share of opex, which follows its own LKR
+    # depreciation path: relative PPP 1.05 / 1.025 - 1 = 2.44%/yr (currency_split above).
+    # Normal; low/high are the 95% interval around that base, with the half-width of the
+    # BIS long-run depreciation's standard error (sigma 7.91%/yr over 20.0 usable years,
+    # the 2020-22 peg excluded) carried at the base: 2.4390 +/- 3.5516, in percent. One
+    # draw holds for the whole life. A test re-derives the band.
+    - name: opex.currency_split.usd_lkr_depreciation_pct
+      low: -1.1125
+      high: 5.9906
+      distribution: normal
+      source: "Base: relative PPP of opex.currency_split (usd 2.5%, lkr 5.0%). Half-width: BIS weekly USD/LKR 2005-01 to 2026-06, analytics.fx.fx_calibration.long_run_depreciation_band (1.96 x sigma / sqrt(T), carried at the base)"
 
 metadata:
   version: '0.7'
