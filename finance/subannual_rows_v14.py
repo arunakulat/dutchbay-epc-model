@@ -126,6 +126,8 @@ FLOW_KEYS: frozenset[str] = frozenset(
         "posttax_cfads_lkr",
         "risk_haircut_amount_lkr",
         "bess_augmentation_capex_lkr",
+        # #1893 dolphin 2: the change in offtaker receivables, a flow over the year.
+        "receivables_change_lkr",
         "cfads_final_lkr",
         "cfads_risk_adjusted_lkr",
         "revenue_usd",
