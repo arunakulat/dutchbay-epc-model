@@ -49,6 +49,7 @@ import pytest
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.run_modes import POLICIES, resolve_run_mode
 from analytics.scenario_loader import load_scenario_config
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import (
     _build_cfads_timeline,
@@ -161,7 +162,8 @@ EVALUABLE = [p for p in SCENARIOS if p.name not in NON_EVALUABLE]
 
 def _plan_for(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run the engine exactly as ``run_v14_pipeline`` does, returning (cfg, result)."""
-    cfg = load_scenario_config(str(path))
+    # #1899: the pipeline applies a declared capex price date before the engine runs.
+    cfg = apply_capex_price_basis(load_scenario_config(str(path)))
     annual_rows = build_annual_rows(cfg)
     mode = resolve_run_mode(cfg)
     forbid = mode is not None and not POLICIES[mode].allow_toy_capex

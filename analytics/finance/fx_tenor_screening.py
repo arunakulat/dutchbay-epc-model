@@ -605,8 +605,10 @@ def scenario_screening_inputs(scenario: Mapping[str, Any]) -> Dict[str, Any]:
         KeyError: A scenario key the screening reads is missing; the message names it.
         ValueError: ``tariff.om_indexation`` is malformed (``resolve_om_indexation``).
     """
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.tariff_indexation import resolve_om_indexation
 
+    refuse_unapplied_price_basis(scenario, "the FX and tenor screening")
     tariff_lkr = float(_required(scenario, "tariff.lkr_per_kwh"))
     inputs: Dict[str, Any] = {
         "capex_usd": float(_required(scenario, "capex.usd_total")),
@@ -818,11 +820,15 @@ def run_fx_tenor_screening_for_scenario(
         ValueError: The block is present but malformed (every problem is listed).
         KeyError: A scenario key the screening reads is missing.
     """
+    from analytics.evaluation_v14 import evaluated_scenario_config
     from analytics.site_analysis_blocks import (
         STATUS_NOT_APPLICABLE,
         resolve_site_analysis_block,
     )
 
+    # #1899: screen the capex the engine finances. A declared capex.price_basis is
+    # applied here (idempotent), as the pipeline applies it.
+    scenario = evaluated_scenario_config(scenario)
     common: Dict[str, Any] = {
         "schema": SUMMARY_SCHEMA,
         "analysis": "FX and tenor screening",

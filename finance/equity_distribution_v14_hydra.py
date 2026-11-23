@@ -179,9 +179,11 @@ def _extract_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     on. The flat multi-section lookup below is unchanged for scenarios that do neither
     (levy-free flat configs), so they stay byte-identical.
     """
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.native_cost_inputs import normalize_native_capex
 
     config = normalize_native_capex(config)
+    refuse_unapplied_price_basis(config, "the equity-distribution capex resolver")
     from finance.import_levies import has_taxes_indirect
 
     capex_section = _section_case_insensitive(config, "capex")
