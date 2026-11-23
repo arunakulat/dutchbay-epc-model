@@ -9,6 +9,12 @@ from pandas.api.types import is_float_dtype
 
 from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.reproducible_workbook import normalize_xlsx_reproducible
+from analytics.run_identity import (
+    F5_NON_RELIANCE_NOTICE,
+    RUN_IDENTITY_FIELDS,
+    excel_number_format,
+    run_identity,
+)
 
 PathLike = Union[str, Path]
 
@@ -17,12 +23,7 @@ PathLike = Union[str, Path]
 # writes its figures produces the workbook by default, so it carries the same F-5
 # bar the HTML report and the screening helpers carry. The wording is pinned by a
 # test.
-EXECUTIVE_WORKBOOK_F5_CAVEAT = (
-    "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. These are model outputs for "
-    "screening and discussion only. They support no covenant, lender or IC "
-    "representation, and no quarterly CFADS or intra-year DSCR figure may be used "
-    "for covenant purposes."
-)
+EXECUTIVE_WORKBOOK_F5_CAVEAT = F5_NON_RELIANCE_NOTICE
 
 # Zero-based row at which the Summary KPI table starts: row 1 holds the notice, row 2 is blank.
 _SUMMARY_TABLE_START_ROW = 2
@@ -35,6 +36,7 @@ __all__ = [
     "EXECUTIVE_WORKBOOK_F5_CAVEAT",
     "RUN_MANIFEST_SHEET",
     "read_workbook_run_manifest",
+    "read_workbook_unit_formats",
     "build_executive_workbook",
     "frames_from_pipeline_result",
     "serialize_resource_trend",
@@ -131,8 +133,6 @@ def build_executive_workbook(
             _to_excel(resource_trend_df, writer, "ResourceTrend")
 
         if run_manifest is not None:
-            from analytics.run_identity import RUN_IDENTITY_FIELDS, run_identity
-
             identity = run_identity(run_manifest, "executive workbook")
             _to_excel(
                 pd.DataFrame(
@@ -147,6 +147,8 @@ def build_executive_workbook(
                 writer,
                 RUN_MANIFEST_SHEET,
             )
+
+        _apply_workbook_unit_formats(writer)
 
         # Ensure the Summary table has at least 3 rows below the notice:
         #   - header row
@@ -166,6 +168,63 @@ def build_executive_workbook(
     normalize_xlsx_reproducible(out_path)
 
     return out_path
+
+
+def _is_numeric_cell(value: Any) -> bool:
+    """True for numeric spreadsheet values (excluding booleans)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _apply_metric_value_formats(ws: Any, *, header_row: int) -> None:
+    """Apply canonical openpyxl unit number formats to a (Metric, Value) sheet."""
+    if ws.max_column < 2 or ws.max_row <= header_row:
+        return
+    if (
+        ws.cell(header_row, 1).value != "Metric"
+        or ws.cell(header_row, 2).value != "Value"
+    ):
+        return
+    for row_idx in range(header_row + 1, ws.max_row + 1):
+        metric_key = ws.cell(row_idx, 1).value
+        if not metric_key:
+            continue
+        fmt = excel_number_format(str(metric_key))
+        if fmt is None:
+            continue
+        val_cell = ws.cell(row_idx, 2)
+        if _is_numeric_cell(val_cell.value):
+            val_cell.number_format = fmt
+
+
+def _apply_columnar_formats(ws: Any, *, header_row: int = 1) -> None:
+    """Apply canonical openpyxl unit number formats across a tabular sheet."""
+    if ws.max_row <= header_row:
+        return
+    for col_idx in range(1, ws.max_column + 1):
+        col_name = ws.cell(header_row, col_idx).value
+        if not col_name:
+            continue
+        fmt = excel_number_format(str(col_name))
+        if fmt is None:
+            continue
+        for row_idx in range(header_row + 1, ws.max_row + 1):
+            cell = ws.cell(row_idx, col_idx)
+            if _is_numeric_cell(cell.value):
+                cell.number_format = fmt
+
+
+def _apply_workbook_unit_formats(writer: pd.ExcelWriter) -> None:
+    """Stamp canonical unit number_formats across the Executive Workbook sheets."""
+    sheets = writer.sheets
+    if "Summary" in sheets:
+        _apply_metric_value_formats(
+            sheets["Summary"], header_row=_SUMMARY_TABLE_START_ROW + 1
+        )
+    if "Ratios" in sheets:
+        _apply_metric_value_formats(sheets["Ratios"], header_row=1)
+    for sheet_name in ("Cashflow", "DebtService", "ScenarioSummary"):
+        if sheet_name in sheets:
+            _apply_columnar_formats(sheets[sheet_name], header_row=1)
 
 
 # ===========================================================================
@@ -591,6 +650,51 @@ def read_workbook_run_manifest(path: PathLike) -> Optional[dict[str, Any]]:
         text = None if value in (None, "") else str(value)
         out[str(field)] = int(text) if field == "seed" and text is not None else text
     return out
+
+
+def read_workbook_unit_formats(path: PathLike) -> dict[str, dict[str, str]]:
+    """Read back openpyxl ``number_format`` strings per sheet/metric for parity checks.
+
+    Returns a mapping ``{sheet_name: {metric_or_column: number_format}}`` for the
+    numeric entries in ``Summary``, ``Ratios``, and ``ScenarioSummary``.
+    """
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(Path(path), read_only=False, data_only=False)
+    try:
+        formats: dict[str, dict[str, str]] = {}
+        for sheet_name, header_row in (
+            ("Summary", _SUMMARY_TABLE_START_ROW + 1),
+            ("Ratios", 1),
+        ):
+            if sheet_name not in workbook.sheetnames:
+                continue
+            ws = workbook[sheet_name]
+            sheet_map: dict[str, str] = {}
+            if (
+                ws.max_column >= 2
+                and ws.cell(header_row, 1).value == "Metric"
+                and ws.cell(header_row, 2).value == "Value"
+            ):
+                for row_idx in range(header_row + 1, ws.max_row + 1):
+                    key = ws.cell(row_idx, 1).value
+                    val_cell = ws.cell(row_idx, 2)
+                    if key and _is_numeric_cell(val_cell.value):
+                        sheet_map[str(key)] = str(val_cell.number_format)
+            formats[sheet_name] = sheet_map
+        if "ScenarioSummary" in workbook.sheetnames:
+            ws = workbook["ScenarioSummary"]
+            ss_map: dict[str, str] = {}
+            if ws.max_row >= 2:
+                for col_idx in range(1, ws.max_column + 1):
+                    col_name = ws.cell(1, col_idx).value
+                    cell = ws.cell(2, col_idx)
+                    if col_name and _is_numeric_cell(cell.value):
+                        ss_map[str(col_name)] = str(cell.number_format)
+            formats["ScenarioSummary"] = ss_map
+        return formats
+    finally:
+        workbook.close()
 
 
 # EOF

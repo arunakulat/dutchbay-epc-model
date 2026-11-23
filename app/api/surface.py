@@ -29,10 +29,15 @@ The public field sets are frozen by ``tests/app/test_surface_contract.py`` and v
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from analytics.run_identity import (
+    F5_NON_RELIANCE_NOTICE,
+    metric_unit,
+    validate_section_disposition,
+)
 from app.api.responses import API_CONTRACT_VERSION
 from app.reports.report_model import (
     CapitalRiskBlock,
@@ -47,7 +52,8 @@ class KpiCard(BaseModel):
 
     ``display`` is the report's OWN formatted string (e.g. ``"1.46%"`` / ``"1.29x"`` /
     ``"-$79,273,514"``), so a client shows numbers identical to the PDF/HTML report without
-    re-implementing the formatting rules.
+    re-implementing the formatting rules. ``unit`` states the canonical unit contract
+    (e.g. ``"pct"``, ``"multiple"``, ``"usd"``) for cross-surface verification (#1815).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -58,6 +64,7 @@ class KpiCard(BaseModel):
     #: ``display`` then reads ``"undefined"`` (#1436, contract 2.0).
     value: Optional[float]
     display: str
+    unit: Optional[str] = None
 
 
 class TornadoBar(BaseModel):
@@ -193,6 +200,10 @@ class CaseSurface(BaseModel):
     global_sa_pawn: Optional[GlobalSaChart] = None
     capital_risk: Optional[CapitalRiskSurface] = None
     artifacts: ArtifactLinks = Field(default_factory=ArtifactLinks)
+    run_manifest: Optional[Dict[str, Any]] = None
+    reliance_notice: Optional[str] = None
+    reliance_label: str = "lender_reliance_prohibited"
+    section_dispositions: Dict[str, str] = Field(default_factory=dict)
     contract_version: str = Field(
         default=API_CONTRACT_VERSION,
         description="Public API contract version this response conforms to (#841).",
@@ -206,7 +217,13 @@ class CaseSurface(BaseModel):
         nothing. Absent supplementary blocks (``None`` on the context) stay ``None`` here.
         """
         kpi_cards = [
-            KpiCard(key=row.key, label=row.label, value=row.value, display=row.display)
+            KpiCard(
+                key=row.key,
+                label=row.label,
+                value=row.value,
+                display=row.display,
+                unit=metric_unit(row.key),
+            )
             for row in context.kpi_rows
         ]
         return cls(
@@ -220,7 +237,61 @@ class CaseSurface(BaseModel):
             global_sa_morris=_project_global_sa(context.global_sa),
             global_sa_pawn=_project_global_sa(context.global_sa_pawn),
             capital_risk=_project_capital_risk(context.capital_risk),
+            run_manifest=dict(context.manifest) if context.manifest else None,
+            reliance_notice=context.f5_notice or F5_NON_RELIANCE_NOTICE,
+            reliance_label="lender_reliance_prohibited",
+            section_dispositions=_project_section_dispositions(context),
         )
+
+
+def _project_section_dispositions(context: ReportContext) -> Dict[str, str]:
+    """Derive explicit per-section dispositions (computed/allocated/omitted/not_run)."""
+    not_run_titles = [entry.section for entry in context.sections_not_run]
+    raw = {
+        "kpis": "computed" if context.kpi_rows else "omitted",
+        "tornado": (
+            "computed"
+            if context.tornado is not None and context.tornado.rows
+            else (
+                "not_run"
+                if context.tornado_not_computed
+                or any(title == "Sensitivity tornado" for title in not_run_titles)
+                else "omitted"
+            )
+        ),
+        "global_sa_morris": (
+            "computed"
+            if context.global_sa is not None and context.global_sa.drivers
+            else (
+                "not_run"
+                if any("Morris" in title for title in not_run_titles)
+                else "omitted"
+            )
+        ),
+        "global_sa_pawn": (
+            "computed"
+            if context.global_sa_pawn is not None and context.global_sa_pawn.drivers
+            else (
+                "not_run"
+                if any("PAWN" in title for title in not_run_titles)
+                else "omitted"
+            )
+        ),
+        "capital_risk": (
+            "computed"
+            if context.capital_risk is not None
+            else (
+                "not_run"
+                if any("Capital risk" in title for title in not_run_titles)
+                else "omitted"
+            )
+        ),
+        "multi_tech": "allocated" if context.multi_tech is not None else "omitted",
+    }
+    return {
+        section: validate_section_disposition(section, disposition)
+        for section, disposition in raw.items()
+    }
 
 
 def _project_tornado(block: Optional[TornadoBlock]) -> Optional[TornadoChart]:
