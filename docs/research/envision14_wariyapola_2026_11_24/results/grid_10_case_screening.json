@@ -1,0 +1,150 @@
+{
+  "status": "ILLUSTRATIVE_NON_BANKABLE",
+  "route_eia_pdf_pages": [
+    138,
+    139,
+    140,
+    141,
+    142,
+    160
+  ],
+  "route_km": 104.77,
+  "conductors": "ACSR Zebra, 2 circuits with twin bundle",
+  "AC_resistance_25C_ohm_km_per_conductor": 0.0702,
+  "assumed_X_ohm_km_per_circuit": 0.27,
+  "collector_transformers": "2x90MVA 33/220kV",
+  "terminal": "Proposed Wariyapola switching station",
+  "line_thermal_Nminus1_MVA_in_EIA": 290,
+  "plant_rating_mva_SCREENING_ASSUMPTION": 147.0,
+  "source_fault_illustrative_MVA": [
+    500,
+    700,
+    900,
+    1100,
+    1500
+  ],
+  "cases": [
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 500.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 2.964549884934597
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 500.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 2.6271633993454095
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 700.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 3.9475865288950276
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 700.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 3.371104573651516
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 900.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.839037410670112
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 900.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.000447888403211
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1100.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 5.6511318913407935
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1100.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.539778987805382
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1500.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 7.076172484681782
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1500.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 5.415983354427967
+    }
+  ],
+  "status_flags": [
+    "PCC_UNVALIDATED",
+    "FAULT_LEVEL_ILLUSTRATIVE",
+    "R_X_ILLUSTRATIVE",
+    "F5_HOLD",
+    "2030_LINE_VS_2027_COD_UNRESOLVED"
+  ],
+  "excluded_source": [
+    "private EIA route image",
+    "confidential original annex and report PDF"
+  ],
+  "use": "Reproduction test/reference only; no grid-code approval"
+}

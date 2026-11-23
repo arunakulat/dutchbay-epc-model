@@ -1,0 +1,13 @@
+{
+  "screening_gross_gwh": 616.0428789205927,
+  "screening_net_gwh": 462.9226999232198,
+  "legacy_policy_haircut_pct": 2.0,
+  "conditional_billing_aep_gwh": 453.6642459247554,
+  "unqualified_one_year_p90_like_gwh": 377.1750133471547,
+  "project_nominal_mw": 147,
+  "WTG_derated_active_maximum_mw": 133,
+  "old_legacy_2025_tariff_lkr_per_kwh": 20.3,
+  "pipeline_status": "FAILED_LOUD: NON_BANKABLE_AEP_SOURCE_PROVENANCE",
+  "finance_KPIs_promoted": false,
+  "claim": "No IRR, DSCR, P90 or lendercase promotion from this source. The refusal is expected and must not be bypassed."
+}

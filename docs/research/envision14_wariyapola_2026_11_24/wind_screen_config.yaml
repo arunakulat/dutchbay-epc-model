@@ -1,0 +1,24 @@
+schema_version: 1
+classification: NON_BANKABLE_SCREENING
+source_lendercase: scenarios/dutchbay_lendercase_2025Q4.yaml
+site_layout: conf/dutchbay_wake_14_turbines.yaml
+resource:
+  rose_csv: docs/blue_whale/met_mast_wind_rose_130m.csv
+  transfer_summary: docs/blue_whale/met_mast_transfer_summary.json
+  old_era5_from_layout: true
+turbine:
+  model: Envision EN206/10.5
+  rotor_diameter_m: 206.0
+  hub_height_m: 130.0
+  nameplate_kw: 10500.0
+  derate_clip_kw: 9500.0
+  curve_environment: BLUE_WHALE_POWER_CURVE_CSV
+  curve_source: OEM_CONFIDENTIAL_NOT_COMMITTED
+model:
+  deficit: bastankhah
+  ti_cases: [0.06, 0.10, 0.14]
+  include_t2_external: true
+  include_t2_absent_sensitivity: true
+  legacy_p50_haircut_pct: 2.0
+  historical_era5_ti: 0.10
+hold: Screening only, remote partial mast + reference data, no accepted OEM derate mode or independent EYA.
