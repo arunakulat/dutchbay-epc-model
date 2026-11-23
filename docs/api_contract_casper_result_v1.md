@@ -21,8 +21,10 @@ by the comment above `CASPER_CONTRACT_VERSION` in
   `tests/api/test_casper_contract_freeze.py` pins this.
 - **Additive posture**: adding a new top-level key is a non-breaking change and
   does NOT bump the version, provided the key degrades to `None` when its
-  upstream input is absent. Precedents: `generation`, `technology_breakdown`,
-  `multi_tech_wbs` (#475), `mc_risk` (#637).
+  upstream input is absent. A new key nested inside an existing block follows the
+  same posture. Precedents: `generation`, `technology_breakdown`,
+  `multi_tech_wbs` (#475), `mc_risk` (#637); nested:
+  `scenario.equity_performance.equity_irr_caveat` (#1688).
 - **Breaking changes** — removing, renaming, or re-typing an existing key, or
   changing the meaning of its values — REQUIRE a version bump to
   `casper_result_v2` plus updated freeze tests and a successor to this document.
@@ -54,6 +56,10 @@ Key-by-key notes:
   `equity_performance` blocks when attached to the `ScenarioResult`. Full
   `config` / `annual_rows` are deliberately NOT shipped. When the producer only
   has a scenario name string, the descriptor is `{"scenario_name": <str>}`.
+  `equity_performance` carries `equity_irr_caveat` (#1688, additive): the
+  #1456 ranking caveat as one sentence when the equity metadata's
+  `equity_irr_ranks_reliably` is `False`, and `None` otherwise, including when
+  the flag is absent. `equity_npv` sits beside it in the same block.
 - **`baseline_kpis`** — numeric scalars only, filtered from
   `ScenarioResult.kpis` (non-numeric entries such as `scenario_name`,
   `wacc_label`, `dscr_series` are skipped; `bool` is excluded).

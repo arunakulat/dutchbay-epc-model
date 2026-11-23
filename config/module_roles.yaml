@@ -186,6 +186,11 @@ modules:
     role_description: Resolves CLI emitter selection flags controlling optional pipeline report and workbook outputs.
     excel_representation: non_model_adapter
 
+  - module_path: analytics.equity_irr_caveat
+    pipeline_stage: reporting_delivery
+    role_description: Words the equity IRR ranking caveat from the waterfall's published flag for every surface that prints equity IRR (#1688).
+    excel_representation: non_model_adapter
+
   - module_path: analytics.evaluate_scenario
     pipeline_stage: core_finance
     role_description: Coordinator entry point loading a scenario config, applying overrides, and running v14 pipeline.
