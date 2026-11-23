@@ -65,9 +65,12 @@ class TestEngineShapes:
         with pytest.raises(MonteCarloConfigError, match="unsupported distribution"):
             MonteCarloEngine(cfg, seed=1)
 
-    def test_all_uniform_scenario_has_no_shaped_params(self) -> None:
-        # Byte-identical: the shipped canonical uses uniform throughout -> nothing shaped.
-        assert MonteCarloEngine(_load(), seed=1)._shaped_params == {}
+    def test_canonical_scenario_shapes_only_fx_depreciation(self) -> None:
+        # The shipped canonical is uniform throughout except fx.annual_depr (#1898), whose
+        # band is a normal 95% interval: it is the only shaped parameter.
+        eng = MonteCarloEngine(_load(), seed=1)
+        shaped = {eng._param_names[i]: v[0] for i, v in eng._shaped_params.items()}
+        assert shaped == {"fx.annual_depr": "normal"}
 
     def test_triangular_param_registers_and_runs(self) -> None:
         logging.disable(logging.WARNING)
