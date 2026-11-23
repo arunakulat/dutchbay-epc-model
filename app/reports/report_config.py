@@ -7,8 +7,9 @@ only validates and exposes them. No finance logic (Dolphin).
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Mapping, Optional
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -41,14 +42,95 @@ MethodologyKey = Literal["fx_path"]
 #: block, or this file's report-level default when the scenario declares none.
 CovenantSource = Literal["scenario", "report_defaults"]
 
+#: Scenario DSCR covenant label when the scenario's lock-up uses that threshold (#1668).
+SCENARIO_LOCKUP_COVENANT_NAME = "lock-up covenant"
+
+#: Scenario DSCR covenant label when no lock-up is declared at that threshold (#1900).
+SCENARIO_DSCR_COVENANT_NAME = "minimum DSCR covenant"
+
+#: Equity distribution section names recognized by the waterfall engine.
+_EQUITY_SECTION_NAMES = ("equity_distribution", "Equity_Distribution", "equity")
+
 #: What the minimum-DSCR threshold is called, by source. A scenario's
-#: ``constraints.min_dscr_covenant`` is its lock-up covenant (owner wording, #1668,
-#: 2026-11-15); this file's default is a presentation floor. The covenant table, the
-#: verdict note and the IC flag all read this one mapping.
+#: ``constraints.min_dscr_covenant`` is labeled ``"lock-up covenant"`` only when the
+#: scenario declares an active distribution lock-up at that threshold (#1668, #1900);
+#: otherwise a scenario-declared threshold is labeled ``"minimum DSCR covenant"``, and
+#: this file's default is a presentation floor (``"lender floor"``). The covenant table,
+#: the verdict note, and the IC flag all read this naming rule.
 DSCR_THRESHOLD_NAME: Dict[CovenantSource, str] = {
-    "scenario": "lock-up covenant",
+    "scenario": SCENARIO_DSCR_COVENANT_NAME,
     "report_defaults": "lender floor",
 }
+
+
+def _scenario_number(value: Any) -> Optional[float]:
+    """A declared covenant value as a finite float, or ``None`` (bools are not numbers)."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
+    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
+
+    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
+    restated here because the report layer takes no import on the finance package (the
+    debt-package boundary lint and the architecture diagram both refuse one). A test pins
+    the two to the same answers (#1862).
+    """
+    if key in mapping:
+        return mapping[key]
+    key_lower = key.lower()
+    for existing_key, value in mapping.items():
+        if str(existing_key).lower() == key_lower:
+            return value
+    return None
+
+
+def declared_lockup_threshold(
+    scenario_config: Optional[Mapping[str, Any]],
+) -> Optional[float]:
+    """Return the scenario's declared positive lock-up DSCR threshold, or ``None`` (#1900).
+
+    Mirrors ``finance.equity_distribution_v14_hydra._build_distribution_config``'s
+    authored-input chain without falling back to the engine's internal 1.25x default:
+    returns ``None`` when equity distribution is disabled, when ``min_dscr_threshold``
+    is explicitly disabled (``<= 0``) or non-numeric, or when neither
+    ``equity_distribution.min_dscr_threshold`` nor ``constraints.min_dscr_covenant``
+    declares a positive threshold.
+    """
+    if not isinstance(scenario_config, Mapping):
+        return None
+    equity: Mapping[str, Any] = {}
+    for section_name in _EQUITY_SECTION_NAMES:
+        section = _lookup_key_as_engine(scenario_config, section_name)
+        if isinstance(section, Mapping) and section:
+            equity = section
+            break
+    if not bool(equity.get("enabled", True)):
+        return None
+    if "min_dscr_threshold" in equity and equity.get("min_dscr_threshold") is not None:
+        explicit = _scenario_number(equity.get("min_dscr_threshold"))
+        return explicit if (explicit is not None and explicit > 0.0) else None
+    constraints = _lookup_key_as_engine(scenario_config, "constraints")
+    if isinstance(constraints, Mapping):
+        covenant = _scenario_number(
+            _lookup_key_as_engine(constraints, "min_dscr_covenant")
+        )
+        if covenant is not None and covenant > 0.0:
+            return covenant
+    return None
+
+
+def dscr_threshold_name(source: CovenantSource, *, is_lockup: bool = False) -> str:
+    """Return the display name for a minimum-DSCR threshold (#1668, #1900)."""
+    if source == "scenario" and is_lockup:
+        return SCENARIO_LOCKUP_COVENANT_NAME
+    return DSCR_THRESHOLD_NAME[source]
 
 
 class ReportMeta(BaseModel):
@@ -75,12 +157,16 @@ class Covenants(BaseModel):
     #: Set by the report from the scenario (#1668); the YAML defaults leave both
     #: as ``report_defaults``.
     min_dscr_floor_source: CovenantSource = "report_defaults"
+    #: True only when the scenario declares an active lock-up at ``min_dscr_floor`` (#1900).
+    min_dscr_floor_is_lockup: bool = False
     max_balloon_pct_source: CovenantSource = "report_defaults"
 
     @property
     def min_dscr_floor_name(self) -> str:
-        """The minimum-DSCR threshold's name for its source (#1668)."""
-        return DSCR_THRESHOLD_NAME[self.min_dscr_floor_source]
+        """The minimum-DSCR threshold's name for its source and lock-up status (#1668, #1900)."""
+        return dscr_threshold_name(
+            self.min_dscr_floor_source, is_lockup=self.min_dscr_floor_is_lockup
+        )
 
 
 class KpiSpec(BaseModel):
