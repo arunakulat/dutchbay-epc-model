@@ -93,10 +93,14 @@ __all__ = [
     "LINE_BASIS",
     "MONTHLY_KEY",
     "MONTHS_PER_YEAR",
+    "MAX_RECEIVABLE_DAYS",
+    "RECEIVABLES_KEY",
     "RECONCILIATION_REL_TOLERANCE",
     "MonthlyCascade",
     "MonthlySpec",
+    "apply_receivables_lag",
     "build_monthly_cascade",
+    "receivables_balances",
     "operating_month_weights",
     "resolve_monthly_spec",
 ]
@@ -107,7 +111,11 @@ MONTHS_PER_YEAR = 12
 MONTHLY_KEY = "cashflow.monthly"
 _MONTHLY_PATH: Sequence[str] = ("cashflow", "monthly")
 
-_ALLOWED_KEYS = frozenset({"cod_month", "energy_shape"})
+_ALLOWED_KEYS = frozenset({"cod_month", "energy_shape", "receivable_days"})
+
+#: Longest receivables lag accepted, in days. A lag over a year would carry a whole
+#: year's revenue unpaid, which is a default, not a payment term.
+MAX_RECEIVABLE_DAYS = 365
 
 #: A 12-period grid, used only to validate a shape through the shared profile contract.
 _MONTHLY_GRID = PeriodGrid(resolution="monthly", periods_per_year=MONTHS_PER_YEAR)
@@ -134,6 +142,10 @@ _DAYS_IN_CALENDAR_MONTH: Tuple[int, ...] = (
 #: sum carry a few ULPs of rounding, about 1e-15 relative; 1e-12 leaves three orders of
 #: margin for that and none for a real error, which would be a whole share of a line.
 RECONCILIATION_REL_TOLERANCE = 1e-12
+
+#: The annual and monthly row key for the change in offtaker receivables (dolphin 2).
+#: Positive means cash tied up (receivables grew), and it is deducted from CFADS.
+RECEIVABLES_KEY = "receivables_change_lkr"
 
 #: How a monthly figure may be used while F-5 stands.
 COVENANT_USE = (
@@ -165,6 +177,7 @@ LINE_BASIS: Dict[str, str] = {
     "posttax_cfads_lkr": COMPUTED,
     "risk_haircut_amount_lkr": COMPUTED,
     "bess_augmentation_capex_lkr": ALLOCATED,
+    "receivables_change_lkr": COMPUTED,
     "cfads_final_lkr": COMPUTED,
     "revenue_usd": COMPUTED,
     "cfads_usd": COMPUTED,
@@ -183,6 +196,7 @@ class MonthlySpec:
 
     cod_month: Optional[int]
     energy_shape: Optional[Tuple[float, ...]]
+    receivable_days: int = 0
 
 
 @dataclass(frozen=True)
@@ -264,7 +278,21 @@ def resolve_monthly_spec(config: Mapping[str, Any] | None) -> Optional[MonthlySp
             shape_raw, _MONTHLY_GRID, f"{MONTHLY_KEY}.energy_shape"
         )
 
-    return MonthlySpec(cod_month=cod_month, energy_shape=shape)
+    days_raw = raw.get("receivable_days", 0)
+    if isinstance(days_raw, bool) or not isinstance(days_raw, int):
+        raise ValueError(
+            f"{MONTHLY_KEY}.receivable_days must be a whole number of days; "
+            f"got {days_raw!r}."
+        )
+    if not 0 <= days_raw <= MAX_RECEIVABLE_DAYS:
+        raise ValueError(
+            f"{MONTHLY_KEY}.receivable_days must be 0-{MAX_RECEIVABLE_DAYS}; "
+            f"got {days_raw}."
+        )
+
+    return MonthlySpec(
+        cod_month=cod_month, energy_shape=shape, receivable_days=days_raw
+    )
 
 
 def operating_month_weights(
@@ -380,8 +408,14 @@ def build_monthly_cascade(
         )
     )
 
+    balances = receivables_balances(annual_rows, spec)
     rows: List[Dict[str, Any]] = []
     for year_index, annual in enumerate(annual_rows):
+        start = year_index * MONTHS_PER_YEAR
+        receivables_change = [
+            balances[start + k] - (balances[start + k - 1] if start + k > 0 else 0.0)
+            for k in range(MONTHS_PER_YEAR)
+        ]
         tariff = tariff_lkr_per_kwh_for_year(
             float(params["tariff_lkr_per_kwh"]),
             params.get("tariff_om_indexation"),
@@ -398,6 +432,7 @@ def build_monthly_cascade(
             hedge_ratio=fx_hedge.hedge_ratio,
             spread=fx_hedge.spread,
             forward=forward,
+            receivables_change=receivables_change,
         )
         for k, line_values in enumerate(months):
             row: Dict[str, Any] = {
@@ -435,6 +470,7 @@ def _cascade_year(
     hedge_ratio: float,
     spread: float,
     forward: float,
+    receivables_change: Sequence[float] = (0.0,) * MONTHS_PER_YEAR,
 ) -> List[Dict[str, float]]:
     """Run the cascade for the 12 months of one operating year."""
     fx_rate = float(annual["fx_rate"])
@@ -469,7 +505,7 @@ def _cascade_year(
         )
         posttax = ebitda - tax[k]
         after_haircut = posttax * factor
-        cfads_lkr = after_haircut - aug[k]
+        cfads_lkr = after_haircut - aug[k] - receivables_change[k]
         if fx_rate > 0.0:
             revenue_usd = _hedged_usd(revenue, fx_rate, forward, hedge_ratio, spread)
             cfads_usd = _hedged_usd(cfads_lkr, fx_rate, forward, hedge_ratio, spread)
@@ -498,6 +534,7 @@ def _cascade_year(
                 "posttax_cfads_lkr": posttax,
                 "risk_haircut_amount_lkr": posttax - after_haircut,
                 "bess_augmentation_capex_lkr": aug[k],
+                RECEIVABLES_KEY: receivables_change[k],
                 "cfads_final_lkr": cfads_lkr,
                 "revenue_usd": revenue_usd,
                 "cfads_usd": cfads_usd,
@@ -537,6 +574,11 @@ def _check_reconciliation(
     tol = _tolerance(annual)
     for line in LINE_BASIS:
         if line not in annual:
+            if any(float(m.get(line, 0.0)) != 0.0 for m in months):
+                raise ValueError(
+                    f"Operating year {year_index + 1}: the months carry {line} but the "
+                    "annual engine's row does not; refusing to return the cascade."
+                )
             continue
         total = math.fsum(float(m[line]) for m in months)
         want = float(annual[line])
@@ -554,3 +596,84 @@ def _check_reconciliation(
                 f"{total - want!r}, tolerance {line_tol!r}). The monthly cascade must "
                 "reconcile to the annual figures; refusing to return it."
             )
+
+
+def receivables_balances(
+    annual_rows: Sequence[Mapping[str, float]], spec: Optional[MonthlySpec]
+) -> List[float]:
+    """Month-end offtaker receivables (LKR), one per operating month, in order.
+
+    A month-end balance is the revenue invoiced over the trailing ``receivable_days``,
+    walking back through earlier months at each month's daily rate, and never before
+    the first operating month (nothing is owed before COD). Generation revenue is placed
+    by the energy weights and a BESS capacity charge by the day weights, as in the
+    cascade. The project's last month-end balance is 0: what is still owed at the end of
+    operations is assumed collected in the final month, so the lag defers cash and never
+    loses it.
+
+    With no spec or a zero lag every balance is 0.
+    """
+    n = len(annual_rows) * MONTHS_PER_YEAR
+    if spec is None or spec.receivable_days == 0 or n == 0:
+        return [0.0] * n
+    energy_w, time_w, _calendar, _assumptions = operating_month_weights(spec)
+    days = [w * 365.0 for w in time_w]
+    revenue: List[float] = []
+    for annual in annual_rows:
+        gen = float(annual["generation_revenue_lkr"])
+        bess = float(annual["bess_revenue_lkr"])
+        revenue.extend(
+            gen * energy_w[k] + bess * time_w[k] for k in range(MONTHS_PER_YEAR)
+        )
+    balances: List[float] = []
+    for i in range(n):
+        remaining = float(spec.receivable_days)
+        balance = 0.0
+        j = i
+        while remaining > 0.0 and j >= 0:
+            month_days = days[j % MONTHS_PER_YEAR]
+            take = min(remaining, month_days)
+            balance += revenue[j] * (take / month_days)
+            remaining -= take
+            j -= 1
+        balances.append(balance)
+    balances[-1] = 0.0
+    return balances
+
+
+def apply_receivables_lag(
+    rows: List[Dict[str, float]], config: Mapping[str, Any], fx_hedge: Any
+) -> List[Dict[str, float]]:
+    """Deduct the change in offtaker receivables from each annual row's CFADS.
+
+    Dolphin 2 of #1893. Called by every annual row builder in
+    :mod:`finance.cashflow_v14`, so the debt sizing, the covenant tests and the equity
+    waterfall all see cash as COLLECTED, not as invoiced. Without
+    ``cashflow.monthly.receivable_days`` (or with 0) the rows are returned untouched,
+    byte for byte, and carry no :data:`RECEIVABLES_KEY`.
+
+    The change is a working-capital movement: it is not a cost, so it moves neither
+    EBITDA nor taxable income, and it sits after the risk haircut, like augmentation
+    capex. Its USD view uses the year's own conversion (spot, or the hedge blend).
+    """
+    spec = resolve_monthly_spec(config)
+    if spec is None or spec.receivable_days == 0 or not rows:
+        return rows
+    balances = receivables_balances(rows, spec)
+    previous = 0.0
+    for year_index, row in enumerate(rows):
+        closing = balances[(year_index + 1) * MONTHS_PER_YEAR - 1]
+        change = closing - previous
+        previous = closing
+        row[RECEIVABLES_KEY] = change
+        row["cfads_final_lkr"] = row["cfads_final_lkr"] - change
+        row["cfads_risk_adjusted_lkr"] = row["cfads_final_lkr"]
+        fx_rate = float(row["fx_rate"])
+        if fx_rate > 0.0:
+            forward = (
+                fx_hedge.forward_curve[year_index] if fx_hedge.forward_curve else 0.0
+            )
+            row["cfads_usd"] = row["cfads_usd"] - _hedged_usd(
+                change, fx_rate, forward, fx_hedge.hedge_ratio, fx_hedge.spread
+            )
+    return rows
