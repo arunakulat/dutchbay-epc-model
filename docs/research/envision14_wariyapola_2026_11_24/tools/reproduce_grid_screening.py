@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 import yaml
+from path_guard import require_external_path
 
 from analytics.grid.evaluate_grid import evaluate_grid
 from analytics.grid.grid_interface_schema import validate_grid_block
@@ -82,6 +83,16 @@ def calculate(config: dict, repo: Path) -> dict:
             )
     return {
         "status": "ADVISORY_NON_BANKABLE",
+        "method": "magnitude_only_screening_evaluate_grid_no_pandapower_no_reactive",
+        "poc_definition": "Dutch Bay plant-side collector end; series line connects to hypothetical Wariyapola source",
+        "upstream_bus": "Wariyapola 220 kV assumed source; authenticated CEB model absent",
+        "transformer_n_minus_one": "NOT MODELLED: 2 x 90 MVA, one offline leaves 90 MVA < assumed 133 MW, minimum 32.3% active-power curtailment even at power factor 1",
+        "line_voltage_and_charging": "not modelled; no EMT/QSTS or grid-code certification",
+        "assumption_sources": {
+            "fault_mva": "illustrative, old Puttalam proxy not valid Wariyapola evidence",
+            "line_X": "illustrative 0.27 ohm/km/circuit; no utility model",
+            "line_R": "EIA Annex III I 25C prelim, not issued-for-construction",
+        },
         "route_length_km_EIA_PRELIMINARY": line["route_km"],
         "poc_kv_ASSUMED": line["nominal_kv"],
         "plant_mva_ASSUMED": e["plant_rating_mva_screening_assumption"],
@@ -102,9 +113,10 @@ def main() -> None:
     ap.add_argument("--repo", type=Path, default=REPO)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
-    out = args.output.resolve()
-    if out.is_relative_to(args.repo.resolve()):
-        raise SystemExit("Refusing to write screening/utility output into repository")
+    try:
+        out = require_external_path(args.output, declared_repo=args.repo)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     result = calculate(yaml.safe_load(args.config.read_text()), args.repo)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

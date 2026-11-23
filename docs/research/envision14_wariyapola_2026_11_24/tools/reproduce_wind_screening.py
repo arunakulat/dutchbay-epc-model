@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import yaml
+from path_guard import require_external_path
 from py_wake.literature.gaussian_models import Bastankhah_PorteAgel_2014
 from py_wake.site import UniformWeibullSite
 from py_wake.wind_turbines import WindTurbine
@@ -26,7 +27,7 @@ REPO = PACKAGE.parents[2]
 
 
 def _load_curve(
-    path: Path, power_cap: float
+    path: Path, power_cap: float, expected_nameplate_kw: float
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     with path.open() as stream:
         r = list(
@@ -35,12 +36,24 @@ def _load_curve(
             )
         )
     ws = np.array([float(x["wind_speed_ms"]) for x in r])
-    p = np.array([min(float(x["power_kw"]), power_cap) for x in r])
+    raw_kw = np.array([float(x["power_kw"]) for x in r])
     ct = np.array([float(x["thrust_coefficient"]) for x in r])
-    if len(ws) < 10 or not np.all(np.diff(ws) > 0) or not np.all((ct >= 0) & (ct <= 1)):
-        raise ValueError("invalid OEM curve geometry / thrust data")
-    if np.max(p) > power_cap:
-        raise ValueError("power cap violated")
+    if (
+        len(ws) < 10
+        or not all(np.all(np.isfinite(x)) for x in (ws, raw_kw, ct))
+        or not np.all(np.diff(ws) > 0)
+        or np.min(ws) < 0
+        or np.min(raw_kw) < 0
+        or not np.all((ct >= 0) & (ct < 1))
+    ):
+        raise ValueError("invalid OEM curve geometry / units / thrust data")
+    # Deliberately check the UNCLIPPED OEM values.  A 'power_kw' file filled
+    # with watts or MW must fail rather than become plausible by clipping.
+    if not 0.95 * expected_nameplate_kw <= raw_kw.max() <= 1.05 * expected_nameplate_kw:
+        raise ValueError("OEM curve power_kw peak inconsistent with 10.5 MW model")
+    if not 0 < power_cap <= expected_nameplate_kw:
+        raise ValueError("invalid derated active-power limit")
+    p = np.minimum(raw_kw, power_cap)
     return ws, p, ct
 
 
@@ -61,12 +74,21 @@ def execute(cfg: dict, curve: Path, repo: Path) -> dict:
         and not count[1]
     )
     freq = np.array([float(x["frequency"]) for x in rose])
+    if (
+        not np.all(np.isfinite(freq))
+        or np.any(freq < 0)
+        or not 0.99 < freq.sum() < 1.01
+    ):
+        raise ValueError("invalid directional sector frequencies")
     freq = freq / freq.sum()
     A = np.array([float(x["weibull_a_ms"]) for x in rose])
     K = np.array([float(x["weibull_k"]) for x in rose])
-    assert len(freq) == 16
+    if len(freq) != 16 or not all(
+        np.all(np.isfinite(v)) and np.all(v > 0) for v in (A, K)
+    ):
+        raise ValueError("invalid 16-sector Weibull parameters")
     c = cfg["turbine"]
-    ws, p, ct = _load_curve(curve, float(c["derate_clip_kw"]))
+    ws, p, ct = _load_curve(curve, float(c["derate_clip_kw"]), float(c["nameplate_kw"]))
     wt = WindTurbine(
         name=c["model"] + " capped at 9.5 MW (ASSUMED)",
         diameter=float(c["rotor_diameter_m"]),
@@ -157,7 +179,8 @@ def execute(cfg: dict, curve: Path, repo: Path) -> dict:
         "hold": [
             "partial mast campaign",
             "MERRA-2/ERA5 divergence",
-            "no certified OEM derated curve",
+            "9.5 MW clipped power with unmodified 10.5 MW Ct; no certified OEM derated operating mode",
+            "partial mast TI is not a justified uniform farm TI",
             "wake and turbine loading independent review needed",
             "not a P50/P90 or lender AEP",
         ],
@@ -175,9 +198,14 @@ def main() -> None:
     source = a.curve or Path(os.environ.get(cfg["turbine"]["curve_environment"], ""))
     if not source.is_file():
         raise SystemExit("Private OEM curve not supplied: set env or --curve; refusing")
-    out = a.output.resolve()
-    if out.is_relative_to(a.repo.resolve()):
-        raise SystemExit("Refusing to write derived/private output inside repository")
+    if source.resolve().is_relative_to(REPO.resolve()):
+        raise SystemExit(
+            "Private OEM power/Ct input found inside public checkout: refusing"
+        )
+    try:
+        out = require_external_path(a.output, declared_repo=a.repo)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     r = execute(cfg, source, a.repo)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(r, indent=2) + "\n", encoding="utf-8")
