@@ -555,18 +555,28 @@ class WaterfallRow(BaseModel):
     scheduled_debt_service: float
     balloon_sweep: float
     cash_to_equity: float
+    #: #1897: the reconciliation to the covenant DSCR (None when not published). See
+    #: analytics.three_statement.CashflowWaterfallRow for each figure's source.
+    coverage_cfads: Optional[float] = None
+    bridge_cfads_credit: Optional[float] = None
+    fee_in_project_basis: Optional[float] = None
+    tax_basis_difference: Optional[float] = None
+    senior_fee: Optional[float] = None
+    covenant_cfads: Optional[float] = None
+    covenant_debt_service: Optional[float] = None
+    covenant_dscr: Optional[float] = None
 
 
 class WaterfallBlock(BaseModel):
     """Cash-flow waterfall (CFADS → scheduled debt service → balloon → equity) + totals (#481, RPT-2).
 
-    Sourced from the engine's own published per-row figures, so the cascade ties line-for-line to
-    the rest of the report (CCCDIR — one source of truth): ``cfads`` equals the CFADS the DSCR
-    numerator uses (``total_cfads`` = the report's headline CFADS) and ``scheduled_debt_service``
-    equals the Debt Structure & DSCR Profile section's debt service. The balloon is a SEPARATE line
-    (senior to equity but excluded from the scheduled DSCR, so the two sections do not present
-    contradictory coverage). The model sweeps 100% of post-senior cash to equity, so
-    ``cash_to_equity`` is the distribution (no reserve build-up beyond the DSRA funded at close).
+    Sourced from the engine's own published per-row figures (CCCDIR — one source of truth).
+    ``cfads`` is the PROJECT-basis CFADS (unlevered tax), and ``scheduled_debt_service`` is the
+    debt service the DSCR divides. The balloon is a SEPARATE line (senior to equity but excluded
+    from the scheduled DSCR). #1897: the DSCR numerator is the coverage CFADS (levered tax) less
+    the senior fee; when the run publishes it, ``has_coverage_basis`` is set and each row carries
+    the reconciliation, so the waterfall and the DSCR profile do not read as a contradiction.
+    ``cash_to_equity`` is the project-basis residual, not the sponsors' distributions.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -577,6 +587,19 @@ class WaterfallBlock(BaseModel):
     total_scheduled_debt_service: float
     total_balloon_sweep: float
     total_cash_to_equity: float
+    has_coverage_basis: bool = False
+    total_coverage_cfads: Optional[float] = None
+    #: #1897: the years where project-basis CFADS falls short of the waterfall's scheduled
+    #: debt service, and the lowest and highest covenant DSCR in those years. The report
+    #: states these figures; it never asserts the covenant is met.
+    shortfall_years: List[int] = Field(default_factory=list)
+    shortfall_dscr_min: Optional[float] = None
+    shortfall_dscr_max: Optional[float] = None
+    #: Years whose covenant DSCR is below 1.00x.
+    below_one_years: List[int] = Field(default_factory=list)
+    #: Years whose covenant debt service differs from the waterfall's scheduled debt
+    #: service (a capitalised bridge period, for example).
+    service_differs_years: List[int] = Field(default_factory=list)
 
 
 class ResourceTrendRow(BaseModel):
@@ -2902,6 +2925,7 @@ def _three_statement_block(
 def _waterfall_block(
     result: Optional[ThreeStatementResult],
     annual_rows: Optional[Sequence[Mapping[str, Any]]],
+    debt_result: Optional[Mapping[str, Any]] = None,
 ) -> Optional[WaterfallBlock]:
     """Project the cash-flow waterfall (by payment priority) into a report block (#481, RPT-2).
 
@@ -2913,7 +2937,13 @@ def _waterfall_block(
     """
     if result is None or not annual_rows:
         return None
-    wf = build_cashflow_waterfall(annual_rows)
+    wf = build_cashflow_waterfall(annual_rows, debt_result=debt_result)
+    short = [
+        r
+        for r in wf.rows
+        if r.scheduled_debt_service > 0.0 and r.cfads < r.scheduled_debt_service
+    ]
+    short_dscrs = [r.covenant_dscr for r in short if r.covenant_dscr is not None]
     return WaterfallBlock(
         currency=wf.currency,
         rows=[
@@ -2923,6 +2953,14 @@ def _waterfall_block(
                 scheduled_debt_service=r.scheduled_debt_service,
                 balloon_sweep=r.balloon_sweep,
                 cash_to_equity=r.cash_to_equity,
+                coverage_cfads=r.coverage_cfads,
+                bridge_cfads_credit=r.bridge_cfads_credit,
+                fee_in_project_basis=r.fee_in_project_basis,
+                tax_basis_difference=r.tax_basis_difference,
+                senior_fee=r.senior_fee,
+                covenant_cfads=r.covenant_cfads,
+                covenant_debt_service=r.covenant_debt_service,
+                covenant_dscr=r.covenant_dscr,
             )
             for r in wf.rows
         ],
@@ -2930,6 +2968,22 @@ def _waterfall_block(
         total_scheduled_debt_service=wf.total_scheduled_debt_service,
         total_balloon_sweep=wf.total_balloon_sweep,
         total_cash_to_equity=wf.total_cash_to_equity,
+        has_coverage_basis=wf.has_coverage_basis,
+        total_coverage_cfads=wf.total_coverage_cfads,
+        shortfall_years=[r.year for r in short],
+        shortfall_dscr_min=min(short_dscrs) if short_dscrs else None,
+        shortfall_dscr_max=max(short_dscrs) if short_dscrs else None,
+        below_one_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_dscr is not None and r.covenant_dscr < 1.0
+        ],
+        service_differs_years=[
+            r.year
+            for r in wf.rows
+            if r.covenant_debt_service is not None
+            and abs(r.covenant_debt_service - r.scheduled_debt_service) > 0.005
+        ],
     )
 
 
@@ -3442,7 +3496,7 @@ def build_report_context(
         multi_tech=_build_multi_tech(case_result, scenario_config),
         per_tech_chapters=_build_per_tech_chapters(case_result, scenario_config),
         three_statement=_three_statement_block(ts_result),
-        cashflow_waterfall=_waterfall_block(ts_result, annual_rows),
+        cashflow_waterfall=_waterfall_block(ts_result, annual_rows, debt_result),
         resource_trend=_build_resource_trend(resource_trend),
         site_analyses=site_analyses,
         irr_bridge=_irr_bridge_block(run_result),
