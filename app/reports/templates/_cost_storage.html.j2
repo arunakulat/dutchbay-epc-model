@@ -1,0 +1,136 @@
+{#- Cost and storage (#1825 slice iii), built by app/reports/cost_storage_section.py.
+    Included by report.html.j2 only when ctx.cost_storage is set, so other reports are
+    byte-identical. Beside the committed case, never a replacement for it. -#}
+{%- set cs = ctx.cost_storage %}
+  <section class="page cost-storage">
+    <h2>Cost and Storage</h2>
+    <p class="muted"><strong>Beside the committed case, not a revised case.</strong> Nothing in
+      this section changes the committed case or any figure elsewhere in this report.</p>
+    {% if cs.estimate_class %}
+    {% set ec = cs.estimate_class %}
+    <h3>Estimate class</h3>
+    <p>AACE Class {{ ec.estimate_class }}{% if not ec.declared %} (the repository default: the
+      scenario declares no capex.estimate_class){% endif %}: expected accuracy
+      {{ "%+.0f"|format(ec.low_pct) }}% to {{ "%+.0f"|format(ec.high_pct) }}% of the point
+      estimate, about {{ fmt_pct(ec.implied_sigma_pct) }} at one sigma.</p>
+    {% endif %}
+    {% if cs.capex_mc %}
+    {% set mc = cs.capex_mc %}
+    <h3>CAPEX Monte Carlo</h3>
+    <p class="muted">{{ mc.n_trials }} trials, seed {{ mc.seed }}, a normal CAPEX factor at one
+      sigma of {{ fmt_pct(mc.sigma_pct) }}: {{ mc.sigma_basis }}. Each trial scales the
+      pre-levy CAPEX base of {{ fmt_usd(mc.base_capex_usd) }} and re-runs the model; import
+      levies are re-applied on the scaled base. Lender guards: at least the lender-grade trial
+      floor, and no toy fallback. {{ mc.base_point }}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Figure</th>
+          <th style="text-align:right;">Committed</th>
+          <th style="text-align:right;">P10</th>
+          <th style="text-align:right;">P50</th>
+          <th style="text-align:right;">P90</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in mc.rows %}
+        {% set f = fmt_usd if r.unit == "usd" else (fmt_ratio_pct_or_undefined if r.unit == "pct" else fmt_x) %}
+        <tr><td>{{ r.label }}</td><td class="num">{{ f(r.committed) }}</td>
+          <td class="num">{{ f(r.p10) }}</td><td class="num">{{ f(r.p50) }}</td>
+          <td class="num">{{ f(r.p90) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Straight percentiles: P10 is the 10th percentile of each figure across the
+      trials. For CAPEX the adverse case is P90; for the returns and the DSCR it is P10.</p>
+    {% if mc.debt_sizing_note %}<p class="muted">{{ mc.debt_sizing_note }}</p>{% endif %}
+    {% endif %}
+    {% if cs.dispatch %}
+    {% set d = cs.dispatch %}
+    <h3>Storage dispatch</h3>
+    <p>{{ d.hours }} hours dispatched: {{ "{:,.1f}".format(d.charged_mwh) }} MWh charged,
+      {{ "{:,.1f}".format(d.discharged_mwh) }} MWh discharged, {{ "{:,.1f}".format(d.exported_mwh) }} MWh
+      exported, {{ "{:,.1f}".format(d.curtailed_mwh) }} MWh curtailed,
+      {{ "{:,.1f}".format(d.losses_mwh) }} MWh of losses and {{ "{:,.1f}".format(d.unmet_mwh) }} MWh
+      of unmet instructions. A physical ledger; it sets no revenue.</p>
+    {% endif %}
+    {% if cs.lcos %}
+    <h3>Levelised cost of storage</h3>
+    <p class="muted">At the run's discount rate of {{ fmt_ratio_pct(cs.lcos_discount_rate) }},
+      over its operating years, on the financed CAPEX (any declared price basis applied) and a
+      fixed-dispatch basis.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Battery</th>
+          <th style="text-align:right;">LCOS (USD/MWh)</th>
+          <th style="text-align:right;">PV of costs</th>
+          <th style="text-align:right;">PV of MWh discharged</th>
+          <th style="text-align:right;">Cycles a year</th>
+          <th style="text-align:right;">Depth of discharge</th>
+          <th style="text-align:right;">Round-trip efficiency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in cs.lcos %}
+        <tr><td>{{ r.technology }}</td>
+          <td class="num">{{ "undefined" if r.lcos_usd_per_mwh is none else "{:,.2f}".format(r.lcos_usd_per_mwh) }}</td>
+          <td class="num">{{ fmt_usd(r.pv_costs_usd) }}</td>
+          <td class="num">{{ "{:,.0f}".format(r.pv_discharged_mwh) }}</td>
+          <td class="num">{{ "{:,.0f}".format(r.cycles_per_year) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.depth_of_discharge) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.round_trip_efficiency) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% for r in cs.lcos %}
+    {% if r.benchmark_note %}<p class="muted">{{ r.technology }}: {{ r.benchmark_note }}</p>{% endif %}
+    {% for n in r.notes %}<p class="muted">{{ r.technology }}: {{ n }}</p>{% endfor %}
+    {% endfor %}
+    {% endif %}
+    {% if cs.bess_economics %}
+    <h3>Battery as its own project</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Battery</th>
+          <th style="text-align:right;">Landed CAPEX</th>
+          <th style="text-align:right;">NPV</th>
+          <th style="text-align:right;">IRR</th>
+          <th style="text-align:right;">Discount rate</th>
+          <th style="text-align:right;">Years</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in cs.bess_economics %}
+        <tr><td>{{ r.technology }}</td><td class="num">{{ fmt_usd(r.landed_capex_usd) }}</td>
+          <td class="num">{{ fmt_usd(r.npv_usd) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.irr_usd) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.discount_rate) }}</td>
+          <td class="num">{{ r.horizon_years }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Basis: {{ cs.bess_economics[0].currency_basis }}. A separate cashflow for the
+      battery; it moves no scenario KPI.</p>
+    {% endif %}
+    {% if cs.epc_margin %}
+    {% set e = cs.epc_margin %}
+    <h3>EPC construction margin</h3>
+    <p>Contract value {{ fmt_usd(e.contract_value) }} against a total cost of
+      {{ fmt_usd(e.total_cost) }}: gross margin {{ fmt_usd(e.gross_margin) }}
+      ({{ fmt_ratio_pct(e.gross_margin_pct) }} of the contract,
+      {{ fmt_ratio_pct(e.return_on_cost_pct) }} on cost) over {{ e.construction_months }} months.
+      Peak working capital {{ fmt_usd(e.peak_working_capital) }}; annualised IRR
+      {{ fmt_ratio_pct_or_undefined(e.annualized_irr) }}{% if e.irr_note %} ({{ e.irr_note }}){% endif %}.</p>
+    {% endif %}
+    {% if cs.parts_not_run %}
+    <p class="muted">Parts not run:</p>
+    <ul class="notes cost-storage-not-run">
+      {% for line in cs.parts_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>

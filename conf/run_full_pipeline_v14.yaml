@@ -257,3 +257,14 @@ lender_report:
       enabled: false
       n: 64
       metrics: [equity_npv, max_debt_usd]
+  # #1825 slice (iii): cost and storage section (AACE estimate class, CAPEX Monte Carlo
+  # under the lender guards, chronological storage dispatch, battery LCOS, battery-project
+  # economics, EPC margin). OPT-IN: off unless enabled. Each part runs only where the scenario
+  # declares its inputs and is otherwise listed with its reason. The CAPEX Monte Carlo re-runs
+  # the model once per trial (about 1 minute at 1000 trials); trials may not go under the
+  # lender-grade floor of 1000.
+  cost_storage:
+    enabled: false
+    capex_mc:
+      trials: 1000
+      seed: 12345

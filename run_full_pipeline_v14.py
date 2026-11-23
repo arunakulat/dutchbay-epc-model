@@ -1675,6 +1675,7 @@ def cli(cfg: DictConfig) -> None:
                 from app.reports.lender_report_emit import (
                     LENDER_REPORT_HTML_NAME,
                     capital_structure_settings_from_config,
+                    cost_storage_settings_from_config,
                     emit_lender_report_from_pipeline,
                     lender_sensitivity_settings_from_config,
                 )
@@ -1720,6 +1721,9 @@ def cli(cfg: DictConfig) -> None:
                     ),
                     sensitivities=lender_sensitivity_settings_from_config(
                         lender_report_cfg.get("sensitivities", None)
+                    ),
+                    cost_storage=cost_storage_settings_from_config(
+                        lender_report_cfg.get("cost_storage", None)
                     ),
                 )
                 result["lender_report"] = written.as_dict()

@@ -883,6 +883,7 @@
   </section>
   {% endif %}
 
+  {% if ctx.cost_storage %}{% include "_cost_storage.html.j2" %}{% endif %}
   {# 4h. Capital risk (canonical Monte-Carlo) — #776 / #657. Render-when-present; the MC runs
      out-of-band (heavy) and is passed in. Distributional covenant-breach + VaR/CVaR. #}
   {% if ctx.capital_risk %}

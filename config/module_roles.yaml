@@ -1148,6 +1148,11 @@ modules:
     role_description: Bounded TCFD-aligned climate-risk disclosure contract and standalone Jinja2 partial renderer.
     excel_representation: non_model_adapter
 
+  - module_path: app.reports.cost_storage_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in cost and storage section (AACE estimate class, CAPEX Monte Carlo under the lender guards, storage dispatch, battery LCOS, battery-project economics, EPC margin) beside the committed case.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.dbpl.fonts
     pipeline_stage: reporting_delivery
     role_description: Local-first DBPL font provisioning and substitution-provenance tracker for PDF output.

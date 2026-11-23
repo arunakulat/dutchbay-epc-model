@@ -87,6 +87,7 @@ READERS: Dict[str, str] = {
     "app/api/responses.py": "not_a_read",
     "app/models/inputs.py": "engine_input",
     "app/reports/capital_structure_section.py": "gateway",
+    "app/reports/cost_storage_section.py": "gateway",
     "app/reports/report_model.py": "gateway",
     "app/reports/solar_assessment.py": "guarded",
     "finance/bess_lcos.py": "guarded",
