@@ -385,6 +385,7 @@ def build_three_statement(
             if (
                 not covenant_locked
                 and prior_retained_bal == 0.0
+                and locked_cash_bal == 0.0
                 and _f(er, "retained_cash_usd") == 0.0
                 and t < n_rows - 1
             ):

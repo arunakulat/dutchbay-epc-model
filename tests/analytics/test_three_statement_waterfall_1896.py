@@ -391,3 +391,106 @@ def test_covenant_locked_drawdown_of_prior_retained_cash_preserves_partition() -
     assert ts.cash_flow[3].closing_cash == pytest.approx(0.0)
     assert ts.cash_flow[3].locked_cash_balance == pytest.approx(0.0)
     assert ts.cash_flow[3].retained_cash_balance == pytest.approx(0.0)
+
+
+def test_unlocked_bullet_shortfall_preserves_prior_locked_cash() -> None:
+    """Unlocked bullet shortfall after an earlier lock-up preserves locked cash without false tie-out failure."""
+    from finance.equity_distribution_v14_hydra import (
+        EquityDistributionConfig,
+        build_equity_distribution_schedule,
+    )
+
+    # Yr 1: locked (DSCR 1.20 < 1.25), CFADS 30 vs DS 25 -> traps 5.0 in locked_cash.
+    # Yr 2: unlocked (DSCR 2.00 >= 1.25), CFADS 20 vs DS 10 + bullet balloon 15 -> -5.0 cash call;
+    #       under bullet treatment, prior locked_cash (5.0) remains held in SPV cash.
+    # Yr 3: unlocked, CFADS 20 vs DS 0 -> releases prior locked_cash (5.0) + Yr 3 cash (20.0).
+    annual_rows = [
+        {
+            "year": 1,
+            "revenue_lkr": 3000.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 3000.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 5.0,
+            "debt_service_total": 25.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 30.0,
+            "dscr": 1.20,
+        },
+        {
+            "year": 2,
+            "revenue_lkr": 2000.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 2000.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 2.0,
+            "debt_service_total": 10.0,
+            "balloon_resolution": 15.0,
+            "cf_pre_debt": 20.0,
+            "dscr": 2.00,
+        },
+        {
+            "year": 3,
+            "revenue_lkr": 2000.0,
+            "opex_lkr": 0.0,
+            "ebitda_lkr": 2000.0,
+            "total_depreciation_lkr": 1000.0,
+            "tax_lkr": 0.0,
+            "fx_rate": 100.0,
+            "interest_usd": 0.0,
+            "debt_service_total": 0.0,
+            "balloon_resolution": 0.0,
+            "cf_pre_debt": 20.0,
+        },
+    ]
+    debt_result: Dict[str, Any] = {
+        "debt_total": 43.0,
+        "total_idc": 0.0,
+        "balloon_residual": 0.0,
+        "balloon_treatment": "bullet",
+    }
+    dist_cfg = EquityDistributionConfig(
+        project_life_years=3,
+        min_dscr_threshold=1.25,
+        min_reserve_months=0,
+        allow_default_equity_investment=True,
+        default_equity_investment_usd=57.0,
+    )
+    schedule = build_equity_distribution_schedule(
+        annual_rows=annual_rows,
+        debt_result=debt_result,
+        distribution_config=dist_cfg,
+    )
+    pipeline_result = {
+        "annual_rows": annual_rows,
+        "debt_result": debt_result,
+        "equity_distribution": {
+            "status": "computed",
+            "annual_distributions": schedule,
+        },
+    }
+    config: Dict[str, Any] = {
+        "capex": {"usd_total": 100.0},
+        "equity_distribution": {
+            "project_life_years": 3,
+            "min_dscr_threshold": 1.25,
+            "min_reserve_months": 0,
+        },
+    }
+    ts = build_three_statement_from_run(pipeline_result, config)
+    assert ts is not None and ts.tie_outs is not None
+    assert ts.tie_outs.all_pass is True
+    assert ts.tie_outs.waterfall_reconciles is True
+    verify_three_statement_waterfall_tieout(ts, pipeline_result["equity_distribution"])
+
+    assert ts.cash_flow[0].closing_cash == pytest.approx(5.0)
+    assert ts.cash_flow[0].locked_cash_balance == pytest.approx(5.0)
+    assert ts.cash_flow[1].closing_cash == pytest.approx(5.0)
+    assert ts.cash_flow[1].locked_cash_balance == pytest.approx(5.0)
+    assert -ts.cash_flow[1].distributions == pytest.approx(-5.0)
+    assert ts.cash_flow[2].closing_cash == pytest.approx(0.0)
+    assert -ts.cash_flow[2].distributions == pytest.approx(25.0)
