@@ -1,0 +1,122 @@
+{
+  "committed": {
+    "gross_gwh": 517.2,
+    "losses_pct": {
+      "availability_pct": 97.0,
+      "curtailment_pct": 2.0,
+      "electrical_loss_pct": 2.0,
+      "other_pct": 1.0,
+      "wake_loss_pct": 7.32
+    },
+    "n_turbines": 14,
+    "net_bankable_gwh": 433.2,
+    "net_modelled_gwh": 442.1,
+    "total_loss_pct": 14.52
+  },
+  "control": {
+    "delta_pct": 4.3261,
+    "description": "Gross energy with the density shift left out. It must fall outside the tolerance, which shows the comparison can fail.",
+    "gross_gwh": 539.5746,
+    "outside_tolerance": true
+  },
+  "delta_pct": {
+    "gross_gwh": 0.0172,
+    "net_bankable_gwh": 0.0267,
+    "net_modelled_gwh": 0.0133
+  },
+  "engine": {
+    "density_velocity_factor": 0.979161,
+    "distribution": "NREL-PySAM",
+    "machine": "x86_64",
+    "module": "Windpower",
+    "power_curve_grid_ms": 0.25,
+    "python": "3.12.3",
+    "resource_model": "Weibull (wind_resource_model_choice = 1)",
+    "version": "7.1.1.post1",
+    "wake_model": "constant (wind_farm_wake_model = 3), declared wake loss"
+  },
+  "inputs": {
+    "aep_summary_path": "scenarios/aep_summary_dutchbay_10mw.json",
+    "air_density_ref_kgm3": 1.225,
+    "air_density_site_kgm3": 1.15,
+    "hub_height_m": 150.0,
+    "losses_pct": {
+      "availability_pct": 97.0,
+      "curtailment_pct": 2.0,
+      "electrical_loss_pct": 2.0,
+      "other_pct": 1.0,
+      "wake_loss_pct": 7.32
+    },
+    "n_turbines": 14,
+    "p50_haircut_pct": 2.0,
+    "power_curve": {
+      "curve_key": "iea_reference_10mw",
+      "power_kw": [
+        37.874,
+        440.49,
+        1074.369,
+        1973.429,
+        3152.143,
+        4723.686,
+        6734.924,
+        7863.971,
+        9057.796,
+        10309.687,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.3,
+        10638.301
+      ],
+      "ws_ms": [
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        9.5,
+        10.0,
+        10.5,
+        11.0,
+        11.5,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        18.0,
+        20.0,
+        25.0
+      ]
+    },
+    "power_curve_store": "wind_resource/config/power_curves.yaml",
+    "rotor_diameter_m": 198.0,
+    "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "shear_exponent": 0.14,
+    "weibull_a_ms": 8.199,
+    "weibull_k": 2.665,
+    "weibull_reference_height_m": 150.0
+  },
+  "inputs_sha256": "fbf5c8da527676a4812081b7998d4f9401574447c1c24444f6e5c1c280394b2f",
+  "method_sha256": {
+    "conf/pysam_energy_crosscheck_1888.yaml": "ba952096a1f1c7fb4a8d170c623d38520975126b96ffd44b87b2e3061668c74d",
+    "scripts/run_pysam_energy_crosscheck.py": "aa162f40bba8dabbfe28fb428d7c7bca3b999709c302a0c3106bbc8ff926dff5"
+  },
+  "pysam": {
+    "gross_gwh": 517.2889,
+    "net_bankable_gwh": 433.3156,
+    "net_modelled_gwh": 442.1588,
+    "total_loss_pct": 14.5238
+  },
+  "schema": "dutchbay.pysam_energy_crosscheck.v1",
+  "tolerance_pct": 0.5,
+  "within_tolerance": true,
+  "work_item": "#1888"
+}

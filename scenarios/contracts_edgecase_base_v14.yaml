@@ -5,6 +5,7 @@ meta:
   description: "Minimal v14-compliant base scenario for contracts sensitivity edgecase tests."
 
 project:
+  jurisdiction: Sri Lanka  # binds the Sri Lanka pack (#1841)
   technology: "wind"
   capacity_mw: 150
   project_life_years: 25

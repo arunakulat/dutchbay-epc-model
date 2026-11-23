@@ -395,6 +395,8 @@ def _place_year(
 
     pretax = _parts(year_rows, "pretax_cfads_lkr")
     haircut = _parts(year_rows, "risk_haircut_amount_lkr")
+    # Absent unless ``cashflow.monthly.receivable_days`` is set (#1893 dolphin 2).
+    receivables = [float(row.get("receivables_change_lkr", 0.0)) for row in year_rows]
 
     posttax = _closing_residual(
         float(annual["posttax_cfads_lkr"]),
@@ -402,7 +404,10 @@ def _place_year(
     )
     cfads_final = _closing_residual(
         float(annual["cfads_final_lkr"]),
-        [posttax[i] - haircut[i] - aug[i] for i in range(len(year_rows))],
+        [
+            posttax[i] - haircut[i] - aug[i] - receivables[i]
+            for i in range(len(year_rows))
+        ],
     )
     factor = _usd_factor(annual)
     cfads_usd = _closing_residual(

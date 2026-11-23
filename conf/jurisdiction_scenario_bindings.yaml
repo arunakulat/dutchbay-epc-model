@@ -1,0 +1,22 @@
+# Which registered jurisdiction pack a scenario binds to (#1841 PR 3).
+#
+# A scenario names its jurisdiction in `project.jurisdiction`, by the code or by one of
+# the names below (any case). That name binds the scenario to the pack id and version
+# given here, for every subject the pack covers. Loader and checks:
+# analytics/jurisdiction_packs/scenario_binding.py.
+#
+# NOTHING IN THE ENGINE READS THE BINDING YET. Later slices of #1841 move statutory
+# values onto the pack. The Sri Lanka tax and levy code still refuses any other
+# jurisdiction on its own (#1882).
+#
+# Moving a jurisdiction to a new pack version is a one-line change here, and it needs
+# the zero-diff scenario sweep that every #1841 slice needs.
+
+schema_id: dutchbay.jurisdiction_scenario_bindings.v1
+jurisdictions:
+  - jurisdiction_code: LK
+    names:
+      - Sri Lanka
+      - LKA
+    pack_id: dutchbay.jurisdiction.lk
+    pack_version: 1.0.0

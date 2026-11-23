@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_float_dtype
 
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.reproducible_workbook import normalize_xlsx_reproducible
 
 PathLike = Union[str, Path]
@@ -26,8 +27,14 @@ EXECUTIVE_WORKBOOK_F5_CAVEAT = (
 # Zero-based row at which the Summary KPI table starts: row 1 holds the notice, row 2 is blank.
 _SUMMARY_TABLE_START_ROW = 2
 
+#: The sheet that carries the run identity (#1815), the same fields the API response
+#: manifest and the report context carry (``analytics.run_identity.RUN_IDENTITY_FIELDS``).
+RUN_MANIFEST_SHEET = "Manifest"
+
 __all__ = [
     "EXECUTIVE_WORKBOOK_F5_CAVEAT",
+    "RUN_MANIFEST_SHEET",
+    "read_workbook_run_manifest",
     "build_executive_workbook",
     "frames_from_pipeline_result",
     "serialize_resource_trend",
@@ -45,6 +52,7 @@ def build_executive_workbook(
     scenario_summary_df: pd.DataFrame,
     output_path: PathLike,
     resource_trend_df: Optional[pd.DataFrame] = None,
+    run_manifest: Optional[Mapping[str, Any]] = None,
 ) -> Path:
     """
     Build the lender-facing Executive Workbook for a single scenario.
@@ -64,6 +72,10 @@ def build_executive_workbook(
     - Writes the F-5 non-reliance notice (``EXECUTIVE_WORKBOOK_F5_CAVEAT``) in
       cell A1 of the "Summary" sheet, the first sheet; the KPI table follows
       from row 3, below one blank row.
+    - Adds a "Manifest" sheet (Field/Value) when ``run_manifest`` is supplied: the
+      run-identity fields of ``analytics.run_identity.RUN_IDENTITY_FIELDS``, the same
+      values the API response and the report carry (#1815). A null field is written as
+      an empty cell.
     - Returns the resolved Path to the created workbook.
 
     Inputs
@@ -117,6 +129,24 @@ def build_executive_workbook(
         # MEASNET long-term-reference basis for the forward P50.
         if resource_trend_df is not None:
             _to_excel(resource_trend_df, writer, "ResourceTrend")
+
+        if run_manifest is not None:
+            from analytics.run_identity import RUN_IDENTITY_FIELDS, run_identity
+
+            identity = run_identity(run_manifest, "executive workbook")
+            _to_excel(
+                pd.DataFrame(
+                    {
+                        "Field": list(RUN_IDENTITY_FIELDS),
+                        "Value": [
+                            "" if identity[key] is None else str(identity[key])
+                            for key in RUN_IDENTITY_FIELDS
+                        ],
+                    }
+                ),
+                writer,
+                RUN_MANIFEST_SHEET,
+            )
 
         # Ensure the Summary table has at least 3 rows below the notice:
         #   - header row
@@ -234,9 +264,26 @@ def _metric_value_df(source: Mapping[str, Any], keys: Sequence[str]) -> pd.DataF
     return pd.DataFrame(rows, columns=["Metric", "Value"])
 
 
-def _pipeline_summary_df(kpis: Mapping[str, Any]) -> pd.DataFrame:
-    """ "Summary" sheet: every scalar KPI as a tidy (Metric, Value) table."""
-    rows = [(k, kpis[k]) for k in sorted(kpis) if _is_scalar(kpis[k])]
+#: Label of the #1456 equity IRR ranking caveat on the "Summary" and "ScenarioSummary"
+#: sheets (#1688). It is a presentation label, not a KPI: it never enters ``kpis``.
+EQUITY_IRR_CAVEAT_LABEL = "equity_irr_caveat"
+
+
+def _pipeline_summary_df(
+    kpis: Mapping[str, Any], equity_irr_caveat: Optional[str] = None
+) -> pd.DataFrame:
+    """ "Summary" sheet: every scalar KPI as a tidy (Metric, Value) table.
+
+    When the equity IRR cannot rank the case (#1688), the caveat follows the
+    ``equity_irr`` row, so the two are read together.
+    """
+    rows: list[tuple[str, Any]] = []
+    for key in sorted(kpis):
+        if not _is_scalar(kpis[key]):
+            continue
+        rows.append((key, kpis[key]))
+        if key == "equity_irr" and equity_irr_caveat is not None:
+            rows.append((EQUITY_IRR_CAVEAT_LABEL, equity_irr_caveat))
     return pd.DataFrame(rows, columns=["Metric", "Value"])
 
 
@@ -308,10 +355,19 @@ def _pipeline_ratios_df(
     return pd.concat([ratios, covenants], ignore_index=True)
 
 
-def _pipeline_scenario_summary_df(kpis: Mapping[str, Any]) -> pd.DataFrame:
-    """ "ScenarioSummary" sheet: one headline row for this single scenario."""
-    row = {"scenario_name": kpis.get("scenario_name")}
-    row.update({k: kpis.get(k) for k in _SCENARIO_SUMMARY_KEYS})
+def _pipeline_scenario_summary_df(
+    kpis: Mapping[str, Any], equity_irr_caveat: Optional[str] = None
+) -> pd.DataFrame:
+    """ "ScenarioSummary" sheet: one headline row for this single scenario.
+
+    The ``equity_irr_caveat`` column follows ``equity_irr`` on every row (#1688). It is
+    empty when the equity IRR ranks the case, so the sheet's columns do not depend on it.
+    """
+    row: dict[str, Any] = {"scenario_name": kpis.get("scenario_name")}
+    for key in _SCENARIO_SUMMARY_KEYS:
+        row[key] = kpis.get(key)
+        if key == "equity_irr":
+            row[EQUITY_IRR_CAVEAT_LABEL] = equity_irr_caveat
     return pd.DataFrame([row])
 
 
@@ -336,12 +392,14 @@ def frames_from_pipeline_result(
     debt_result: Mapping[str, Any] = result.get("debt_result", {}) or {}
     scenario_result: Mapping[str, Any] = result.get("scenario_result", {}) or {}
     debt_covenants: Mapping[str, Any] = scenario_result.get("debt_covenants", {}) or {}
+    # #1688: the #1456 ranking caveat, read from the waterfall's equity summary.
+    caveat = equity_irr_caveat_from_run(result)
     return {
-        "summary": _pipeline_summary_df(kpis),
+        "summary": _pipeline_summary_df(kpis, caveat),
         "cashflow": _pipeline_cashflow_df(annual_rows),
         "debt": _pipeline_debt_df(debt_result),
         "ratios": _pipeline_ratios_df(kpis, debt_covenants),
-        "scenario_summary": _pipeline_scenario_summary_df(kpis),
+        "scenario_summary": _pipeline_scenario_summary_df(kpis, caveat),
     }
 
 
@@ -505,7 +563,34 @@ def emit_executive_workbook_from_pipeline(
         scenario_summary_df=frames["scenario_summary"],
         output_path=output_path,
         resource_trend_df=resource_trend_df,
+        run_manifest=(
+            result.get("run_manifest")
+            if isinstance(result.get("run_manifest"), Mapping)
+            else None
+        ),
     )
+
+
+def read_workbook_run_manifest(path: PathLike) -> Optional[dict[str, Any]]:
+    """Read the run identity back from a workbook's "Manifest" sheet, or ``None``.
+
+    The inverse of the sheet :func:`build_executive_workbook` writes: an empty cell reads
+    as null, and ``seed`` reads back as an integer.
+    """
+    import openpyxl
+
+    workbook = openpyxl.load_workbook(Path(path), read_only=True, data_only=True)
+    try:
+        if RUN_MANIFEST_SHEET not in workbook.sheetnames:
+            return None
+        rows = list(workbook[RUN_MANIFEST_SHEET].iter_rows(values_only=True))
+    finally:
+        workbook.close()
+    out: dict[str, Any] = {}
+    for field, value in rows[1:]:
+        text = None if value in (None, "") else str(value)
+        out[str(field)] = int(text) if field == "seed" and text is not None else text
+    return out
 
 
 # EOF

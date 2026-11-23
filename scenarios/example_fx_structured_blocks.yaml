@@ -12,6 +12,7 @@
 
 # Project Configuration
 project:
+  jurisdiction: Sri Lanka  # binds the Sri Lanka pack (#1841)
   name: "DutchBay 150MW Wind - FX Structured Example"
   capacity_mw: 150
   capacity_factor: 0.40

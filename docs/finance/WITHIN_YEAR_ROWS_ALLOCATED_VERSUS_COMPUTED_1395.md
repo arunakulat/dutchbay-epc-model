@@ -83,7 +83,8 @@ Each key of an annual row takes exactly one of four treatments. A key in no set 
 | `posttax_cfads_lkr` | Re-derived | The sub-period's pre-tax CFADS less the tax placed in it. |
 | `risk_haircut_amount_lkr` | Allocated | A share of the year's haircut, which the engine computes once on the annual post-tax CFADS. It is not the haircut rate times the sub-period's own post-tax CFADS. |
 | `bess_augmentation_capex_lkr` | Placed | The augmentation payment, placed on the calendar's dates, by default the year's first sub-period. |
-| `cfads_final_lkr` | Re-derived | Post-tax CFADS less the allocated haircut less the placed augmentation. |
+| `receivables_change_lkr` | Allocated | A share of the year's change in offtaker receivables. Present only when `cashflow.monthly.receivable_days` is set; the monthly cascade computes it month by month instead (#1893). |
+| `cfads_final_lkr` | Re-derived | Post-tax CFADS less the allocated haircut, the placed augmentation and the allocated receivables change. |
 | `cfads_risk_adjusted_lkr` | Re-derived | The same figure as `cfads_final_lkr`, under its alias. |
 | `revenue_usd` | Allocated | A share of the year's USD revenue. |
 | `cfads_usd` | Re-derived | `cfads_final_lkr` at the year's own LKR-to-USD factor (hedged or not), so no intra-year FX is modelled. |

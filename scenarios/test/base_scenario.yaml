@@ -1,4 +1,5 @@
 project:
+  jurisdiction: Sri Lanka  # binds the Sri Lanka pack (#1841)
   capacity_mw: 75
   capacity_factor_pct: 43
   degradation_pct: 0.5

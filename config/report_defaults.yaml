@@ -167,7 +167,8 @@ model_limitations:
       The model has no separately modelled major-maintenance reserve: the only reserve
       account it builds is the debt service reserve, so no major-maintenance spend is
       pre-funded from operating cash. The distribution lock-up is a single test, each
-      period's DSCR against one threshold (the scenario's lock-up covenant). There is no
+      period's DSCR against one threshold (the scenario's lock-up covenant, or the model's
+      default threshold where the scenario declares none). There is no
       forward-looking (projected) DSCR test and no multi-tier structure, such as a cash
       sweep tier or a separate default tier. Whether a transaction requires either, and in
       what form, depends on its term sheet and maintenance agreement, and none has been
