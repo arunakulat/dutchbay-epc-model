@@ -1,9 +1,10 @@
-"""Three-statement output (P&L / cash flow / balance sheet) with tie-out checks (#479).
+"""Three-statement output (P&L / cash flow / balance sheet) with tie-out checks (#479, #1896).
 
 Lenders expect the model's KPIs to be backed by three articulating financial statements. This
 module assembles them from the engine's own annual outputs — it adds no new finance logic
-(CESSPIT: every number originates from the enriched ``annual_rows`` + ``debt_result``), and is
-an additive, read-only view that cannot perturb the economics (KPI-neutral).
+(CESSPIT: every number originates from the enriched ``annual_rows`` + ``debt_result`` + the
+equity waterfall), and is an additive, read-only view that cannot perturb the economics
+(KPI-neutral).
 
 Currency: presented in **USD** (the reported-KPI numeraire). DutchBay is a multi-currency
 project — LKR revenue/opex/tax/depreciation but USD-denominated capex and debt — so the LKR
@@ -21,24 +22,38 @@ phantom-lockup bug). This module reads those per-row columns (``interest_usd``,
 period-indexed ``debt_result`` arrays, so the interest/principal stream is phase-correct and the
 year-1 bridge interest is not dropped.
 
-Articulation — by construction, with one INDEPENDENT tie-out
-------------------------------------------------------------
+Equity-waterfall reconciliation (#1896)
+--------------------------------------
+When the equity distribution waterfall applies (``build_three_statement_from_run`` with CFADS
+rows and enabled equity distribution), the statements reconcile period by period to the equity
+waterfall (``finance.equity_distribution_v14_hydra``):
+
+- Income statement tax uses the equity-facing (levered-tax) schedule when available.
+- Cash flow from operations includes ``cf_basis_adjustment`` (the CFADS risk haircut, any FX
+  hedge basis or bridge CFADS credit, grossed-up interest WHT, senior-fee arrears settled, and
+  terminal value), tying operating cash flow to the waterfall's ``cf_pre_debt_usd``.
+- Distributions equal ``-equity_distribution_usd`` (including negative distributions when a
+  sponsor cure / cash call occurs), and ``dividend_wht`` tracks remitted dividend withholding.
+- Closing cash tracks SPV-held cash (``reserve_balance`` DSRA + ``locked_cash_balance`` trapped
+  under covenant lock-up + ``retained_cash_balance`` from holdbacks / un-swept cash), releasing
+  at the horizon (``terminal_release_usd``) and remaining non-negative across refinance years.
+- When ``Financing_Terms.dsra.fund_at_close`` is enabled, ``opening_cash`` starts at
+  ``initial_dsra_usd`` so COD paid-in equity matches Sources & Uses.
+
+Articulation & independent tie-outs
+-----------------------------------
 Paid-in equity is the funding plug (capitalised cost + opening cash − debt drawn); cash rolls
 via the cash-flow statement; PP&E = capex + IDC + cumulative augmentation − accumulated
-depreciation; retained earnings roll (RE = prior + net income − distributions); distributions
-are the full free-cash sweep (CFO + CFI − debt repaid). With those roll-forwards the balance
+depreciation; retained earnings roll forward cleanly. With those roll-forwards the balance
 sheet balances **by construction** every year — so ``balance_sheet_balances`` /
 ``cashflow_reconciles`` / ``retained_earnings_rolls`` are articulation invariants asserted as a
-guard against a builder regression, NOT independent checks on the engine.
+guard against a builder regression.
 
-The genuinely **independent** tie-out is ``debt_retires_to_residual``: the per-row principal +
-balloon repayments, summed, must retire the engine's independently-stated drawn debt down to its
-stated balloon residual (within tolerance). It catches a debt stream that does not amortise the
-financed debt — the real consistency signal.
-
-Documented limitations (honest, not silently wrong): the tax line is the engine's computed tax
-(the model sequences cashflow → debt sizing, so it does not re-credit the full debt-interest
-shield); distributions assume a 100% sweep; equity is the balancing item.
+Two **independent** tie-outs verify consistency:
+- ``debt_retires_to_residual``: the per-row principal + balloon repayments, summed, must retire
+  the engine's independently-stated drawn debt down to its stated balloon residual.
+- ``waterfall_reconciles``: statement distributions, DSRA reserve balance/movement, and SPV
+  closing cash match the equity waterfall period by period, with non-negative closing cash.
 """
 
 from __future__ import annotations
@@ -87,10 +102,17 @@ class CashFlowRow:
     cfi: float  # investing
     debt_principal: float  # negative (scheduled amortisation)
     balloon_repaid: float  # negative (balloon sweep at maturity)
-    distributions: float  # negative (to equity)
+    distributions: float  # negative (to equity); positive when sponsor cure
     cff: float  # financing
     net_change_in_cash: float
     closing_cash: float
+    cf_basis_adjustment: float = 0.0
+    dividend_wht: float = 0.0
+    reserve_funded: float = 0.0
+    reserve_movement: float = 0.0
+    reserve_balance: float = 0.0
+    locked_cash_balance: float = 0.0
+    retained_cash_balance: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -111,13 +133,14 @@ class BalanceSheetRow:
 
 @dataclass(frozen=True)
 class TieOutStatus:
-    """Status of the articulation invariants + the independent debt-retirement check.
+    """Status of the articulation invariants + independent consistency checks.
 
     ``balance_sheet_balances`` / ``cashflow_reconciles`` / ``retained_earnings_rolls`` are
     articulation INVARIANTS — true by construction, asserted as a guard against a builder
-    regression. ``debt_retires_to_residual`` is the genuinely INDEPENDENT consistency check
-    (the per-row principal+balloon repayments must retire the engine's stated drawn debt to its
-    stated balloon residual).
+    regression. ``debt_retires_to_residual`` and ``waterfall_reconciles`` are the genuinely
+    INDEPENDENT consistency checks: per-row principal+balloon repayments retire drawn debt to
+    the balloon residual, and statement distributions, reserve movements, and SPV closing
+    cash match the equity waterfall period by period with non-negative closing cash (#1896).
     """
 
     balance_sheet_balances: bool
@@ -127,6 +150,8 @@ class TieOutStatus:
     max_abs_balance_residual: float
     debt_retirement_residual: float
     tolerance: float
+    waterfall_reconciles: bool = True
+    max_abs_waterfall_residual: float = 0.0
 
     @property
     def all_pass(self) -> bool:
@@ -135,6 +160,7 @@ class TieOutStatus:
             and self.debt_retires_to_residual
             and self.cashflow_reconciles
             and self.retained_earnings_rolls
+            and self.waterfall_reconciles
         )
 
 
@@ -165,6 +191,8 @@ def build_three_statement(
     opening_cash: float = 0.0,
     tolerance: float = DEFAULT_TIEOUT_TOLERANCE,
     balloon_interest: Optional[Sequence[float]] = None,
+    equity_rows: Optional[Sequence[Mapping[str, Any]]] = None,
+    equity_schedule: Optional[Sequence[Mapping[str, Any]]] = None,
 ) -> ThreeStatementResult:
     """Assemble the three statements from the engine's enriched annual rows.
 
@@ -190,10 +218,25 @@ def build_three_statement(
             interest is an expense and only the remainder retires debt; interest a cash
             sweep could not pay is capitalised, so the remainder can be negative and the
             balance grows. ``None`` treats the whole row as principal.
+        equity_rows: Optional equity-facing rows (levered tax). When supplied, ``tax_lkr``
+            comes from ``equity_rows`` so the P&L tax matches the SPV's levered tax.
+        equity_schedule: Optional equity waterfall schedule (from
+            ``finance.equity_distribution_v14_hydra``). When supplied, distributions, DSRA
+            reserve balances/movements, lock-up/retention balances, WHT, and closing cash tie
+            period by period to the waterfall (#1896).
 
     Returns:
         A :class:`ThreeStatementResult` with the three statements and the tie-out status.
     """
+    if equity_rows is not None and len(equity_rows) != len(annual_rows):
+        raise ValueError(
+            f"equity_rows length ({len(equity_rows)}) != annual_rows length ({len(annual_rows)})"
+        )
+    if equity_schedule is not None and len(equity_schedule) != len(annual_rows):
+        raise ValueError(
+            f"equity_schedule length ({len(equity_schedule)}) != annual_rows length ({len(annual_rows)})"
+        )
+
     paid_in_equity = gross_capitalised_cost + opening_cash - debt_drawn
 
     income: List[IncomeStatementRow] = []
@@ -201,16 +244,23 @@ def build_three_statement(
     balance_sheet: List[BalanceSheetRow] = []
 
     cash = opening_cash
+    prev_reserve = opening_cash if equity_schedule is not None else 0.0
+    wf_spv_cash = opening_cash
+    retained_cash_bal = 0.0
     accum_dep = 0.0
     cum_aug = 0.0
     retained = 0.0
     debt_balance = debt_drawn
     total_repaid = 0.0
     max_residual = 0.0
+    max_wf_residual = 0.0
     cf_reconciles = True
     re_rolls = True
+    wf_reconciles = True
 
+    n_rows = len(annual_rows)
     for t, row in enumerate(annual_rows):
+        tax_row = equity_rows[t] if equity_rows is not None else row
         year = int(_f(row, "year", t + 1))
         fx = 1.0
         if fx_rates is not None and t < len(fx_rates):
@@ -235,7 +285,7 @@ def build_three_statement(
         opex = _f(row, "opex_lkr") / fx
         ebitda = _f(row, "ebitda_lkr") / fx
         dep = _f(row, "total_depreciation_lkr") / fx
-        tax = _f(row, "tax_lkr") / fx
+        tax = _f(tax_row, "tax_lkr") / fx
         ebit = ebitda - dep
         pretax_income = ebit - interest
         net_income = pretax_income - tax
@@ -257,13 +307,101 @@ def build_three_statement(
         # ---- cash-flow statement (indirect) ---------------------------------
         aug = _f(row, "bess_augmentation_capex_lkr") / fx
         cum_aug += aug
-        cfo = net_income + dep  # interest & tax already in net income
         cfi = -aug
-        # Full sweep of free cash to equity after ALL debt repaid (amortisation + balloon).
-        distributions = max(0.0, cfo + cfi - total_debt_repaid)
-        cff = -total_debt_repaid - distributions
-        net_change = cfo + cfi + cff
-        cash += net_change
+
+        if equity_schedule is not None:
+            er = equity_schedule[t]
+            cf_pre_debt_wf = _f(er, "cf_pre_debt_usd")
+            wht_on_interest = _f(er, "wht_on_interest_usd")
+            wht_on_dividends = _f(er, "wht_on_dividends_usd")
+            arrears_settled = _f(er, "senior_fee_arrears_settled_usd")
+            terminal_value = _f(er, "terminal_value_usd")
+            eq_dist = _f(er, "equity_distribution_usd")
+            wf_reserve_balance = _f(er, "reserve_balance_usd")
+            wf_reserve_funded = _f(er, "reserve_funded_usd")
+            covenant_locked = bool(er.get("covenant_locked", False))
+
+            # Bridge from P&L (EBITDA - tax) to the waterfall's cash basis (CFADS after
+            # risk haircut, FX hedge / bridge CFADS, grossed-up interest WHT, senior-fee
+            # arrears settlement, and terminal proceeds).
+            cf_basis_adj = (
+                (cf_pre_debt_wf + aug - (ebitda - tax))
+                - wht_on_interest
+                - arrears_settled
+                + terminal_value
+            )
+            cfo = net_income + dep + cf_basis_adj
+            distributions_cf = (
+                -eq_dist
+            )  # negative = paid to equity; positive = sponsor cure
+            div_wht_cf = -wht_on_dividends
+            cff = -total_debt_repaid + distributions_cf + div_wht_cf
+            net_change = cfo + cfi + cff
+            cash += net_change
+
+            reserve_mov = wf_reserve_balance - prev_reserve
+            prior_retained_bal = retained_cash_bal
+            if t == n_rows - 1 and wf_reserve_balance == 0.0 and abs(cash) <= tolerance:
+                locked_cash_bal = 0.0
+                retained_cash_bal = 0.0
+            elif covenant_locked:
+                locked_cash_bal = max(
+                    0.0, cash - wf_reserve_balance - retained_cash_bal
+                )
+            else:
+                locked_cash_bal = 0.0
+                retained_cash_bal = max(0.0, cash - wf_reserve_balance)
+
+            wf_spv_cash += (
+                cf_pre_debt_wf
+                - _f(er, "debt_service_usd")
+                - wht_on_interest
+                - _f(er, "balloon_resolution_usd")
+                - arrears_settled
+                - wht_on_dividends
+                - eq_dist
+                + terminal_value
+            )
+            period_wf_res = max(
+                abs((-distributions_cf) - eq_dist),
+                abs(reserve_mov - (wf_reserve_balance - prev_reserve)),
+                abs(cash - wf_spv_cash),
+                abs(service - _f(er, "debt_service_usd")),
+                abs((balloon + refi_interest) - _f(er, "balloon_resolution_usd")),
+                max(0.0, -cash),
+                max(0.0, wf_reserve_balance - cash),
+            )
+            if t == n_rows - 1:
+                period_wf_res = max(period_wf_res, abs(cash))
+            if (
+                not covenant_locked
+                and prior_retained_bal == 0.0
+                and _f(er, "retained_cash_usd") == 0.0
+                and t < n_rows - 1
+            ):
+                period_wf_res = max(period_wf_res, abs(cash - wf_reserve_balance))
+            max_wf_residual = max(max_wf_residual, period_wf_res)
+            if period_wf_res > tolerance:
+                wf_reconciles = False
+            prev_reserve = wf_reserve_balance
+            retained_delta = net_income + cf_basis_adj + distributions_cf + div_wht_cf
+        else:
+            cf_basis_adj = 0.0
+            div_wht_cf = 0.0
+            wf_reserve_funded = 0.0
+            reserve_mov = 0.0
+            wf_reserve_balance = 0.0
+            locked_cash_bal = 0.0
+            retained_cash_bal = 0.0
+            cfo = net_income + dep  # interest & tax already in net income
+            # Full sweep of free cash to equity after ALL debt repaid (amortisation + balloon).
+            distributions_out = max(0.0, cfo + cfi - total_debt_repaid)
+            distributions_cf = -distributions_out
+            cff = -total_debt_repaid + distributions_cf
+            net_change = cfo + cfi + cff
+            cash += net_change
+            retained_delta = net_income + distributions_cf
+
         cash_flow.append(
             CashFlowRow(
                 year=year,
@@ -274,10 +412,17 @@ def build_three_statement(
                 cfi=cfi,
                 debt_principal=-principal,
                 balloon_repaid=-balloon,
-                distributions=-distributions,
+                distributions=distributions_cf,
                 cff=cff,
                 net_change_in_cash=net_change,
                 closing_cash=cash,
+                cf_basis_adjustment=cf_basis_adj,
+                dividend_wht=div_wht_cf,
+                reserve_funded=wf_reserve_funded,
+                reserve_movement=reserve_mov,
+                reserve_balance=wf_reserve_balance,
+                locked_cash_balance=locked_cash_bal,
+                retained_cash_balance=retained_cash_bal,
             )
         )
 
@@ -286,7 +431,7 @@ def build_three_statement(
         ppe_net = gross_capitalised_cost + cum_aug - accum_dep
         debt_balance -= total_debt_repaid
         total_repaid += total_debt_repaid
-        retained += net_income - distributions
+        retained += retained_delta
         total_assets = ppe_net + cash
         total_equity = paid_in_equity + retained
         total_le = debt_balance + total_equity
@@ -312,7 +457,7 @@ def build_three_statement(
         if abs((cash - prior_cash) - net_change) > tolerance:
             cf_reconciles = False
         prior_re = balance_sheet[t - 1].retained_earnings if t > 0 else 0.0
-        if abs(retained - (prior_re + net_income - distributions)) > tolerance:
+        if abs(retained - (prior_re + retained_delta)) > tolerance:
             re_rolls = False
 
     # ---- the INDEPENDENT tie-out: do the per-row repayments retire the debt? --
@@ -326,6 +471,8 @@ def build_three_statement(
         max_abs_balance_residual=max_residual,
         debt_retirement_residual=debt_retirement_residual,
         tolerance=tolerance,
+        waterfall_reconciles=wf_reconciles,
+        max_abs_waterfall_residual=max_wf_residual,
     )
     return ThreeStatementResult(
         currency=currency,
@@ -380,6 +527,93 @@ def _resolve_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     return None
 
 
+def _has_cashflow_config(config: Mapping[str, Any]) -> bool:
+    """Return True when ``config`` carries enough scenario sections for ``build_annual_rows``."""
+    keys = {str(k).lower() for k in config.keys()}
+    return (
+        "tax" in keys
+        and "fx" in keys
+        and bool(keys & {"project", "generation", "tariff", "revenue", "parameters"})
+    )
+
+
+def _resolve_equity_rows_and_schedule(
+    pipeline_result: Mapping[str, Any],
+    config: Mapping[str, Any],
+    annual_rows: Sequence[Mapping[str, Any]],
+    debt_result: Mapping[str, Any],
+) -> Tuple[Optional[List[Mapping[str, Any]]], Optional[List[Dict[str, Any]]]]:
+    """Resolve the equity-facing (levered-tax) rows and equity waterfall schedule (#1896)."""
+    if not annual_rows:
+        return None, None
+    has_cfads = any(
+        key in annual_rows[0]
+        for key in ("cf_pre_debt", "cfads_usd", "cfads_final_lkr", "cfads_lkr")
+    )
+    if not has_cfads:
+        return None, None
+
+    from finance.equity_distribution_v14_hydra import (
+        _build_distribution_config,
+        build_equity_distribution_schedule,
+    )
+
+    dist_cfg = _build_distribution_config(config)
+    if not dist_cfg.enabled:
+        return None, None
+
+    raw_eq_rows = pipeline_result.get("equity_rows")
+    if isinstance(raw_eq_rows, list) and len(raw_eq_rows) == len(annual_rows):
+        equity_rows: List[Mapping[str, Any]] = list(raw_eq_rows)
+    elif _has_cashflow_config(config):
+        from analytics.pipeline_v14_enhanced import (
+            _equity_facing_rows,
+            _senior_fee_lkr_series,
+        )
+        from finance.cashflow_v14 import build_annual_rows
+
+        cfg_dict = dict(config)
+        rows_list = [dict(r) for r in annual_rows]
+        debt_dict = dict(debt_result)
+        fee_series = _senior_fee_lkr_series(debt_dict, rows_list)
+        equity_rows = list(
+            _equity_facing_rows(
+                cfg_dict,
+                rows_list,
+                debt_dict,
+                fee_series,
+                build_annual_rows=build_annual_rows,
+            )
+        )
+    else:
+        equity_rows = list(annual_rows)
+
+    ed = pipeline_result.get("equity_distribution")
+    if isinstance(ed, Mapping):
+        status = str(ed.get("status", ""))
+        if status == "disabled":
+            return None, None
+        raw_sched = ed.get("annual_distributions")
+        if (
+            status in ("computed", "defaulted")
+            and isinstance(raw_sched, list)
+            and len(raw_sched) == len(annual_rows)
+        ):
+            return equity_rows, [dict(r) for r in raw_sched]
+
+    schedule = build_equity_distribution_schedule(
+        annual_rows=equity_rows,
+        debt_result=debt_result,
+        distribution_config=dist_cfg,
+    )
+    if dist_cfg.terminal_value_usd > 0.0 and schedule:
+        schedule[-1]["terminal_value_usd"] = dist_cfg.terminal_value_usd
+        schedule[-1]["equity_distribution_usd"] = (
+            float(schedule[-1]["equity_distribution_usd"]) + dist_cfg.terminal_value_usd
+        )
+    return equity_rows, schedule
+
+
 def build_three_statement_from_run(
     pipeline_result: Mapping[str, Any],
     config: Mapping[str, Any],
@@ -388,10 +622,10 @@ def build_three_statement_from_run(
 ) -> Optional[ThreeStatementResult]:
     """Assemble the three statements (USD) from a ``run_v14_pipeline`` result, or ``None``.
 
-    Reads the enriched ``annual_rows`` (LKR P&L + per-year USD debt columns) and ``debt_result``
-    (the independent drawn debt + balloon residual + IDC). The capitalised asset base (USD) is
-    the financed capex (config ``capex.usd_total``) + IDC. Returns ``None`` when the required
-    inputs are absent (so callers attach it opportunistically).
+    Reads the enriched ``annual_rows`` (LKR P&L + per-year USD debt columns), ``debt_result``
+    (the independent drawn debt + balloon residual + IDC), and the equity waterfall schedule.
+    The capitalised asset base (USD) is the financed capex (config ``capex.usd_total``) + IDC.
+    Returns ``None`` when the required inputs are absent (so callers attach it opportunistically).
     """
     annual_rows = pipeline_result.get("annual_rows")
     debt_result = pipeline_result.get("debt_result")
@@ -414,6 +648,16 @@ def build_three_statement_from_run(
     debt_drawn = debt_principal_drawn + total_idc
     gross_capitalised = capex_usd + total_idc
 
+    funding = debt_result.get("funding") or {}
+    opening_cash = (
+        float(_f(funding, "initial_dsra_usd", 0.0))
+        if isinstance(funding, Mapping) and bool(funding.get("fund_at_close"))
+        else 0.0
+    )
+    equity_rows, equity_schedule = _resolve_equity_rows_and_schedule(
+        pipeline_result, config, annual_rows, debt_result
+    )
+
     fx_rates = [_f(row, "fx_rate", 0.0) for row in annual_rows]
     return build_three_statement(
         annual_rows,
@@ -422,8 +666,11 @@ def build_three_statement_from_run(
         gross_capitalised_cost=gross_capitalised,
         fx_rates=fx_rates,
         currency="USD",
+        opening_cash=opening_cash,
         tolerance=tolerance,
         balloon_interest=_balloon_interest_by_row(debt_result, len(annual_rows)),
+        equity_rows=equity_rows,
+        equity_schedule=equity_schedule,
     )
 
 
@@ -708,6 +955,109 @@ def build_cashflow_waterfall(
     )
 
 
+def verify_three_statement_waterfall_tieout(
+    three_statement: ThreeStatementResult,
+    equity_distribution: Mapping[str, Any],
+    *,
+    opening_cash: float = 0.0,
+    tolerance: float = DEFAULT_TIEOUT_TOLERANCE,
+) -> None:
+    """Assert period-by-period equality between three statements and the equity waterfall (#1896).
+
+    Verifies that all statement tie-outs pass and that distributions, DSRA reserve balances and
+    movements, and SPV closing cash match ``equity_distribution["annual_distributions"]``
+    period by period with non-negative closing cash. Raises ``ValueError`` on any divergence.
+    """
+    if three_statement.tie_outs is None or not three_statement.tie_outs.all_pass:
+        raise ValueError(f"Three-statement tie-outs failed: {three_statement.tie_outs}")
+
+    schedule = equity_distribution.get("annual_distributions")
+    if not isinstance(schedule, Sequence) or isinstance(schedule, (str, bytes)):
+        raise ValueError(
+            "equity_distribution.annual_distributions is missing or invalid"
+        )
+    if len(three_statement.cash_flow) != len(schedule):
+        raise ValueError(
+            f"Cash-flow row count ({len(three_statement.cash_flow)}) != "
+            f"waterfall schedule count ({len(schedule)})"
+        )
+    if len(three_statement.balance_sheet) != len(schedule):
+        raise ValueError(
+            f"Balance-sheet row count ({len(three_statement.balance_sheet)}) != "
+            f"waterfall schedule count ({len(schedule)})"
+        )
+
+    prev_reserve = opening_cash
+    wf_cash = opening_cash
+    n_rows = len(schedule)
+    for t, (cf, bs, er) in enumerate(
+        zip(
+            three_statement.cash_flow,
+            three_statement.balance_sheet,
+            schedule,
+            strict=True,
+        )
+    ):
+        year = cf.year
+        wf_dist = _f(er, "equity_distribution_usd")
+        stmt_dist = -cf.distributions
+        if abs(stmt_dist - wf_dist) > tolerance:
+            raise ValueError(
+                f"Year {year}: statement distribution {stmt_dist:.2f} != "
+                f"waterfall distribution {wf_dist:.2f}"
+            )
+
+        wf_res_bal = _f(er, "reserve_balance_usd")
+        if abs(cf.reserve_balance - wf_res_bal) > tolerance:
+            raise ValueError(
+                f"Year {year}: statement reserve_balance {cf.reserve_balance:.2f} != "
+                f"waterfall reserve_balance_usd {wf_res_bal:.2f}"
+            )
+
+        expected_mov = wf_res_bal - prev_reserve
+        if abs(cf.reserve_movement - expected_mov) > tolerance:
+            raise ValueError(
+                f"Year {year}: statement reserve_movement {cf.reserve_movement:.2f} != "
+                f"waterfall reserve movement {expected_mov:.2f}"
+            )
+        prev_reserve = wf_res_bal
+
+        if cf.closing_cash < -tolerance:
+            raise ValueError(
+                f"Year {year}: statement closing_cash is negative ({cf.closing_cash:.2f})"
+            )
+        if abs(bs.cash - cf.closing_cash) > tolerance:
+            raise ValueError(
+                f"Year {year}: balance-sheet cash {bs.cash:.2f} != "
+                f"cash-flow closing_cash {cf.closing_cash:.2f}"
+            )
+
+        wf_cash += (
+            _f(er, "cf_pre_debt_usd")
+            - _f(er, "debt_service_usd")
+            - _f(er, "wht_on_interest_usd")
+            - _f(er, "balloon_resolution_usd")
+            - _f(er, "senior_fee_arrears_settled_usd")
+            - _f(er, "wht_on_dividends_usd")
+            - wf_dist
+            + _f(er, "terminal_value_usd")
+        )
+        if abs(cf.closing_cash - wf_cash) > tolerance:
+            raise ValueError(
+                f"Year {year}: statement closing_cash {cf.closing_cash:.2f} != "
+                f"waterfall SPV cash {wf_cash:.2f}"
+            )
+        if cf.closing_cash < wf_res_bal - tolerance:
+            raise ValueError(
+                f"Year {year}: statement closing_cash {cf.closing_cash:.2f} < "
+                f"DSRA reserve balance {wf_res_bal:.2f}"
+            )
+        if t == n_rows - 1 and abs(cf.closing_cash) > tolerance:
+            raise ValueError(
+                f"Year {year}: horizon closing_cash {cf.closing_cash:.2f} != 0 after terminal release"
+            )
+
+
 __all__ = [
     "DEFAULT_TIEOUT_TOLERANCE",
     "IncomeStatementRow",
@@ -720,4 +1070,5 @@ __all__ = [
     "build_three_statement",
     "build_three_statement_from_run",
     "build_cashflow_waterfall",
+    "verify_three_statement_waterfall_tieout",
 ]
