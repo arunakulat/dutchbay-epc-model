@@ -144,10 +144,14 @@ def _resolve_financed_capex_usd(config: Mapping[str, Any]) -> Optional[float]:
     Returns ``None`` when no CAPEX is resolvable (the resolver raises on an absent/empty
     CAPEX; the WBS is opportunistic and must not crash the run).
     """
+    from finance.capex_price_basis import UnappliedCapexPriceBasisError
     from finance.debt_v14 import _extract_capex_usd
 
     try:
         return float(_extract_capex_usd(dict(config)))
+    except UnappliedCapexPriceBasisError:
+        # #1899: an unapplied price date is a caller error, not a missing capex.
+        raise
     except (ValueError, TypeError, KeyError):
         return None
 

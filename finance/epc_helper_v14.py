@@ -201,9 +201,11 @@ def _resolve_capex_usd_total(config: Mapping[str, Any]) -> Optional[float]:
         >>> _resolve_capex_usd_total(config)
         10000000.0
     """
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.native_cost_inputs import normalize_native_capex
 
     config = normalize_native_capex(config)
+    refuse_unapplied_price_basis(config, "the EPC capex resolver")
     # Try canonical paths first
     capex = config.get("capex", {}) or {}
     if isinstance(capex, Mapping):

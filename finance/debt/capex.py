@@ -30,10 +30,12 @@ def _extract_capex_base_usd(params: Dict[str, Any]) -> float:
     levies). The financed, levy-inclusive total is the :func:`_extract_capex_usd`
     wrapper below.
     """
+    from finance.capex_price_basis import refuse_unapplied_price_basis
     from finance.native_cost_inputs import normalize_native_capex
 
     params = normalize_native_capex(params)
     validate_cost_input_currencies(params)
+    refuse_unapplied_price_basis(params, "the debt capex resolver")
     capex_section = _section_case_insensitive(params, "capex")
     if capex_section and _lookup_case_insensitive(
         capex_section, "derive_from_breakdown"
