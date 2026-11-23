@@ -544,7 +544,11 @@ class TestCliEmitWiring:
         out = json.loads(capsys.readouterr().out)
         assert out["executive_workbook_path"] == str(wb_path)
         assert wb_path.exists()
-        assert openpyxl.load_workbook(wb_path).sheetnames == _EXPECTED_SHEETS
+        # A real run carries its manifest, so the workbook adds the Manifest sheet (#1815).
+        assert openpyxl.load_workbook(wb_path).sheetnames == [
+            *_EXPECTED_SHEETS,
+            "Manifest",
+        ]
 
     def test_emit_on_defaults_path_under_export_dir(
         self, tmp_path, pipeline_result, monkeypatch, capsys
