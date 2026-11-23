@@ -164,8 +164,54 @@ def execute(cfg: dict, curve: Path, repo: Path) -> dict:
             np.full(12, float(old["weibull_k"])),
         )
     )
+    # Review-triggered, deliberately non-adopted stress cases. The farm's
+    # measured energy-bearing sector TI is nearer 0.07--0.085 than the 0.10
+    # legacy engine default. Rotate the complete distribution +/- 22.5 deg
+    # without mutating the original 16-sector wind rose (not an uncertainty
+    # distribution, just a directional adverse-case test).
+    robustness_cases = [
+        once("MCP_NASA_T2_external_TI_site_0p070", 0.07, x, y, count, freq, A, K),
+        once("MCP_NASA_T2_external_TI_site_0p085", 0.085, x, y, count, freq, A, K),
+    ]
+    for steps, name in [(-1, "minus_22p5deg"), (1, "plus_22p5deg")]:
+        robustness_cases.append(
+            once(
+                "MCP_NASA_T2_external_rose_" + name,
+                0.07,
+                x,
+                y,
+                count,
+                np.roll(freq, steps),
+                np.roll(A, steps),
+                np.roll(K, steps),
+            )
+        )
+    excluded = {"T1", "T13", "T14", "T15"}
+    flow = np.array([t["id"] not in excluded for t in turbines], dtype=bool)
+    if flow.sum() != 11 or count[flow].sum() != 10:
+        raise ValueError("TEC uncertainty sensitivity has unexpected counted layout")
+    robustness_cases.append(
+        once(
+            "MCP_NASA_TEC_open_T1_T13_T15_excluded_TI_0p070",
+            0.07,
+            x[flow],
+            y[flow],
+            count[flow],
+            freq,
+            A,
+            K,
+        )
+    )
     return {
         "status": "SCREENING_NOT_LENDER_GRADE",
+        "robustness_cases": robustness_cases,
+        "robustness_use": "Review-targeted non-bankable TI/direction/TEC sensitivities, not probabilistic bounds",
+        "source_limitations": [
+            "Bastankhah-PorteAgel far-wake model not validated near 2.2 rotor diameters",
+            "9.5 MW assumed cap changes power but retains 10.5 MW Ct, not a real derated curve",
+            "site mast directional residual and seasonal incomplete campaign not propagated",
+            "legacy ERA5 12-sector distribution is NOT like-for-like with NASA 16-sector transfer",
+        ],
         "source": "public frozen MCP/NASA 16-sector aggregate and EIA-derived site layout; private OEM curve supplied only at runtime",
         "turbine": {
             "model": c["model"],

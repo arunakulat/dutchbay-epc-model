@@ -13,3 +13,12 @@
 **Explicit not run/not satisfied:** full project CI/review pair, licensed wind/DERATE independent engineering study, updated ERA5 hourly fetch, site-specific P50/P90 qualification, verified utility network fault model, issued EIA amended consent, grid commissioning, updated OEM landed offer, FX/tenor under new case, Board/lender circulation authority and F-5 exit.
 
 **Current public-source-safe controls:** run tools/verify_public_package.py (does not require private OEM curve). The wind and grid reproduction scripts require their respective inputs and refuse to write output within the Git checkout. No secret-bearing environment contents are committed.
+
+## R3 remediation retest — 24 November 2026
+
+- Prior formal exact-head R3 review on PR #1942: three separate CHANGES_REQUESTED verdicts (domain, assurance and finance/E&S). They remain valid for the previous frozen head, not automatically resolved by remediation.
+- D1 safety tests cover OEM raw power units (watts, MW, NaN, negative), path overrides, Git trees, symlinks and invalid OCR selection.
+- D2 five wind/rose/TI/TEC screens (not stochastic bounds), explicit 7.32% vs 18.52% unresolved wake, retained 10.5 MW Ct at 9.5 MW clip and 2x90 MVA transformer N-1 not included in SCR.
+- D3 P04 DBPL regeneration corrects footer attribution and separates Puttalam/Wariyapola, historical 15-WTG EIA from proposed 14 EN206; full finance pipeline unchanged.
+- D4 public package verifier uses allowlisted inventory and PDF text/image and SHA checks, with extra hostile negative tests. Third-party derived-data rights remain unconfirmed.
+- Repeat independent reviews at new exact head; no green FAST test or deferred draft CI implies lender release.

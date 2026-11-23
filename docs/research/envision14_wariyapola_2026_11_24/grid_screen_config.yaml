@@ -3,7 +3,8 @@ classification: ADVISORY_SCREENING_NOT_UTILITY_VALIDATED
 base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
 line:
   description: Private proposed collector-to-Wariyapola 220kV route from EIA Annex III I
-  collector_bus: Wariyapola 220kV Switching Station — PROPOSED ONLY
+  collector_bus: Dutch Bay plant-end 220kV bus — ASSUMED
+  upstream_source_bus: Wariyapola 220kV — HYPOTHETICAL grid equivalent
   nominal_kv: 220.0
   route_km: 104.77
   double_circuit: true
@@ -20,6 +21,11 @@ electrical:
   screening_source_fault_mva: [500.0, 700.0, 900.0, 1100.0, 1500.0]
   assumed_source_rx: 0.083
   assumed_network_thevenin_x_r: 12.0
+  method: magnitude_only_closed_form_no_pandapower
+  grid_x_r_is_not_used_in_screening: true
+  transformer_n_minus_one_not_modelled: true
+  transformer_mva_each: 90.0
+  transformer_count: 2
   assumptions: No certified CEB fault MVA, P/Q curve or line R/X; study_enabled only for external screening.
 publication:
   screening_only: true
