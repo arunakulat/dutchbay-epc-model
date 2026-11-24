@@ -446,13 +446,31 @@ def validate_command_contract(subject: dict) -> None:
     contract = subject["command_contract"]
     require(
         isinstance(contract, dict)
-        and set(contract) == {"interpreter", "hook_config_sha256", "checks"}
+        and set(contract)
+        in (
+            {"interpreter", "hook_config_sha256", "checks"},
+            {
+                "interpreter",
+                "hook_config_sha256",
+                "checks",
+                "observed_execution_worktree",
+            },
+        )
         and isinstance(contract["interpreter"], str)
         and Path(contract["interpreter"]).is_absolute()
         and hex_value(contract["hook_config_sha256"])
         and isinstance(contract["checks"], list),
         "invalid command contract",
     )
+    if "observed_execution_worktree" in contract:
+        worktree = contract["observed_execution_worktree"]
+        require(
+            isinstance(worktree, str)
+            and Path(worktree).is_absolute()
+            and Path(worktree).as_posix() == worktree
+            and ".." not in Path(worktree).parts,
+            "invalid observed execution worktree",
+        )
     checks = contract["checks"]
     require(
         len(checks) == len(ordered_checks(subject)),
@@ -497,6 +515,25 @@ def validate_command_contract(subject: dict) -> None:
         ),
         "planned log collides with hook pass evidence",
     )
+    if "observed_execution_worktree" in contract:
+        require(
+            not log_names.intersection(
+                {
+                    item["log_name"] + ".execution.json"
+                    for item in checks
+                    if execution_check(item["check_id"])
+                }
+            ),
+            "planned log collides with execution sidecar",
+        )
+
+
+def execution_check(cid: str) -> bool:
+    return cid.startswith("types:") or cid == "regression"
+
+
+def observed_execution_required(subject: dict) -> bool:
+    return "observed_execution_worktree" in subject.get("command_contract", {})
 
 
 def command_contract_bound(subject: dict) -> bool:
@@ -512,6 +549,11 @@ def verify_contract_runtime(root: Path, subject: dict) -> None:
         return
     contract = subject["command_contract"]
     config = root / ready.CONFIG
+    if observed_execution_required(subject):
+        require(
+            str(root.resolve()) == contract["observed_execution_worktree"],
+            "observed execution worktree drift",
+        )
     require(
         contract["interpreter"] == sys.executable
         and config.is_file()
@@ -600,6 +642,8 @@ def check_bound_record(data: dict, start: dict, directory: Path) -> None:
         }
         if cid.startswith("types:"):
             fields.add("type_evidence")
+        if observed_execution_required(subject) and execution_check(cid):
+            fields.add("execution_observation_sha256")
         require(set(data) == fields, "invalid bound observation fields")
     if cid.startswith("types:"):
         plan = next(
@@ -615,6 +659,51 @@ def check_bound_record(data: dict, start: dict, directory: Path) -> None:
             data["command"] == type_command(plan),
             "type command differs from governed plan",
         )
+
+
+def verify_execution_evidence(
+    record: dict, subject: dict, directory: Path, prior_tip: str
+) -> None:
+    """Reconcile captured bytes against the anchored event; not authentication."""
+    pin = record.get("execution_observation_sha256")
+    require(hex_value(pin), "execution sidecar digest required")
+    raw = ready.read_regular(
+        evidence_file(directory, record["log_name"] + ".execution.json")
+    )
+    require(digest(raw) == pin, "execution sidecar digest mismatch")
+    evidence = json.loads(raw)
+    require(
+        isinstance(evidence, dict)
+        and set(evidence)
+        == {
+            "schema",
+            "observation",
+            "worktree",
+            "prior_tip",
+            "started_utc",
+            "finished_utc",
+            "candidate_state_unchanged",
+            "execution_authenticated",
+        }
+        and type(evidence["schema"]) is int
+        and evidence["schema"] == 1
+        and evidence["observation"]
+        == {k: v for k, v in record.items() if k != "execution_observation_sha256"}
+        and evidence["worktree"]
+        == subject["command_contract"]["observed_execution_worktree"]
+        and evidence["prior_tip"] == prior_tip
+        and evidence["candidate_state_unchanged"] is True
+        and evidence["execution_authenticated"] is False,
+        "execution sidecar binding mismatch",
+    )
+    started = datetime.fromisoformat(evidence["started_utc"])
+    finished = datetime.fromisoformat(evidence["finished_utc"])
+    require(
+        started.tzinfo is not None
+        and finished.tzinfo is not None
+        and started <= finished,
+        "invalid execution time evidence",
+    )
 
 
 def verify_readiness_evidence(record: dict, subject: dict, directory: Path) -> None:
@@ -862,6 +951,8 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
             require(bool(start), "journal start missing")
             if event == "CHECK_OBSERVED":
                 cid = data.get("check_id")
+                if not isinstance(cid, str):
+                    raise ValueError("invalid check identity")
                 require(
                     isinstance(cid, str)
                     and cid in start["required_checks"]
@@ -878,6 +969,10 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
                         "bound check order or prior failure",
                     )
                 check_bound_record(data, start, directory)
+                if observed_execution_required(start["subject"]) and execution_check(
+                    cid
+                ):
+                    verify_execution_evidence(data, start["subject"], directory, prev)
                 if (
                     schema == BOUND_SCHEMA
                     and cid == "readiness"
@@ -1005,6 +1100,9 @@ def inspect_journal(path: Path, expected_tip: str | None = None) -> dict:
         "checkpoint_verified": False,
         "legacy_historical_only": legacy,
         "command_contract_bound": rows[0].get("schema") == BOUND_SCHEMA,
+        "observed_execution_required": (
+            not legacy and observed_execution_required(rows[0]["data"]["subject"])
+        ),
         "report_observed": any(x["event"] == "REPORT_OBSERVED" for x in rows),
         "delivery_confirmed": False,
         "independent_review_complete": False,

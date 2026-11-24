@@ -154,6 +154,8 @@ def execute_check(args: argparse.Namespace, journal: Path) -> dict[str, Any]:
         stream.write(receipt.canonical(evidence) + b"\n")
         stream.flush()
         os.fsync(stream.fileno())
+    if receipt.observed_execution_required(subject):
+        observation["execution_observation_sha256"] = ready.digest(sidecar)
     tip = receipt._append_event(
         journal, "CHECK_OBSERVED", observation, args.expected_tip
     )

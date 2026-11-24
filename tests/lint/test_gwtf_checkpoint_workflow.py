@@ -168,6 +168,7 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
         lease["command_contract"] = {
             "interpreter": sys.executable,
             "hook_config_sha256": ready.digest(root / ready.CONFIG),
+            "observed_execution_worktree": str(root.resolve()),
             "checks": [
                 {"check_id": cid, "command": argv, "log_name": log}
                 for cid, argv, log in planned
@@ -276,6 +277,20 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
             assert evidence["candidate_state_unchanged"] is True
             assert evidence["execution_authenticated"] is False
             tip = observation["tip_sha256"]
+            assert receipt.parse_rows(j.read_text())[-1]["data"][
+                "execution_observation_sha256"
+            ] == ready.digest(sidecar)
+            assert (
+                call("inspect", "--expected-tip", tip)["observed_execution_required"]
+                is True
+            )
+            original_sidecar = sidecar.read_bytes()
+            sidecar.write_bytes(original_sidecar + b" ")
+            call("inspect", "--expected-tip", tip, ok=False)
+            sidecar.write_bytes(original_sidecar)
+            sidecar.unlink()
+            call("inspect", "--expected-tip", tip, ok=False)
+            sidecar.write_bytes(original_sidecar)
             execute(cid, ok=False)
     else:
         cmd = start["type_commands"]["types:strict"]

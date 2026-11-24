@@ -252,3 +252,73 @@ def test_schema_downgrade_refused_and_v2_remains_diagnostic(tmp_path: Path) -> N
     prior = tmp_path / "v2.jsonl"
     old_tip = receipt.append_event(prior, "STARTED", receipt.start_data(lease))
     assert receipt.inspect_journal(prior, old_tip)["command_contract_bound"] is False
+
+
+@pytest.mark.parametrize(
+    "mutation", ["missing", "tip", "worktree", "exit", "auth", "time", "hash", "none"]
+)
+def test_execution_sidecar_binding(tmp_path: Path, mutation: str) -> None:
+    lease = lease_fixture()
+    lease["command_contract"]["observed_execution_worktree"] = str(
+        tmp_path / "worktree"
+    )
+    start = receipt.start_data(lease)
+    journal = tmp_path / "events.jsonl"
+    tip = receipt.append_event(journal, "STARTED", start)
+    tip = receipt._append_event(
+        journal, "CHECK_OBSERVED", readiness_fixture(tmp_path, start), tip
+    )
+    planned = start["subject"]["command_contract"]["checks"][1]
+    log = tmp_path / planned["log_name"]
+    log.write_text("synthetic output, not attestation")
+    observation = {
+        **planned,
+        "subject_sha256": start["subject_sha256"],
+        "exit_code": 0,
+        "log_sha256": ready.digest(log),
+    }
+    sidecar = log.with_name(log.name + ".execution.json")
+    data: dict[str, Any] = {
+        "schema": 1,
+        "observation": copy.deepcopy(observation),
+        "worktree": str(tmp_path / "worktree"),
+        "prior_tip": tip,
+        "started_utc": "2026-01-01T00:00:00+00:00",
+        "finished_utc": "2026-01-01T00:00:01+00:00",
+        "candidate_state_unchanged": True,
+        "execution_authenticated": False,
+    }
+    if mutation == "tip":
+        data["prior_tip"] = "0" * 64
+    elif mutation == "worktree":
+        data["worktree"] = "/other"
+    elif mutation == "exit":
+        data["observation"]["exit_code"] = 1
+    elif mutation == "auth":
+        data["execution_authenticated"] = True
+    elif mutation == "time":
+        data["finished_utc"] = "2025-01-01T00:00:00+00:00"
+    sidecar.write_bytes(receipt.canonical(data))
+    observation["execution_observation_sha256"] = ready.digest(sidecar)
+    if mutation == "missing":
+        del observation["execution_observation_sha256"]
+    elif mutation == "hash":
+        sidecar.write_bytes(sidecar.read_bytes() + b" ")
+    before = journal.read_bytes()
+    if mutation == "none":
+        tip = receipt._append_event(journal, "CHECK_OBSERVED", observation, tip)
+        assert receipt.inspect_journal(journal, tip)["observed_execution_required"]
+        assert receipt.inspect_journal(journal, tip)["execution_authenticated"] is False
+    else:
+        with pytest.raises(ValueError):
+            receipt._append_event(journal, "CHECK_OBSERVED", observation, tip)
+        assert journal.read_bytes() == before
+
+
+def test_execution_sidecar_log_collision_refused(tmp_path: Path) -> None:
+    lease = lease_fixture()
+    lease["command_contract"]["observed_execution_worktree"] = str(tmp_path)
+    checks = lease["command_contract"]["checks"]
+    checks[2]["log_name"] = checks[1]["log_name"] + ".execution.json"
+    with pytest.raises(ValueError, match="execution sidecar"):
+        receipt.start_data(lease)
