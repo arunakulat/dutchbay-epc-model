@@ -175,6 +175,7 @@ def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
         "label": "Equity IRR",
         "value": None,
         "display": "undefined",
+        "unit": None,
     }
 
 
