@@ -281,41 +281,51 @@ def long_run_depreciation_band(
     *,
     frequency: str = "weekly",
     z: float = 1.959963984540054,
+    horizon_years: float | None = None,
     regimes: Sequence[tuple[str, str, str | None]] = DEFAULT_REGIMES,
     excluded_regimes: frozenset[str] = DEFAULT_EXCLUDED_REGIMES,
 ) -> dict[str, float]:
-    """The interval around the long-run depreciation that a Monte Carlo may sample (#1898).
+    """The interval around the long-run depreciation that a Monte Carlo may sample (#1898, #1917).
 
     :func:`calibrate_fx` sets ``fx.annual_depr`` from the annualised mean log-return over
     the usable regimes, ``mu``. That mean is an estimate: over ``T`` usable years with an
-    annualised volatility ``sigma``, its standard error is ``sigma / sqrt(T)``. The same
-    quantity is also the spread of a realised ``T``-year average around ``mu`` under a
-    random walk. This returns ``exp(mu) - 1`` with a symmetric decimal interval of ``z`` standard
-    errors, carried through ``d(exp(mu)) = exp(mu) * d(mu)``, so its midpoint is the drift
-    the scenario uses. It reads the same returns and exclusions as :func:`calibrate_fx`.
+    annualised volatility ``sigma``, its standard error is ``sigma / sqrt(T)``.
 
-    The interval is parameter uncertainty only: how well ``T`` years of history fix the
-    mean. The spread of the realised average over a project's own life ``H`` is a second,
-    independent variance, so the lifetime interval is wider, ``sigma * sqrt(1/T + 1/H)``
-    (about 1.41 times this one at ``T = H = 20``). A Monte Carlo that samples this band
-    therefore understates lifetime FX risk: read it as a lower bound (#1917).
+    When ``horizon_years`` is ``None`` (the parameter-only mode), the interval covers
+    historical-mean parameter uncertainty only, ``sigma / sqrt(T)`` (#1898). That mode
+    understates lifetime FX risk and should be read as a lower bound.
+
+    When ``horizon_years`` is given as the project's own life ``H``, the independent
+    interannual (realised-path) variance ``sigma^2 / H`` adds to the parameter variance
+    ``sigma^2 / T``, giving the combined standard error ``sigma * sqrt(1/T + 1/H)`` (#1917;
+    about 1.41 times wider at ``T = H = 20``). Both modes return ``exp(mu) - 1`` with a
+    symmetric decimal interval of ``z`` standard errors, carried through
+    ``d(exp(mu)) = exp(mu) * d(mu)``, so its midpoint is the drift the scenario uses. It
+    reads the same returns and exclusions as :func:`calibrate_fx`.
 
     Args:
         series: The provenance-bearing history (LKR per USD).
         frequency: Return frequency, as in :func:`calibrate_fx`.
         z: Standard errors on each side (default: the two-sided 95% normal quantile).
+        horizon_years: Optional project life ``H`` in years. When provided, includes the
+            interannual realised-path variance ``1/H`` alongside parameter variance ``1/T``.
         regimes: Ordered regime windows.
         excluded_regimes: Regimes left out of the estimate.
 
     Returns:
         ``annual_depr``, ``low`` and ``high`` (decimals), ``sigma_annual``,
-        ``usable_years`` and ``n_returns``.
+        ``usable_years`` and ``n_returns`` (plus ``horizon_years`` when provided).
 
     Raises:
-        ValueError: If fewer than two usable returns remain or ``z`` is not positive.
+        ValueError: If fewer than two usable returns remain, ``z`` is not positive, or
+            ``horizon_years`` is provided and not finite and positive.
     """
     if z <= 0:
         raise ValueError("z must be > 0")
+    if horizon_years is not None and (
+        not math.isfinite(horizon_years) or horizon_years <= 0
+    ):
+        raise ValueError("horizon_years must be > 0")
     keys, vals = to_periodic(series, frequency)
     ppy = _annualization_factor(frequency)
     usable = [
@@ -333,8 +343,12 @@ def long_run_depreciation_band(
     sigma = _stdev(usable) * math.sqrt(ppy)
     years = len(usable) / ppy
     centre = math.exp(mu) - 1.0
-    half = math.exp(mu) * z * sigma / math.sqrt(years)
-    return {
+    if horizon_years is None:
+        se = sigma / math.sqrt(years)
+    else:
+        se = sigma * math.sqrt(1.0 / years + 1.0 / horizon_years)
+    half = math.exp(mu) * z * se
+    out: dict[str, float] = {
         "annual_depr": centre,
         "low": centre - half,
         "high": centre + half,
@@ -342,6 +356,9 @@ def long_run_depreciation_band(
         "usable_years": years,
         "n_returns": float(len(usable)),
     }
+    if horizon_years is not None:
+        out["horizon_years"] = float(horizon_years)
+    return out
 
 
 class CalibratedFXSampler:
