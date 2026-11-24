@@ -51,6 +51,11 @@ def test_import_smoke_suite_does_not_poison_fx_tests() -> None:
             sys.executable,
             "-m",
             "pytest",
+            # Nested pytest may inherit disabled plugin autoload from the
+            # parent suite; load the pinned coverage plugin explicitly so
+            # --no-cov remains a valid option in that child process.
+            "-p",
+            "pytest_cov",
             _POISONER,
             *_VICTIMS,
             "--no-cov",
