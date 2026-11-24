@@ -1,0 +1,77 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Audited F-5 exit evidence pack & parity checks (#1893 Dolphin 4)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/run_f5_exit_evidence_v14.py and analytics/finance/f5_exit_evidence.py.
+# Committed outputs:
+#   - docs/finance/f5_exit_evidence_1893.json
+#   - docs/finance/F5_EXIT_EVIDENCE_PACK_1893.md
+#
+# Config-first (no site literals in Python code): all scenario paths, shapes, and
+# opt-in test parameters live here. All committed scenarios remain default-off with
+# zero KPI diff; HOLD union unchanged: F-5, #1110, v15.6.1.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+f5_exit_evidence:
+  scenarios_glob: "scenarios/**/*.yaml"
+  primary_scenario: "scenarios/dutchbay_lendercase_2025Q4.yaml"
+  hybrid_bess_scenario: "scenarios/dutchbay_hybrid_bess_2025Q4.yaml"
+  bess_augmentation_scenario: "scenarios/ceb_bess_10mw_capacity_charge.yaml"
+  shortfall_reference_scenario: "scenarios/blue_whale_wind_lot5b_2026.yaml"
+  expected_baseline_kpis_json: "tests/fixtures/finance/lendercase_expected_kpis.json"
+  source_files:
+    - "analytics/pipeline_v14_enhanced.py"
+    - "analytics/finance/p90_recomputed_downside.py"
+    - "analytics/finance/p90_cover.py"
+    - "analytics/finance/f5_exit_evidence.py"
+    - "analytics/three_statement.py"
+    - "analytics/run_identity.py"
+    - "finance/monthly_cascade_v14.py"
+    - "finance/quarterly_sculpting_v14.py"
+    - "finance/debt/layer.py"
+    - "finance/debt/plan.py"
+    - "finance/debt/sizing.py"
+    - "conf/f5_exit_evidence_1893.yaml"
+    - "scripts/run_f5_exit_evidence_v14.py"
+  tolerances:
+    reconciliation_rel: 1.0e-12
+    conservation_usd: 1.0e-5
+    dscr_abs: 1.0e-9
+    covenant_floor_eps: 1.0e-6
+    hand_oracle_rel: 1.0e-9
+  shapes:
+    seasonal: [0.06, 0.05, 0.05, 0.05, 0.10, 0.12, 0.13, 0.12, 0.10, 0.08, 0.07, 0.07]
+    mixed_sign_sparse: [0.25, 0.0, 0.0, 0.25, 0.0, 0.0, 0.25, 0.0, 0.0, 0.25, 0.0, 0.0]
+  cases:
+    cod_month: 7
+    hybrid_cod_month: 4
+    receivable_days: 30
+    semi_annual_quarters: [2, 4]
+    non_q4_quarters: [1, 3]
+    p90_cover_min_dscr: 1.15
+    hand_oracle_year_index: 2
+    hand_oracle_month_index: 7
+    augmentation_year_index: 9
+    hybrid_statutory_test:
+      success_fee_pct: 0.01
+      env_surcharge_pct: 0.0025
+      social_services_levy_pct: 0.02
+    hybrid_fx_hedge:
+      hedge_ratio: 0.5
+      spread_bps: 50
+  # Leave null to print JSON only; set to write the committed JSON evidence file.
+  summary_json: null
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
