@@ -1,0 +1,1 @@
+Exercise a real checkpoint lifecycle through the external pinned verifier closure, including hostile candidate imports and substitution refusal after checkpoint. Require independently reviewed launcher and manifest custody before operational reliance; direct candidate invocations are diagnostics. (#1945)

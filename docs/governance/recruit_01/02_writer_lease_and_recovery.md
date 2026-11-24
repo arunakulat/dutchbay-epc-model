@@ -125,12 +125,37 @@ limitations, not certified isolation. The stricter applicable rule always wins.
 ### 4.3 Coordinator CLI for the v2 checkpoint journal
 
 Use the governed Python interpreter and external, access-controlled evidence
-directory. After the R25 and lease checks, invoke
-`python -B scripts/gwtf_checkpoint_workflow.py --journal "$J" start --worktree "$W" --lease "$L"`
-with the exact applied-patch lease, including initial index digest, candidate
+directory. Before operational reliance, an independent reviewer must inspect
+the exact launcher and verifier module closure and verify their source object
+identities. An independent custodian must retain the launcher digest and the
+complete manifest digest outside the candidate worktree and writer control.
+The bundle contains only the reviewed launcher, readiness, receipt, recovery,
+incident and workflow Python files, plus the exact manifest with source commit
+and SHA256 of each file. Verify the launcher bytes against the independently
+retained pin before starting Python. Use the governed interpreter and its
+independently verified runtime; the private external bundle is not a sandbox.
+A copied candidate, fixture manifest or writer-issued pin is not independent
+approval. If the reviewed source, custody, pins or runtime are unavailable,
+stop operational qualification; direct candidate CLI runs are diagnostics only.
+
+After R25 and the lease checks, the reviewed external launcher can be invoked
+with this shape, where B is the private external bundle and PIN is the
+independently retained manifest digest (not recomputed from mutable input):
+
+```bash
+"$DUTCHBAY_VENV/bin/python" -I -S -B "$B/gwtf_trusted_verifier.py" \
+  --bundle "$B" --manifest-sha256 "$PIN" gwtf_checkpoint_workflow \
+  --journal "$J" start --worktree "$W" --lease "$L"
+```
+
+Supply the exact applied-patch lease, including initial index digest, candidate
 hashes and Git modes, and approved type plan. Retain the returned subject
 digest and journal tip in independent custody. The CLI returns planned type
-commands; it does not execute them.
+commands; it does not execute them. Route subsequent workflow subcommands
+through the same pinned launcher; use its readiness entry for both canonical
+readiness and staged comparison. Use the reviewed recovery and incident entries
+for those operations. Keep actual coordinator execution evidence separate
+from source pins and journal assertions.
 
 Run canonical readiness, the required targeted mypy and regression checks
 under the lease. For each actual observed result, prepare an external JSON

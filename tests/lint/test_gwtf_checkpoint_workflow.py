@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,7 +23,10 @@ def git(root: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
 
 
-def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "external", [False, True], ids=["direct-diagnostic", "external-fixture-pin"]
+)
+def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
     root = tmp_path / "repo"
     root.mkdir()
     git(root, "init", "-b", "main")
@@ -47,6 +52,64 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
         capture_output=True,
     )
     path.write_text("x: int = 2\n")
+    scope = [path.name]
+    bundle = tmp_path.resolve() / "review-fixture-bundle"
+    pin = ""
+    marker = root / "shadow-ran"
+    if external:
+        # This test uses a self-issued synthetic fixture pin, not an independent
+        # reviewer approval or operational custody claim.
+        bundle.mkdir(mode=0o700)
+        names = (
+            "gwtf_trusted_verifier.py",
+            "gwtf_checkpoint_readiness.py",
+            "gwtf_checkpoint_receipt.py",
+            "gwtf_checkpoint_workflow.py",
+            "gwtf_interruption_recovery.py",
+            "gwtf_incident.py",
+        )
+        for name in names:
+            shutil.copyfile(ROOT / "scripts" / name, bundle / name)
+            (bundle / name).chmod(0o600)
+        manifest = bundle / "manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "reviewed_commit": "a" * 40,
+                    "files": {name: ready.digest(bundle / name) for name in names},
+                }
+            )
+        )
+        manifest.chmod(0o600)
+        pin = ready.digest(manifest)
+        for name in ("gwtf_checkpoint_readiness.py", "pre_commit.py"):
+            (root / name).write_text(
+                "from pathlib import Path\nPath('shadow-ran').touch()\n"
+                "raise RuntimeError('candidate shadow')\n"
+            )
+            scope.append(name)
+
+    def verifier_command(entry: str, *args: str) -> list[str]:
+        if external:
+            return [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(bundle / "gwtf_trusted_verifier.py"),
+                "--bundle",
+                str(bundle),
+                "--manifest-sha256",
+                pin,
+                entry,
+                *args,
+            ]
+        return [sys.executable, "-B", str(ROOT / "scripts" / (entry + ".py")), *args]
+
+    # The inherited path is deliberately hostile in the external fixture.
+    # It must not replace any module in the pinned verifier closure.
+    env = dict(os.environ, PYTHONPATH=str(root)) if external else None
     lease: dict[str, Any] = {
         **ready.identity(root),
         "lease_id": "fixture",
@@ -54,14 +117,14 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
         "state": "PATCH_APPLIED",
         "holder": "fixture",
         "coordinator": "fixture",
-        "allowlist": [path.name],
-        "candidate_sha256": {path.name: ready.digest(path)},
-        "candidate_modes": {path.name: ready.git_mode(path)},
+        "allowlist": scope,
+        "candidate_sha256": {name: ready.digest(root / name) for name in scope},
+        "candidate_modes": {name: ready.git_mode(root / name) for name in scope},
         "type_plan": [
             {
                 "check_id": "types:strict",
                 "profile": "strict",
-                "scope": [path.name],
+                "scope": scope,
                 "interpreter": sys.executable,
                 "python_version": sys.version,
                 "mypy_version": subprocess.check_output(
@@ -79,8 +142,9 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
     def call(*args: str, ok: bool = True) -> dict[str, Any]:
         before = ready.identity(root), ready.snapshot(root)
         result = subprocess.run(
-            [sys.executable, "-B", str(CLI), "--journal", str(j), *args],
+            verifier_command("gwtf_checkpoint_workflow", "--journal", str(j), *args),
             cwd=root,
+            env=env,
             capture_output=True,
             text=True,
             check=False,
@@ -127,8 +191,11 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
         ]
 
     log = tmp_path / "readiness.jsonl"
-    ready.run_readiness(root, lease, log)
-    observe("readiness", [sys.executable, "-B", "readiness"], log, 0)
+    cmd = verifier_command("gwtf_checkpoint_readiness", *common, "--receipt", str(log))
+    result = subprocess.run(cmd, cwd=root, env=env, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert b"READY_FOR_FINAL_BYTE_TESTS" in result.stdout
+    observe("readiness", cmd, log, result.returncode)
     cmd = start["type_commands"]["types:strict"]
     result = subprocess.run(cmd, cwd=root, capture_output=True)
     log = tmp_path / "types.log"
@@ -143,12 +210,18 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
     log.write_bytes(result.stdout + result.stderr)
     assert result.returncode == 0
     observe("regression", cmd, log, result.returncode)
-    git(root, "add", path.name)
+    git(root, "add", *scope)
     log = tmp_path / "staged.json"
-    log.write_text(json.dumps(ready.verify_staged(root, lease)))
-    observe("staged", [sys.executable, "-B", "verify_staged"], log, 0)
-    cmd = ["git", "commit", "-m", "candidate"]
-    result = subprocess.run(cmd, cwd=root, capture_output=True)
+    cmd = verifier_command(
+        "gwtf_checkpoint_readiness", *common, "--receipt", str(log), "--verify-staged"
+    )
+    result = subprocess.run(cmd, cwd=root, env=env, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    observe("staged", cmd, log, result.returncode)
+    cmd = ready.git_command("commit", "-m", "candidate")
+    result = subprocess.run(
+        cmd, cwd=root, env=ready.hook_environment(root), capture_output=True
+    )
     log = tmp_path / "commit.log"
     log.write_bytes(result.stdout + result.stderr)
     assert result.returncode == 0
@@ -167,6 +240,16 @@ def test_anchored_cli_lifecycle(tmp_path: Path) -> None:
         "report", "--expected-tip", tip, "--channel", "chat", "--observation", "emitted"
     )["tip_sha256"]
     assert call("verify", *common, "--expected-tip", tip)["delivery_confirmed"] is False
+    assert not marker.exists()
+    if external:
+        # Prove the actual record/verify path refuses a changed bundle even
+        # when the journal and candidate remain unchanged.
+        module = bundle / "gwtf_checkpoint_receipt.py"
+        module.write_text("raise RuntimeError('substitute')\n")
+        before = j.read_bytes()
+        call("verify", *common, "--expected-tip", tip, ok=False)
+        assert j.read_bytes() == before
+        assert not marker.exists()
 
 
 @pytest.mark.parametrize(
