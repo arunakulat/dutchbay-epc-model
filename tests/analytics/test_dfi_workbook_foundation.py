@@ -2117,7 +2117,7 @@ def _libreoffice_displayed_cells(
     subprocess.run(
         [
             soffice,
-            f"-env:UserInstallation=file://{tmp_path / 'lo_profile'}",
+            f"-env:UserInstallation={(tmp_path / 'lo_profile').as_uri()}",
             "--headless",
             "--convert-to",
             "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true",
@@ -2133,10 +2133,14 @@ def _libreoffice_displayed_cells(
         return [row[0] if row else "" for row in csv.reader(handle)]
 
 
+@pytest.mark.parametrize("directory", ["plain", "space # percent %"])
 def test_misstating_formats_are_real_and_general_control_shows_the_value(
     tmp_path: Path,
+    directory: str,
 ) -> None:
     """Oracle: live LibreOffice rendering matches the committed fixture and controls."""
+    tmp_path = tmp_path / directory
+    tmp_path.mkdir()
     cases = _load_libreoffice_oracle_cases()
     cells = [(case["value"], case["number_format"]) for case in cases]
     shown = _libreoffice_displayed_cells(tmp_path, cells)

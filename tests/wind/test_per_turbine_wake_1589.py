@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict
@@ -97,8 +98,55 @@ def test_the_rose_follows_the_wind_direction() -> None:
 def test_the_farm_figures_do_not_move(fresh: Dict[str, Any]) -> None:
     committed = json.loads(SUMMARY.read_text())
     assert fresh["wake_loss_14_pct"] == committed["wake_loss_14_pct"] == 7.32
-    assert fresh["real_layout"] == committed["real_layout"]
-    assert fresh["synthetic_row"] == committed["synthetic_row"]
+    _assert_same_model_values(fresh["real_layout"], committed["real_layout"])
+    _assert_same_model_values(fresh["synthetic_row"], committed["synthetic_row"])
+
+
+def _assert_same_model_values(actual: Any, expected: Any) -> None:
+    """Permit only bounded float roundoff; preserve types, keys and provenance."""
+    assert type(actual) is type(expected)
+    if isinstance(expected, dict):
+        assert actual.keys() == expected.keys()
+        for key in expected:
+            _assert_same_model_values(actual[key], expected[key])
+    elif isinstance(expected, list):
+        assert len(actual) == len(expected)
+        for a, e in zip(actual, expected):
+            _assert_same_model_values(a, e)
+    elif isinstance(expected, float):
+        assert math.isfinite(actual) and math.isfinite(expected)
+        assert actual == pytest.approx(expected, rel=1e-12, abs=1e-10)
+    else:
+        assert actual == expected
+
+
+def test_machine_precision_comparison_accepts_observed_roundoff() -> None:
+    _assert_same_model_values(
+        {"energy": 432.9616663079632}, {"energy": 432.961666307966}
+    )
+
+
+@pytest.mark.parametrize(
+    "actual, expected",
+    [
+        ({"energy": 432.961667}, {"energy": 432.961666}),
+        ({"loss": 19.435306}, {"loss": 19.435305}),
+        ({"ratio": 1.000001}, {"ratio": 1.0}),
+        ({"count": True}, {"count": 1}),
+        ({"count": 14.0}, {"count": 14}),
+        ({"energy": 1}, {"energy": 1.0}),
+        ({"energy": float("nan")}, {"energy": 1.0}),
+        ({"energy": float("inf")}, {"energy": float("inf")}),
+        ({"model": "changed"}, {"model": "original"}),
+        ({"energy": 1.0, "extra": 2}, {"energy": 1.0}),
+        ([1, 2], [1]),
+    ],
+)
+def test_machine_precision_comparison_rejects_regression(
+    actual: Any, expected: Any
+) -> None:
+    with pytest.raises(AssertionError):
+        _assert_same_model_values(actual, expected)
 
 
 def test_the_committed_summary_carries_the_fresh_per_turbine_block(
