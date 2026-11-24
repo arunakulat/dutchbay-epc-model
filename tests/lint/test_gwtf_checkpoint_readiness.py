@@ -304,3 +304,88 @@ def test_git_environment_override_refused(
     monkeypatch.setenv(key, "hostile")
     with pytest.raises(ready.ReadinessError, match="environment override"):
         ready.identity(root)
+
+
+def test_ordinary_commit_uses_safe_hook_environment(
+    candidate: tuple, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, lease, receipt = candidate
+    shadow = root / "pre_commit.py"
+    shadow.write_text("from pathlib import Path\nPath('shadow-ran').touch()\n")
+    fake = root.parent / "injected-python"
+    fake.mkdir()
+    marker = fake / "site-ran"
+    (fake / "sitecustomize.py").write_text(
+        "from pathlib import Path\nPath(" + repr(str(marker)) + ").touch()\n"
+    )
+    monkeypatch.setenv("PYTHONPATH", str(fake))
+    monkeypatch.setenv("PYTHONHOME", str(fake))
+    lease["allowlist"].append(shadow.name)
+    lease["candidate_sha256"][shadow.name] = ready.digest(shadow)
+    lease["candidate_modes"][shadow.name] = ready.git_mode(shadow)
+    ready.run_readiness(root, lease, receipt)
+    git(root, "add", *lease["allowlist"])
+    env = ready.hook_environment(root)
+    assert "PYTHONPATH" not in env and "PYTHONHOME" not in env
+    result = subprocess.run(
+        ready.git_command("commit", "-m", "real ordinary hook"),
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "fixture check" in result.stdout + result.stderr
+    assert "Passed" in result.stdout + result.stderr
+    assert not (root / "shadow-ran").exists() and not marker.exists()
+
+
+def test_safe_environment_preserves_ordinary_hook_failure(candidate: tuple) -> None:
+    root, _, _ = candidate
+    before = ready.identity(root)["head"]
+    (root / "fixture_hook.py").write_text("raise SystemExit(17)\n")
+    git(root, "add", "fixture_hook.py", "candidate.txt")
+    result = subprocess.run(
+        ready.git_command("commit", "-m", "must not commit"),
+        cwd=root,
+        env=ready.hook_environment(root),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "Failed" in result.stdout + result.stderr
+    assert ready.identity(root)["head"] == before
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "PRE_COMMIT_HOME",
+        "BASH_ENV",
+        "ENV",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "BASH_FUNC_git%%",
+    ],
+)
+def test_hook_environment_rejects_loader_shell_cache_override(
+    candidate: tuple, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    root, lease, receipt = candidate
+    monkeypatch.setenv(key, "untrusted")
+    with pytest.raises(ready.ReadinessError, match="override present"):
+        ready.run_readiness(root, lease, receipt)
+    assert not any(x["state"] == "HOOK_PASS_OBSERVED" for x in events(receipt))
+
+
+def test_symlinked_installed_hook_is_refused(candidate: tuple) -> None:
+    root, lease, receipt = candidate
+    hook = root / ".git/hooks/pre-commit"
+    target = hook.with_name("outside-hook")
+    hook.rename(target)
+    hook.symlink_to(target)
+    with pytest.raises(ready.ReadinessError, match="installed executable"):
+        ready.run_readiness(root, lease, receipt)

@@ -144,7 +144,15 @@ in command arguments, logs or evidence files.
 
 Only the authorized writer may explicitly stage the exact tested allowlist,
 run the readiness utility's --verify-staged comparison and ordinary commit
-hooks. Record the staged and commit observations with their actual logs.
+hooks. For both readiness and the ordinary commit child, use the controlled
+hook environment from the independently trusted verifier's
+`hook_environment(worktree)`: remove inherited Python import-path overrides,
+enable safe-path and no-user-site behavior, and use the governed interpreter
+directory plus the system executable search path. Loader, shell, hook-cache
+and bypass overrides require reconciliation, not execution. The coordinator
+checks installed-hook, interpreter and cache custody separately; the helper
+only constructs the environment and does not commit or grant authority.
+Record the staged and commit observations with their actual logs.
 Use `complete --expected-tip "$TIP" --exit-code 0` only on observed successful
 completion, then retain that pre-checkpoint tip separately. Invoke
 `record --worktree "$W" --lease "$L" --expected-tip "$TIP"`, retain the new tip,

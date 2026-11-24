@@ -67,6 +67,37 @@ def git_command(*args: str) -> list[str]:
     return [executable, "--no-replace-objects", *args]
 
 
+def hook_environment(root: Path) -> dict[str, str]:
+    """Construct the hook child environment; never execute or authorize a commit.
+
+    Assumes the coordinator has independently established interpreter, installed
+    hook and cache custody. This is not a sandbox or an authentication claim.
+    """
+    git_command("version")  # Refuse existing Git and hook bypass overrides.
+    require(
+        not any(
+            k in {"PRE_COMMIT_HOME", "BASH_ENV", "ENV", "LD_PRELOAD", "LD_LIBRARY_PATH"}
+            or k.startswith(("DYLD_", "BASH_FUNC_"))
+            for k in os.environ
+        ),
+        "hook loader, shell or cache override present",
+    )
+    interpreter_dir = Path(sys.executable).parent
+    require(
+        interpreter_dir.is_absolute()
+        and not interpreter_dir.resolve().is_relative_to(root.resolve()),
+        "governed interpreter must be outside candidate worktree",
+    )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
+    env.update(
+        PATH=os.pathsep.join((str(interpreter_dir), os.defpath)),
+        PYTHONSAFEPATH="1",
+        PYTHONNOUSERSITE="1",
+        PYTHONDONTWRITEBYTECODE="1",
+    )
+    return env
+
+
 def git(root: Path, *args: str) -> bytes:
     return subprocess.check_output(git_command(*args), cwd=root)
 
@@ -264,7 +295,7 @@ def verify_candidate(
     require(cfg.returncode == 1, "custom or indeterminate hooks path")
     hook = root / git_text(root, "rev-parse", "--git-path", "hooks/pre-commit")
     require(
-        hook.is_file() and os.access(hook, os.X_OK),
+        hook.is_file() and not hook.is_symlink() and os.access(hook, os.X_OK),
         "installed executable pre-commit hook required",
     )
     candidate = {}
@@ -374,7 +405,11 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
             ]
             for attempt in (1, 2):
                 result = subprocess.run(
-                    command, cwd=root, capture_output=True, check=False
+                    command,
+                    cwd=root,
+                    env=hook_environment(root),
+                    capture_output=True,
+                    check=False,
                 )
                 log = receipt.with_name(receipt.name + f".pass{attempt}.log")
                 logfd = os.open(
