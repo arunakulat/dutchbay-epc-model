@@ -52,6 +52,7 @@ def candidate(tmp_path: Path) -> tuple[Path, dict, Path]:
         "coordinator": "fixture coordinator",
         "allowlist": ["candidate.txt"],
         "candidate_sha256": {"candidate.txt": ready.digest(root / "candidate.txt")},
+        "candidate_modes": {"candidate.txt": ready.git_mode(root / "candidate.txt")},
     }
     return root, lease, tmp_path / "receipt.jsonl"
 
@@ -133,12 +134,14 @@ def test_hook_effect_stops_and_preserves_state(candidate: tuple, effect: str) ->
         "index": "import subprocess\nsubprocess.run(['git','add','candidate.txt'],check=True)\n",
     }[effect]
     (root / "fixture_hook.py").write_text(code)
-    git(root, "add", "fixture_hook.py")
     # The fixture hook would mutate the candidate at commit time, so this test
     # models the hook result directly using the real pre-commit invocation below.
     # Keep the fixture's changed hook in the allowlist, no baseline commit needed.
     lease["allowlist"].append("fixture_hook.py")
     lease["candidate_sha256"]["fixture_hook.py"] = ready.digest(
+        root / "fixture_hook.py"
+    )
+    lease["candidate_modes"]["fixture_hook.py"] = ready.git_mode(
         root / "fixture_hook.py"
     )
     with pytest.raises(ready.ReadinessError):
@@ -162,3 +165,89 @@ def test_receipt_is_exclusive_and_external(candidate: tuple) -> None:
     assert receipt.read_text() == "prior evidence\n"
     with pytest.raises(ready.ReadinessError):
         ready.run_readiness(root, lease, root / "receipt.jsonl")
+
+
+@pytest.mark.parametrize(
+    "defect", ["staged", "partial", "mode", "missing_mode", "missing_index"]
+)
+def test_final_byte_preflight_rejects_index_and_mode_drift(
+    candidate: tuple, defect: str
+) -> None:
+    root, lease, receipt = candidate
+    path = root / "candidate.txt"
+    if defect == "staged":
+        git(root, "add", "candidate.txt")
+    elif defect == "partial":
+        path.write_text("different staged bytes\n")
+        git(root, "add", "candidate.txt")
+        path.write_text("candidate\n")
+    elif defect == "mode":
+        path.chmod(0o755 if ready.git_mode(path) == "100644" else 0o644)
+    elif defect == "missing_mode":
+        del lease["candidate_modes"]
+    else:
+        del lease["index_sha256"]
+    with pytest.raises(ready.ReadinessError):
+        ready.run_readiness(root, lease, receipt)
+    assert not any(x["state"] == "HOOK_PASS_OBSERVED" for x in events(receipt))
+
+
+@pytest.mark.parametrize(
+    "defect", ["none", "wrong_blob", "wrong_mode", "extra", "missing"]
+)
+def test_staged_comparison_uses_actual_index_objects(
+    candidate: tuple, defect: str
+) -> None:
+    root, lease, receipt = candidate
+    path = root / "candidate.txt"
+    ready.run_readiness(root, lease, receipt)
+    if defect == "wrong_blob":
+        path.write_text("different staged bytes\n")
+        git(root, "add", "candidate.txt")
+        path.write_text("candidate\n")
+    elif defect != "missing":
+        git(root, "add", "candidate.txt")
+    if defect == "wrong_mode":
+        git(
+            root,
+            "update-index",
+            (
+                "--chmod=+x"
+                if lease["candidate_modes"]["candidate.txt"] == "100644"
+                else "--chmod=-x"
+            ),
+            "candidate.txt",
+        )
+    if defect == "extra":
+        (root / "unrelated.txt").write_text("extra\n")
+        git(root, "add", "unrelated.txt")
+    before = ready.identity(root)
+    if defect == "none":
+        proof = ready.verify_staged(root, lease)
+        assert proof["staged_matches_candidate"] is True
+        assert proof["checkpoint_verified"] is False
+        assert (
+            proof["index_objects"]["candidate.txt"]["mode"]
+            == lease["candidate_modes"]["candidate.txt"]
+        )
+    else:
+        with pytest.raises(ready.ReadinessError):
+            ready.verify_staged(root, lease)
+    assert ready.identity(root) == before
+
+
+def test_candidate_module_cannot_shadow_governed_precommit(candidate: tuple) -> None:
+    root, lease, receipt = candidate
+    path = root / "pre_commit.py"
+    path.write_text(
+        "from pathlib import Path\nPath('shadow-ran').write_text('unexpected')\n"
+    )
+    lease["allowlist"].append(path.name)
+    lease["candidate_sha256"][path.name] = ready.digest(path)
+    lease["candidate_modes"][path.name] = ready.git_mode(path)
+    ready.run_readiness(root, lease, receipt)
+    assert not (root / "shadow-ran").exists()
+    for event in events(receipt):
+        if event["state"] == "HOOK_PASS_OBSERVED":
+            assert event["command"][1:4] == ["-I", "-m", "pre_commit"]
+            assert event["exit_code"] == 0

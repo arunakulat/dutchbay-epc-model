@@ -129,8 +129,28 @@ def snapshot(root: Path) -> dict[str, str]:
     return result
 
 
+def git_mode(path: Path) -> str:
+    """Git regular-file mode, not a certification of filesystem permissions."""
+    mode = path.lstat().st_mode
+    require(stat.S_ISREG(mode), "candidate must be a regular file")
+    return "100755" if mode & stat.S_IXUSR else "100644"
+
+
+def staged_entries(root: Path) -> dict[str, tuple[str, str]]:
+    """Read actual stage-zero index modes and object IDs, rejecting conflicts."""
+    entries = {}
+    for raw in git(root, "ls-files", "--stage", "-z").split(b"\0"):
+        if not raw:
+            continue
+        meta, name = raw.split(b"\t", 1)
+        mode, oid, stage = meta.decode("ascii").split()
+        require(stage == "0", "unmerged index entry")
+        entries[os.fsdecode(name)] = (mode, oid)
+    return entries
+
+
 def verify_candidate(
-    root: Path, lease: dict[str, Any]
+    root: Path, lease: dict[str, Any], *, staged: bool = False
 ) -> tuple[dict[str, str], dict[str, str], list[str]]:
     require(
         not any(k in os.environ for k in FORBIDDEN_ENV),
@@ -158,6 +178,14 @@ def verify_candidate(
         all(ident[k] == lease[k] for k in ("branch", "head", "tree", "base")),
         "lease Git identity mismatch",
     )
+    if not staged:
+        require(
+            ident["index_sha256"] == lease.get("index_sha256"), "initial index drift"
+        )
+        require(
+            not git(root, "diff", "--cached", "--name-only", "-z"),
+            "pre-staged candidate prohibited",
+        )
     scope = lease["allowlist"]
     require(
         isinstance(scope, list)
@@ -190,6 +218,7 @@ def verify_candidate(
         "installed executable pre-commit hook required",
     )
     candidate = {}
+    modes = {}
     for name in scope:
         p = path_at(root, name)
         require(
@@ -197,8 +226,45 @@ def verify_candidate(
             "G2 requires regular candidate files; deletions require separate handling",
         )
         candidate[name] = digest(p)
+        modes[name] = git_mode(p)
     require(candidate == lease["candidate_sha256"], "candidate content drift")
+    require(
+        modes == lease.get("candidate_modes"),
+        "candidate Git mode drift or missing mode evidence",
+    )
+    if staged:
+        require(
+            names(git(root, "diff", "--cached", "--name-only", "--no-renames", "-z"))
+            == set(scope),
+            "staged scope mismatch",
+        )
+        entries = staged_entries(root)
+        for name in scope:
+            require(name in entries, "candidate missing from index")
+            mode, oid = entries[name]
+            require(mode == modes[name], "staged Git mode mismatch")
+            require(
+                sha(git(root, "cat-file", "blob", oid)) == candidate[name],
+                "staged blob mismatch",
+            )
     return ident, snapshot(root), sorted(scope)
+
+
+def verify_staged(root: Path, lease: dict[str, Any]) -> dict[str, Any]:
+    """Read-only exact staged comparison; no stage, commit or approval authority."""
+    ident, _, scope = verify_candidate(root.resolve(), lease, staged=True)
+    entries = staged_entries(root.resolve())
+    return {
+        "identity": ident,
+        "candidate_sha256": lease["candidate_sha256"],
+        "candidate_modes": lease["candidate_modes"],
+        "index_objects": {
+            name: {"mode": entries[name][0], "oid": entries[name][1]} for name in scope
+        },
+        "staged_matches_candidate": True,
+        "checkpoint_verified": False,
+        "independent_review_complete": False,
+    }
 
 
 def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
@@ -239,10 +305,12 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
                 "PREFLIGHTED",
                 identity=ident,
                 candidate_sha256=lease["candidate_sha256"],
+                candidate_modes=lease["candidate_modes"],
                 config_sha256=digest(root / CONFIG),
             )
             command = [
                 sys.executable,
+                "-I",
                 "-m",
                 "pre_commit",
                 "run",
@@ -288,6 +356,7 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
             emit(
                 "READY_FOR_FINAL_BYTE_TESTS",
                 candidate_sha256=lease["candidate_sha256"],
+                candidate_modes=lease["candidate_modes"],
                 identity=ident,
                 checkpoint_verified=False,
                 tests_verified=False,
@@ -307,9 +376,32 @@ def main() -> int:
     parser.add_argument("--worktree", type=Path, required=True)
     parser.add_argument("--lease", type=Path, required=True)
     parser.add_argument("--receipt", type=Path, required=True)
+    parser.add_argument(
+        "--verify-staged",
+        action="store_true",
+        help="read-only staged comparison instead of hooks",
+    )
     args = parser.parse_args()
     try:
-        run_readiness(args.worktree, json.loads(args.lease.read_text()), args.receipt)
+        lease = json.loads(args.lease.read_text())
+        if args.verify_staged:
+            proof = verify_staged(args.worktree, lease)
+            path = args.receipt.resolve()
+            root = args.worktree.resolve()
+            require(
+                not path.is_relative_to(root)
+                and not any((p / ".git").exists() for p in path.parents),
+                "receipt must be outside Git worktrees",
+            )
+            with path.open("x", encoding="utf-8") as out:
+                os.fchmod(out.fileno(), 0o600)
+                json.dump(proof, out, sort_keys=True)
+                out.write("\n")
+                out.flush()
+                os.fsync(out.fileno())
+            print("STAGED_MATCHES_CANDIDATE — no commit or approval")
+            return 0
+        run_readiness(args.worktree, lease, args.receipt)
     except (
         OSError,
         ValueError,
