@@ -3,9 +3,15 @@
 set -euo pipefail
 stop() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
 [[ $# == 3 ]] || stop 'usage: gwtf-preflight.sh EXPECTED_WORKTREE EXPECTED_BRANCH EXPECTED_BASE_SHA'
-for variable in SKIP GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS PRE_COMMIT_ALLOW_NO_CONFIG; do
+for variable in SKIP GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_EXEC_PATH GIT_REPLACE_REF_BASE GIT_NO_REPLACE_OBJECTS GIT_EXTERNAL_DIFF GIT_NAMESPACE GIT_SHALLOW_FILE GIT_GRAFT_FILE PRE_COMMIT_ALLOW_NO_CONFIG; do
     [[ ! ${!variable+x} ]] || stop 'execution environment override present'
 done
+for variable in ${!GIT_CONFIG_KEY_@} ${!GIT_CONFIG_VALUE_@}; do
+    stop 'execution environment override present'
+done
+# Fixed system search path for Git only; do not change the caller's PATH.
+git_bin=$(PATH=/usr/bin:/bin command -v git) || stop 'system Git unavailable'
+git() { "$git_bin" --no-replace-objects "$@"; }
 expected_root=$(cd "$1" && pwd -P) || stop 'expected worktree unavailable'
 expected_branch=$2
 expected_base=$3
@@ -19,7 +25,7 @@ branch=$(git branch --show-current)
 git_dir=$(git rev-parse --path-format=absolute --git-dir)
 common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
 [[ "$git_dir" != "$common_dir" ]] || stop 'dedicated linked worktree required by this writer preflight'
-[[ "$(git rev-parse origin/main)" == "$expected_base" ]] || stop 'local origin/main differs from expected base'
+[[ "$(git rev-parse --verify refs/remotes/origin/main)" == "$expected_base" ]] || stop 'local origin/main differs from expected base'
 remote=$(git ls-remote --exit-code origin refs/heads/main) || stop 'live protected base unavailable'
 [[ "$remote" == "$expected_base"$'\t'refs/heads/main ]] || stop 'live protected base differs; refresh and reconcile'
 git merge-base --is-ancestor "$expected_base" HEAD || stop 'expected base is not an ancestor of HEAD'

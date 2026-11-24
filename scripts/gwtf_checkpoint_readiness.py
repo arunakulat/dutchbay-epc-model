@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -27,6 +28,16 @@ FORBIDDEN_ENV = (
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_CONFIG_COUNT",
     "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_EXEC_PATH",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_NAMESPACE",
+    "GIT_SHALLOW_FILE",
+    "GIT_GRAFT_FILE",
     "PRE_COMMIT_ALLOW_NO_CONFIG",
 )
 
@@ -40,8 +51,24 @@ def require(ok: bool, message: str) -> None:
         raise ReadinessError(message)
 
 
+def git_command(*args: str) -> list[str]:
+    """Use system Git and real objects, not candidate PATH or replace refs."""
+    require(
+        not any(k in os.environ for k in FORBIDDEN_ENV)
+        and not any(
+            k.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")) for k in os.environ
+        ),
+        "execution environment override present",
+    )
+    executable = shutil.which("git", path=os.defpath)
+    require(executable is not None, "system Git unavailable")
+    if executable is None:
+        raise ReadinessError("system Git unavailable")
+    return [executable, "--no-replace-objects", *args]
+
+
 def git(root: Path, *args: str) -> bytes:
-    return subprocess.check_output(["git", *args], cwd=root)
+    return subprocess.check_output(git_command(*args), cwd=root)
 
 
 def git_text(root: Path, *args: str) -> str:
@@ -123,7 +150,7 @@ def identity(root: Path) -> dict[str, str]:
         "branch": git_text(root, "branch", "--show-current"),
         "head": git_text(root, "rev-parse", "HEAD"),
         "tree": git_text(root, "rev-parse", "HEAD^{tree}"),
-        "base": git_text(root, "rev-parse", "origin/main"),
+        "base": git_text(root, "rev-parse", "--verify", "refs/remotes/origin/main"),
         "index_sha256": sha(git(root, "ls-files", "--stage", "-z")),
     }
 
@@ -229,7 +256,7 @@ def verify_candidate(
         "canonical hook configuration differs from HEAD",
     )
     cfg = subprocess.run(
-        ["git", "config", "--get", "core.hooksPath"],
+        git_command("config", "--get", "core.hooksPath"),
         cwd=root,
         capture_output=True,
         check=False,

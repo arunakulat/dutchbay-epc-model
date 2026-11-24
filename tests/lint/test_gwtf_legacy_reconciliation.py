@@ -168,3 +168,27 @@ def test_r10_local_hooks_and_ci_type_gates_remain_bound() -> None:
     )
     assert "full suite before pushing" in rules["R23"]["description"]
     assert "CLEANUP-01" in rules["R23"]["description"]
+
+
+def test_preflight_uses_exact_remote_tracking_ref(
+    linked: tuple[Path, Path, str],
+) -> None:
+    _, work, base = linked
+    git(work, "commit", "--allow-empty", "-m", "different head")
+    git(work, "tag", "origin/main", "HEAD")
+    result = preflight(work, work, "feat/fixture", base)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["GIT_CONFIG_GLOBAL", "GIT_EXEC_PATH", "GIT_REPLACE_REF_BASE", "GIT_CONFIG_KEY_0"],
+)
+def test_preflight_refuses_git_override(
+    linked: tuple[Path, Path, str], monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    _, work, base = linked
+    monkeypatch.setenv(key, "hostile")
+    result = preflight(work, work, "feat/fixture", base)
+    assert result.returncode != 0
+    assert "execution environment override present" in result.stderr

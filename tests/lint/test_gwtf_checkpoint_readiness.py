@@ -251,3 +251,56 @@ def test_candidate_module_cannot_shadow_governed_precommit(candidate: tuple) -> 
         if event["state"] == "HOOK_PASS_OBSERVED":
             assert event["command"][1:4] == ["-I", "-m", "pre_commit"]
             assert event["exit_code"] == 0
+
+
+def test_exact_remote_ref_and_real_blob_view(candidate: tuple) -> None:
+    root, lease, _ = candidate
+    # A same-name tag points to a different object, but the actual remote ref wins.
+    git(root, "commit", "--allow-empty", "-m", "second fixture commit")
+    git(root, "tag", "origin/main", "HEAD")
+    assert ready.identity(root)["base"] == lease["base"]
+    actual = ready.git_text(root, "rev-parse", "HEAD:candidate.txt")
+    alternate = ready.git_text(root, "rev-parse", "HEAD:fixture_hook.py")
+    git(root, "replace", actual, alternate)
+    # Ordinary Git reads the replacement, our verifier reads the actual blob.
+    assert (
+        subprocess.check_output(["git", "cat-file", "blob", actual], cwd=root)
+        == (root / "fixture_hook.py").read_bytes()
+    )
+    assert ready.git(root, "cat-file", "blob", actual) == b"base\n"
+
+
+def test_git_resolution_ignores_candidate_path(
+    candidate: tuple, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, lease, _ = candidate
+    fake = root / "fake-bin"
+    fake.mkdir()
+    marker = fake / "executed"
+    binary = fake / "git"
+    binary.write_text("#!/bin/sh\ntouch " + shlex.quote(str(marker)) + "\nexit 3\n")
+    binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake))
+    assert ready.identity(root)["base"] == lease["base"]
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "GIT_CONFIG_GLOBAL",
+        "GIT_CONFIG_SYSTEM",
+        "GIT_EXEC_PATH",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_CONFIG_KEY_0",
+        "GIT_CONFIG_VALUE_0",
+    ],
+)
+def test_git_environment_override_refused(
+    candidate: tuple, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    root, _, _ = candidate
+    monkeypatch.setenv(key, "hostile")
+    with pytest.raises(ready.ReadinessError, match="environment override"):
+        ready.identity(root)
