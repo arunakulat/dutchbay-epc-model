@@ -47,7 +47,7 @@
         "project_irr": -0.0013777935011814939,
         "project_npv": -87976535.91571534,
         "scenario_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
-        "scenario_sha256": "fb4cdaa645e6de61403ca375f7c486383208b7bd83cdf11003bc2994471dbf08"
+        "scenario_sha256": "603df259a930f425cb1bf66f94bfbeee76a6b4a689025f4418d13ce4df999324"
       },
       "shortfall_reference": {
         "avg_dscr": 1.36066190904521,
@@ -61,7 +61,7 @@
         "project_irr": 0.12764205206673865,
         "project_npv": 1729926.9205551958,
         "scenario_path": "scenarios/blue_whale_wind_lot5b_2026.yaml",
-        "scenario_sha256": "cc1544a70fbda2b8c4a43af93d893081523ba7c9b8e2a509d77c909609448eff"
+        "scenario_sha256": "f5da0f41c9490a71c614a3f13060f21b6516e49ca7e1273dd14f6835e745e6ce"
       }
     },
     "runnable_scenarios_scanned": 47,

@@ -25,7 +25,7 @@ Committed artifact: [f5_exit_evidence_1893.json](f5_exit_evidence_1893.json) (sc
 
 ### Gate 1 — Baseline Canon Invariance (`PASS`)
 - Scanned `47` runnable scenario YAMLs matching `scenarios/**/*.yaml`: `0` enable `cashflow.monthly`, `0` enable `receivables_lag`, and `0` enable `quarterly_sculpting`.
-- Primary lender case (`scenarios/dutchbay_lendercase_2025Q4.yaml`, SHA-256 `fb4cdaa645e6de61403ca375f7c486383208b7bd83cdf11003bc2994471dbf08`) preserves exact 43-KPI digest `f7c16d0129e0ad0f808641240637bd7a171b8fe4b2aa49201925bd4e6fb69c59`:
+- Primary lender case (`scenarios/dutchbay_lendercase_2025Q4.yaml`, SHA-256 `603df259a930f425cb1bf66f94bfbeee76a6b4a689025f4418d13ce4df999324`) preserves exact 43-KPI digest `f7c16d0129e0ad0f808641240637bd7a171b8fe4b2aa49201925bd4e6fb69c59`:
   - `max_debt_usd`: `$55,292,580.84` (`55292580.841819994`)
   - `min_dscr`: `1.3000` (`1.2999999999999998`)
   - `avg_dscr`: `1.3936` (`1.393606903991241`)
