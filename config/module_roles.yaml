@@ -1276,6 +1276,11 @@ modules:
     role_description: Vendor-neutral OEM tender gap dossier builder tracking extraction provenance and caveats.
     excel_representation: non_model_adapter
 
+  - module_path: app.reports.what_if_lender_risk_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in what-if (#1403/#1523) and FRAMEWORK-01 CASPER lender-risk blocks section beside the committed case.
+    excel_representation: non_model_adapter
+
   - module_path: app.reports.wind_rose_plot
     pipeline_stage: reporting_delivery
     role_description: Renders polar wind-rose plots for inclusion in lender assessment reports.
