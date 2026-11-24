@@ -205,11 +205,31 @@ def test_evaluate_with_casper_tail_risk_real_engine(tmp_path: object) -> None:
     assert result.monte_carlo.iterations == 6
     assert result.monte_carlo.failed_iterations == 0
     assert result.monte_carlo.success_rate() == 100.0
-    # Real distribution, ordered, finite.
+    # Real distribution, ordered, finite (NPV is always finite; #1746 p10 IRR may be
+    # None when >10% of high-depreciation tail trials have no IRR root under #1917).
+    npv_p10 = result.monte_carlo.project_npv_p10
+    npv_p50 = result.monte_carlo.project_npv_p50
+    npv_p90 = result.monte_carlo.project_npv_p90
+    assert (
+        isinstance(npv_p10, float)
+        and isinstance(npv_p50, float)
+        and isinstance(npv_p90, float)
+    )
+    assert npv_p10 <= npv_p50 <= npv_p90
+    assert npv_p90 - npv_p10 > 1e-4
+
     p10 = result.monte_carlo.project_irr_p10
+    p50 = result.monte_carlo.project_irr_p50
     p90 = result.monte_carlo.project_irr_p90
-    assert isinstance(p10, float) and isinstance(p90, float)
-    assert p10 <= result.monte_carlo.project_irr_p50 <= p90
+    assert isinstance(p50, float) and isinstance(p90, float)
+    assert p50 <= p90
+    if p10 is None:
+        irr_summary = result.monte_carlo.summary["project_irr"]
+        assert irr_summary["percentile_basis"] == "excluded_trials_ranked_worst"
+        assert isinstance(irr_summary["percentile_bound"], float)
+    else:
+        assert isinstance(p10, float)
+        assert p10 <= p50
 
     # Multi-tech generation view is now POPULATED (previously always None): the
     # wind profile carries the run's real P50 AEP (433.2 GWh, post 2% haircut; 464.3 for
