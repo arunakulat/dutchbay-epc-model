@@ -173,7 +173,7 @@ existing full pre-push or CI gates or enable the disabled local mypy hook
 enabled formatting, lint, import-order and file checks run automatically and GOV-02's
 `no-commit-to-branch` guard is active. Hooks live in `.git/hooks`, which git does not
 track, so a fresh clone starts with none. The local hook configuration does not enable mypy, consistent with the owner decision in
-[issue #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270). R10 names
+[the 26 October 2026 owner decision on #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270#issuecomment-6407805476). R10 names
 the active local hooks and mandatory CI type gates: `test-suite.yml` strict library/engine
 and scripts mypy checks, plus scoped checks in `ci_v14_fastlane.yml`, `fx-tests.yml` and
 `regression-smoke.yml`. The separate `make type` and CI type gates remain mandatory;

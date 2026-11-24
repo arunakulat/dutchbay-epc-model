@@ -161,7 +161,8 @@ R3 and CI remain mandatory. Version 1 records are historical claims only.
 
 ### 4.4 Predecessor disposition and verification limits
 
-The #1270 owner decision retains the disabled automatic local mypy hook;
+The [#1270 owner decision of 26 October 2026](https://github.com/arunakulat/dutchbay-epc-model/issues/1270#issuecomment-6407805476)
+retains the disabled automatic local mypy hook;
 R10 names the configured hooks and R21/R23 and applicable CI gates retain
 mandatory type verification. Local implementation is not issue closure;
 independent exact-object review and required CI still apply. #1262 remains
@@ -170,7 +171,8 @@ setup-path reachability. Do not claim that readiness or the v2 journal closes
 that gap. The scope of branch retirement remains §8 and CLEANUP-01; no new
 authority to retire unrelated or recovery branches is conferred.
 
-Policy fences check required active rule identities and scoped normative
+Policy fences preserve every active predecessor rule identity, reject duplicate
+identities and allow additive rules. They check scoped normative
 clauses, not a frozen total rule count. They detect specific hostile context
 mutations, not arbitrary natural-language contradictions. Independent semantic
 review and actual behavioral oracles remain mandatory.
