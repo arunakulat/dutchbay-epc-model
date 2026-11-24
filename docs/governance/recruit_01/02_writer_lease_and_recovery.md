@@ -108,6 +108,17 @@ rights independently before any new lease. Unknown outcomes, missing evidence,
 out-of-scope drift and platform execution restrictions fail closed; never
 bypass platform restrictions. These tools do not grant writer authority,
 retry permission, independent acceptance, required CI or merge authority.
+Incident v2 drift is measured against the expected Git-visible state immediately
+before the observed operation (including the authorized candidate and index),
+not against HEAD. Retain the baseline digest and execution-evidence digest;
+without them completion/unchanged claims cannot qualify. Unknown reporting of
+a completed operation requires reconciliation. Incident CLI exit 0 denotes
+only an observed successful, non-reconciliation disposition; exit 2 records
+a held or incomplete disposition, exit 1 refuses malformed evidence. A receipt
+write never authorizes retry or confirms delivery. CLI inputs must be regular
+external files, and failures use bounded diagnostics; original logs and
+authorized scope evidence still require controlled custody.
+
 Ignored paths and concurrent changes between observations are residual
 limitations, not certified isolation. The stricter applicable rule always wins.
 

@@ -61,6 +61,29 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def read_regular(path: Path) -> bytes:
+    """Refuse symlinks and special objects before reading a CLI input."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        require(
+            stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "regular input required"
+        )
+        return stream.read()
+
+
+def external_path(path: Path) -> Path:
+    path = path.absolute()
+    require(path.parent.is_dir(), "external parent missing")
+    require(
+        not any(p.is_symlink() for p in (path, *path.parents)), "symlink external path"
+    )
+    require(
+        not any((p / ".git").exists() for p in path.parents),
+        "external path must be outside Git worktrees",
+    )
+    return path
+
+
 def path_at(root: Path, name: str) -> Path:
     rel = Path(name)
     require(
@@ -270,7 +293,8 @@ def verify_staged(root: Path, lease: dict[str, Any]) -> dict[str, Any]:
 def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
     """Two clean pinned-hook passes; stop on any visible drift, never stage."""
     root = root.resolve()
-    receipt = receipt.resolve()
+    require(isinstance(lease, dict), "invalid lease object")
+    receipt = external_path(receipt)
     require(
         not receipt.is_relative_to(root)
         and not any(
@@ -279,7 +303,7 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
         "receipt must be outside Git worktrees",
     )
     require(receipt.parent.is_dir(), "receipt parent must already exist")
-    fd = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    fd = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
 
         def emit(state: str, **fields: Any) -> None:
@@ -326,7 +350,9 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
                     command, cwd=root, capture_output=True, check=False
                 )
                 log = receipt.with_name(receipt.name + f".pass{attempt}.log")
-                logfd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                logfd = os.open(
+                    log, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+                )
                 with os.fdopen(logfd, "wb") as out:
                     out.write(result.stdout + result.stderr)
                     out.flush()
@@ -366,7 +392,7 @@ def run_readiness(root: Path, lease: dict[str, Any], receipt: Path) -> None:
             emit(
                 "STOPPED_RECONCILIATION_REQUIRED",
                 error_type=type(exc).__name__,
-                message=str(exc),
+                message="readiness stopped; preserve evidence and reconcile",
             )
             raise
 
@@ -383,10 +409,11 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
-        lease = json.loads(args.lease.read_text())
+        lease = json.loads(read_regular(external_path(args.lease)))
+        require(isinstance(lease, dict), "invalid lease object")
         if args.verify_staged:
             proof = verify_staged(args.worktree, lease)
-            path = args.receipt.resolve()
+            path = external_path(args.receipt)
             root = args.worktree.resolve()
             require(
                 not path.is_relative_to(root)
@@ -406,10 +433,15 @@ def main() -> int:
         OSError,
         ValueError,
         KeyError,
+        TypeError,
+        AttributeError,
         ReadinessError,
         subprocess.CalledProcessError,
-    ) as exc:
-        print(f"STOP: {exc}", file=sys.stderr)
+    ):
+        print(
+            "STOP: checkpoint readiness refused; preserve evidence and reconcile",
+            file=sys.stderr,
+        )
         return 1
     print("READY_FOR_FINAL_BYTE_TESTS — no staging or commit performed")
     return 0

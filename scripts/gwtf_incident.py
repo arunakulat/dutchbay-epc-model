@@ -46,6 +46,7 @@ FIELDS = {
     "reporting",
     "drift",
     "evidence_sha256",
+    "baseline_sha256",
 }
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -81,11 +82,12 @@ def validate(observation: dict[str, Any]) -> None:
         or type(observation["platform_restriction"]) is bool,
         "invalid restriction state",
     )
-    digest = observation["evidence_sha256"]
-    require(
-        digest is None or (isinstance(digest, str) and bool(HEX.fullmatch(digest))),
-        "invalid evidence digest",
-    )
+    for key in ("evidence_sha256", "baseline_sha256"):
+        digest = observation[key]
+        require(
+            digest is None or (isinstance(digest, str) and bool(HEX.fullmatch(digest))),
+            "invalid evidence or baseline digest",
+        )
 
 
 def classify(observation: dict[str, Any]) -> dict[str, Any]:
@@ -93,6 +95,9 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
 
     Restrictions and uncertain execution always require reconciliation. This
     function has no process-control, Git mutation, retry or notification powers.
+    Drift is relative to the expected Git-visible state immediately before the
+    observed operation, not HEAD; an already applied patch is not itself drift.
+    The baseline digest is supplied evidence, not authenticated state.
     """
     validate(observation)
     x = observation
@@ -126,8 +131,11 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
         x["platform_restriction"] is None
         or execution == "UNKNOWN"
         or x["drift"] == "UNKNOWN"
+        or x["baseline_sha256"] is None
     ):
         kind = "UNKNOWN_OUTCOME"
+    elif execution in {"RUNNING", "NOT_STARTED"} and x["drift"] != "UNCHANGED":
+        kind = "RECONCILIATION_REQUIRED"
     elif execution == "RUNNING":
         kind = "EXECUTION_RUNNING"
     elif execution == "NOT_STARTED":
@@ -150,7 +158,12 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
     else:
         kind = "UNCLASSIFIED_EXECUTION_FAILURE"
 
-    if execution != "EXITED" or code is None or contradictory:
+    if (
+        execution != "EXITED"
+        or code is None
+        or contradictory
+        or x["evidence_sha256"] is None
+    ):
         report = "COMPLETION_NOT_ESTABLISHED"
     elif x["reporting"] == "NOT_OBSERVED":
         report = "COMPLETED_BUT_UNREPORTED"
@@ -160,14 +173,14 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
         report = "REPORTING_UNKNOWN"
 
     return {
-        "schema": 1,
+        "schema": 2,
         "execution_disposition": kind,
         "reporting_disposition": report,
         "contradictory_observations": contradictory,
         "platform_restriction_observed": x["platform_restriction"],
         "reconciliation_required": kind
         not in {"EXECUTION_RUNNING", "EXECUTION_NOT_STARTED", "EXECUTION_SUCCEEDED"}
-        or report == "COMPLETED_BUT_UNREPORTED",
+        or report in {"COMPLETED_BUT_UNREPORTED", "REPORTING_UNKNOWN"},
         "checkpoint_verified": False,
         "independent_review_complete": False,
         "writer_authorized": False,
@@ -198,9 +211,12 @@ def main() -> int:
     parser.add_argument("--receipt", type=Path, required=True)
     args = parser.parse_args()
     try:
-        observation = json.loads(args.observation.read_text())
+        observation = json.loads(
+            recovery.read_regular(receipt.safe_external(args.observation))
+        )
         tip = persist(observation, args.receipt)
-        print(json.dumps({"receipt_sha256": tip, **classify(observation)}, indent=2))
+        result = classify(observation)
+        print(json.dumps({"receipt_sha256": tip, **result}, indent=2))
     except (OSError, ValueError, KeyError, TypeError):
         # Avoid echoing arbitrary input content or sensitive filesystem paths.
         print(
@@ -208,8 +224,13 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    # A successful receipt write is not a successful underlying execution.
-    return 0
+    # Receipt persistence does not imply the underlying execution succeeded.
+    return (
+        0
+        if result["execution_disposition"] == "EXECUTION_SUCCEEDED"
+        and not result["reconciliation_required"]
+        else 2
+    )
 
 
 if __name__ == "__main__":

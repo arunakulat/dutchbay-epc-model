@@ -798,7 +798,7 @@ def append_event(path: Path, event: str, data: dict) -> str:
 
 def inspect_journal(path: Path, expected_tip: str | None = None) -> dict:
     path = safe_external(path)
-    rows = parse_rows(path.read_text())
+    rows = parse_rows(ready.read_regular(path).decode())
     require(bool(rows), "empty journal")
     legacy = rows[0].get("schema") == 1
     tip = (
@@ -837,7 +837,7 @@ def qualification_rows(
         == root,
         "incorrect worktree",
     )
-    rows = parse_rows(journal.read_text())
+    rows = parse_rows(ready.read_regular(journal).decode())
     require(
         bool(rows) and rows[0].get("schema") == SCHEMA,
         "legacy or empty journal cannot qualify",
@@ -1023,8 +1023,18 @@ def main() -> int:
     args = parser.parse_args()
     try:
         print(json.dumps(inspect_journal(args.journal, args.expected_tip), indent=2))
-    except (OSError, ValueError, KeyError, TypeError, ready.ReadinessError) as exc:
-        print(f"STOP: {exc}", file=sys.stderr)
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        ready.ReadinessError,
+    ):
+        print(
+            "STOP: checkpoint receipt refused; preserve evidence and reconcile",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

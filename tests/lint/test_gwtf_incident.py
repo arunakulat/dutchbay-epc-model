@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,7 @@ def observation(**overrides: object) -> dict:
         "reporting": "OBSERVED",
         "drift": "UNCHANGED",
         "evidence_sha256": "a" * 64,
+        "baseline_sha256": "b" * 64,
         **overrides,
     }
 
@@ -171,3 +175,145 @@ def test_external_receipt_exclusive_and_fixed_schema(tmp_path: Path) -> None:
     (repo / ".git").mkdir()
     with pytest.raises(ValueError):
         incident.persist(observation(), repo / "incident.json")
+
+
+@pytest.mark.parametrize(
+    "overrides,kind,report",
+    [
+        ({"reporting": "UNKNOWN"}, "EXECUTION_SUCCEEDED", "REPORTING_UNKNOWN"),
+        (
+            {"reporting": "NOT_OBSERVED", "evidence_sha256": None},
+            "MISSING_EXECUTION_EVIDENCE",
+            "COMPLETION_NOT_ESTABLISHED",
+        ),
+        (
+            {"baseline_sha256": None},
+            "UNKNOWN_OUTCOME",
+            "REPORT_OBSERVED_DELIVERY_UNCONFIRMED",
+        ),
+        (
+            {
+                "execution": "RUNNING",
+                "exit_code": None,
+                "reporting": "UNKNOWN",
+                "drift": "ALLOWLIST_ONLY",
+            },
+            "RECONCILIATION_REQUIRED",
+            "COMPLETION_NOT_ESTABLISHED",
+        ),
+        (
+            {"platform_restriction": True, "baseline_sha256": None},
+            "PLATFORM_EXECUTION_RESTRICTION",
+            "REPORT_OBSERVED_DELIVERY_UNCONFIRMED",
+        ),
+    ],
+)
+def test_uncertainty_requires_reconciliation(
+    overrides: dict, kind: str, report: str
+) -> None:
+    result = incident.classify(observation(**overrides))
+    assert result["execution_disposition"] == kind
+    assert result["reporting_disposition"] == report
+    assert result["reconciliation_required"] is True
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize(
+    "overrides,code",
+    [
+        ({}, 0),
+        ({"platform_restriction": True}, 2),
+        ({"reporting": "UNKNOWN"}, 2),
+        ({"evidence_sha256": None}, 2),
+        ({"baseline_sha256": None}, 2),
+        ({"execution": "RUNNING", "exit_code": None, "reporting": "UNKNOWN"}, 2),
+        ({"exit_code": 1, "failure": "TEST_FAILURE"}, 2),
+    ],
+)
+def test_incident_shell_gate(tmp_path: Path, overrides: dict, code: int) -> None:
+    source = tmp_path / "input.json"
+    target = tmp_path / "receipt.json"
+    source.write_text(json.dumps(observation(**overrides)))
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(ROOT / "scripts/gwtf_incident.py"),
+            "--observation",
+            str(source),
+            "--receipt",
+            str(target),
+        ],
+        capture_output=True,
+    )
+    assert result.returncode == code, result.stderr
+    assert target.is_file()
+    assert json.loads(result.stdout)["retry_authorized"] is False
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "gwtf_checkpoint_readiness",
+        "gwtf_checkpoint_receipt",
+        "gwtf_checkpoint_workflow",
+        "gwtf_incident",
+        "gwtf_interruption_recovery",
+    ],
+)
+@pytest.mark.parametrize("malformed", ["array", "fifo"])
+def test_cli_refuses_malformed_or_special_input(
+    tmp_path: Path, script: str, malformed: str
+) -> None:
+    source = tmp_path / "input.json"
+    if malformed == "fifo":
+        os.mkfifo(source)
+    else:
+        source.write_text('["PRIVATE_FIXTURE"]\n')
+    target = tmp_path / "output.json"
+    root = tmp_path / "repo"
+    root.mkdir()
+    if script == "gwtf_checkpoint_receipt":
+        args = [str(source)]
+    elif script == "gwtf_checkpoint_workflow":
+        args = [
+            "--journal",
+            str(target),
+            "start",
+            "--worktree",
+            str(root),
+            "--lease",
+            str(source),
+        ]
+    elif script == "gwtf_incident":
+        args = ["--observation", str(source), "--receipt", str(target)]
+    elif script == "gwtf_interruption_recovery":
+        args = [
+            "--worktree",
+            str(root),
+            "--lease",
+            str(source),
+            "--output",
+            str(target),
+        ]
+    else:
+        args = [
+            "--worktree",
+            str(root),
+            "--lease",
+            str(source),
+            "--receipt",
+            str(target),
+        ]
+    result = subprocess.run(
+        [sys.executable, "-B", str(ROOT / "scripts" / (script + ".py")), *args],
+        capture_output=True,
+        timeout=5,
+    )
+    assert result.returncode != 0
+    assert b"STOP:" in result.stderr
+    assert b"Traceback" not in result.stderr
+    assert b"PRIVATE_FIXTURE" not in result.stderr
+    assert not target.exists()
