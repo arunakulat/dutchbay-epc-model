@@ -115,7 +115,7 @@ def test_one_time_adjustment_is_the_weighted_index() -> None:
 # Config
 # ---------------------------------------------------------------------------
 def test_committed_config_validates() -> None:
-    wbo.validate_config(_cfg())
+    wbo.validate_config(_cfg(), schema_version=wbo_runner.CONFIG_SCHEMA)
 
 
 @pytest.mark.parametrize(
@@ -143,7 +143,7 @@ def test_config_refuses_missing_unknown_and_inconsistent_keys(
     cfg = _cfg()
     mutate(cfg)
     with pytest.raises(ValueError, match=message):
-        wbo.validate_config(cfg)
+        wbo.validate_config(cfg, schema_version=wbo_runner.CONFIG_SCHEMA)
 
 
 # ---------------------------------------------------------------------------

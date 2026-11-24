@@ -63,6 +63,11 @@ _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical"}
 #: (repository-relative path, rule, the literal's opening text) -> why it stays.
 ALLOWED: Dict[Tuple[str, str, str], str] = {
     (
+        "analytics/wind/wind_bess_options.py",
+        "site-name",
+        "blue_whale_wind_bess_options_v1",
+    ): "default schema_version kept for storage_options.json provenance stability (#1799)",
+    (
         "analytics/grid/curtailment_qsts.py",
         "site-name",
         "Not the CEB Kalpitiya/Puttalam feeder and not site-representative.",
