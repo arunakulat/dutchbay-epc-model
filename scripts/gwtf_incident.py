@@ -15,9 +15,9 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-if __package__:
+if not TYPE_CHECKING and __package__:
     from . import gwtf_checkpoint_receipt as receipt
     from . import gwtf_interruption_recovery as recovery
 else:

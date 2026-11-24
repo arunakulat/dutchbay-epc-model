@@ -17,9 +17,9 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-if __package__:
+if not TYPE_CHECKING and __package__:
     from . import gwtf_checkpoint_readiness as ready
 else:
     import gwtf_checkpoint_readiness as ready
@@ -124,7 +124,12 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
         )
         state = row.get("event")
         data = row.get("data")
-        require(state in EVENTS and isinstance(data, dict), "invalid journal event")
+        if (
+            not isinstance(state, str)
+            or state not in EVENTS
+            or not isinstance(data, dict)
+        ):
+            raise ValueError("invalid journal event")
         if state == "STARTED":
             require(
                 index == 0
@@ -233,13 +238,14 @@ def append_event(path: Path, event: str, data: dict) -> str:
             "event": event,
             "data": data,
         }
-        row["event_sha256"] = digest(canonical(row))
+        event_digest = digest(canonical(row))
+        row["event_sha256"] = event_digest
         validate_chain([*rows, row], path.parent)
         stream.seek(0, os.SEEK_END)
         stream.write(canonical(row).decode() + "\n")
         stream.flush()
         os.fsync(stream.fileno())
-        return row["event_sha256"]
+        return event_digest
 
 
 def inspect_journal(path: Path, expected_tip: str | None = None) -> dict:
