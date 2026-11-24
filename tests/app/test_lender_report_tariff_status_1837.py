@@ -120,11 +120,27 @@ def test_no_figure_on_the_analogy_rate_reaches_the_report_without_its_label(
     assert f"Tariff legal status. {ANALOGY.upper()}" in section
 
 
-def test_an_unlisted_scenario_says_its_status_is_not_recorded(
+def test_hybrid_and_lender_case_print_their_recorded_statuses(
     wind_result: Mapping[str, Any], tmp_path: Path
 ) -> None:
     hybrid = ROOT / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
-    out = _emit(wind_result, hybrid, tmp_path)
+    out_hybrid = _emit(wind_result, hybrid, tmp_path / "hybrid")
+    html_hybrid = out_hybrid.html_path.read_text(encoding="utf-8")
+    assert "Revenue rests on 24.97 LKR/kWh: Analogy, unpublished" in html_hybrid
+    assert "pucsl_fit_2026_wind_solar_blended_hybrid" in html_hybrid
+
+    lender = ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+    out_lender = _emit(wind_result, lender, tmp_path / "lender")
+    html_lender = out_lender.html_path.read_text(encoding="utf-8")
+    assert "Revenue rests on 20.30 LKR/kWh: Unconfirmed" in html_lender
+    assert "ceb_sppa_unexecuted_wind_assumption" in html_lender
+
+
+def test_an_unlisted_scenario_says_its_status_is_not_recorded(
+    wind_result: Mapping[str, Any], tmp_path: Path
+) -> None:
+    base = ROOT / "scenarios" / "dutchbay_basecase_2025Q4.yaml"
+    out = _emit(wind_result, base, tmp_path)
     html = out.html_path.read_text(encoding="utf-8")
     assert STATUS_LABELS["not_recorded"] in html
 

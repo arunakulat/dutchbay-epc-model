@@ -58,6 +58,10 @@ from app.reports.report_config import (
     ReportConfig,
     ReportMeta,
     RiskItem,
+    _lookup_key_as_engine,
+    _scenario_number,
+    declared_lockup_threshold,
+    dscr_threshold_name,
     load_report_config,
 )
 from app.reports.site_analysis_model import SiteAnalysesBlock
@@ -1365,6 +1369,124 @@ class CostStorageBlock(BaseModel):
     parts_not_run: List[str] = Field(default_factory=list)
 
 
+class WhatIfParameterSummary(BaseModel):
+    """One what-if case parameter with its provenance (#1403 / #1523)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    value_display: str
+    provenance: str
+
+
+class WhatIfKpiRow(BaseModel):
+    """One KPI comparison row (base vs what-if variant, #1403)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kpi: str
+    label: str
+    unit: str  # "pct" | "usd" | "ratio" | "raw"
+    base: Optional[float] = None
+    case: Optional[float] = None
+    delta: Optional[float] = None
+
+
+class WhatIfVariantBlock(BaseModel):
+    """One runnable parameter variant of a #1403 what-if case."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    changed_paths: List[str] = Field(default_factory=list)
+    kpis: List[WhatIfKpiRow] = Field(default_factory=list)
+    debt_usd: Optional[float] = None
+    equity_usd: Optional[float] = None
+    total_uses_usd: Optional[float] = None
+
+
+class WhatIfCaseBlock(BaseModel):
+    """One #1403 non-canonical what-if case with #1523 caveats preserved verbatim."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    case_id: str
+    kind: str
+    label: str
+    canonical: bool = False
+    base_scenario: str
+    case_file: Optional[str] = None
+    source: str
+    limitations: List[str] = Field(default_factory=list)
+    parameters: List[WhatIfParameterSummary] = Field(default_factory=list)
+    notes: str = ""
+    variants: List[WhatIfVariantBlock] = Field(default_factory=list)
+
+
+class CasperLenderRiskRow(BaseModel):
+    """One row of the CASPER lender-risk table (``build_casper_risk_blocks``)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    unit: str  # "ratio" | "pct" | "usd"
+    p50: Optional[float] = None
+    p90: Optional[float] = None
+    p95: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    defined_trials: int
+    total_trials: int
+    unavailable_trials: int
+    coverage_note: Optional[str] = None
+
+
+class CasperCovenantSummary(BaseModel):
+    """Covenant block emitted by ``build_casper_risk_blocks`` (FRAMEWORK-01)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    dscr_floor: float
+    prob_breach: float
+    floor_pinned: bool
+    worst_year_dscr_p95_downside: Optional[float] = None
+    n_trials: int
+    n_total_trials: int
+    unavailable_trials: int
+
+
+class CasperLenderRiskBlock(BaseModel):
+    """CASPER lender-risk blocks under ``capital_risk_emit`` lender guards (#1825 slice iv)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scenario: str
+    method: str
+    n_trials: int
+    seed: Optional[int] = None
+    allow_toy_fallback: bool = False
+    covenant: CasperCovenantSummary
+    rows: List[CasperLenderRiskRow] = Field(default_factory=list)
+    floor_pinned_note: Optional[str] = None
+    coverage_notes: List[str] = Field(default_factory=list)
+
+
+class WhatIfLenderRiskBlock(BaseModel):
+    """What-if cases (#1403/#1523) and CASPER lender-risk blocks (#1825 slice iv).
+
+    Beside the committed case, never a replacement for it. Each part either runs or is
+    listed in ``parts_not_run`` with its reason. None of it moves a committed KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    what_if_cases: List[WhatIfCaseBlock] = Field(default_factory=list)
+    casper_lender_risk: Optional[CasperLenderRiskBlock] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1550,6 +1672,9 @@ class ReportContext(BaseModel):
     #: dispatch, LCOS, battery-project economics and EPC margin. The command-line lender
     #: report fills it when switched on; None (the default) omits the section.
     cost_storage: Optional[CostStorageBlock] = None
+    #: What-if cases (#1403/#1523) and FRAMEWORK-01 CASPER lender-risk blocks (#1825 slice iv).
+    #: The command-line lender report fills it when switched on; None (the default) omits it.
+    what_if_lender_risk: Optional[WhatIfLenderRiskBlock] = None
 
 
 def _build_kpi_rows(
@@ -1617,34 +1742,6 @@ def _dscr_against(value: float, threshold: Optional[float]) -> str:
     return text
 
 
-def _scenario_number(value: Any) -> Optional[float]:
-    """A declared covenant value as a finite float, or ``None`` (bools are not numbers)."""
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
-
-
-def _lookup_key_as_engine(mapping: Mapping[str, Any], key: str) -> Any:
-    """``mapping[key]``, else the first key equal to ``key`` ignoring case, else ``None``.
-
-    The same lookup as the debt engine's ``finance.debt.helpers._lookup_case_insensitive``,
-    restated here because the report layer takes no import on the finance package (the
-    debt-package boundary lint and the architecture diagram both refuse one). A test pins
-    the two to the same answers (#1862).
-    """
-    if key in mapping:
-        return mapping[key]
-    key_lower = key.lower()
-    for existing_key, value in mapping.items():
-        if str(existing_key).lower() == key_lower:
-            return value
-    return None
-
-
 def _scenario_covenants(
     defaults: Covenants, scenario_config: Optional[Mapping[str, Any]]
 ) -> Covenants:
@@ -1680,6 +1777,10 @@ def _scenario_covenants(
     if floor is not None:
         update["min_dscr_floor"] = floor
         update["min_dscr_floor_source"] = "scenario"
+        lockup = declared_lockup_threshold(scenario_config)
+        update["min_dscr_floor_is_lockup"] = lockup is not None and math.isclose(
+            lockup, floor, rel_tol=0.0, abs_tol=1e-9
+        )
     ceiling = _scenario_number(constraints.get("max_balloon_pct"))
     if ceiling is not None:
         update["max_balloon_pct"] = ceiling
@@ -1774,7 +1875,7 @@ def _build_verdict(
         notes.append(
             f"Minimum DSCR {_dscr_against(min_dscr, covenants.min_dscr_floor)}x {rel} the "
             f"{covenants.min_dscr_floor:.2f}x "
-            f"{_DSCR_THRESHOLD_NAME[covenants.min_dscr_floor_source]} "
+            f"{covenants.min_dscr_floor_name} "
             f"({_COVENANT_SOURCE_NOTE[covenants.min_dscr_floor_source]}; "
             f"report-default target {covenants.min_dscr_target:.2f}x)."
         )
@@ -1826,6 +1927,7 @@ def _build_ic_summary(
     readiness_rows: Sequence[ReadinessRow],
     dscr_threshold_source: CovenantSource = "report_defaults",
     dscr_threshold: Optional[float] = None,
+    dscr_threshold_is_lockup: bool = False,
 ) -> IcSummaryBlock:
     """Project the run's explicit negative signals into the IC red-flag block (#706).
 
@@ -1851,7 +1953,7 @@ def _build_ic_summary(
                 severity="high",
                 detail=(
                     f"Minimum DSCR {_dscr_against(min_dscr, dscr_threshold)}x breaches the "
-                    f"{_DSCR_THRESHOLD_NAME[dscr_threshold_source]}."
+                    f"{dscr_threshold_name(dscr_threshold_source, is_lockup=dscr_threshold_is_lockup)}."
                 ),
                 source="engine KPI min_dscr vs configured DSCR covenant",
             )
@@ -3607,6 +3709,7 @@ def build_report_context(
             readiness_rows,
             dscr_threshold_source=covenants.min_dscr_floor_source,
             dscr_threshold=covenants.min_dscr_floor,
+            dscr_threshold_is_lockup=covenants.min_dscr_floor_is_lockup,
         ),
         assumptions=_build_assumptions(inputs, scenario_config),
         risk_register=_build_risk_register(

@@ -17,11 +17,13 @@ from analytics.tariff_legal_status import (
     STATUS_MISMATCH,
     STATUS_NOT_RECORDED,
     STATUS_PUBLISHED,
+    STATUS_UNCONFIRMED,
     STATUSES,
     TariffLegalStatusError,
     load_registry,
     read_registry,
     resolve_scenario_status,
+    storage_options_tariff_legal_status,
     window_flags,
 )
 
@@ -112,6 +114,16 @@ REFUSALS = [
             "unknown source 'PUCSL-DECISION-2026-08'",
             f"{A}.source: unknown source 'PUCSL-METHOD-2026'",
             f"{A}.review_source: unknown source 'PUCSL-METHOD-2026'",
+            "rates.pucsl_fit_2026_wind_solar_blended_hybrid.source: "
+            "unknown source 'PUCSL-ANNEX2-2026-08'",
+            "rates.pucsl_fit_2026_wind_solar_blended_hybrid.effective_from_source: "
+            "unknown source 'PUCSL-DECISION-2026-08'",
+            "rates.pucsl_fit_2026_wind_solar_blended_hybrid.review_source: "
+            "unknown source 'PUCSL-DECISION-2026-08'",
+            "rates.ceb_sppa_unexecuted_wind_assumption.source: "
+            "unknown source 'PUCSL-DECISION-2026-08'",
+            "rates.ceb_sppa_unexecuted_wind_assumption.review_source: "
+            "unknown source 'PUCSL-DECISION-2026-08'",
         ],
     ),
     # sources
@@ -193,6 +205,10 @@ REFUSALS = [
             "unknown rate 'wind_bess_on_solar_bess_formula'",
             "scenarios.blue_whale_solar_bess_lot5b_2026.headline_revenue: "
             "unknown rate 'pucsl_fit_2026_ground_solar_other_period'",
+            "scenarios.blue_whale_hybrid_lot5b_2026.headline_revenue: "
+            "unknown rate 'pucsl_fit_2026_wind_solar_blended_hybrid'",
+            "scenarios.dutchbay_lendercase_2025Q4.headline_revenue: "
+            "unknown rate 'ceb_sppa_unexecuted_wind_assumption'",
         ],
     ),
     (
@@ -458,14 +474,66 @@ def test_every_storage_basis_the_wind_scenario_uses_is_recorded() -> None:
     assert used <= recorded
 
 
+def test_dutchbay_lender_case_and_hybrid_resolve_to_their_recorded_statuses() -> None:
+    lender = resolve_scenario_status(
+        _scenario("dutchbay_lendercase_2025Q4"), "dutchbay_lendercase_2025Q4"
+    )
+    assert lender.recorded
+    assert lender.headline.rate_id == "ceb_sppa_unexecuted_wind_assumption"
+    assert lender.headline.status == STATUS_UNCONFIRMED
+    assert lender.headline.needs_label
+    assert lender.headline.rate is not None
+    assert lender.headline.rate.lkr_per_kwh == pytest.approx(20.30)
+
+    hybrid = resolve_scenario_status(
+        _scenario("blue_whale_hybrid_lot5b_2026"), "blue_whale_hybrid_lot5b_2026"
+    )
+    assert hybrid.recorded
+    assert hybrid.headline.rate_id == "pucsl_fit_2026_wind_solar_blended_hybrid"
+    assert hybrid.headline.status == STATUS_ANALOGY_UNPUBLISHED
+    assert hybrid.headline.needs_label
+    assert hybrid.headline.rate is not None
+    assert hybrid.headline.rate.lkr_per_kwh == pytest.approx(24.97345)
+
+
 def test_an_unlisted_scenario_is_not_recorded_never_published() -> None:
     status = resolve_scenario_status(
-        _scenario("dutchbay_lendercase_2025Q4"), "dutchbay_lendercase_2025Q4"
+        _scenario("dutchbay_basecase_2025Q4"), "dutchbay_basecase_2025Q4"
     )
     assert not status.recorded
     assert status.headline.status == STATUS_NOT_RECORDED
     assert status.headline.needs_label
     assert "20.3 LKR/kWh" in status.headline.detail
+
+
+def test_committed_storage_options_summary_carries_machine_readable_tariff_status() -> (
+    None
+):
+    import json
+
+    summary_path = (
+        ROOT
+        / "docs"
+        / "site_analyses"
+        / "blue_whale_wind_lot5b_2026"
+        / "storage_options.json"
+    )
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    block = summary["tariff_legal_status"]
+    expected = storage_options_tariff_legal_status(
+        _scenario("blue_whale_wind_lot5b_2026"),
+        "blue_whale_wind_lot5b_2026",
+        [
+            summary["revenue_bases"]["base"],
+            *summary["revenue_bases"]["sensitivities"],
+        ],
+    )
+    assert block == expected
+    assert block["headline_revenue"]["status"] == STATUS_PUBLISHED
+    for basis, entry in block["revenue_bases"].items():
+        assert entry["status"] == STATUS_ANALOGY_UNPUBLISHED, basis
+        assert entry["needs_label"] is True, basis
+        assert entry["rate_id"] == "wind_bess_on_solar_bess_formula", basis
 
 
 def test_a_different_tariff_value_is_a_mismatch() -> None:

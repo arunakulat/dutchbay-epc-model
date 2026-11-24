@@ -127,7 +127,7 @@ Dependabot pull request, which is read as `R2` because `REVIEW-01` classes depen
 needs them again.
 
 **Where it runs.** The workflow triggers on `pull_request_target`, so GitHub takes the workflow
-file from `main`, and it checks out the base commit, so the script is `main`'s too. A pull request
+file from `main`, and it checks out the base branch tip (`main`), so the script is `main`'s too. A pull request
 cannot edit the check that judges it, and no pull-request code runs. From 2 December 2026 GitHub
 blocks `pull_request_target` in public repositories unless an Actions event policy allows it, so
 the owner's settings work (#1713) has two steps, in this order or together: allow
@@ -275,7 +275,10 @@ unchanged: this narrower link test applies only to a train.
 the car's lanes posts its carry-forward on the train pull request in the §4.1 header, with
 `Commit:` the train head and `Car: #<car>`, and the train body declares the highest class among its
 cars. The required check `Independent review (RECRUIT-01)` then needs one accepting domain and
-assurance pair per car and no withheld acceptance for any car (§4.1). This is how §4.1's rule that
+assurance pair per car and no withheld acceptance for any car (§4.1). Every car on a train
+requires a full domain and assurance pair, including a car (such as an `R1` car) that `REVIEW-01`
+would review with one lane alone when outside a train; the check fails closed without both roles
+for every car. This is how §4.1's rule that
 a moved head needs both roles bound again applies to a train: the binding is this carry-forward, not
 a fresh review.
 

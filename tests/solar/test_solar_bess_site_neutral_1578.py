@@ -26,14 +26,16 @@ import yaml
 
 import solar_resource.pv_bess_dispatch as pbd
 import solar_resource.pv_bess_sizing as sz
+import solar_resource.pv_bess_sizing_runner as sz_runner
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONF = REPO_ROOT / "conf"
-PROJECT_CONF = CONF / "blue_whale_solar_bess_project_sizing.yaml"
 UNIT_CONF = CONF / "blue_whale_solar_bess.yaml"
 PRICING_CONF = CONF / "blue_whale_pv_bess_pricing.yaml"
 REG_CONF = CONF / "blue_whale_pucsl_fit_2026.yaml"
-SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
+METHOD_CONF = CONF / "solar_bess_sizing.yaml"
+SOLAR_BESS = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
+SCENARIO = SOLAR_BESS
 
 #: The generic modules of the solar + BESS chain (the Blue Whale runners and configs are
 #: the site's, and may name it).
@@ -138,7 +140,6 @@ def test_the_committed_configs_are_their_families() -> None:
         (PRICING_CONF, sz.PRICING_SCHEMA),
         (CONF / "blue_whale_pv_bess_sizing.yaml", sz.SIZING_SCHEMA),
         (REG_CONF, sz.REGULATORY_SCHEMA),
-        (PROJECT_CONF, sz.PROJECT_SIZING_SCHEMA),
     ):
         version = _yaml(path)["schema_version"]
         assert version == f"blue_whale_{family}", path.name
@@ -146,9 +147,8 @@ def test_the_committed_configs_are_their_families() -> None:
 
 
 def test_project_and_unit_schemas_cannot_stand_in_for_each_other() -> None:
-    project = _yaml(PROJECT_CONF)["schema_version"]
     with pytest.raises(ValueError, match="sizing.schema_version"):
-        sz._check_schema(project, sz.SIZING_SCHEMA, "sizing")
+        sz._check_schema(sz.PROJECT_SIZING_SCHEMA, sz.SIZING_SCHEMA, "sizing")
     unit_sizing = _yaml(CONF / "blue_whale_pv_bess_sizing.yaml")["schema_version"]
     with pytest.raises(ValueError, match="sizing.schema_version"):
         sz._check_schema(unit_sizing, sz.PROJECT_SIZING_SCHEMA, "sizing")
@@ -229,9 +229,11 @@ def site() -> Dict[str, Any]:
 
 def _small_project(names: Dict[str, str]) -> Dict[str, Any]:
     """A two-point, two-trial project run with its readings renamed by ``names``."""
-    cfg = copy.deepcopy(_yaml(PROJECT_CONF))
-    for k in ("defaults", "hydra"):
-        cfg.pop(k, None)
+    cfg = sz_runner.config_from_block(
+        _yaml(SOLAR_BESS)["solar_storage_sizing"],
+        _yaml(METHOD_CONF)["method"],
+        scenario_label="scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+    )
     cfg["grid"] = {
         **cfg["grid"],
         "pv_tables": ["land_max"],

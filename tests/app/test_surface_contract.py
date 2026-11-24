@@ -74,12 +74,16 @@ def test_case_surface_public_field_set_is_frozen() -> None:
         "global_sa_pawn",
         "capital_risk",
         "artifacts",
+        "run_manifest",
+        "reliance_notice",
+        "reliance_label",
+        "section_dispositions",
         "contract_version",
     }
 
 
 def test_kpi_card_field_set_is_frozen() -> None:
-    assert set(KpiCard.model_fields) == {"key", "label", "value", "display"}
+    assert set(KpiCard.model_fields) == {"key", "label", "value", "display", "unit"}
 
 
 def test_tornado_field_sets_are_frozen() -> None:
@@ -322,9 +326,19 @@ def test_build_case_surface_projects_a_real_run(
     assert {"project_irr", "equity_irr", "min_dscr"} <= card_keys
     project_card = next(c for c in surface.kpi_cards if c.key == "project_irr")
     assert isinstance(project_card.value, float)
+    assert project_card.unit == "pct"
     assert project_card.display.endswith("%")  # IRR formatted as a percentage
     min_dscr_card = next(c for c in surface.kpi_cards if c.key == "min_dscr")
+    assert min_dscr_card.unit == "multiple"
     assert min_dscr_card.display.endswith("x")  # DSCR formatted as a multiple
+
+    # Run identity, section dispositions, and F-5 reliance label ride on CaseSurface (#1815).
+    assert surface.run_manifest is not None
+    assert len(surface.run_manifest["config_sha256"]) == 64
+    assert surface.reliance_label == "lender_reliance_prohibited"
+    assert surface.reliance_notice is not None and "F-5" in surface.reliance_notice
+    assert surface.section_dispositions["kpis"] == "computed"
+    assert surface.section_dispositions["capital_risk"] == "omitted"
 
     # The supplementary charts computed on the synchronous path are present and typed.
     assert surface.tornado is not None

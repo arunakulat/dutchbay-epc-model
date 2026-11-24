@@ -17,6 +17,7 @@ import ast
 import csv
 import hashlib
 import io
+import json
 import math
 import os
 import re
@@ -39,6 +40,7 @@ from pydantic import ValidationError
 
 from analytics.dfi_workbook import (
     DFI_WORKBOOK_F5_CAVEAT,
+    SCENARIO_NOTE_ROW_LABEL,
     CellRef,
     CellRegistry,
     DfiWorkbookMetadata,
@@ -625,6 +627,7 @@ def _assert_no_excel_errors(wb: openpyxl.Workbook) -> None:
 
 
 def test_dfi_workbook_package_has_no_forbidden_layer_imports() -> None:
+    allowed_app_contracts = frozenset({"app.reports.module_ledger"})
     package_dir = Path(__file__).resolve().parents[2] / "analytics" / "dfi_workbook"
     for py_file in sorted(package_dir.glob("*.py")):
         tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
@@ -637,7 +640,10 @@ def test_dfi_workbook_package_has_no_forbidden_layer_imports() -> None:
                 continue
             for mod in targets:
                 app_msg = f"{py_file.name} imports forbidden app module {mod!r}"
-                assert not (mod == "app" or mod.startswith("app.")), app_msg
+                assert (
+                    not (mod == "app" or mod.startswith("app."))
+                    or mod in allowed_app_contracts
+                ), app_msg
                 fin_msg = f"{py_file.name} imports forbidden finance module {mod!r}"
                 assert not (mod == "finance" or mod.startswith("finance.")), fin_msg
                 pipe_msg = f"{py_file.name} imports forbidden pipeline module {mod!r}"
@@ -978,6 +984,8 @@ class TestStrictContracts:
             "executed\x00",
             "with space",
             "1bad",
+            "custom_deferred",
+            "unknown_status",
             "",
             "   ",
         ],
@@ -1389,9 +1397,9 @@ class TestBuildDfiWorkbookFoundation:
                 module_path="analytics.custom_plugin",
                 pipeline_stage="custom",
                 role_description="Custom extension module",
-                status="custom_deferred",
+                status="degraded",
                 excel_representation="ledger_only",
-                reason="deferred in wave 3",
+                reason="fallback mode used in wave 3",
             ),
             ModuleLedgerEntry(
                 module_path="finance.irr",
@@ -1429,7 +1437,7 @@ class TestBuildDfiWorkbookFoundation:
         expected_exp = Counter(entry.status for entry in expanded_ledger)
         assert exp_counts["executed"] == expected_exp["executed"] == 3
         assert exp_counts["failed"] == expected_exp["failed"] == 1
-        assert exp_counts["custom_deferred"] == 1
+        assert exp_counts["degraded"] == 1
         assert exp_total == len(expanded_ledger) == 8
 
         empty_counts, empty_total = _verify_ooxml_workbook(
@@ -1552,9 +1560,9 @@ class TestBuildDfiWorkbookFoundation:
                 module_path="analytics.custom_plugin",
                 pipeline_stage="custom",
                 role_description="Custom extension module",
-                status="custom_deferred",
+                status="degraded",
                 excel_representation="ledger_only",
-                reason="deferred in wave 3",
+                reason="fallback mode used in wave 3",
             ),
             ModuleLedgerEntry(
                 module_path="finance.irr",
@@ -1567,7 +1575,7 @@ class TestBuildDfiWorkbookFoundation:
         counts_exp, total_exp = _evaluate_with_soffice("expanded", expanded_ledger)
         expected_exp = Counter(entry.status for entry in expanded_ledger)
         assert counts_exp["executed"] == expected_exp["executed"] == 3
-        assert counts_exp["custom_deferred"] == 1
+        assert counts_exp["degraded"] == 1
         assert total_exp == len(expanded_ledger)
 
         # Empty ledger boundary: formulas evaluate cleanly to zero with no Excel errors.
@@ -1804,7 +1812,7 @@ def test_f5_notice_refuses_copied_model_with_suffix(tmp_path: Path) -> None:
 def test_scenario_note_has_its_own_row_and_a1_is_exact(tmp_path: Path) -> None:
     from openpyxl import load_workbook
 
-    note = "Scenario: stress-case. HOLD LIFTED"
+    note = "Scenario: stress-case (25% capex sensitivity; screening only)."
     dest = tmp_path / "noted.xlsx"
     build_dfi_workbook_foundation(
         dest,
@@ -1818,7 +1826,64 @@ def test_scenario_note_has_its_own_row_and_a1_is_exact(tmp_path: Path) -> None:
         ws.cell(row=r, column=1).value: ws.cell(row=r, column=2).value
         for r in range(4, ws.max_row + 1)
     }
-    assert fields["scenario_note"] == note
+    assert "does not modify A1 F-5 hold" in SCENARIO_NOTE_ROW_LABEL
+    assert fields[SCENARIO_NOTE_ROW_LABEL] == note
+
+
+_HOSTILE_HOLD_OR_RELIANCE_PHRASES: tuple[str, ...] = (
+    "HOLD LIFTED",
+    "Scenario: stress-case. HOLD LIFTED",
+    "F-5 hold withdrawn by committee",
+    "Hold cleared for closing",
+    "Non-reliance lifted after audit",
+    "Approved for lender and covenant reliance.",
+    "approved for covenant purposes",
+    "Lender-Grade output",
+    "Bankable project financials",
+    "Board reliance confirmed",
+    "covenant reliance authorized",
+    "usable for covenant reporting",
+)
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "scenario_note",
+        "formula_boundary_note",
+        "project_name",
+        "scenario_name",
+        "run_mode",
+        "engine_version",
+    ),
+)
+@pytest.mark.parametrize("phrase", _HOSTILE_HOLD_OR_RELIANCE_PHRASES)
+def test_control_provenance_metadata_refuses_hold_lift_and_reliance_wording(
+    field: str, phrase: str
+) -> None:
+    with pytest.raises(ValueError, match="A1 F-5 non-reliance hold"):
+        _sample_metadata(**{field: phrase})
+
+
+@pytest.mark.parametrize(
+    "field",
+    ("scenario_note", "formula_boundary_note", "project_name", "scenario_name"),
+)
+def test_builder_refuses_copied_metadata_with_hold_lift_before_touching_dest(
+    tmp_path: Path, field: str
+) -> None:
+    copied = _sample_metadata().model_copy(
+        update={field: "HOLD LIFTED: approved for lender and covenant reliance."}
+    )
+    dest = tmp_path / "new_parent" / "hostile_meta.xlsx"
+    with pytest.raises(ValueError, match="A1 F-5 non-reliance hold"):
+        build_dfi_workbook_foundation(
+            dest,
+            metadata=copied,
+            inputs=_sample_inputs(),
+            ledger_entries=_sample_ledger(),
+        )
+    assert not dest.parent.exists()
 
 
 @pytest.mark.parametrize("bad", ("", "   ", "=1", "-1", "source\ufffe"))
@@ -1833,12 +1898,14 @@ def test_formula_boundary_note_does_not_claim_input_formulas() -> None:
     assert "use live Excel formulas bound via CellRegistry" not in note
 
 
-# #1828: display formats must not hide or alter what a reader sees.
+# #1828 & #1906: display formats must not hide or alter what a reader sees.
 _MISSTATING_FORMAT_CASES = (
     pytest.param("Fund A", ";;;", "displayed text", id="text-hidden"),
     pytest.param("Fund A", ';;;"X"', "displayed text", id="text-replaced"),
     pytest.param("Fund A", "yyyy-mm-dd", "displayed text", id="text-date"),
     pytest.param(True, "hh:mm:ss", "displayed text", id="bool-time"),
+    pytest.param(True, "@", "displayed text", id="bool-at-true"),
+    pytest.param(False, "@", "displayed text", id="bool-at-false"),
     pytest.param(-1234.5, "0.0;0.0", "negative section", id="sign-dropped"),
     pytest.param(-1234.5, "[Red]0.0;[Blue]0.0", "negative section", id="sign-colour"),
     pytest.param(-1234.5, "0.0;0.0;0.0", "negative section", id="sign-3-sections"),
@@ -1851,6 +1918,57 @@ _MISSTATING_FORMAT_CASES = (
     pytest.param(1.5, '0.00" (lender case)"', "unit token", id="affix-wording"),
     pytest.param(0.5, '0.00 "A/P"', "unit token", id="affix-ampm"),
     pytest.param(-4, '0.00;(0.00);0.00;"Ref "@', "unit token", id="affix-text-sect"),
+    pytest.param(1500, '"ZZZ "#,##0', "unit token", id="unit-non-iso-zzz"),
+    pytest.param(1500, '"BGN "#,##0', "unit token", id="unit-retired-bgn"),
+    pytest.param(1500, '"XTS "#,##0', "unit token", id="unit-non-transactional-xts"),
+    pytest.param(1500, '"XXX "#,##0', "unit token", id="unit-non-transactional-xxx"),
+    pytest.param(1500, '0.00" m/s"', "unit token", id="unit-bare-mag-ratio"),
+    pytest.param(1500, '0.00" USD/foo"', "unit token", id="unit-bad-denom"),
+    pytest.param(1500, '0.00"  MW"', "unit token", id="unit-double-space"),
+    pytest.param(-0.5, "0.00;-0.00%", "mix '%'", id="mixed-pct-neg"),
+    pytest.param(0.5, "0.00%;-0.00", "mix '%'", id="mixed-pct-pos"),
+    pytest.param(0.5, "0.00%;-0.00%;0.00", "mix '%'", id="mixed-pct-zero"),
+    pytest.param(-0.5, "General;-0.00%", "mix '%'", id="mixed-general-pct"),
+    pytest.param(
+        -1234567.5, '#,##0;-#,##0,," m"', "trailing scaling", id="mixed-commas"
+    ),
+    pytest.param(
+        -1234567.5, '#,##0,"k";-#,##0,," m"', "trailing scaling", id="mixed-k-vs-m"
+    ),
+    pytest.param(
+        -1234567.5, '#,##0,"k";-#,##0,"k";0', "trailing scaling", id="mixed-k-zero"
+    ),
+    pytest.param(0, "#.##", "'0' placeholder", id="hash-only-blank"),
+    pytest.param(0, "#.00", "'0' placeholder", id="hash-only-dot-zero"),
+    pytest.param(0, "#,###", "'0' placeholder", id="hash-grouping-only"),
+    pytest.param(0, "???", "'0' placeholder", id="question-marks-only"),
+    pytest.param(0, "0.0;-0.0;#", "'0' placeholder", id="zero-section-hash"),
+    pytest.param(0, "0.0;-0.0;#.00", "'0' placeholder", id="zero-section-hash-dec"),
+    pytest.param(1234567.5, "0,,", "without a magnitude unit", id="bare-commas-int"),
+    pytest.param(
+        1234567.5, "#,##0.0,,", "without a magnitude unit", id="bare-commas-dec"
+    ),
+    pytest.param(
+        1234567.5, '#,##0.0,," USD"', "without a magnitude unit", id="commas-no-mag"
+    ),
+    pytest.param(
+        1234567.5,
+        '#,##0.0,,"k"',
+        "does not match its magnitude",
+        id="commas-mismatch-k",
+    ),
+    pytest.param(
+        1234567.5,
+        '#,##0," mn"',
+        "does not match its magnitude",
+        id="commas-mismatch-mn",
+    ),
+    pytest.param(
+        -1234567.5,
+        '#,##0.0,," m";(#,##0.0,,)',
+        "without a magnitude unit",
+        id="commas-neg-missing-mag",
+    ),
 )
 
 
@@ -1874,6 +1992,113 @@ def test_builder_refuses_misstating_display_formats(
     assert not destination.parent.exists()
 
 
+def test_widened_unit_grammar_and_general_controls_round_trip(tmp_path: Path) -> None:
+    """Items 1-4: widened unit grammar, uniform scaling, bool/text, 0-anchored controls."""
+    calamine = pytest.importorskip("python_calamine")
+    cases: tuple[tuple[int | float | str | bool, str, str], ...] = (
+        # Item 1: ISO 4217 codes, energy/power, per-unit X/Y, magnitude, time, ratio + General
+        (1234567.5, '#,##0.0,," m"', "n"),
+        (1234567.5, '#,##0.0,," mn"', "n"),
+        (1234567.5, '#,##0.0,," USD m"', "n"),
+        (1234567.5, '#,##0,"k"', "n"),
+        (1234567.5, '#,##0,,," bn"', "n"),
+        (12.5, '0.0" USD mn"', "n"),
+        (42.5, '0.00" LKR/kWh"', "n"),
+        (68.5, '0.00" USD/MWh"', "n"),
+        (1.15, '0.00" USD/EUR"', "n"),
+        (950.0, '#,##0" $/kW"', "n"),
+        (2100.0, '#,##0" kWh/yr"', "n"),
+        (25, '0" bps"', "n"),
+        (18, '0" months"', "n"),
+        (1500, '"EUR "#,##0', "n"),
+        (1500, '"INR "#,##0', "n"),
+        (1500, '"GBP "#,##0', "n"),
+        (1500, '"JPY "#,##0', "n"),
+        (100.0, '0.0" MWp"', "n"),
+        (220.0, '0" kV"', "n"),
+        (50.0, '0.0" Hz"', "n"),
+        (1500, "General", "n"),
+        # Item 2: uniform scaling across sections + General control
+        (-0.5, "0.00%;-0.00%;0.00%", "n"),
+        (-1234567.5, '#,##0.0,," m";(#,##0.0,," m");0.0,," m"', "n"),
+        (-0.5, "General", "n"),
+        # Item 3: bool General-only, text General/@
+        (True, "General", "b"),
+        (False, "General", "b"),
+        ("EUR", "@", "s"),
+        ("EUR", "General", "s"),
+        # Item 4: zero-anchored integer placeholders + General control
+        (0, "0.##", "n"),
+        (0, "#,##0", "n"),
+        (0, "0.0;-0.0;General", "n"),
+        (0, "General", "n"),
+    )
+    source = _sample_inputs()[0]
+    items = tuple(
+        source.model_copy(
+            update={"key": f"w_{idx}", "value": val, "number_format": fmt}
+        )
+        for idx, (val, fmt, _) in enumerate(cases)
+    )
+    destination, registry = build_dfi_workbook_foundation(
+        tmp_path / "widened_grammar.xlsx",
+        metadata=_sample_metadata(),
+        inputs=items,
+        ledger_entries=(),
+    )
+    workbook = openpyxl.load_workbook(destination)
+    with calamine.CalamineWorkbook.from_path(destination) as reader:
+        reopened = reader.get_sheet_by_name("Inputs").to_python()
+        for idx, (val, fmt, data_type) in enumerate(cases):
+            ref = registry.get(f"w_{idx}")
+            cell = workbook[ref.sheet][f"{ref.column}{ref.row}"]
+            assert (cell.value, cell.number_format, cell.data_type) == (
+                val,
+                fmt,
+                data_type,
+            )
+            assert reopened[ref.row - 1][3] == val
+    workbook.close()
+
+
+_LIBREOFFICE_ORACLE_FIXTURE = (
+    Path(__file__).resolve().parents[1]
+    / "fixtures"
+    / "analytics"
+    / "dfi_workbook_libreoffice_display_oracle.json"
+)
+
+
+def _load_libreoffice_oracle_cases() -> list[dict[str, Any]]:
+    payload = json.loads(_LIBREOFFICE_ORACLE_FIXTURE.read_text(encoding="utf-8"))
+    assert payload["schema"] == "dutchbay.dfi_workbook.libreoffice_display_oracle.v1"
+    cases: list[dict[str, Any]] = payload["cases"]
+    assert cases
+    return cases
+
+
+def test_committed_libreoffice_display_oracle_parity() -> None:
+    """Item 5: always-run parity against the committed LibreOffice display fixture."""
+    cases = _load_libreoffice_oracle_cases()
+    source = _sample_inputs()[0]
+    for case in cases:
+        value = case["value"]
+        number_format = case["number_format"]
+        update = {"value": value, "number_format": number_format}
+        if case["expected_accepted"]:
+            item_map = WorkbookInputItem.model_validate(source.model_dump() | update)
+            item_copy = WorkbookInputItem.model_validate(
+                source.model_copy(update=update)
+            )
+            assert item_map.number_format == number_format
+            assert item_copy.number_format == number_format
+        else:
+            with pytest.raises(ValidationError):
+                WorkbookInputItem.model_validate(source.model_dump() | update)
+            with pytest.raises(ValidationError):
+                WorkbookInputItem.model_validate(source.model_copy(update=update))
+
+
 def _libreoffice_displayed_cells(
     tmp_path: Path, cells: Sequence[tuple[object, str]]
 ) -> list[str]:
@@ -1892,7 +2117,7 @@ def _libreoffice_displayed_cells(
     subprocess.run(
         [
             soffice,
-            f"-env:UserInstallation=file://{tmp_path / 'lo_profile'}",
+            f"-env:UserInstallation={(tmp_path / 'lo_profile').as_uri()}",
             "--headless",
             "--convert-to",
             "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true",
@@ -1908,37 +2133,25 @@ def _libreoffice_displayed_cells(
         return [row[0] if row else "" for row in csv.reader(handle)]
 
 
+@pytest.mark.parametrize("directory", ["plain", "space # percent %"])
 def test_misstating_formats_are_real_and_general_control_shows_the_value(
     tmp_path: Path,
+    directory: str,
 ) -> None:
-    """Oracle: the refused formats do misstate in a reader; the controls do not."""
-    cells: tuple[tuple[object, str], ...] = (
-        ("Fund A", ";;;"),
-        ("Fund A", ';;;"X"'),
-        ("Fund A", "General"),
-        (-1234.5, "0.0;0.0"),
-        (-1234.5, "0.0"),
-        (-1234.5, "0.0;-0.0"),
-        (-1234.5, "0.0;(0.0)"),
-        (1.5, '0.00" (lender case)"'),
-        (1.5, "0.00"),
-    )
+    """Oracle: live LibreOffice rendering matches the committed fixture and controls."""
+    tmp_path = tmp_path / directory
+    tmp_path.mkdir()
+    cases = _load_libreoffice_oracle_cases()
+    cells = [(case["value"], case["number_format"]) for case in cases]
     shown = _libreoffice_displayed_cells(tmp_path, cells)
-    assert shown == [
-        "",
-        "X",
-        "Fund A",
-        "1234.5",
-        "-1234.5",
-        "-1234.5",
-        "(1234.5)",
-        "1.50 (lender case)",
-        "1.50",
-    ]
-    for value, number_format in cells[:2] + cells[3:4] + cells[7:8]:
-        update = {"value": value, "number_format": number_format}
-        with pytest.raises(ValidationError):
+    expected_shown = [case["libreoffice_shown"] for case in cases]
+    assert shown == expected_shown
+    for case in cases:
+        update = {"value": case["value"], "number_format": case["number_format"]}
+        if case["expected_accepted"]:
             WorkbookInputItem.model_validate(_sample_inputs()[0].model_dump() | update)
-    for value, number_format in cells[2:3] + cells[4:7] + cells[8:]:
-        update = {"value": value, "number_format": number_format}
-        WorkbookInputItem.model_validate(_sample_inputs()[0].model_dump() | update)
+        else:
+            with pytest.raises(ValidationError):
+                WorkbookInputItem.model_validate(
+                    _sample_inputs()[0].model_dump() | update
+                )

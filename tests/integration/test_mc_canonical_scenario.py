@@ -57,19 +57,32 @@ def test_canonical_mc_engine_runs_on_canonical_scenario() -> None:
     assert result.failed_iterations == 0
     assert result.success_rate() == 100.0
 
-    # Flat-scalar surface (#203) is populated and ordered.
-    p10, p50, p90 = (
-        result.project_irr_p10,
-        result.project_irr_p50,
-        result.project_irr_p90,
-    )
-    for v in (p10, p50, p90):
-        assert isinstance(v, float) and math.isfinite(v)
-    assert p10 <= p50 <= p90
-    # Sane economic range for this project (single-digit-to-low-double-digit IRR).
-    assert -0.10 < p10 and p90 < 0.30
-    # A genuine distribution, not a collapsed constant.
-    assert p90 - p10 > 1e-4
+    # Real non-collapsed NPV distribution (#1456/#1746: always finite even when tail IRR is undefined).
+    npv_p10 = result.project_npv_p10
+    npv_p50 = result.project_npv_p50
+    npv_p90 = result.project_npv_p90
+    assert isinstance(npv_p10, float) and math.isfinite(npv_p10)
+    assert isinstance(npv_p50, float) and math.isfinite(npv_p50)
+    assert isinstance(npv_p90, float) and math.isfinite(npv_p90)
+    assert npv_p10 <= npv_p50 <= npv_p90
+    assert npv_p90 - npv_p10 > 1e-4
+
+    # Flat-scalar IRR surface (#203, #1746): p50/p90 are finite and ordered; p10 may be
+    # None when >10% of high-depreciation tail trials have no IRR root (#1917).
+    p10 = result.project_irr_p10
+    p50 = result.project_irr_p50
+    p90 = result.project_irr_p90
+    assert isinstance(p50, float) and math.isfinite(p50)
+    assert isinstance(p90, float) and math.isfinite(p90)
+    assert p50 <= p90 and p90 < 0.30
+    if p10 is None:
+        irr_summary = result.summary["project_irr"]
+        assert irr_summary["percentile_basis"] == "excluded_trials_ranked_worst"
+        assert isinstance(irr_summary["percentile_bound"], float)
+    else:
+        assert isinstance(p10, float) and math.isfinite(p10)
+        assert -0.10 < p10 <= p50
+        assert p90 - p10 > 1e-4
 
 
 def test_dict_shaped_parameters_raises_clear_error() -> None:

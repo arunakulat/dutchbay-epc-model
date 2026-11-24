@@ -158,7 +158,8 @@ def test_lender_band_is_the_cited_bis_interval() -> None:
     param = _param(cfg, LENDER_PARAM)
     assert "long_run_depreciation_band" in param["source"]
     assert param["distribution"] == "normal"
-    band = long_run_depreciation_band(resolve_fx_history(cfg))
+    horizon = float(cfg["returns"]["project_life_years"])
+    band = long_run_depreciation_band(resolve_fx_history(cfg), horizon_years=horizon)
     assert round(band["low"], 4) == param["low"]
     assert round(band["high"], 4) == param["high"]
     # The band is centred on the scenario's own deterministic drift.
@@ -171,10 +172,16 @@ def test_blue_whale_band_is_ppp_with_the_bis_half_width() -> None:
     param = _param(cfg, BW_PARAM)
     assert "long_run_depreciation_band" in param["source"]
     assert param["distribution"] == "normal"
-    band = long_run_depreciation_band(resolve_fx_history(cfg))
+    horizon = float(cfg["returns"]["project_life_years"])
+    band = long_run_depreciation_band(resolve_fx_history(cfg), horizon_years=horizon)
     base = _bw_ppp_pct(cfg)
-    half = (1.0 + base / 100.0) * Z95 * band["sigma_annual"]
-    half = half / math.sqrt(band["usable_years"]) * 100.0
+    half = (
+        (1.0 + base / 100.0)
+        * Z95
+        * band["sigma_annual"]
+        * math.sqrt(1.0 / band["usable_years"] + 1.0 / horizon)
+        * 100.0
+    )
     assert round(base - half, 4) == param["low"]
     assert round(base + half, 4) == param["high"]
     # The reporting rate stays flat and is not sampled (owner, 2026-10-28 and 2026-11-22).
@@ -199,6 +206,87 @@ def test_band_helper_matches_the_calibrated_drift() -> None:
     assert wider["low"] < band["low"] and wider["high"] > band["high"]
     with pytest.raises(ValueError, match="z must be > 0"):
         long_run_depreciation_band(series, z=0.0)
+
+
+def test_combined_band_closed_form_oracle_and_responsiveness() -> None:
+    """TEST-01 closed-form oracle and responsiveness guard for horizon_years (#1917)."""
+    from datetime import date, timedelta
+
+    from analytics.fx.fx_history import FXHistorySeries
+
+    # Construct a synthetic weekly series with alternating log-returns (+0.01, -0.006)
+    # over 104 weeks (T = 2.0 years, ppy = 52), so mu and sigma have exact closed forms.
+    n_returns = 104
+    r_pos, r_neg = 0.01, -0.006
+    start = date(2010, 1, 4)  # Monday, distinct ISO week per step
+    dates: List[str] = [start.isoformat()]
+    rates: List[float] = [100.0]
+    spot = 100.0
+    for i in range(n_returns):
+        spot *= math.exp(r_pos if i % 2 == 0 else r_neg)
+        dates.append((start + timedelta(weeks=i + 1)).isoformat())
+        rates.append(spot)
+    synthetic = FXHistorySeries(
+        provider="BIS",
+        frequency="weekly",
+        unit="LKR per USD",
+        dates=tuple(dates),
+        rates=tuple(rates),
+        fetched_as_of="2026-06-01",
+        source_endpoint="synthetic://oracle",
+    )
+
+    ppy = 52.0
+    t_years = n_returns / ppy
+    mean_r = 0.5 * (r_pos + r_neg)
+    # Sample stdev (ddof=1) of 52 copies of r_pos and 52 copies of r_neg around mean_r:
+    ss = (n_returns / 2) * ((r_pos - mean_r) ** 2 + (r_neg - mean_r) ** 2)
+    sigma_expected = math.sqrt(ss / (n_returns - 1)) * math.sqrt(ppy)
+    mu_expected = mean_r * ppy
+    centre_expected = math.exp(mu_expected) - 1.0
+
+    horizon = 15.0
+    band_param = long_run_depreciation_band(synthetic, z=Z95)
+    band_comb = long_run_depreciation_band(synthetic, z=Z95, horizon_years=horizon)
+
+    half_comb_expected = (
+        math.exp(mu_expected)
+        * Z95
+        * sigma_expected
+        * math.sqrt(1.0 / t_years + 1.0 / horizon)
+    )
+    assert band_comb["annual_depr"] == pytest.approx(centre_expected, abs=1e-12)
+    assert band_comb["low"] == pytest.approx(
+        centre_expected - half_comb_expected, abs=1e-12
+    )
+    assert band_comb["high"] == pytest.approx(
+        centre_expected + half_comb_expected, abs=1e-12
+    )
+    assert band_comb["horizon_years"] == horizon
+
+    # Ratio of combined half-width to parameter-only half-width is sqrt(1 + T / H).
+    half_param = 0.5 * (band_param["high"] - band_param["low"])
+    half_comb = 0.5 * (band_comb["high"] - band_comb["low"])
+    assert half_comb / half_param == pytest.approx(
+        math.sqrt(1.0 + t_years / horizon), rel=1e-12
+    )
+
+    # Responsiveness guard: shorter horizon widens the band, longer horizon narrows it.
+    band_short = long_run_depreciation_band(synthetic, z=Z95, horizon_years=5.0)
+    band_long = long_run_depreciation_band(synthetic, z=Z95, horizon_years=50.0)
+    assert (band_short["high"] - band_short["low"]) > (
+        band_comb["high"] - band_comb["low"]
+    )
+    assert (band_comb["high"] - band_comb["low"]) > (
+        band_long["high"] - band_long["low"]
+    )
+    assert (band_long["high"] - band_long["low"]) > (
+        band_param["high"] - band_param["low"]
+    )
+
+    for bad_h in (0.0, -5.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="horizon_years must be > 0"):
+            long_run_depreciation_band(synthetic, horizon_years=bad_h)
 
 
 # --- the draw reaches the cash flows ----------------------------------------------------

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -23,6 +24,12 @@ from analytics.reproducible_workbook import (
     freeze_workbook_reproducible,
     normalize_xlsx_reproducible,
 )
+from app.reports.module_ledger import (
+    _REASON_REQUIRED_STATUSES,
+    ModuleExecutionLedger,
+    ModuleExecutionRecord,
+    ModuleExecutionStatus,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from openpyxl.worksheet.worksheet import Worksheet
@@ -41,15 +48,18 @@ DFI_WORKBOOK_F5_CAVEAT: str = (
     "for covenant purposes."
 )
 
-CANONICAL_LEDGER_STATUSES: tuple[str, ...] = (
-    "executed",
-    "guard_passed",
-    "guard_refused",
-    "not_applicable",
-    "skipped_missing_inputs",
-    "skipped_optional_extra",
-    "skipped_sync_profile",
-    "failed",
+# Canonical status vocabulary derived directly from #1813's contract
+# (app.reports.module_ledger.ModuleExecutionStatus); no second list here (#1827).
+CANONICAL_LEDGER_STATUSES: tuple[str, ...] = tuple(
+    status.value for status in ModuleExecutionStatus
+)
+_CANONICAL_LEDGER_STATUS_SET: frozenset[str] = frozenset(CANONICAL_LEDGER_STATUSES)
+_REASON_REQUIRED_LEDGER_STATUSES: frozenset[str] = frozenset(
+    status.value for status in _REASON_REQUIRED_STATUSES
+)
+
+SCENARIO_NOTE_ROW_LABEL: str = (
+    "scenario_note (informational only; does not modify A1 F-5 hold)"
 )
 
 DEFAULT_FORMULA_BOUNDARY_NOTE: str = (
@@ -67,6 +77,59 @@ _LEDGER_STATUS_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 _ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _ISO_DATETIME_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+
+_HOLD_WITHDRAWAL_OR_RELIANCE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "hold withdrawal claim",
+        re.compile(
+            r"\bhold\b[^.?!\n]{0,40}\b"
+            r"(?:lifted|withdrawn|cleared|removed|waived|superseded|suspended|revoked|overridden)\b"
+            r"|\b(?:lift|lifts|lifted|lifting|withdraw|withdraws|withdrew|withdrawn|withdrawing|"
+            r"clear|clears|cleared|clearing|waive|waives|waived|waiving|"
+            r"supersede|supersedes|superseded|superseding|"
+            r"override|overrides|overrode|overridden|overriding|"
+            r"revoke|revokes|revoked|revoking)\b[^.?!\n]{0,30}\bhold\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "non-reliance withdrawal claim",
+        re.compile(
+            r"\bnon[-\s_]+reliance[\s_-]+(?:lifted|withdrawn|cleared|waived|superseded|removed|revoked)\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "approval or reliance qualification claim",
+        re.compile(
+            r"\bapproved[\s_-]+for\b"
+            r"|\b(?:lender|dfi|investment|bank|credit|covenant)[\s_-]+grade\b"
+            r"|\bbankab(?:le|ility)\b"
+            r"|\b(?:lender|covenant|board|ic|credit|audit|external|official|formal)[\s_-]+reliance\b"
+            r"|\breliance[\s_-]+(?:granted|approved|authorized|authorised|permitted|confirmed|restored)\b"
+            r"|\b(?:fit|cleared|certified|qualified|usable|suitable|valid)[\s_-]+for[\s_-]+"
+            r"(?:lender|covenant|board|ic|credit)\b"
+            r"|\bfor[\s_-]+(?:lender|covenant|board|ic|credit)[\s_-]+"
+            r"(?:use|purposes|reliance|reporting|submission)\b"
+            r"|\b(?:f[\s_-]?5|covenant)[\s_-]+(?:cleared|waived|lifted|satisfied|approved|compliant)\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+
+def _validate_non_contradictory_metadata_text(text: str, field_name: str) -> str:
+    """Refuse hold-withdrawal or reliance-qualification wording in Control_Provenance."""
+    for category, pattern in _HOLD_WITHDRAWAL_OR_RELIANCE_PATTERNS:
+        match = pattern.search(text)
+        if match is not None:
+            raise ValueError(
+                f"DfiWorkbookMetadata.{field_name} contains forbidden {category} "
+                f"{match.group(0)!r}; free-text Control_Provenance metadata cannot "
+                "withdraw, qualify, or contradict the A1 F-5 non-reliance hold."
+            )
+    return text
+
 
 # An allowlist for the entire format. Only an unquoted, unescaped semicolon
 # separates sections. Literal tokens consume their delimiters as a unit.
@@ -92,24 +155,167 @@ _SUPPORTED_NUMERIC_FORMAT_RE = re.compile(
     re.VERBOSE | re.IGNORECASE | re.ASCII,
 )
 
-# A quoted literal may hold only a unit token (optionally with one space on
-# either side) or one character that could also be written escaped. Free
-# wording beside a value would bypass the literal-text and reliance controls
-# (#1828).
-_QUOTED_UNIT_TOKENS: frozenset[str] = frozenset(
-    {"%", "x", "MW", "MWh", "kWh", "GWh", "USD", "LKR", "days", "years", "yrs"}
+# A quoted literal may hold only a unit expression from the grammar below
+# (optionally with one space on either side) or one character that could also
+# be written escaped. Free wording beside a value would bypass the literal-text
+# and reliance controls (#1828, #1906).
+#
+# Transactional ISO-4217 3-letter currency codes frozen from SIX ISO-4217
+# Maintenance Agency List One on 2026-08-24 (same cutoff as
+# analysis_tools.f5_02_lender_return, excluding non-transactional XTS/XXX).
+_ISO_4217_CURRENCY_CODES: frozenset[str] = frozenset("""
+    AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BOV
+    BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUP
+    CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF
+    GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR
+    KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT
+    MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN
+    PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE
+    SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX
+    USD USN UYI UYU UYW UZS VED VES VND VUV WST XAD XAF XAG XAU XBA XBB XBC
+    XBD XCD XCG XDR XOF XPD XPF XPT XSU XUA YER ZAR ZMW ZWG
+    """.split())
+_CURRENCY_SYMBOLS: frozenset[str] = frozenset({"$", "€", "£", "¥"})
+_ENERGY_POWER_UNIT_RE = re.compile(
+    r"^(?:(?:[kMGT])?(?:Wh|Wp|W|VA|VAr|var)|(?:[kM])?V|(?:[kMG])?Hz)$"
 )
+_TIME_UNIT_WORDS: frozenset[str] = frozenset(
+    {
+        "s",
+        "sec",
+        "secs",
+        "second",
+        "seconds",
+        "min",
+        "mins",
+        "minute",
+        "minutes",
+        "h",
+        "hr",
+        "hrs",
+        "hour",
+        "hours",
+        "d",
+        "day",
+        "days",
+        "wk",
+        "wks",
+        "week",
+        "weeks",
+        "mo",
+        "mos",
+        "month",
+        "months",
+        "qtr",
+        "qtrs",
+        "quarter",
+        "quarters",
+        "yr",
+        "yrs",
+        "year",
+        "years",
+    }
+)
+_MAGNITUDE_SCALES: Mapping[str, int] = {
+    "k": 1,
+    "K": 1,
+    "m": 2,
+    "mn": 2,
+    "M": 2,
+    "MM": 2,
+    "b": 3,
+    "bn": 3,
+    "B": 3,
+    "t": 4,
+    "tn": 4,
+    "T": 4,
+}
+_RATIO_UNIT_WORDS: frozenset[str] = frozenset({"%", "x", "bps"})
+
 _QUOTED_SINGLE_CHARACTERS: frozenset[str] = frozenset(" ;:,.%$€£¥()+-")
 _FORMAT_TOKEN_RE = re.compile(r'"[^"]*"|\\.|.', re.DOTALL)
-_TEXT_OR_BOOL_FORMATS: frozenset[str] = frozenset({"General", "@"})
+_LEADING_COLOR_TAG_RE = re.compile(r"^\[[A-Za-z]+\]")
+_MANTISSA_RE = re.compile(r"([0#?]+(?:,[0#?]+)*)(?:\.([0#?]+))?(,*)")
+_TEXT_FORMATS: frozenset[str] = frozenset({"General", "@"})
 
 
-def _quoted_literal_allowed(content: str) -> bool:
+def _is_currency_atom(token: str) -> bool:
+    return token in _ISO_4217_CURRENCY_CODES or token in _CURRENCY_SYMBOLS
+
+
+def _is_energy_power_atom(token: str) -> bool:
+    return bool(_ENERGY_POWER_UNIT_RE.fullmatch(token))
+
+
+def _parse_currency_magnitude_or_atom(
+    expr: str, *, allow_bare_magnitude: bool
+) -> tuple[bool, Optional[int]]:
+    """Parse a unit atom or ``<currency>[ ]<magnitude>`` expression."""
+    if expr in _MAGNITUDE_SCALES:
+        return (
+            (True, _MAGNITUDE_SCALES[expr]) if allow_bare_magnitude else (False, None)
+        )
+    if (
+        _is_currency_atom(expr)
+        or _is_energy_power_atom(expr)
+        or expr in _TIME_UNIT_WORDS
+        or expr in _RATIO_UNIT_WORDS
+    ):
+        return True, None
+    # Symbol + optional space + magnitude (e.g. "$m", "$ mn", "€bn").
+    if expr and expr[0] in _CURRENCY_SYMBOLS:
+        rest = expr[1:].lstrip(" ") if expr[1:].startswith(" ") else expr[1:]
+        if rest in _MAGNITUDE_SCALES and len(expr) - len(rest) in (1, 2):
+            return True, _MAGNITUDE_SCALES[rest]
+    # ISO 4217 code + single space + magnitude (e.g. "USD m", "EUR mn").
+    if " " in expr:
+        head, _, tail = expr.partition(" ")
+        if head in _ISO_4217_CURRENCY_CODES and tail in _MAGNITUDE_SCALES:
+            return True, _MAGNITUDE_SCALES[tail]
+    return False, None
+
+
+def _parse_unit_token(core: str) -> tuple[bool, Optional[int]]:
+    """Validate ``core`` against the DFI unit grammar and return magnitude scale."""
+    if not core:
+        return False, None
+    if "/" in core:
+        numerator, _, denominator = core.partition("/")
+        if "/" in denominator or not numerator or not denominator:
+            return False, None
+        if not (
+            _is_energy_power_atom(denominator)
+            or denominator in _TIME_UNIT_WORDS
+            or _is_currency_atom(denominator)
+        ):
+            return False, None
+        return _parse_currency_magnitude_or_atom(numerator, allow_bare_magnitude=False)
+    return _parse_currency_magnitude_or_atom(core, allow_bare_magnitude=True)
+
+
+def _quoted_literal_info(content: str) -> tuple[bool, Optional[int]]:
+    """Return ``(allowed, magnitude_scale)`` for the text inside quotes."""
     if content in _QUOTED_SINGLE_CHARACTERS:
-        return True
+        return True, None
     core = content[1:] if content.startswith(" ") else content
     core = core[:-1] if core.endswith(" ") else core
-    return core in _QUOTED_UNIT_TOKENS
+    return _parse_unit_token(core)
+
+
+def _numeric_section_structure(
+    section: list[tuple[str, bool]],
+) -> tuple[bool, int, int]:
+    """Return ``(has_zero_in_integer, percent_count, scaling_commas)``."""
+    raw_unquoted = "".join(char for char, literal in section if not literal)
+    body = _LEADING_COLOR_TAG_RE.sub("", raw_unquoted)
+    if "general" in body.lower():
+        return True, 0, 0
+    match = _MANTISSA_RE.search(body)
+    if match is None:  # pragma: no cover - guarded by _SUPPORTED_NUMERIC_FORMAT_RE
+        return False, body.count("%"), 0
+    integer_part = match.group(1)
+    scaling_commas = len(match.group(3))
+    return ("0" in integer_part), body.count("%"), scaling_commas
 
 
 def _numeric_format_display_problem(number_format: str) -> Optional[str]:
@@ -119,21 +325,30 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
     Conditional sections are refused because spreadsheet readers disagree on
     whether such a section prints the minus sign (#1828). With an explicit
     negative section, the minus sign must be written into that section, either
-    as ``-`` or as parentheses, and no other section may print one.
+    as ``-`` or as parentheses, and no other section may print one. Numeric
+    sections must also agree on ``%`` and trailing scaling commas, carry a ``0``
+    in the integer part, and pair trailing scaling commas with a matching
+    magnitude unit token (#1906).
     """
     # Each section is a list of (character, written_as_literal) pairs.
     sections: list[list[tuple[str, bool]]] = [[]]
+    section_quoted_scales: list[list[int]] = [[]]
     for token in _FORMAT_TOKEN_RE.findall(number_format):
         if token == ";":
             sections.append([])
+            section_quoted_scales.append([])
         elif token.startswith('"'):
             content = token[1:-1]
-            if not _quoted_literal_allowed(content):
+            allowed, scale = _quoted_literal_info(content)
+            if not allowed:
                 return (
                     f"quoted literal {token} is not an allowed unit token; allowed "
-                    f"are {', '.join(sorted(_QUOTED_UNIT_TOKENS))} or one "
-                    "punctuation character."
+                    "are an ISO 4217 currency code, energy/power unit, time unit, "
+                    "magnitude word (k/m/mn/bn/tn), ratio unit (%, x, bps), "
+                    "per-unit form (X/Y), or one punctuation character."
                 )
+            if scale is not None:
+                section_quoted_scales[-1].append(scale)
             sections[-1].extend((char, True) for char in content)
         elif token.startswith("\\"):
             sections[-1].append((token[1:], True))
@@ -142,6 +357,7 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
     if "[<" in number_format or "[>" in number_format or "[=" in number_format:
         return "conditional sections are not supported."
     numeric_sections = sections[:3]
+    scaling_signatures: list[tuple[int, int]] = []
     for index, section in enumerate(numeric_sections):
         # The sign of a scientific exponent (E-00, E+00) is not a value sign.
         text = "".join(
@@ -166,6 +382,32 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
                 f"section {index + 1} prints a minus sign or parentheses, so a "
                 "non-negative value would read as negative."
             )
+        has_zero_in_int, percent_count, scaling_commas = _numeric_section_structure(
+            section
+        )
+        if not has_zero_in_int:
+            return (
+                f"section {index + 1} has no '0' placeholder in its integer part, "
+                "so zero or small values would be hidden."
+            )
+        if scaling_commas > 0:
+            scales = section_quoted_scales[index]
+            if not scales:
+                return (
+                    f"section {index + 1} uses {scaling_commas} trailing scaling "
+                    "comma(s) without a magnitude unit token declaring the scale."
+                )
+            if len(set(scales)) != 1 or scales[0] != scaling_commas:
+                return (
+                    f"section {index + 1} has {scaling_commas} trailing scaling "
+                    "comma(s), which does not match its magnitude unit token."
+                )
+        scaling_signatures.append((percent_count, scaling_commas))
+    if len(set(scaling_signatures)) > 1:
+        return (
+            "numeric sections must not mix '%' or trailing scaling commas across "
+            "sections."
+        )
     return None
 
 
@@ -299,18 +541,23 @@ class WorkbookInputItem(BaseModel):
     percentages and signed scientific exponents. Each numeric section may have
     one of the eight standard named colors. Affixes may use spaces, signs,
     parentheses, currency symbols ($, €, £, ¥), backslash-escaped punctuation
-    from the allowlist, or quoted literals holding a unit token or one such
-    punctuation character. An optional fourth section after three numeric
-    sections accepts a single @ with literal affixes. Formats that openpyxl
-    would reopen as a date, time, or duration are also refused.
+    from the allowlist, or quoted literals holding a grammar-valid unit
+    expression (ISO 4217 currency code, energy/power unit, time unit, magnitude
+    word, ratio unit, or ``X/Y`` per-unit form) or one such punctuation
+    character. An optional fourth section after three numeric sections accepts a
+    single @ with literal affixes. Formats that openpyxl would reopen as a date,
+    time, or duration are also refused.
 
-    A format must not change what a reader sees (#1828). Text and boolean
-    values accept only General or @. Conditional sections are refused. An
+    A format must not change what a reader sees (#1828, #1906). Text values
+    accept only General or @, and boolean values accept only General (since @
+    renders booleans as 1/0 in Calc). Conditional sections are refused. An
     explicit negative section must print the sign as ``-`` or parentheses, and
-    the positive and zero sections must print neither. Preserve unsupported
-    sources externally and supply a supported textual reference as the input
-    value. Text must satisfy the literal-text contract, including its
-    formula-prefix restriction.
+    the positive and zero sections must print neither. Numeric sections must
+    share identical ``%`` and trailing scaling-comma scaling, carry a ``0`` in
+    the integer part, and pair trailing scaling commas with a matching
+    magnitude unit token. Preserve unsupported sources externally and supply a
+    supported textual reference as the input value. Text must satisfy the
+    literal-text contract, including its formula-prefix restriction.
     """
 
     model_config = ConfigDict(
@@ -400,14 +647,23 @@ class WorkbookInputItem(BaseModel):
 
     @model_validator(mode="after")
     def _validate_scalar_format(self) -> Self:
-        if isinstance(self.value, (str, bool)):
-            if self.number_format in _TEXT_OR_BOOL_FORMATS:
+        if isinstance(self.value, bool):
+            if self.number_format == "General":
                 return self
             raise ValueError(
                 f"WorkbookInputItem {self.key!r} has number_format "
-                f"{self.number_format!r} for a {type(self.value).__name__} value. "
-                "Text and boolean inputs accept only 'General' or '@', so the "
-                "displayed text always equals the stored value (#1828)."
+                f"{self.number_format!r} for a bool value. Boolean inputs accept "
+                "only 'General' ('@' renders boolean values as '1'/'0' in Calc), "
+                "so the displayed text always equals the stored boolean (#1906)."
+            )
+        if isinstance(self.value, str):
+            if self.number_format in _TEXT_FORMATS:
+                return self
+            raise ValueError(
+                f"WorkbookInputItem {self.key!r} has number_format "
+                f"{self.number_format!r} for a str value. Text inputs accept "
+                "only 'General' or '@', so the displayed text always equals the "
+                "stored value (#1828)."
             )
         if self.number_format == "General":
             return self
@@ -480,6 +736,12 @@ class ModuleLedgerEntry(BaseModel):
                 "ModuleLedgerEntry.status 'total' is reserved for the "
                 "Module_Ledger rollup Total row."
             )
+        if normalized not in _CANONICAL_LEDGER_STATUS_SET:
+            allowed = ", ".join(CANONICAL_LEDGER_STATUSES)
+            raise ValueError(
+                f"Invalid ModuleLedgerEntry.status {value!r}: expected one of "
+                f"#1813 ModuleExecutionStatus values ({allowed})."
+            )
         return normalized
 
     @field_validator("reason", "provenance_ref", mode="before")
@@ -503,8 +765,8 @@ class DfiWorkbookMetadata(BaseModel):
     generated_at: str
     non_reliance_notice: str = DFI_WORKBOOK_F5_CAVEAT
     formula_boundary_note: str = DEFAULT_FORMULA_BOUNDARY_NOTE
-    # Free scenario wording lives in its own field and row, never in the F-5
-    # notice cell, so no appended text can qualify or withdraw the hold.
+    # Free scenario wording lives in its own explicitly labelled row and cannot
+    # withdraw or qualify the F-5 non-reliance hold.
     scenario_note: Optional[str] = None
 
     @field_validator(
@@ -516,7 +778,9 @@ class DfiWorkbookMetadata(BaseModel):
     )
     @classmethod
     def _validate_required_texts(cls, value: object, info: ValidationInfo) -> str:
-        return _validate_literal_text(value, str(info.field_name), allow_empty=False)
+        field_name = str(info.field_name)
+        text = _validate_literal_text(value, field_name, allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, field_name)
 
     @field_validator("config_sha256", mode="before")
     @classmethod
@@ -552,14 +816,16 @@ class DfiWorkbookMetadata(BaseModel):
     def _validate_scenario_note(cls, value: object) -> Optional[str]:
         if value is None:
             return None
-        return _validate_literal_text(value, "scenario_note", allow_empty=False)
+        text = _validate_literal_text(value, "scenario_note", allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, "scenario_note")
 
     @field_validator("run_mode", mode="before")
     @classmethod
     def _validate_run_mode(cls, value: object) -> Optional[str]:
         if value is None:
             return None
-        return _validate_literal_text(value, "run_mode", allow_empty=False)
+        text = _validate_literal_text(value, "run_mode", allow_empty=False)
+        return _validate_non_contradictory_metadata_text(text, "run_mode")
 
 
 @dataclass(frozen=True)
@@ -662,7 +928,7 @@ def _populate_control_provenance_sheet(
         ("generated_at", metadata.generated_at),
         ("formula_boundary_note", metadata.formula_boundary_note),
         (
-            "scenario_note",
+            SCENARIO_NOTE_ROW_LABEL,
             metadata.scenario_note if metadata.scenario_note is not None else "",
         ),
     )
@@ -678,9 +944,11 @@ def _populate_control_provenance_sheet(
         val_cell.border = styles.thin_border
         if field_name == "formula_boundary_note":
             ws.row_dimensions[row_idx].height = 42
+        elif field_name == SCENARIO_NOTE_ROW_LABEL:
+            ws.row_dimensions[row_idx].height = 30
 
     ws.freeze_panes = "A4"
-    _apply_column_widths(ws, {"A": 26, "B": 96})
+    _apply_column_widths(ws, {"A": 34, "B": 96})
 
 
 def _populate_inputs_sheet(
@@ -795,14 +1063,7 @@ def _populate_module_ledger_sheet(
         cell.alignment = styles.header_alignment
         cell.border = styles.thin_border
 
-    extra_statuses = sorted(
-        {
-            entry.status
-            for entry in ledger_entries
-            if entry.status not in CANONICAL_LEDGER_STATUSES
-        }
-    )
-    rollup_statuses = list(CANONICAL_LEDGER_STATUSES) + extra_statuses
+    rollup_statuses = CANONICAL_LEDGER_STATUSES
 
     status_end_row = max(2, 1 + len(ledger_entries))
     status_range = registry.range_ref(
@@ -852,12 +1113,161 @@ def _populate_module_ledger_sheet(
     _apply_column_widths(ws, widths)
 
 
+def project_module_execution_record(
+    record: ModuleExecutionRecord | Mapping[str, object],
+) -> ModuleLedgerEntry:
+    """Project one #1813 ``ModuleExecutionRecord`` into a ``ModuleLedgerEntry``."""
+    validated = ModuleExecutionRecord.model_validate(record)
+    reason_text = (
+        validated.reason
+        if validated.reason is not None
+        else (validated.caveat if validated.caveat is not None else "")
+    )
+    provenance_text = ", ".join(validated.provenance_refs)
+    return ModuleLedgerEntry(
+        module_path=validated.module_path,
+        pipeline_stage=validated.pipeline_stage.value,
+        role_description=validated.role_description,
+        status=validated.status.value,
+        excel_representation=validated.excel_representation.value,
+        reason=reason_text,
+        provenance_ref=provenance_text,
+    )
+
+
+def _normalize_execution_records(
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleExecutionRecord, ...]:
+    """Validate an execution ledger or record sequence and enforce unique paths."""
+    if isinstance(execution_records, ModuleExecutionLedger):
+        return ModuleExecutionLedger.model_validate(execution_records).records
+    if isinstance(execution_records, (str, bytes, Mapping, BaseModel)):
+        raise ValueError(
+            "execution_records must be a ModuleExecutionLedger or a sequence of "
+            "ModuleExecutionRecord items."
+        )
+    records = tuple(
+        ModuleExecutionRecord.model_validate(item) for item in execution_records
+    )
+    counts = Counter(record.module_path for record in records)
+    duplicates = sorted(path for path, count in counts.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            "Duplicate module_path entries in execution_records: "
+            f"{', '.join(duplicates)}."
+        )
+    return records
+
+
+def _validate_ledger_entries(
+    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Validate ledger entries and refuse duplicate ``module_path`` rows."""
+    if isinstance(ledger_entries, (str, bytes, Mapping, BaseModel)):
+        raise ValueError(
+            "ledger_entries must be a sequence of ModuleLedgerEntry items."
+        )
+    entries = tuple(ModuleLedgerEntry.model_validate(entry) for entry in ledger_entries)
+    counts = Counter(entry.module_path for entry in entries)
+    duplicates = sorted(path for path, count in counts.items() if count > 1)
+    if duplicates:
+        raise ValueError(
+            f"Duplicate module_path entries in ledger_entries: {', '.join(duplicates)}."
+        )
+    return entries
+
+
+def project_module_execution_ledger(
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Project all execution records in a run into ``ModuleLedgerEntry`` rows."""
+    records = _normalize_execution_records(execution_records)
+    return tuple(project_module_execution_record(record) for record in records)
+
+
+def validate_ledger_against_execution_records(
+    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+    execution_records: (
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ),
+) -> tuple[ModuleLedgerEntry, ...]:
+    """Validate ``Module_Ledger`` rows 1-to-1 against ``ModuleExecutionRecord`` inputs.
+
+    Refuses duplicates, dropped execution records, orphan ledger entries, and any
+    disagreement on ``pipeline_stage``, ``role_description``, ``status``, or
+    ``excel_representation``.
+    """
+    validated_entries = _validate_ledger_entries(ledger_entries)
+    validated_records = _normalize_execution_records(execution_records)
+
+    records_by_path = {record.module_path: record for record in validated_records}
+    entries_by_path = {entry.module_path: entry for entry in validated_entries}
+
+    missing = [
+        record.module_path
+        for record in validated_records
+        if record.module_path not in entries_by_path
+    ]
+    if missing:
+        raise ValueError(
+            "Execution record(s) missing from Module_Ledger: " f"{', '.join(missing)}."
+        )
+
+    orphans = [
+        entry.module_path
+        for entry in validated_entries
+        if entry.module_path not in records_by_path
+    ]
+    if orphans:
+        raise ValueError(
+            "Orphan Module_Ledger entry/entries absent from execution_records: "
+            f"{', '.join(orphans)}."
+        )
+
+    for entry in validated_entries:
+        record = records_by_path[entry.module_path]
+        mismatches: list[str] = []
+        if entry.pipeline_stage != record.pipeline_stage.value:
+            mismatches.append(
+                f"pipeline_stage={entry.pipeline_stage!r} "
+                f"(expected {record.pipeline_stage.value!r})"
+            )
+        if entry.role_description != record.role_description:
+            mismatches.append(
+                f"role_description={entry.role_description!r} "
+                f"(expected {record.role_description!r})"
+            )
+        if entry.status != record.status.value:
+            mismatches.append(
+                f"status={entry.status!r} (expected {record.status.value!r})"
+            )
+        if entry.excel_representation != record.excel_representation.value:
+            mismatches.append(
+                f"excel_representation={entry.excel_representation!r} "
+                f"(expected {record.excel_representation.value!r})"
+            )
+        if mismatches:
+            raise ValueError(
+                f"Module_Ledger entry for {entry.module_path!r} does not match "
+                f"ModuleExecutionRecord: {'; '.join(mismatches)}."
+            )
+
+    return validated_entries
+
+
 def build_dfi_workbook_foundation(
     output_path: PathLike,
     *,
     metadata: DfiWorkbookMetadata | Mapping[str, object],
     inputs: Sequence[WorkbookInputItem | Mapping[str, object]],
-    ledger_entries: Sequence[ModuleLedgerEntry | Mapping[str, object]],
+    ledger_entries: Optional[Sequence[ModuleLedgerEntry | Mapping[str, object]]] = None,
+    execution_records: Optional[
+        ModuleExecutionLedger | Sequence[ModuleExecutionRecord | Mapping[str, object]]
+    ] = None,
 ) -> tuple[Path, CellRegistry]:
     """Build the macro-free, byte-reproducible DFI workbook foundation.
 
@@ -875,14 +1285,21 @@ def build_dfi_workbook_foundation(
         output_path: Destination ``.xlsx`` path (parent directories created).
         metadata: A :class:`DfiWorkbookMetadata` record or equivalent mapping.
         inputs: Non-empty sequence of :class:`WorkbookInputItem` records or mappings.
-        ledger_entries: Sequence of :class:`ModuleLedgerEntry` records or mappings.
+        ledger_entries: Optional sequence of :class:`ModuleLedgerEntry` records or
+            mappings. When omitted and ``execution_records`` is provided, rows are
+            projected via :func:`project_module_execution_ledger`.
+        execution_records: Optional :class:`ModuleExecutionLedger` or sequence of
+            :class:`ModuleExecutionRecord` items. When provided alongside
+            ``ledger_entries``, every row is strictly cross-checked against it
+            before touching ``output_path``.
 
     Returns:
         Tuple of ``(resolved_output_path, populated_cell_registry)``.
 
     Raises:
         ValueError: If any record fails validation, ``inputs`` is empty,
-            duplicate keys occur, or the output path does not use ``.xlsx``.
+            ``ledger_entries`` disagrees with ``execution_records``, duplicate keys
+            occur, or the output path does not use ``.xlsx``.
     """
     # Revalidate typed records as well as mappings before touching the destination.
     validated_metadata = DfiWorkbookMetadata.model_validate(metadata)
@@ -892,9 +1309,20 @@ def build_dfi_workbook_foundation(
             "inputs must contain at least one WorkbookInputItem; cannot build "
             "an Inputs sheet without registered scalar parameters."
         )
-    validated_ledger = [
-        ModuleLedgerEntry.model_validate(entry) for entry in ledger_entries
-    ]
+    if ledger_entries is None and execution_records is None:
+        raise ValueError(
+            "Must provide execution_records or ledger_entries to "
+            "build_dfi_workbook_foundation."
+        )
+    if ledger_entries is None:
+        assert execution_records is not None
+        validated_ledger = list(project_module_execution_ledger(execution_records))
+    elif execution_records is not None:
+        validated_ledger = list(
+            validate_ledger_against_execution_records(ledger_entries, execution_records)
+        )
+    else:
+        validated_ledger = list(_validate_ledger_entries(ledger_entries))
 
     out_path = Path(output_path).expanduser().resolve()
     if out_path.suffix.lower() != ".xlsx":
@@ -936,6 +1364,10 @@ __all__ = [
     "INPUTS_SHEET_NAME",
     "LEDGER_SHEET_NAME",
     "ModuleLedgerEntry",
+    "SCENARIO_NOTE_ROW_LABEL",
     "WorkbookInputItem",
     "build_dfi_workbook_foundation",
+    "project_module_execution_ledger",
+    "project_module_execution_record",
+    "validate_ledger_against_execution_records",
 ]
