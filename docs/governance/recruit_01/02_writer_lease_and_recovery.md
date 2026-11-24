@@ -111,6 +111,43 @@ retry permission, independent acceptance, required CI or merge authority.
 Ignored paths and concurrent changes between observations are residual
 limitations, not certified isolation. The stricter applicable rule always wins.
 
+### 4.3 Coordinator CLI for the v2 checkpoint journal
+
+Use the governed Python interpreter and external, access-controlled evidence
+directory. After the R25 and lease checks, invoke
+`python -B scripts/gwtf_checkpoint_workflow.py --journal "$J" start --worktree "$W" --lease "$L"`
+with the exact applied-patch lease, including initial index digest, candidate
+hashes and Git modes, and approved type plan. Retain the returned subject
+digest and journal tip in independent custody. The CLI returns planned type
+commands; it does not execute them.
+
+Run canonical readiness, the required targeted mypy and regression checks
+under the lease. For each actual observed result, prepare an external JSON
+object containing check_id, subject_sha256, command (argument list), exit_code,
+log_name (basename in journal directory), log_sha256 and, for a type check,
+type_evidence (the corresponding plan record). Append using
+`observe --expected-tip "$TIP" --observation "$OBS"` after the same journal
+prefix. Independently retain each returned tip. Failed observations are not
+PASS; stop and reconcile rather than replacing evidence. Do not expose secrets
+in command arguments, logs or evidence files.
+
+Only the authorized writer may explicitly stage the exact tested allowlist,
+run the readiness utility's --verify-staged comparison and ordinary commit
+hooks. Record the staged and commit observations with their actual logs.
+Use `complete --expected-tip "$TIP" --exit-code 0` only on observed successful
+completion, then retain that pre-checkpoint tip separately. Invoke
+`record --worktree "$W" --lease "$L" --expected-tip "$TIP"`, retain the new tip,
+and invoke `verify --worktree "$W" --lease "$L" --expected-tip "$TIP"` with that
+new anchor. The latter re-compares actual Git objects. Inspect alone never
+establishes checkpoint qualification. The report subcommand records observed
+reporting separately and cannot confirm delivery. Every mutation after start
+requires the independently retained previous tip; a mismatch stops execution.
+
+The CLI never stages, commits, pushes or merges and does not authenticate
+execution, ownership, source rights or reviewer identity. Coordinator review,
+live-base and scope adequacy checks, full pre-push tests and formal independent
+R3 and CI remain mandatory. Version 1 records are historical claims only.
+
 ## 5. Interruption and collision recovery
 
 Any interruption, target drift, patch-context failure, unexpected writer activity, worktree-owner
