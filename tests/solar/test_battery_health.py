@@ -35,7 +35,7 @@ from solar_resource import pv_bess_dispatch as pbd
 from solar_resource import pv_bess_sizing as sz
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess_project_sizing.yaml"
+SOLAR_BESS_SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 PRICING_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_pricing.yaml"
 PR3_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_sizing.yaml"
 PRIVATE_ENV = "DUTCHBAY_BLUE_WHALE_PRIVATE_SOH_CURVE"
@@ -48,7 +48,7 @@ def _yaml(path: Path) -> Dict[str, Any]:
 
 
 def _health_raw() -> Dict[str, Any]:
-    return dict(_yaml(PROJECT_CONF)["battery_health"])
+    return dict(_yaml(SOLAR_BESS_SCENARIO)["solar_storage_sizing"]["battery_health"])
 
 
 def _health(**kw: Any) -> sz.BatteryHealth:

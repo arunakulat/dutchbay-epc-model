@@ -110,7 +110,7 @@ SUPPLIER_KEYS = (
     "smallest_block_dc_mwh",
     "power_cell_premium",
 )
-SCHEMA_VERSION = "blue_whale_wind_bess_options_v1"
+SCHEMA_VERSION = "dutchbay.wind_bess_options.config.v1"
 OPTION_KEYS = ("name", "power_mw", "energy_mwh", "operation")
 
 
