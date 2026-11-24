@@ -194,6 +194,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     receipt.require(receipt.hex_value(tip), "externally retained prior tip required")
     if action == "execute":
         return execute_check(args, journal)
+    if action == "verify-historical":
+        return receipt.historical_checkpoint(args.worktree, journal, tip, args.commit)
     if action in {"record", "verify"}:
         lease = read_object(args.lease)
         if action == "record":
@@ -259,6 +261,10 @@ def main() -> int:
         command.add_argument("--lease", type=Path, required=True)
         if name != "start":
             command.add_argument("--expected-tip", required=True)
+    historical = sub.add_parser("verify-historical")
+    historical.add_argument("--worktree", type=Path, required=True)
+    historical.add_argument("--commit", required=True)
+    historical.add_argument("--expected-tip", required=True)
     execute = sub.add_parser("execute")
     execute.add_argument("--worktree", type=Path, required=True)
     execute.add_argument("--lease", type=Path, required=True)

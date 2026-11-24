@@ -1305,6 +1305,132 @@ def reconcile_checkpoint(
     return proof
 
 
+def historical_checkpoint(
+    root: Path, journal: Path, expected_tip: str, commit: str
+) -> dict:
+    """Compare anchored historical Git objects, not current qualification.
+
+    The supplied anchor and exact commit must be retained independently.
+    Neither current runtime nor current worktree state authenticates past execution.
+    No lease, branch update, checkout, journal append or authority is granted.
+    """
+    require(
+        hex_value(expected_tip) and hex_value(commit, HEX40),
+        "exact historical commit and trusted journal tip required",
+    )
+    root = root.resolve()
+    require(
+        Path(ready.git_text(root, "rev-parse", "--show-toplevel")).resolve() == root,
+        "incorrect Git repository root",
+    )
+    journal = safe_external(journal)
+    rows = parse_rows(ready.read_regular(journal).decode())
+    require(
+        bool(rows) and rows[0].get("schema") in {SCHEMA, BOUND_SCHEMA},
+        "unsupported historical object receipt schema",
+    )
+    require(
+        validate_chain(rows, journal.parent) == expected_tip,
+        "trusted journal tip mismatch",
+    )
+    start = rows[0]["data"]
+    subject = start["subject"]
+    checks = {
+        x["data"]["check_id"]: x["data"] for x in rows if x["event"] == "CHECK_OBSERVED"
+    }
+    recorded = [x for x in rows if x["event"] == "CHECKPOINT_VERIFIED"]
+    require(len(recorded) == 1, "historical checkpoint event required")
+    proof = recorded[0]["data"]
+    require(proof["head"] == commit, "historical commit mismatch")
+    require(
+        set(checks) == set(start["required_checks"])
+        and all(x["exit_code"] == 0 for x in checks.values())
+        and any(
+            x["event"] == "EXECUTION_COMPLETED" and x["data"]["exit_code"] == 0
+            for x in rows
+        ),
+        "historical check evidence incomplete",
+    )
+    verify_readiness_evidence(checks["readiness"], subject, journal.parent)
+    require(
+        ready.git_text(root, "cat-file", "-t", commit) == "commit"
+        and ready.git_text(root, "rev-parse", commit + "^{tree}") == proof["tree"],
+        "historical commit/tree mismatch",
+    )
+    parent = subject["parent_head"]
+    base = subject["base"]
+    require(
+        ready.git_text(root, "rev-list", "--parents", "-n", "1", commit).split()
+        == [commit, parent],
+        "historical commit parent mismatch",
+    )
+    require(
+        ready.git_text(root, "rev-parse", parent + "^{tree}") == subject["parent_tree"]
+        and ready.git_text(root, "cat-file", "-t", base) == "commit"
+        and ready.git_text(root, "merge-base", base, parent) == base,
+        "historical parent tree or base ancestry mismatch",
+    )
+    scope = set(subject["candidate_sha256"])
+    require(
+        ready.names(
+            ready.git(
+                root,
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "--no-renames",
+                "-r",
+                "-z",
+                commit,
+            )
+        )
+        == scope,
+        "historical committed scope mismatch",
+    )
+    entries = {}
+    for raw in ready.git(root, "ls-tree", "-r", "-z", commit).split(b"\0"):
+        if raw:
+            meta, name = raw.split(b"\t", 1)
+            mode, kind, oid = meta.decode("ascii").split()
+            entries[os.fsdecode(name)] = (mode, kind, oid)
+    for name in scope:
+        require(name in entries, "historical object missing")
+        mode, kind, oid = entries[name]
+        require(
+            kind == "blob"
+            and mode == subject["candidate_modes"][name]
+            and proof["index_objects"][name] == {"mode": mode, "oid": oid}
+            and digest(ready.git(root, "cat-file", "blob", oid))
+            == subject["candidate_sha256"][name],
+            "historical blob or mode mismatch",
+        )
+    if command_contract_bound(subject):
+        require(
+            digest(ready.git(root, "show", parent + ":" + ready.CONFIG))
+            == subject["command_contract"]["hook_config_sha256"],
+            "historical hook config object mismatch",
+        )
+    for plan in subject["type_plan"]:
+        require(
+            digest(ready.git(root, "show", commit + ":mypy.ini"))
+            == plan["config_sha256"],
+            "historical type config object mismatch",
+        )
+    return {
+        "tip_sha256": expected_tip,
+        "historical_commit": commit,
+        "historical_tree": proof["tree"],
+        "historical_base": base,
+        "historical_git_object_comparison_passed": True,
+        "candidate_objects_verified": len(scope),
+        "live_qualification": False,
+        "checkpoint_verified": False,
+        "execution_authenticated": False,
+        "independent_review_complete": False,
+        "merge_authorized": False,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("journal", type=Path)

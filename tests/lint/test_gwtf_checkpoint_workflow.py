@@ -347,6 +347,67 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
     )["tip_sha256"]
     assert call("verify", *common, "--expected-tip", tip)["delivery_confirmed"] is False
     assert not marker.exists()
+    historical_commit = ready.git_text(root, "rev-parse", "HEAD")
+    hist = [
+        "--worktree",
+        str(root),
+        "--commit",
+        historical_commit,
+        "--expected-tip",
+        tip,
+    ]
+    original_journal = j.read_bytes()
+    assert call("verify-historical", *hist)["historical_git_object_comparison_passed"]
+    call(
+        "verify-historical",
+        "--worktree",
+        str(root),
+        "--commit",
+        "HEAD",
+        "--expected-tip",
+        tip,
+        ok=False,
+    )
+    call(
+        "verify-historical",
+        "--worktree",
+        str(root),
+        "--commit",
+        historical_commit,
+        "--expected-tip",
+        "0" * 64,
+        ok=False,
+    )
+    # Advance the current branch and remote-tracking base, then dirty the
+    # current configuration. Historical comparison must use recorded objects.
+    subprocess.run(
+        ready.git_command("commit", "--allow-empty", "-m", "later checkpoint"),
+        cwd=root,
+        env=ready.hook_environment(root),
+        check=True,
+        capture_output=True,
+    )
+    later = ready.git_text(root, "rev-parse", "HEAD")
+    git(root, "update-ref", "refs/remotes/origin/main", later)
+    (root / "mypy.ini").write_text("[mypy]\n")
+    call("verify", *common, "--expected-tip", tip, ok=False)
+    historical = call("verify-historical", *hist)
+    assert historical["historical_git_object_comparison_passed"] is True
+    assert historical["live_qualification"] is False
+    assert historical["checkpoint_verified"] is False
+    assert historical["execution_authenticated"] is False
+    assert historical["candidate_objects_verified"] == len(scope)
+    assert j.read_bytes() == original_journal
+    call(
+        "verify-historical",
+        "--worktree",
+        str(root),
+        "--commit",
+        later,
+        "--expected-tip",
+        tip,
+        ok=False,
+    )
     if external:
         # Prove the actual record/verify path refuses a changed bundle even
         # when the journal and candidate remain unchanged.
