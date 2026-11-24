@@ -97,6 +97,9 @@ def test_levered_cfads_uplift_equals_the_rate_times_deductible_interest(
     cfg = copy.deepcopy(lender_config)
     cfg["tax"] = dict(cfg["tax"])
     cfg["tax"]["loss_carryforward_years"] = 0
+    cfg["tax"]["pack_overrides"] = {
+        "loss_carryforward_years": "test_levered_cfads_debt_sizing: isolate single-year interest shield"
+    }
 
     rate = float(cfg["tax"]["corporate_tax_rate"])
     assert rate > 0.0, "the oracle is vacuous at a zero tax rate"

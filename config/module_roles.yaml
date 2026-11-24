@@ -612,19 +612,19 @@ modules:
     pipeline_stage: cost_levies_epc
     role_description: Resolves jurisdiction pack values by governed subject and valuation date; fails closed and reports conflicts.
     excel_representation: governance_metadata
-    notes: Not wired (#1843); no engine path calls the resolver until later #1841 slices.
+    notes: Wired for direct tax (#1841 PR 4) via finance.cashflow_v14_tax, finance.equity_distribution_v14_hydra, and finance.wacc_v14; levies and tariff slices follow in PRs 5-6.
 
   - module_path: analytics.jurisdiction_packs.schema
     pipeline_stage: cost_levies_epc
     role_description: Strict schema and loader for versioned, sourced, effective-dated jurisdiction rule packs (statutory tax and levy parameters).
     excel_representation: governance_metadata
-    notes: Data contract only (#1842); no engine path reads a pack until later #1841 slices.
+    notes: Loaded via resolver for direct tax (#1841 PR 4); levies and tariff slices follow in PRs 5-6.
 
   - module_path: analytics.jurisdiction_packs.scenario_binding
     pipeline_stage: cost_levies_epc
     role_description: Binds a scenario's project.jurisdiction to one registered jurisdiction pack version and returns its per-subject bindings; fails closed.
     excel_representation: governance_metadata
-    notes: Not wired (#1841 PR 3); every committed scenario must bind, but no engine path calls it until later #1841 slices.
+    notes: Wired for direct tax (#1841 PR 4); every committed scenario binds its project.jurisdiction to a registered pack.
 
   - module_path: analytics.loader.aep_loader
     pipeline_stage: resource_yield
