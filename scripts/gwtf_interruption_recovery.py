@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -50,20 +51,40 @@ def write_new(path: Path, data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def capture(
-    root: Path, lease: dict[str, Any], output: Path, *, preserve_bytes: bool = False
-) -> dict[str, Any]:
-    root = root.resolve()
+def read_regular(path: Path) -> bytes:
+    """Read/hash the same regular-file bytes; refuse final-component links/FIFOs."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        require(stat.S_ISREG(before.st_mode), "regular evidence file required")
+        raw = stream.read()
+        after = os.fstat(stream.fileno())
+        require(
+            (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            )
+            == (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            ),
+            "file changed while reading",
+        )
+    return raw
+
+
+def lease_binding(root: Path, lease: dict[str, Any]) -> dict[str, Any]:
+    require(isinstance(lease, dict), "invalid prior lease")
     require(
-        not any(k in os.environ for k in ready.FORBIDDEN_ENV),
-        "execution environment override present",
-    )
-    require(
-        Path(ready.git_text(root, "rev-parse", "--show-toplevel")).resolve() == root,
-        "incorrect worktree",
-    )
-    require(
-        Path(lease["worktree"]).resolve() == root and bool(lease["lease_id"]),
+        Path(lease["worktree"]).resolve() == root
+        and isinstance(lease["lease_id"], str)
+        and bool(lease["lease_id"]),
         "prior lease worktree or identity mismatch",
     )
     scope = lease["allowlist"]
@@ -76,60 +97,144 @@ def capture(
     )
     for name in scope:
         ready.path_at(root, name)
+    require(
+        all(
+            receipt.hex_value(lease[k], receipt.HEX40) for k in ("head", "tree", "base")
+        ),
+        "invalid prior Git identity",
+    )
+    require(receipt.hex_value(lease["index_sha256"]), "initial index evidence required")
+    require(
+        isinstance(lease["branch"], str)
+        and lease["branch"] not in {"", "main", "master"},
+        "protected or detached prior branch",
+    )
+    return {
+        **{
+            k: lease[k]
+            for k in (
+                "lease_id",
+                "worktree",
+                "branch",
+                "head",
+                "tree",
+                "base",
+                "index_sha256",
+            )
+        },
+        "allowlist": sorted(scope),
+    }
+
+
+def check_root(root: Path) -> None:
+    require(
+        not any(k in os.environ for k in ready.FORBIDDEN_ENV),
+        "execution environment override present",
+    )
+    require(
+        Path(ready.git_text(root, "rev-parse", "--show-toplevel")).resolve() == root,
+        "incorrect worktree",
+    )
+
+
+def state_summary(observed: dict[str, Any], binding: dict[str, Any]) -> dict[str, Any]:
+    """Persist a whole-state commitment, not unrelated names or per-file hashes."""
+    changed = set(observed["changed_paths"])
+    scope = set(binding["allowlist"])
+    return {
+        "state_sha256": receipt.digest(receipt.canonical(observed)),
+        "identity": observed["identity"],
+        "scoped_changed_paths": sorted(changed & scope),
+        "unexpected_path_count": len(changed - scope),
+    }
+
+
+def identity_matches(observed: dict[str, Any], binding: dict[str, Any]) -> bool:
+    # The original index is bound to the lease but may legitimately differ now.
+    return all(
+        observed["identity"][k] == binding[k]
+        for k in ("branch", "head", "tree", "base")
+    )
+
+
+def scoped_bytes(
+    root: Path, observed: dict[str, Any], scope: list[str]
+) -> dict[str, dict[str, bytes]]:
+    """Re-derive scoped working bytes and actual stage-zero objects."""
+    require(ready.identity(root) == observed["identity"], "index or identity drift")
+    entries = ready.staged_entries(root)
+    values: dict[str, dict[str, bytes]] = {}
+    for name in scope:
+        path = ready.path_at(root, name)
+        snap = observed["snapshot"].get(name, "missing")
+        item: dict[str, bytes] = {}
+        if snap != "missing":
+            require(
+                not path.is_symlink() and path.is_file(),
+                "unsupported scoped working object",
+            )
+            raw = read_regular(path)
+            mode = stat.S_IMODE(path.lstat().st_mode)
+            require(
+                snap == f"{mode:o}:" + receipt.digest(raw),
+                "working bytes differ from observed snapshot",
+            )
+            item["working"] = raw
+        else:
+            require(
+                not path.exists() and not path.is_symlink(),
+                "missing working object changed",
+            )
+        if name in entries:
+            index_mode, oid = entries[name]
+            require(
+                index_mode in {"100644", "100755"}, "unsupported scoped index object"
+            )
+            item["index"] = ready.git(root, "cat-file", "blob", oid)
+        values[name] = item
+    require(ready.identity(root) == observed["identity"], "index or identity drift")
+    return values
+
+
+def capture(
+    root: Path, lease: dict[str, Any], output: Path, *, preserve_bytes: bool = False
+) -> dict[str, Any]:
+    root = root.resolve()
+    check_root(root)
+    binding = lease_binding(root, lease)
     output = receipt.safe_external(output)
     output.mkdir(mode=0o700)
     before = state(root)
-    ident = before["identity"]
-    expected_identity = all(
-        ident[k] == lease[k] for k in ("branch", "head", "tree", "base")
-    ) and ident["branch"] not in {"", "main", "master"}
-    unexpected = sorted(set(before["changed_paths"]) - set(scope))
-    # Do not copy bytes from an unowned or out-of-scope tree. Explicit opt-in
-    # is required even for a matching lease, and the coordinator must verify rights.
+    summary = state_summary(before, binding)
+    matches = identity_matches(before, binding)
     preserved: dict[str, dict[str, Any]] = {}
-    if preserve_bytes and expected_identity and not unexpected:
-        for i, name in enumerate(sorted(set(before["changed_paths"]) & set(scope))):
-            path = ready.path_at(root, name)
-            item: dict[str, Any] = {}
-            if path.is_symlink() or (path.exists() and not path.is_file()):
-                item["unsupported_working_object"] = True
-            elif path.is_file():
-                filename = f"{i:04d}-working.bin"
-                item["working"] = {
+    if preserve_bytes and matches and not summary["unexpected_path_count"]:
+        values = scoped_bytes(root, before, summary["scoped_changed_paths"])
+        for i, (name, item) in enumerate(values.items()):
+            preserved[name] = {}
+            for kind, raw in item.items():
+                filename = f"{i:04d}-{kind}.bin"
+                preserved[name][kind] = {
                     "file": filename,
-                    "sha256": write_new(output / filename, path.read_bytes()),
+                    "sha256": write_new(output / filename, raw),
                 }
-            else:
-                item["working_missing"] = True
-            index = subprocess.run(
-                ["git", "show", ":" + name], cwd=root, capture_output=True, check=False
-            )
-            if index.returncode == 0:
-                filename = f"{i:04d}-index.bin"
-                item["index"] = {
-                    "file": filename,
-                    "sha256": write_new(output / filename, index.stdout),
-                }
-            else:
-                item["index_unavailable"] = True
-            preserved[name] = item
     after = state(root)
     stable = before == after
     record = {
-        "schema": 1,
+        "schema": 2,
         "state": "OBSERVED_READ_ONLY",
         "observed_utc": datetime.now(timezone.utc).isoformat(),
-        "lease_id": lease["lease_id"],
-        "worktree": str(root),
-        "prior_identity_matches": expected_identity,
-        "unexpected_paths": unexpected,
+        "lease_id": binding["lease_id"],
+        "lease_binding_sha256": receipt.digest(receipt.canonical(binding)),
+        "prior_identity_matches": matches,
+        "unexpected_path_count": summary["unexpected_path_count"],
         "stable_observation": stable,
-        "before": before,
-        "after": after,
+        "before": summary,
+        "after": state_summary(after, binding),
         "preserved": preserved,
         "preserve_bytes_requested": preserve_bytes,
         "writer_authorized": False,
-        "limitations": "Git-visible state only. Copying requires independently established source rights. No owner/worker identity, process termination, live base, secret absence or platform permission authenticated.",
+        "limitations": "Git-visible state only; aggregate digest is not anonymization. Copying requires independently established source rights. No sandbox, owner/worker identity, process termination, live base, secret absence or platform permission authenticated. Concurrent changes between observations and ignored paths remain limitations.",
     }
     write_new(output / "observation.json", receipt.canonical(record) + b"\n")
     return record
@@ -144,40 +249,65 @@ def assess(
 ) -> dict[str, Any]:
     """Return eligibility for coordinator review, never a new writer lease."""
     root = root.resolve()
+    check_root(root)
     observation = receipt.safe_external(observation)
+    raw = read_regular(observation)
+    require(receipt.digest(raw) == expected_digest, "observation digest mismatch")
+    data = json.loads(raw)
     require(
-        not any(k in os.environ for k in ready.FORBIDDEN_ENV),
-        "execution environment override present",
+        isinstance(data, dict)
+        and data.get("schema") == 2
+        and data.get("state") == "OBSERVED_READ_ONLY",
+        "unsupported recovery observation",
     )
-    require(ready.digest(observation) == expected_digest, "observation digest mismatch")
-    data = json.loads(observation.read_text())
+    binding = lease_binding(root, prior)
     require(
-        prior["state"] == "REVOKED" and prior["lease_id"] == data["lease_id"],
+        prior["state"] == "REVOKED" and binding["lease_id"] == data["lease_id"],
         "prior lease must be revoked",
     )
     require(
-        Path(prior["worktree"]).resolve() == root
-        and Path(data["worktree"]).resolve() == root,
-        "recovery worktree mismatch",
+        data["lease_binding_sha256"] == receipt.digest(receipt.canonical(binding)),
+        "revoked lease binding mismatch",
     )
+    current = state(root)
+    summary = state_summary(current, binding)
     require(
-        data["stable_observation"]
-        and data["prior_identity_matches"]
-        and not data["unexpected_paths"],
+        identity_matches(current, binding)
+        and summary["unexpected_path_count"] == 0
+        and data["before"] == summary == data["after"]
+        and data["stable_observation"] is True
+        and data["prior_identity_matches"] is True
+        and data["unexpected_path_count"] == 0,
         "drift or ownership uncertainty requires separate reconciliation",
     )
-    require(state(root) == data["after"], "observed state has changed")
-    for item in data["preserved"].values():
-        for kind in ("working", "index"):
-            if kind in item:
-                blob = item[kind]
+    preserved = data["preserved"]
+    require(
+        isinstance(preserved, dict) and type(data["preserve_bytes_requested"]) is bool,
+        "invalid preserved evidence",
+    )
+    if data["preserve_bytes_requested"]:
+        values = scoped_bytes(root, current, summary["scoped_changed_paths"])
+        require(set(preserved) == set(values), "preserved scope mismatch")
+        for i, (name, item) in enumerate(values.items()):
+            require(
+                isinstance(preserved[name], dict) and set(preserved[name]) == set(item),
+                "preserved object set mismatch",
+            )
+            for kind, raw in item.items():
+                blob = preserved[name][kind]
+                filename = f"{i:04d}-{kind}.bin"
                 require(
-                    ready.digest(
-                        receipt.evidence_file(observation.parent, blob["file"])
-                    )
-                    == blob["sha256"],
+                    blob == {"file": filename, "sha256": receipt.digest(raw)},
+                    "preserved object binding mismatch",
+                )
+                require(
+                    read_regular(receipt.evidence_file(observation.parent, filename))
+                    == raw,
                     "preserved bytes digest mismatch",
                 )
+    else:
+        require(not preserved, "unexpected preserved evidence")
+    require(state(root) == current, "observed state has changed")
     require(
         bool(coordinator_evidence.get("coordinator"))
         and bool(coordinator_evidence.get("ownership_reference"))
@@ -209,13 +339,42 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--worktree", type=Path, required=True)
     parser.add_argument("--lease", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--assess-observation", type=Path)
+    parser.add_argument("--expected-digest")
+    parser.add_argument("--coordinator-evidence", type=Path)
     parser.add_argument("--preserve-authorized-bytes", action="store_true")
     args = parser.parse_args()
     try:
+        lease = json.loads(read_regular(receipt.safe_external(args.lease)))
+        if args.assess_observation is not None:
+            require(
+                args.output is None
+                and not args.preserve_authorized_bytes
+                and args.expected_digest is not None
+                and args.coordinator_evidence is not None,
+                "invalid assessment arguments",
+            )
+            result = assess(
+                args.worktree,
+                lease,
+                args.assess_observation,
+                args.expected_digest,
+                json.loads(
+                    read_regular(receipt.safe_external(args.coordinator_evidence))
+                ),
+            )
+            print(json.dumps(result, indent=2))
+            return 0
+        require(
+            args.output is not None
+            and args.expected_digest is None
+            and args.coordinator_evidence is None,
+            "invalid capture arguments",
+        )
         result = capture(
             args.worktree,
-            json.loads(args.lease.read_text()),
+            lease,
             args.output,
             preserve_bytes=args.preserve_authorized_bytes,
         )
@@ -223,10 +382,14 @@ def main() -> int:
         OSError,
         ValueError,
         KeyError,
+        TypeError,
+        AttributeError,
         ready.ReadinessError,
         subprocess.CalledProcessError,
-    ) as exc:
-        print(f"STOP: {exc}", file=sys.stderr)
+    ):
+        print(
+            "STOP: recovery refused; preserve evidence and reconcile", file=sys.stderr
+        )
         return 1
     print(
         json.dumps(
@@ -236,7 +399,7 @@ def main() -> int:
                     "state",
                     "stable_observation",
                     "prior_identity_matches",
-                    "unexpected_paths",
+                    "unexpected_path_count",
                     "writer_authorized",
                 )
             },
@@ -247,7 +410,7 @@ def main() -> int:
         0
         if result["stable_observation"]
         and result["prior_identity_matches"]
-        and not result["unexpected_paths"]
+        and not result["unexpected_path_count"]
         else 1
     )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -83,7 +84,10 @@ def test_default_hash_only_and_unexpected_path_not_copied(interrupted: tuple) ->
     assert recovery.capture(root, lease, output)["preserved"] == {}
     (root / "other.txt").write_text("out of scope\n")
     data = recovery.capture(root, lease, output.with_name("other"), preserve_bytes=True)
-    assert data["unexpected_paths"] == ["other.txt"]
+    assert data["unexpected_path_count"] == 1
+    assert (
+        "other.txt" not in (output.with_name("other") / "observation.json").read_text()
+    )
     assert data["preserved"] == {}
     assert (root / "other.txt").read_text() == "out of scope\n"
 
@@ -132,3 +136,82 @@ def test_output_inside_checkout_or_existing_refused(interrupted: tuple) -> None:
     recovery.capture(root, lease, output)
     with pytest.raises(FileExistsError):
         recovery.capture(root, lease, output)
+
+
+@pytest.mark.parametrize(
+    "field", ["head", "tree", "base", "branch", "index_sha256", "allowlist"]
+)
+def test_same_id_different_revoked_lease_refused(
+    interrupted: tuple, field: str
+) -> None:
+    root, lease, output = interrupted
+    recovery.capture(root, lease, output, preserve_bytes=True)
+    prior = dict(lease, state="REVOKED")
+    prior[field] = (
+        ["a.txt"]
+        if field == "allowlist"
+        else (
+            "feat/other"
+            if field == "branch"
+            else "0" * (64 if field == "index_sha256" else 40)
+        )
+    )
+    obs = output / "observation.json"
+    with pytest.raises(ValueError, match="lease binding mismatch"):
+        recovery.assess(root, prior, obs, ready.digest(obs), evidence())
+
+
+@pytest.mark.parametrize(
+    "defect", ["forged_flags", "omitted_blob", "rehashed_blob", "old_schema"]
+)
+def test_rederive_observation_and_preserved_bytes(
+    interrupted: tuple, defect: str
+) -> None:
+    root, lease, output = interrupted
+    data = recovery.capture(root, lease, output, preserve_bytes=True)
+    obs = output / "observation.json"
+    if defect == "forged_flags":
+        (root / "other.txt").write_text("changed outside scope")
+    elif defect == "omitted_blob":
+        del data["preserved"]["a.txt"]["working"]
+    elif defect == "rehashed_blob":
+        blob = data["preserved"]["a.txt"]["working"]
+        (output / blob["file"]).write_text("changed")
+        blob["sha256"] = ready.digest(output / blob["file"])
+    else:
+        data["schema"] = 1
+    obs.write_text(json.dumps(data))
+    with pytest.raises(ValueError):
+        recovery.assess(
+            root, dict(lease, state="REVOKED"), obs, ready.digest(obs), evidence()
+        )
+
+
+def test_capture_minimizes_outside_scope_evidence(interrupted: tuple) -> None:
+    root, lease, output = interrupted
+    secret = root / "private-fixture.txt"
+    secret.write_text("synthetic confidential material")
+    data = recovery.capture(root, lease, output, preserve_bytes=True)
+    raw = (output / "observation.json").read_text()
+    assert data["unexpected_path_count"] == 1
+    assert data["preserved"] == {}
+    assert secret.name not in raw
+    assert ready.digest(secret) not in raw
+    assert "synthetic confidential material" not in raw
+    assert "snapshot" not in data["before"]
+    assert "status_hex" not in data["before"]
+
+
+def test_regular_read_refuses_symlink_and_fifo(tmp_path: Path) -> None:
+    import os
+
+    target = tmp_path / "target"
+    target.write_text("fixture")
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    with pytest.raises(OSError):
+        recovery.read_regular(link)
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    with pytest.raises(ValueError, match="regular evidence"):
+        recovery.read_regular(fifo)
