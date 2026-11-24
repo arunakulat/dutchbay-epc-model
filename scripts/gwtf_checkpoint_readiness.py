@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import shutil
 import stat
@@ -49,6 +50,65 @@ class ReadinessError(RuntimeError):
 def require(ok: bool, message: str) -> None:
     if not ok:
         raise ReadinessError(message)
+
+
+MAX_JSON_BYTES = 16 * 1024 * 1024
+MAX_JSON_DEPTH = 64
+
+
+def strict_json(raw: str | bytes) -> Any:
+    """Decode bounded UTF-8 JSON without ambiguous keys or nonfinite numbers."""
+    if isinstance(raw, bytes):
+        if len(raw) > MAX_JSON_BYTES:
+            raise ValueError("evidence JSON size limit")
+        raw = raw.decode("utf-8", errors="strict")
+    elif len(raw.encode("utf-8", errors="strict")) > MAX_JSON_BYTES:
+        raise ValueError("evidence JSON size limit")
+    # Count containers before invoking the recursive decoder. Ignore quoted
+    # brackets, including escaped quotes and backslashes in string literals.
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_JSON_DEPTH:
+                raise ValueError("evidence JSON nesting limit")
+        elif char in "]}":
+            depth -= 1
+
+    def unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate evidence JSON key")
+            result[key] = value
+        return result
+
+    def finite(value: str) -> float:
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("nonfinite evidence JSON number")
+        return number
+
+    def constant(value: str) -> Any:
+        raise ValueError("nonfinite evidence JSON constant")
+
+    try:
+        return json.loads(
+            raw, object_pairs_hook=unique, parse_float=finite, parse_constant=constant
+        )
+    except RecursionError as exc:
+        raise ValueError("evidence JSON nesting limit") from exc
 
 
 def git_command(*args: str) -> list[str]:
@@ -186,8 +246,17 @@ def identity(root: Path) -> dict[str, str]:
     }
 
 
+def reject_intent_to_add(root: Path) -> None:
+    """Compare explicit index views; an empty blob alone is not an ITA flag."""
+    common = ("diff", "--cached", "--no-renames", "--name-only", "-z")
+    visible = names(git(root, *common, "--ita-visible-in-index", "HEAD"))
+    invisible = names(git(root, *common, "--ita-invisible-in-index", "HEAD"))
+    require(visible == invisible, "intent-to-add index entries unsupported")
+
+
 def snapshot(root: Path) -> dict[str, str]:
     """Hash tracked and nonignored untracked files, including modes and links."""
+    reject_intent_to_add(root)
     flags = git(root, "ls-files", "-v", "-z").split(b"\0")
     require(
         not any(x and (x[:1].islower() or x[:1] == b"S") for x in flags),
@@ -219,6 +288,7 @@ def git_mode(path: Path) -> str:
 
 def staged_entries(root: Path) -> dict[str, tuple[str, str]]:
     """Read actual stage-zero index modes and object IDs, rejecting conflicts."""
+    reject_intent_to_add(root)
     entries = {}
     for raw in git(root, "ls-files", "--stage", "-z").split(b"\0"):
         if not raw:
@@ -250,6 +320,7 @@ def verify_candidate(
         bool(lease["holder"]) and bool(lease["coordinator"]),
         "writer authority not recorded",
     )
+    reject_intent_to_add(root)
     ident = identity(root)
     require(
         bool(ident["branch"]) and ident["branch"] not in {"main", "master"},
@@ -471,7 +542,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
-        lease = json.loads(read_regular(external_path(args.lease)))
+        lease = strict_json(read_regular(external_path(args.lease)))
         require(isinstance(lease, dict), "invalid lease object")
         if args.verify_staged:
             proof = verify_staged(args.worktree, lease)

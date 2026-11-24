@@ -28,7 +28,7 @@ def read_object(path: Path) -> dict[str, Any]:
     path = receipt.safe_external(path)
     if not path.is_file():
         raise ValueError("input must be a regular external file")
-    value = json.loads(ready.read_regular(path))
+    value = ready.strict_json(ready.read_regular(path))
     if not isinstance(value, dict):
         raise ValueError("expected JSON object")
     return value

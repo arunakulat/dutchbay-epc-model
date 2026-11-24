@@ -211,7 +211,7 @@ def main() -> int:
     parser.add_argument("--receipt", type=Path, required=True)
     args = parser.parse_args()
     try:
-        observation = json.loads(
+        observation = recovery.ready.strict_json(
             recovery.read_regular(receipt.safe_external(args.observation))
         )
         tip = persist(observation, args.receipt)

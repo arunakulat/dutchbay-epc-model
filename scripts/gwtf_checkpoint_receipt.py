@@ -671,7 +671,7 @@ def verify_execution_evidence(
         evidence_file(directory, record["log_name"] + ".execution.json")
     )
     require(digest(raw) == pin, "execution sidecar digest mismatch")
-    evidence = json.loads(raw)
+    evidence = ready.strict_json(raw)
     require(
         isinstance(evidence, dict)
         and set(evidence)
@@ -784,7 +784,7 @@ def verify_readiness_evidence(record: dict, subject: dict, directory: Path) -> N
 
 
 def staged_proof(record: dict, subject: dict, directory: Path) -> dict:
-    proof = json.loads(evidence_file(directory, record["log_name"]).read_text())
+    proof = ready.strict_json(evidence_file(directory, record["log_name"]).read_text())
     if not isinstance(proof, dict):
         raise ValueError("invalid staged evidence")
     require(
@@ -1027,7 +1027,7 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
 
 def parse_rows(raw: str) -> list[dict]:
     require(not raw or raw.endswith("\n"), "partial journal record")
-    rows = [json.loads(line) for line in raw.splitlines()]
+    rows = [ready.strict_json(line) for line in raw.splitlines()]
     require(all(isinstance(row, dict) for row in rows), "invalid journal row")
     return rows
 

@@ -389,3 +389,39 @@ def test_symlinked_installed_hook_is_refused(candidate: tuple) -> None:
     hook.symlink_to(target)
     with pytest.raises(ready.ReadinessError, match="installed executable"):
         ready.run_readiness(root, lease, receipt)
+
+
+@pytest.mark.parametrize("content", ["", "new bytes\n"])
+def test_intent_to_add_rejected_even_with_refreshed_index(
+    candidate: tuple, content: str
+) -> None:
+    root, lease, receipt = candidate
+    p = root / "new.txt"
+    p.write_text(content)
+    git(root, "add", "-N", p.name)
+    lease.update(ready.identity(root))
+    lease["allowlist"].append(p.name)
+    lease["candidate_sha256"][p.name] = ready.digest(p)
+    lease["candidate_modes"][p.name] = ready.git_mode(p)
+    before = ready.git(root, "ls-files", "--stage", "-z")
+    with pytest.raises(ready.ReadinessError, match="intent-to-add"):
+        ready.run_readiness(root, lease, receipt)
+    with pytest.raises(ready.ReadinessError, match="intent-to-add"):
+        ready.snapshot(root)
+    with pytest.raises(ready.ReadinessError, match="intent-to-add"):
+        ready.staged_entries(root)
+    assert ready.git(root, "ls-files", "--stage", "-z") == before
+    assert not any(x["state"] == "HOOK_PASS_OBSERVED" for x in events(receipt))
+
+
+def test_genuinely_staged_empty_file_not_intent_to_add(candidate: tuple) -> None:
+    root, lease, _ = candidate
+    p = root / "empty.txt"
+    p.write_bytes(b"")
+    lease["allowlist"].append(p.name)
+    lease["candidate_sha256"][p.name] = ready.digest(p)
+    lease["candidate_modes"][p.name] = ready.git_mode(p)
+    git(root, "add", "candidate.txt", p.name)
+    proof = ready.verify_staged(root, lease)
+    assert proof["staged_matches_candidate"] is True
+    assert proof["candidate_sha256"][p.name] == ready.sha(b"")

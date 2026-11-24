@@ -253,7 +253,7 @@ def assess(
     observation = receipt.safe_external(observation)
     raw = read_regular(observation)
     require(receipt.digest(raw) == expected_digest, "observation digest mismatch")
-    data = json.loads(raw)
+    data = ready.strict_json(raw)
     require(
         isinstance(data, dict)
         and data.get("schema") == 2
@@ -346,7 +346,7 @@ def main() -> int:
     parser.add_argument("--preserve-authorized-bytes", action="store_true")
     args = parser.parse_args()
     try:
-        lease = json.loads(read_regular(receipt.safe_external(args.lease)))
+        lease = ready.strict_json(read_regular(receipt.safe_external(args.lease)))
         if args.assess_observation is not None:
             require(
                 args.output is None
@@ -360,7 +360,7 @@ def main() -> int:
                 lease,
                 args.assess_observation,
                 args.expected_digest,
-                json.loads(
+                ready.strict_json(
                     read_regular(receipt.safe_external(args.coordinator_evidence))
                 ),
             )
