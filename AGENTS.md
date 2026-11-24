@@ -355,6 +355,14 @@ guard above fails if a sixth copy appears.
 
 ## Verification
 
+- **Checkpoint routing.** Use canonical allowlisted hook readiness, final-byte
+  verification, staged and committed blob/mode reconciliation, and the external
+  evidence journal (RECRUIT-01 module 2 §4.2). Record execution completion
+  separately from reporting observation. Poll active processes while executing;
+  persist outstanding process identity and handover on interruption. Use
+  read-only recovery and fixed-schema incident classification; never bypass
+  platform restrictions or treat helper output as writer or merge authority.
+
 Run the narrowest meaningful checks while iterating, then broaden in proportion to risk.
 
 Before typed-code checkpoint qualification, run successful targeted mypy on final

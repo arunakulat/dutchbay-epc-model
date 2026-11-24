@@ -153,6 +153,13 @@ Notes:
 
 ### Pre-commit hooks
 
+For checkpoint operations follow RECRUIT-01 module 2 §4.2: canonical allowlisted
+hook readiness, final-byte tests/type evidence, staged and committed blob/mode
+reconciliation, and an external evidence journal. Record execution completion
+separately from reporting observation. Use read-only recovery and fixed-schema
+incident classification; never bypass platform restrictions. These tools
+do not authenticate a writer or grant approval.
+
 Typed-code checkpoint qualification requires successful targeted mypy on final
 formatter-stable bytes in the governed environment, using the applicable
 existing CI configuration and covering the affected type/import surface. Record

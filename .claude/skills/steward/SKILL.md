@@ -117,6 +117,13 @@ Green means every *required* check reports success on the exact current head wit
 - **Financial-model changes.** Follow `AGENTS.md` "Financial-model changes": regression tests,
   impact disclosure, a `VERSION` bump in the same PR (`DOC-02`; `CHANGELOG.md` is compiled
   only at release cuts), and `TEST-01`'s independent oracle.
+- **Checkpoint routing.** Use canonical allowlisted hook readiness, final-byte
+  verification, staged and committed blob/mode reconciliation, and the external
+  evidence journal (RECRUIT-01 module 2 §4.2). Record execution completion
+  separately from reporting observation. Poll active processes while executing;
+  persist outstanding process identity and handover on interruption. Use
+  read-only recovery and fixed-schema incident classification; never bypass
+  platform restrictions or treat helper output as writer or merge authority.
 - **Typed-code checkpoints.** Require successful targeted mypy on final formatter-stable
   bytes, with the governed interpreter and applicable CI gate configuration.
   Record command, versions, configuration, scope, result, log digest and candidate

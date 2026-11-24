@@ -83,6 +83,34 @@ verification and every existing CI type gate; the #1270 local hook decision
 is unchanged. No error suppression or gate weakening is a remedy for a failed
 type check.
 
+### 4.2 Operational checkpoint and incident routing
+
+Use the R25 preflight with the exact coordinator-verified worktree, branch and
+live base. Before staging, run canonical allowlisted hook readiness
+(`scripts/gwtf_checkpoint_readiness.py`); any formatter mutation stops
+qualification, preserves bytes and requires reconciliation and a fresh lease.
+Run the required final-byte tests and typed-code checks under §4.1, compare
+the staged blobs and modes with the tested candidate, then use ordinary
+commit hooks. Reconcile committed blobs, parent, tree and clean worktree.
+Use `scripts/gwtf_checkpoint_receipt.py` for the external evidence journal;
+preserve its digest independently. A journal entry alone is not proof of
+execution, approval, signer identity or notification delivery. Record execution
+completion separately from reporting observation; persist observed process
+identity, exit and evidence immediately. Poll active processes within the active
+execution session where practical. If interrupted, record outstanding process
+identity and last observed state for the next authorized session; do not claim
+background chat delivery.
+
+Use `scripts/gwtf_interruption_recovery.py` for read-only observation and
+explicitly authorized byte preservation, and `scripts/gwtf_incident.py` for
+fixed-schema incident classification. Reconcile owner, stop, base and source
+rights independently before any new lease. Unknown outcomes, missing evidence,
+out-of-scope drift and platform execution restrictions fail closed; never
+bypass platform restrictions. These tools do not grant writer authority,
+retry permission, independent acceptance, required CI or merge authority.
+Ignored paths and concurrent changes between observations are residual
+limitations, not certified isolation. The stricter applicable rule always wins.
+
 ## 5. Interruption and collision recovery
 
 Any interruption, target drift, patch-context failure, unexpected writer activity, worktree-owner
