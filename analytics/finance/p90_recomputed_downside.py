@@ -281,20 +281,42 @@ def _covenant_cfads_on_interest(
 
     ``rows`` are a run's enriched annual rows; their interest is deducted in tax, exactly
     as the engine's sizing loop does. ``config`` is evaluated as the gateway evaluates it
-    (:func:`analytics.evaluation_v14.evaluated_scenario_config`).
+    (:func:`analytics.evaluation_v14.evaluated_scenario_config`). When opt-in quarterly
+    debt sculpting is active, cascades through ``month_adverse`` to match the engine's
+    published coverage CFADS (#1893).
     """
-    # Function-scoped: the same builder the engine's levered-tax sizing loop calls. The
+    # Function-scoped: the same builders the engine's levered-tax sizing loop calls. The
     # result is checked against the engine's published CFADS before use
     # (_rebuild_matches_engine), so a drift here fails loud instead of misreporting.
     from finance.cashflow_v14 import build_annual_rows
+    from finance.monthly_cascade_v14 import (
+        HAIRCUT_RULE_MONTH_ADVERSE,
+        MONTHS_PER_YEAR,
+        build_monthly_cascade_from_annual_rows,
+    )
+    from finance.quarterly_sculpting_v14 import is_quarterly_sculpting_enabled
 
+    eval_cfg = evaluated_scenario_config(dict(config))
     basis = _balloon_basis(config)
     paid = None if basis == "paid" else _interest_lkr(rows, "paid")
     rebuilt = build_annual_rows(
-        evaluated_scenario_config(dict(config)),
+        eval_cfg,
         interest_expense_series=_interest_lkr(rows, basis),
         interest_paid_series=paid,
     )
+    if is_quarterly_sculpting_enabled(eval_cfg):
+        cascade = build_monthly_cascade_from_annual_rows(
+            eval_cfg,
+            rebuilt,
+            risk_haircut_rule=HAIRCUT_RULE_MONTH_ADVERSE,
+        )
+        return [
+            math.fsum(
+                float(cascade.rows[y * MONTHS_PER_YEAR + m]["cfads_usd"])
+                for m in range(MONTHS_PER_YEAR)
+            )
+            for y in range(len(rebuilt))
+        ]
     return [float(r.get("cfads_usd") or 0.0) for r in rebuilt]
 
 
