@@ -177,7 +177,10 @@ track, so a fresh clone starts with none. The local hook configuration does not 
 the active local hooks and mandatory CI type gates: `test-suite.yml` strict library/engine
 and scripts mypy checks, plus scoped checks in `ci_v14_fastlane.yml`, `fx-tests.yml` and
 `regression-smoke.yml`. The separate `make type` and CI type gates remain mandatory;
-the Makefile type target and CI scripts scope are not identical. Full installer reachability
+the Makefile type target and CI scripts scope are not identical. The existing FX
+scoped mypy step has `continue-on-error: true`; it is advisory, not a substitute
+for the blocking strict and scripts gates. No workflow failure setting is changed.
+Full installer reachability
 remains separately tracked by #1262.
 
 To restore them in an existing checkout without a full environment reconcile, or to run

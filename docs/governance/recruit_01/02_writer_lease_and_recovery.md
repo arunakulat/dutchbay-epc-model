@@ -174,7 +174,10 @@ authority to retire unrelated or recovery branches is conferred.
 Policy fences preserve every active predecessor rule identity, reject duplicate
 identities and allow additive rules. They check scoped normative
 clauses, not a frozen total rule count. They detect specific hostile context
-mutations, not arbitrary natural-language contradictions. Independent semantic
+mutations, including hidden or negated routed paragraphs and altered CI step
+commands or failure settings. The inherited FX scoped mypy step is advisory;
+blocking strict and scripts gates remain mandatory. These fences do not prove
+workflow reachability or arbitrary natural-language consistency. Independent semantic
 review and actual behavioral oracles remain mandatory.
 
 ## 5. Interruption and collision recovery
