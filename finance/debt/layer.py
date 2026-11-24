@@ -38,6 +38,8 @@ _DSCR_LOCKUP_EPS = 1e-9
 def apply_debt_layer(
     params: Dict[str, Any],
     annual_rows: List[Dict[str, Any]],
+    *,
+    quarterly_cfads_scale: float = 1.0,
 ) -> Dict[str, Any]:
     """Core v14 debt engine.
 
@@ -144,33 +146,75 @@ def apply_debt_layer(
 
     principal_after_idc = {n: t.principal for n, t in tranches.items()}
 
-    cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
-    (
-        cfads_ext,
-        annual_row_debt_period_map,
-        timeline_periods,
-        bridge_debt_period,
-    ) = _build_cfads_timeline(annual_rows, cfads, construction_periods, tenor)
+    from finance.quarterly_sculpting_v14 import (
+        QuarterlySculptingResult,
+        build_quarterly_sculpted_schedule,
+        is_quarterly_sculpting_enabled,
+    )
 
-    amort_years = max(0, tenor - years_io)
-    if amortization in _AMORT_ANNUITY_STYLES:
-        schedules = {k: _annuity_schedule(t, amort_years) for k, t in tranches.items()}
-    else:
-        schedules = _sculpted_schedule(
-            tranches,
-            amort_years,
-            cfads_ext[construction_periods:],
-            target_dscr,
+    qs_result: Optional[QuarterlySculptingResult] = None
+    if is_quarterly_sculpting_enabled(params):
+        qs_result = build_quarterly_sculpted_schedule(
+            config=params,
+            annual_rows=annual_rows,
+            tranches=tranches,
+            tenor_years=tenor,
+            years_io=years_io,
+            target_dscr=target_dscr,
             senior_fee_rate=senior_fee_rate,
-            # #1845: on the annual-covenant basis the bridge's service, which
-            # dscr_by_year folds into operating year 1, comes out of year 1's sculpt.
-            folded_index=(
-                bridge_debt_period - construction_periods
-                if bridge_debt_period is not None
-                and resolve_sizing_dscr_basis(params) == "annual_covenant"
-                else None
-            ),
+            amortization_style=amortization,
+            quarterly_cfads_scale=quarterly_cfads_scale,
         )
+        has_bridge = qs_result.bridge_period is not None
+        bridge_debt_period = construction_periods if has_bridge else None
+        first_op_period = construction_periods + (1 if has_bridge else 0)
+        cfads_ext = [0.0] * construction_periods + list(qs_result.annual_cfads_usd)
+        timeline_periods = max(first_op_period + tenor, len(cfads_ext))
+        while len(cfads_ext) < timeline_periods:
+            cfads_ext.append(0.0)
+        annual_row_debt_period_map = [
+            {
+                "annual_row_index": row_index,
+                "year": row.get("year", row_index + 1),
+                "debt_period": first_op_period + row_index,
+                "cfads_usd": float(cfads_ext[first_op_period + row_index]),
+            }
+            for row_index, row in enumerate(annual_rows)
+        ]
+        cfads = [float(m["cfads_usd"]) for m in annual_row_debt_period_map]
+        schedules = {
+            k: list(qs_result.annual_aggregated_schedules[k]) for k in tranches
+        }
+    else:
+        cfads = [float(a.get("cfads_usd", 0.0)) for a in annual_rows]
+        (
+            cfads_ext,
+            annual_row_debt_period_map,
+            timeline_periods,
+            bridge_debt_period,
+        ) = _build_cfads_timeline(annual_rows, cfads, construction_periods, tenor)
+
+        amort_years = max(0, tenor - years_io)
+        if amortization in _AMORT_ANNUITY_STYLES:
+            schedules = {
+                k: _annuity_schedule(t, amort_years) for k, t in tranches.items()
+            }
+        else:
+            schedules = _sculpted_schedule(
+                tranches,
+                amort_years,
+                cfads_ext[construction_periods:],
+                target_dscr,
+                senior_fee_rate=senior_fee_rate,
+                # #1845: on the annual-covenant basis the bridge's service, which
+                # dscr_by_year folds into operating year 1, comes out of year 1's sculpt.
+                folded_index=(
+                    bridge_debt_period - construction_periods
+                    if bridge_debt_period is not None
+                    and resolve_sizing_dscr_basis(params) == "annual_covenant"
+                    else None
+                ),
+            )
 
     for k in schedules:
         schedules[k] = [(0.0, 0.0, 0.0)] * construction_periods + schedules[k]
@@ -198,7 +242,14 @@ def apply_debt_layer(
         fee_applies = period >= construction_periods and (
             bridge_debt_period is None or period != int(bridge_debt_period)
         )
-        fee_period = senior_fee_rate * opening_outstanding if fee_applies else 0.0
+        if not fee_applies:
+            fee_period = 0.0
+        elif qs_result is not None and (
+            0 <= (period - construction_periods) < len(qs_result.annual_senior_fees_usd)
+        ):
+            fee_period = qs_result.annual_senior_fees_usd[period - construction_periods]
+        else:
+            fee_period = senior_fee_rate * opening_outstanding
         senior_fee_schedule.append(fee_period)
         svc = 0.0
         intr = 0.0
@@ -268,6 +319,8 @@ def apply_debt_layer(
         audit_dscr_min = min(folded_dscr_op)
     else:
         audit_dscr_min = dscr_min
+    if qs_result is not None and qs_result.quarterly_dscr_min is not None:
+        audit_dscr_min = min(audit_dscr_min, float(qs_result.quarterly_dscr_min))
 
     debt_principal_total = sum(principal_after_idc.values())
 
@@ -341,7 +394,7 @@ def apply_debt_layer(
     fx_max = max(fx_values) if fx_values else None
     fx_avg = sum(fx_values) / len(fx_values) if fx_values else None
 
-    return {
+    result: Dict[str, Any] = {
         "dscr_series": dscr_series,
         "dscr_by_year": dscr_by_year,
         "dscr_min": dscr_min,
@@ -383,6 +436,9 @@ def apply_debt_layer(
         "fx_max": fx_max,
         "fx_avg": fx_avg,
     }
+    if qs_result is not None:
+        result["quarterly_sculpting"] = qs_result.to_dict()
+    return result
 
 
 def _coverage_ratios(
