@@ -41,11 +41,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         lease = read_object(args.lease)
         ready.verify_candidate(args.worktree.resolve(), lease)
         start = receipt.start_data(lease)
+        receipt.verify_contract_runtime(args.worktree.resolve(), start["subject"])
         tip = receipt.append_event(journal, "STARTED", start)
         return {
             "tip_sha256": tip,
             "subject_sha256": start["subject_sha256"],
             "required_checks": start["required_checks"],
+            "command_contract_bound": receipt.command_contract_bound(start["subject"]),
             "type_commands": {
                 p["check_id"]: receipt.type_command(p)
                 for p in start["subject"]["type_plan"]

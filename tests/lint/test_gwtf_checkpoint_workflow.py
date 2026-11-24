@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from scripts import gwtf_checkpoint_readiness as ready
+from scripts import gwtf_checkpoint_receipt as receipt
 
 ROOT = Path(__file__).resolve().parents[2]
 CLI = ROOT / "scripts/gwtf_checkpoint_workflow.py"
@@ -135,9 +136,44 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
         ],
     }
     lp = tmp_path / "lease.json"
-    lp.write_text(json.dumps(lease))
     j = tmp_path / "journal.jsonl"
     common = ["--worktree", str(root), "--lease", str(lp)]
+    if external:
+        planned = [
+            (
+                "readiness",
+                verifier_command(
+                    "gwtf_checkpoint_readiness",
+                    *common,
+                    "--receipt",
+                    str(tmp_path / "readiness.jsonl"),
+                ),
+                "readiness.jsonl",
+            ),
+            ("types:strict", receipt.type_command(lease["type_plan"][0]), "types.log"),
+            ("regression", ready.git_command("diff", "--check"), "regression.log"),
+            (
+                "staged",
+                verifier_command(
+                    "gwtf_checkpoint_readiness",
+                    *common,
+                    "--receipt",
+                    str(tmp_path / "staged.json"),
+                    "--verify-staged",
+                ),
+                "staged.json",
+            ),
+            ("commit", ready.git_command("commit", "-m", "candidate"), "commit.log"),
+        ]
+        lease["command_contract"] = {
+            "interpreter": sys.executable,
+            "hook_config_sha256": ready.digest(root / ready.CONFIG),
+            "checks": [
+                {"check_id": cid, "command": argv, "log_name": log}
+                for cid, argv, log in planned
+            ],
+        }
+    lp.write_text(json.dumps(lease))
 
     def call(*args: str, ok: bool = True) -> dict[str, Any]:
         before = ready.identity(root), ready.snapshot(root)
@@ -162,6 +198,7 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
         return data
 
     start = call("start", *common)
+    assert start["command_contract_bound"] is external
     tip = start["tip_sha256"]
     subject = start["subject_sha256"]
     call("start", *common, ok=False)
@@ -204,7 +241,7 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
     observe(
         "types:strict", cmd, log, result.returncode, type_evidence=lease["type_plan"][0]
     )
-    cmd = ["git", "diff", "--check"]
+    cmd = ready.git_command("diff", "--check")
     result = subprocess.run(cmd, cwd=root, capture_output=True)
     log = tmp_path / "regression.log"
     log.write_bytes(result.stdout + result.stderr)
@@ -235,7 +272,12 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
         call("verify", *common, "--expected-tip", tip)["git_object_comparison_passed"]
         is True
     )
-    assert call("inspect", "--expected-tip", tip)["checkpoint_verified"] is False
+    inspected = call("inspect", "--expected-tip", tip)
+    assert inspected["checkpoint_verified"] is False
+    assert inspected["command_contract_bound"] is external
+    assert receipt.parse_rows(j.read_text())[0]["schema"] == (
+        receipt.BOUND_SCHEMA if external else receipt.SCHEMA
+    )
     tip = call(
         "report", "--expected-tip", tip, "--channel", "chat", "--observation", "emitted"
     )["tip_sha256"]

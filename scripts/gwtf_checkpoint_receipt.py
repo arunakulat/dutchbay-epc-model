@@ -26,6 +26,7 @@ else:
     import gwtf_checkpoint_readiness as ready
 
 SCHEMA = 2
+BOUND_SCHEMA = 3
 ZERO = "0" * 64
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 EVENTS = {
@@ -288,7 +289,8 @@ def type_command(plan: dict) -> list[str]:
 
 def validate_subject(subject: dict) -> None:
     require(
-        isinstance(subject, dict) and set(subject) == SUBJECT_FIELDS,
+        isinstance(subject, dict)
+        and set(subject) in (SUBJECT_FIELDS, SUBJECT_FIELDS | {"command_contract"}),
         "invalid subject schema",
     )
     require(
@@ -425,6 +427,102 @@ def validate_subject(subject: dict) -> None:
         )
 
 
+def ordered_checks(subject: dict) -> list[str]:
+    return [
+        "readiness",
+        *(item["check_id"] for item in subject["type_plan"]),
+        "regression",
+        "staged",
+        "commit",
+    ]
+
+
+def validate_command_contract(subject: dict) -> None:
+    """Validate a coordinator-approved argv/log contract; not command adequacy.
+
+    The plan must be retained independently and approved before execution.
+    A caller's plan and observations do not authenticate execution.
+    """
+    contract = subject["command_contract"]
+    require(
+        isinstance(contract, dict)
+        and set(contract) == {"interpreter", "hook_config_sha256", "checks"}
+        and isinstance(contract["interpreter"], str)
+        and Path(contract["interpreter"]).is_absolute()
+        and hex_value(contract["hook_config_sha256"])
+        and isinstance(contract["checks"], list),
+        "invalid command contract",
+    )
+    checks = contract["checks"]
+    require(
+        len(checks) == len(ordered_checks(subject)),
+        "command contract check count mismatch",
+    )
+    log_names: set[str] = set()
+    type_plans = {item["check_id"]: item for item in subject["type_plan"]}
+    for cid, item in zip(ordered_checks(subject), checks, strict=True):
+        require(
+            isinstance(item, dict)
+            and set(item) == {"check_id", "command", "log_name"}
+            and item["check_id"] == cid,
+            "command contract check order mismatch",
+        )
+        command, name = item["command"], item["log_name"]
+        require(
+            isinstance(command, list)
+            and bool(command)
+            and all(isinstance(arg, str) and arg and "\0" not in arg for arg in command)
+            and Path(command[0]).is_absolute(),
+            "invalid planned argv",
+        )
+        require(
+            isinstance(name, str)
+            and safe_relative(name)
+            and Path(name).name == name
+            and name not in log_names,
+            "unsafe or duplicate planned log name",
+        )
+        log_names.add(name)
+        if cid in type_plans:
+            plan = type_plans[cid]
+            require(
+                plan["interpreter"] == contract["interpreter"]
+                and command == type_command(plan),
+                "planned type command mismatch",
+            )
+    readiness_log = checks[0]["log_name"]
+    require(
+        not log_names.intersection(
+            {readiness_log + ".pass1.log", readiness_log + ".pass2.log"}
+        ),
+        "planned log collides with hook pass evidence",
+    )
+
+
+def command_contract_bound(subject: dict) -> bool:
+    return "command_contract" in subject
+
+
+def journal_schema(subject: dict) -> int:
+    return BOUND_SCHEMA if command_contract_bound(subject) else SCHEMA
+
+
+def verify_contract_runtime(root: Path, subject: dict) -> None:
+    if not command_contract_bound(subject):
+        return
+    contract = subject["command_contract"]
+    config = root / ready.CONFIG
+    require(
+        contract["interpreter"] == sys.executable
+        and config.is_file()
+        and not config.is_symlink()
+        and ready.digest(config) == contract["hook_config_sha256"]
+        and digest(ready.git(root, "show", subject["parent_head"] + ":" + ready.CONFIG))
+        == contract["hook_config_sha256"],
+        "command contract interpreter or hook configuration drift",
+    )
+
+
 def build_subject(lease: dict) -> dict:
     require(
         isinstance(lease, dict) and lease.get("state") == "PATCH_APPLIED",
@@ -442,7 +540,11 @@ def build_subject(lease: dict) -> dict:
         "type_plan": lease.get("type_plan", []),
         "type_not_applicable_reason": lease.get("type_not_applicable_reason"),
     }
+    if "command_contract" in lease:
+        subject["command_contract"] = lease["command_contract"]
     validate_subject(subject)
+    if command_contract_bound(subject):
+        validate_command_contract(subject)
     require(
         isinstance(lease["allowlist"], list)
         and len(lease["allowlist"]) == len(set(lease["allowlist"]))
@@ -472,6 +574,33 @@ def check_bound_record(data: dict, start: dict, directory: Path) -> None:
         "stale or different candidate check",
     )
     cid = data["check_id"]
+    subject = start["subject"]
+    if command_contract_bound(subject):
+        expected = next(
+            (
+                item
+                for item in subject["command_contract"]["checks"]
+                if item["check_id"] == cid
+            ),
+            None,
+        )
+        require(
+            expected is not None
+            and data["command"] == expected["command"]
+            and data["log_name"] == expected["log_name"],
+            "observation differs from planned command or log",
+        )
+        fields = {
+            "check_id",
+            "subject_sha256",
+            "command",
+            "exit_code",
+            "log_name",
+            "log_sha256",
+        }
+        if cid.startswith("types:"):
+            fields.add("type_evidence")
+        require(set(data) == fields, "invalid bound observation fields")
     if cid.startswith("types:"):
         plan = next(
             (x for x in start["subject"]["type_plan"] if x["check_id"] == cid), None
@@ -523,6 +652,33 @@ def verify_readiness_evidence(record: dict, subject: dict, directory: Path) -> N
         },
         "readiness index/identity mismatch",
     )
+    if command_contract_bound(subject):
+        contract = subject["command_contract"]
+        preflight = rows[1]
+        require(
+            preflight.get("identity") == ident
+            and preflight.get("candidate_sha256") == subject["candidate_sha256"]
+            and preflight.get("candidate_modes") == subject["candidate_modes"]
+            and preflight.get("config_sha256") == contract["hook_config_sha256"],
+            "readiness preflight contract mismatch",
+        )
+        expected_hook = [
+            contract["interpreter"],
+            "-I",
+            "-m",
+            "pre_commit",
+            "run",
+            "--config",
+            ready.CONFIG,
+            "--hook-stage",
+            "pre-commit",
+            "--files",
+            *sorted(subject["candidate_sha256"]),
+        ]
+        require(
+            all(row.get("command") == expected_hook for row in rows[2:4]),
+            "readiness hook command mismatch",
+        )
     for attempt, row in enumerate(rows[2:4], 1):
         require(
             row.get("pass_number") == attempt
@@ -661,10 +817,12 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
     checkpoint = False
     reported = False
     start: dict = {}
+    schema = rows[0].get("schema") if rows and isinstance(rows[0], dict) else SCHEMA
     for index, row in enumerate(rows):
         require(
             isinstance(row, dict)
-            and row.get("schema") == SCHEMA
+            and schema in {SCHEMA, BOUND_SCHEMA}
+            and row.get("schema") == schema
             and row.get("sequence") == index
             and row.get("previous_sha256") == prev,
             "journal sequence/schema mismatch",
@@ -689,6 +847,12 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
             )
             validate_subject(data["subject"])
             require(
+                schema == journal_schema(data["subject"]),
+                "journal command contract schema mismatch",
+            )
+            if schema == BOUND_SCHEMA:
+                validate_command_contract(data["subject"])
+            require(
                 data["subject_sha256"] == digest(canonical(data["subject"]))
                 and data["required_checks"] == sorted(required_checks(data["subject"])),
                 "required check plan or subject mismatch",
@@ -705,13 +869,33 @@ def validate_chain(rows: list[dict], directory: Path) -> str:
                     and not completed,
                     "duplicate, late or unplanned check",
                 )
+                if schema == BOUND_SCHEMA:
+                    order = ordered_checks(start["subject"])
+                    require(
+                        len(checks) < len(order)
+                        and cid == order[len(checks)]
+                        and all(x["exit_code"] == 0 for x in checks.values()),
+                        "bound check order or prior failure",
+                    )
                 check_bound_record(data, start, directory)
+                if (
+                    schema == BOUND_SCHEMA
+                    and cid == "readiness"
+                    and data["exit_code"] == 0
+                ):
+                    verify_readiness_evidence(data, start["subject"], directory)
                 checks[data["check_id"]] = data
             elif event == "EXECUTION_COMPLETED":
                 require(
                     not completed and type(data.get("exit_code")) is int,
                     "invalid execution completion",
                 )
+                if schema == BOUND_SCHEMA and data["exit_code"] == 0:
+                    require(
+                        list(checks) == ordered_checks(start["subject"])
+                        and all(x["exit_code"] == 0 for x in checks.values()),
+                        "bound execution success requires all ordered checks passing",
+                    )
                 completed = True
                 successful = data["exit_code"] == 0
             elif event == "CHECKPOINT_VERIFIED":
@@ -770,8 +954,13 @@ def _append_event(
         prev = validate_chain(rows, path.parent)
         if expected_tip is not None:
             require(prev == expected_tip, "trusted journal tip mismatch")
+        schema = (
+            rows[0]["schema"]
+            if rows
+            else journal_schema(data["subject"]) if event == "STARTED" else SCHEMA
+        )
         row = {
-            "schema": SCHEMA,
+            "schema": schema,
             "sequence": len(rows),
             "previous_sha256": prev,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -815,6 +1004,7 @@ def inspect_journal(path: Path, expected_tip: str | None = None) -> dict:
         "checkpoint_recorded": any(x["event"] == "CHECKPOINT_VERIFIED" for x in rows),
         "checkpoint_verified": False,
         "legacy_historical_only": legacy,
+        "command_contract_bound": rows[0].get("schema") == BOUND_SCHEMA,
         "report_observed": any(x["event"] == "REPORT_OBSERVED" for x in rows),
         "delivery_confirmed": False,
         "independent_review_complete": False,
@@ -839,7 +1029,7 @@ def qualification_rows(
     )
     rows = parse_rows(ready.read_regular(journal).decode())
     require(
-        bool(rows) and rows[0].get("schema") == SCHEMA,
+        bool(rows) and rows[0].get("schema") in {SCHEMA, BOUND_SCHEMA},
         "legacy or empty journal cannot qualify",
     )
     require(
@@ -863,6 +1053,7 @@ def qualification_rows(
         "required check or execution failed",
     )
     subject = start["subject"]
+    verify_contract_runtime(root, subject)
     verify_readiness_evidence(checks["readiness"], subject, journal.parent)
     for plan in subject["type_plan"]:
         require(
