@@ -1526,6 +1526,11 @@ modules:
     role_description: Resolves the canonical operating-period resolution grid for annual or sub-annual cashflows.
     excel_representation: formula
 
+  - module_path: finance.quarterly_sculpting_v14
+    pipeline_stage: core_finance
+    role_description: Computes opt-in quarterly debt sculpting on instalment dates, true-length bridge, time-weighted senior fees, and quarterly DSCR beside the annual covenant.
+    excel_representation: engine_table_plus_rollup
+
   - module_path: finance.self_curtailment_v14
     pipeline_stage: grid_qsts
     role_description: Composes QSTS self-curtailment fractions into cashflow curtailment loss keys when enabled.

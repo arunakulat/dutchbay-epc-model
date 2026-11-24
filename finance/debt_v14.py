@@ -115,6 +115,7 @@ from finance.debt.terms import (  # noqa: F401
     placeholder_construction_schedule,
     placeholder_debt_drawdown_pct,
     resolve_bridge_period_treatment,
+    resolve_sizing_dscr_basis,
 )
 
 logger = logging.getLogger(__name__)
