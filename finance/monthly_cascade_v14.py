@@ -82,7 +82,10 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .cashflow_v14 import _prepare_cashflow_context, build_annual_rows
 from .cashflow_v14_fx import _hedged_usd
-from .cashflow_v14_production import _calculate_statutory_deductions
+from .cashflow_v14_production import (
+    _apply_risk_haircut,
+    _calculate_statutory_deductions,
+)
 from .cashflow_v14_utils import get_nested
 from .period_grid_v14 import PeriodGrid, require_mapping_node
 from .subannual_rows_v14 import validate_profile_weights
@@ -90,32 +93,69 @@ from .tariff_indexation import tariff_lkr_per_kwh_for_year
 
 __all__ = [
     "COVENANT_USE",
+    "DEFAULT_BRIDGE_MONTHS",
+    "DEFAULT_INSTALMENT_QUARTERS",
+    "HAIRCUT_RULE_MONTH_ADVERSE",
+    "HAIRCUT_RULE_YEAR_SIGN",
     "LINE_BASIS",
+    "MAX_BRIDGE_MONTHS",
+    "MAX_RECEIVABLE_DAYS",
     "MONTHLY_KEY",
     "MONTHS_PER_YEAR",
-    "MAX_RECEIVABLE_DAYS",
+    "QUARTERS_PER_YEAR",
     "RECEIVABLES_KEY",
     "RECONCILIATION_REL_TOLERANCE",
+    "VALID_HAIRCUT_RULES",
     "MonthlyCascade",
     "MonthlySpec",
+    "QuarterlySculptingSpec",
     "apply_receivables_lag",
     "build_monthly_cascade",
+    "build_monthly_cascade_from_annual_rows",
     "receivables_balances",
     "operating_month_weights",
     "resolve_monthly_spec",
+    "resolve_risk_haircut_rule",
 ]
 
 MONTHS_PER_YEAR = 12
+QUARTERS_PER_YEAR = 4
 
 #: Dotted config path of the cascade's node, for error messages.
 MONTHLY_KEY = "cashflow.monthly"
 _MONTHLY_PATH: Sequence[str] = ("cashflow", "monthly")
 
-_ALLOWED_KEYS = frozenset({"cod_month", "energy_shape", "receivable_days"})
+_ALLOWED_KEYS = frozenset(
+    {
+        "cod_month",
+        "energy_shape",
+        "receivable_days",
+        "risk_haircut_rule",
+        "quarterly_sculpting",
+    }
+)
+_ALLOWED_QUARTERLY_KEYS = frozenset({"enabled", "instalment_quarters", "bridge_months"})
 
 #: Longest receivables lag accepted, in days. A lag over a year would carry a whole
 #: year's revenue unpaid, which is a default, not a payment term.
 MAX_RECEIVABLE_DAYS = 365
+
+#: Default instalment quarters (every quarter-end) and default true-length bridge
+#: (6 months = half-year) when quarterly sculpting is enabled without explicit terms.
+DEFAULT_INSTALMENT_QUARTERS: Tuple[int, ...] = (1, 2, 3, 4)
+DEFAULT_BRIDGE_MONTHS: int = 6
+MAX_BRIDGE_MONTHS: int = 11
+
+#: Month-level risk haircut rules (dolphin 1 vs dolphin 3):
+#: * ``year_sign`` (dolphin 1 default): apply the annual post-tax sign's haircut factor
+#:   to every month so mixed-sign months still sum back to the annual figure.
+#: * ``month_adverse`` (dolphin 3 required for quarterly/monthly DSCR): apply
+#:   ``finance.cashflow_v14_production._apply_risk_haircut`` per month so a negative
+#:   month inside a positive year is stressed downward (``posttax * (1 + h)``) rather
+#:   than attenuated toward zero (``posttax * (1 - h)``).
+HAIRCUT_RULE_YEAR_SIGN = "year_sign"
+HAIRCUT_RULE_MONTH_ADVERSE = "month_adverse"
+VALID_HAIRCUT_RULES = frozenset({HAIRCUT_RULE_YEAR_SIGN, HAIRCUT_RULE_MONTH_ADVERSE})
 
 #: A 12-period grid, used only to validate a shape through the shared profile contract.
 _MONTHLY_GRID = PeriodGrid(resolution="monthly", periods_per_year=MONTHS_PER_YEAR)
@@ -185,6 +225,24 @@ LINE_BASIS: Dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class QuarterlySculptingSpec:
+    """Resolved ``cashflow.monthly.quarterly_sculpting`` opt-in node (dolphin 3).
+
+    Attributes:
+        enabled: Master opt-in switch (default ``False``).
+        instalment_quarters: Strictly ascending 1-based quarters in ``1..4`` on which
+            debt service is paid (e.g. ``(1, 2, 3, 4)`` quarterly, ``(2, 4)``
+            semi-annual), or ``None`` to use the labelled default ``(1, 2, 3, 4)``.
+        bridge_months: True length of the lead-in bridge period in months (``0..11``;
+            ``0`` omits the bridge), or ``None`` to use the labelled default ``6``.
+    """
+
+    enabled: bool = False
+    instalment_quarters: Optional[Tuple[int, ...]] = None
+    bridge_months: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class MonthlySpec:
     """The resolved ``cashflow.monthly`` node.
 
@@ -192,11 +250,18 @@ class MonthlySpec:
         cod_month: Calendar month (1-12) of operating month 1, or ``None``.
         energy_shape: Share of a year's net energy per CALENDAR month, January first,
             or ``None`` for energy that follows the days.
+        receivable_days: Trailing offtaker receivables lag in days (``0..365``).
+        risk_haircut_rule: Explicit month-level haircut rule (``"year_sign"`` or
+            ``"month_adverse"``), or ``None`` for the mode's default.
+        quarterly_sculpting: Resolved dolphin-3 quarterly debt sculpting configuration,
+            or ``None`` when omitted.
     """
 
     cod_month: Optional[int]
     energy_shape: Optional[Tuple[float, ...]]
     receivable_days: int = 0
+    risk_haircut_rule: Optional[str] = None
+    quarterly_sculpting: Optional[QuarterlySculptingSpec] = None
 
 
 @dataclass(frozen=True)
@@ -214,6 +279,12 @@ class MonthlyCascade:
         assumptions: Each default the cascade fell back on, in words.
         line_basis: :data:`LINE_BASIS`, carried so the output explains itself.
         covenant_use: :data:`COVENANT_USE`.
+        risk_haircut_rule: Effective month-level risk haircut rule used.
+        mixed_sign_haircut_excess_lkr: Per-operating-year excess adverse haircut
+            (``h * (sum(|posttax_m|) - |sum(posttax_m)|) >= 0``) when
+            ``month_adverse`` encounters a negative month inside a positive year (or
+            vice versa); ``0.0`` when all months share the year's sign or under
+            ``year_sign``.
     """
 
     rows: List[Dict[str, Any]]
@@ -223,6 +294,93 @@ class MonthlyCascade:
     assumptions: Tuple[str, ...]
     line_basis: Dict[str, str] = field(default_factory=lambda: dict(LINE_BASIS))
     covenant_use: str = COVENANT_USE
+    risk_haircut_rule: str = HAIRCUT_RULE_YEAR_SIGN
+    mixed_sign_haircut_excess_lkr: Tuple[float, ...] = ()
+
+
+def _resolve_quarterly_sculpting_spec(raw: Any) -> QuarterlySculptingSpec:
+    """Validate and resolve ``cashflow.monthly.quarterly_sculpting``."""
+    q_key = f"{MONTHLY_KEY}.quarterly_sculpting"
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"{q_key} must be a mapping with keys {sorted(_ALLOWED_QUARTERLY_KEYS)}; "
+            f"got {type(raw).__name__}."
+        )
+    unknown = sorted(str(key) for key in raw if key not in _ALLOWED_QUARTERLY_KEYS)
+    if unknown:
+        raise ValueError(
+            f"{q_key} carries unknown key(s) {unknown}; accepted keys are "
+            f"{sorted(_ALLOWED_QUARTERLY_KEYS)}."
+        )
+    enabled_raw = raw.get("enabled", False)
+    if not isinstance(enabled_raw, bool):
+        raise ValueError(
+            f"{q_key}.enabled must be a boolean (true/false); got {enabled_raw!r}."
+        )
+    quarters_raw = raw.get("instalment_quarters")
+    quarters: Optional[Tuple[int, ...]] = None
+    if quarters_raw is not None:
+        if (
+            not isinstance(quarters_raw, Sequence)
+            or isinstance(quarters_raw, (str, bytes))
+            or len(quarters_raw) == 0
+        ):
+            raise ValueError(
+                f"{q_key}.instalment_quarters must be a non-empty list of quarters "
+                f"in 1-4; got {quarters_raw!r}."
+            )
+        parsed_quarters: List[int] = []
+        for entry in quarters_raw:
+            if isinstance(entry, bool) or not isinstance(entry, int):
+                raise ValueError(
+                    f"{q_key}.instalment_quarters entries must be whole quarters 1-4; "
+                    f"got {entry!r}."
+                )
+            if not 1 <= entry <= QUARTERS_PER_YEAR:
+                raise ValueError(
+                    f"{q_key}.instalment_quarters entries must be 1-4; got {entry}."
+                )
+            if parsed_quarters and entry <= parsed_quarters[-1]:
+                raise ValueError(
+                    f"{q_key}.instalment_quarters must be strictly ascending without "
+                    f"duplicates; got {list(quarters_raw)!r}."
+                )
+            parsed_quarters.append(entry)
+        quarters = tuple(parsed_quarters)
+
+    bridge_raw = raw.get("bridge_months")
+    bridge_months: Optional[int] = None
+    if bridge_raw is not None:
+        if isinstance(bridge_raw, bool) or not isinstance(bridge_raw, int):
+            raise ValueError(
+                f"{q_key}.bridge_months must be a whole number of months (0-"
+                f"{MAX_BRIDGE_MONTHS}); got {bridge_raw!r}."
+            )
+        if not 0 <= bridge_raw <= MAX_BRIDGE_MONTHS:
+            raise ValueError(
+                f"{q_key}.bridge_months must be 0-{MAX_BRIDGE_MONTHS}; "
+                f"got {bridge_raw}."
+            )
+        bridge_months = bridge_raw
+
+    return QuarterlySculptingSpec(
+        enabled=enabled_raw,
+        instalment_quarters=quarters,
+        bridge_months=bridge_months,
+    )
+
+
+def resolve_risk_haircut_rule(spec: Optional[MonthlySpec]) -> str:
+    """Return the effective month-level risk haircut rule for ``spec``."""
+    if spec is not None and spec.risk_haircut_rule is not None:
+        return spec.risk_haircut_rule
+    if (
+        spec is not None
+        and spec.quarterly_sculpting is not None
+        and spec.quarterly_sculpting.enabled
+    ):
+        return HAIRCUT_RULE_MONTH_ADVERSE
+    return HAIRCUT_RULE_YEAR_SIGN
 
 
 def resolve_monthly_spec(config: Mapping[str, Any] | None) -> Optional[MonthlySpec]:
@@ -231,8 +389,9 @@ def resolve_monthly_spec(config: Mapping[str, Any] | None) -> Optional[MonthlySp
     Raises:
         ValueError: If the node is not a mapping, carries an unknown key, a
             ``cod_month`` that is not a whole number 1-12, an ``energy_shape`` that is
-            not 12 non-negative finite weights summing to 1, or a shape without a
-            ``cod_month`` to place it.
+            not 12 non-negative finite weights summing to 1, a shape without a
+            ``cod_month`` to place it, a malformed ``receivable_days``,
+            ``risk_haircut_rule``, or ``quarterly_sculpting``.
     """
     if config is None:
         return None
@@ -290,8 +449,45 @@ def resolve_monthly_spec(config: Mapping[str, Any] | None) -> Optional[MonthlySp
             f"got {days_raw}."
         )
 
+    haircut_raw = raw.get("risk_haircut_rule")
+    haircut_rule: Optional[str] = None
+    if haircut_raw is not None:
+        if not isinstance(haircut_raw, str):
+            raise ValueError(
+                f"{MONTHLY_KEY}.risk_haircut_rule must be one of "
+                f"{sorted(VALID_HAIRCUT_RULES)}; got {haircut_raw!r}."
+            )
+        haircut_rule = haircut_raw.strip().lower()
+        if haircut_rule not in VALID_HAIRCUT_RULES:
+            raise ValueError(
+                f"{MONTHLY_KEY}.risk_haircut_rule={haircut_raw!r} is invalid; "
+                f"expected one of {sorted(VALID_HAIRCUT_RULES)}."
+            )
+
+    quarterly_raw = raw.get("quarterly_sculpting")
+    quarterly_spec: Optional[QuarterlySculptingSpec] = None
+    if quarterly_raw is not None:
+        quarterly_spec = _resolve_quarterly_sculpting_spec(quarterly_raw)
+
+    if (
+        quarterly_spec is not None
+        and quarterly_spec.enabled
+        and haircut_rule == HAIRCUT_RULE_YEAR_SIGN
+    ):
+        raise ValueError(
+            f"{MONTHLY_KEY}.quarterly_sculpting requires month-level adverse risk "
+            f"haircut ({HAIRCUT_RULE_MONTH_ADVERSE!r}) before quarterly DSCR; "
+            f"{MONTHLY_KEY}.risk_haircut_rule={HAIRCUT_RULE_YEAR_SIGN!r} cannot be "
+            "used because it attenuates a negative month inside a positive year "
+            "toward zero."
+        )
+
     return MonthlySpec(
-        cod_month=cod_month, energy_shape=shape, receivable_days=days_raw
+        cod_month=cod_month,
+        energy_shape=shape,
+        receivable_days=days_raw,
+        risk_haircut_rule=haircut_rule,
+        quarterly_sculpting=quarterly_spec,
     )
 
 
@@ -357,6 +553,22 @@ def _split(value: float, weights: Sequence[float]) -> List[float]:
     return parts
 
 
+_REQUIRED_ANNUAL_CASCADE_KEYS: Tuple[str, ...] = (
+    "gross_kwh",
+    "net_kwh",
+    "generation_revenue_lkr",
+    "bess_revenue_lkr",
+    "opex_usd",
+    "opex_lkr",
+    "senior_fee_lkr",
+    "tax_lkr",
+    "bess_augmentation_capex_lkr",
+    "risk_haircut_pct",
+    "posttax_cfads_lkr",
+    "fx_rate",
+)
+
+
 def build_monthly_cascade(
     config: Dict[str, Any],
     fx_curve: Optional[List[float]] = None,
@@ -365,6 +577,8 @@ def build_monthly_cascade(
     extra_depreciable_usd: Optional[float] = None,
     senior_fee_lkr_series: Optional[List[float]] = None,
     interest_paid_series: Optional[List[float]] = None,
+    *,
+    risk_haircut_rule: Optional[str] = None,
 ) -> MonthlyCascade:
     """Build the monthly CFADS cascade for a scenario that declares ``cashflow.monthly``.
 
@@ -377,14 +591,6 @@ def build_monthly_cascade(
             malformed (:func:`resolve_monthly_spec`), or if the months fail to reconcile
             to the annual engine.
     """
-    spec = resolve_monthly_spec(config)
-    if spec is None:
-        raise ValueError(
-            f"{MONTHLY_KEY} is not declared. The monthly cascade is opt-in; declare "
-            f"{MONTHLY_KEY} (at least an empty mapping) to build it."
-        )
-    energy_w, time_w, calendar, assumptions = operating_month_weights(spec)
-
     annual_rows = build_annual_rows(
         config,
         fx_curve=fx_curve,
@@ -394,12 +600,74 @@ def build_monthly_cascade(
         senior_fee_lkr_series=senior_fee_lkr_series,
         interest_paid_series=interest_paid_series,
     )
+    return build_monthly_cascade_from_annual_rows(
+        config,
+        annual_rows,
+        fx_curve=fx_curve,
+        capex_depreciable_lkr=capex_depreciable_lkr,
+        interest_expense_series=interest_expense_series,
+        extra_depreciable_usd=extra_depreciable_usd,
+        senior_fee_lkr_series=senior_fee_lkr_series,
+        risk_haircut_rule=risk_haircut_rule,
+    )
+
+
+def build_monthly_cascade_from_annual_rows(
+    config: Mapping[str, Any],
+    annual_rows: Sequence[Mapping[str, Any]],
+    *,
+    fx_curve: Optional[List[float]] = None,
+    capex_depreciable_lkr: Optional[float] = None,
+    interest_expense_series: Optional[List[float]] = None,
+    extra_depreciable_usd: Optional[float] = None,
+    senior_fee_lkr_series: Optional[List[float]] = None,
+    risk_haircut_rule: Optional[str] = None,
+) -> MonthlyCascade:
+    """Cascade pre-built ``annual_rows`` into operating months under ``cashflow.monthly``.
+
+    Reuses the caller's exact ``annual_rows`` (including any levered-tax interest and
+    receivables lag already applied to them) and verifies tariff and line reconciliation
+    against those rows.
+    """
+    spec = resolve_monthly_spec(config)
+    if spec is None:
+        raise ValueError(
+            f"{MONTHLY_KEY} is not declared. The monthly cascade is opt-in; declare "
+            f"{MONTHLY_KEY} (at least an empty mapping) to build it."
+        )
+    effective_rule = (
+        risk_haircut_rule
+        if risk_haircut_rule is not None
+        else resolve_risk_haircut_rule(spec)
+    )
+    if effective_rule not in VALID_HAIRCUT_RULES:
+        raise ValueError(
+            f"risk_haircut_rule={effective_rule!r} is invalid; expected one of "
+            f"{sorted(VALID_HAIRCUT_RULES)}."
+        )
+    annual_list: List[Dict[str, float]] = []
+    for idx, annual_row in enumerate(annual_rows):
+        missing = [k for k in _REQUIRED_ANNUAL_CASCADE_KEYS if k not in annual_row]
+        if missing:
+            raise ValueError(
+                f"Annual row {idx} is missing required monthly-cascade field(s) "
+                f"{missing}; build rows via finance.cashflow_v14.build_annual_rows."
+            )
+        annual_list.append(
+            {
+                k: float(v) if isinstance(v, (int, float)) else v
+                for k, v in annual_row.items()
+            }
+        )
+
+    energy_w, time_w, calendar, assumptions = operating_month_weights(spec)
+
     # A fresh context for the per-year drivers the annual rows do not carry (the tariff
     # in force and the FX hedge). It is built from the same config the same way, so it
     # resolves the same values; _check_tariff below proves that for the tariff.
     params, _fx, _cap, _int, _years, _tp, _dep, fx_hedge, _fee = (
         _prepare_cashflow_context(
-            config,
+            dict(config),
             fx_curve,
             capex_depreciable_lkr,
             interest_expense_series,
@@ -408,9 +676,10 @@ def build_monthly_cascade(
         )
     )
 
-    balances = receivables_balances(annual_rows, spec)
+    balances = receivables_balances(annual_list, spec)
     rows: List[Dict[str, Any]] = []
-    for year_index, annual in enumerate(annual_rows):
+    excess_by_year: List[float] = []
+    for year_index, annual in enumerate(annual_list):
         start = year_index * MONTHS_PER_YEAR
         receivables_change = [
             balances[start + k] - (balances[start + k - 1] if start + k > 0 else 0.0)
@@ -433,6 +702,7 @@ def build_monthly_cascade(
             spread=fx_hedge.spread,
             forward=forward,
             receivables_change=receivables_change,
+            risk_haircut_rule=effective_rule,
         )
         for k, line_values in enumerate(months):
             row: Dict[str, Any] = {
@@ -445,18 +715,37 @@ def build_monthly_cascade(
             }
             row.update(line_values)
             rows.append(row)
-        _check_reconciliation(annual, months, year_index)
+        excess_lkr = _check_reconciliation(
+            annual,
+            months,
+            year_index,
+            risk_haircut_rule=effective_rule,
+            hedge_ratio=fx_hedge.hedge_ratio,
+            spread=fx_hedge.spread,
+            forward=forward,
+        )
+        excess_by_year.append(excess_lkr)
+
+    extra_assumptions = [
+        "tax_lkr and bess_augmentation_capex_lkr are the annual figures spread by "
+        "days until dolphin 2 places them on their dates.",
+    ]
+    if effective_rule == HAIRCUT_RULE_MONTH_ADVERSE:
+        extra_assumptions.append(
+            "risk_haircut_rule=month_adverse: each month's posttax_cfads_lkr is "
+            "haircut in its own adverse direction (posttax - h * |posttax|), so a "
+            "negative month inside a positive year is stressed downward rather than "
+            "attenuated toward zero."
+        )
 
     return MonthlyCascade(
         rows=rows,
-        annual_rows=annual_rows,
+        annual_rows=annual_list,
         energy_weights=energy_w,
         time_weights=time_w,
-        assumptions=tuple(assumptions)
-        + (
-            "tax_lkr and bess_augmentation_capex_lkr are the annual figures spread by "
-            "days until dolphin 2 places them on their dates.",
-        ),
+        assumptions=tuple(assumptions) + tuple(extra_assumptions),
+        risk_haircut_rule=effective_rule,
+        mixed_sign_haircut_excess_lkr=tuple(excess_by_year),
     )
 
 
@@ -471,8 +760,14 @@ def _cascade_year(
     spread: float,
     forward: float,
     receivables_change: Sequence[float] = (0.0,) * MONTHS_PER_YEAR,
+    risk_haircut_rule: str = HAIRCUT_RULE_YEAR_SIGN,
 ) -> List[Dict[str, float]]:
     """Run the cascade for the 12 months of one operating year."""
+    if risk_haircut_rule not in VALID_HAIRCUT_RULES:
+        raise ValueError(
+            f"Unknown risk_haircut_rule {risk_haircut_rule!r}; expected one of "
+            f"{sorted(VALID_HAIRCUT_RULES)}."
+        )
     fx_rate = float(annual["fx_rate"])
     gross = _split(float(annual["gross_kwh"]), energy_w)
     net = _split(float(annual["net_kwh"]), energy_w)
@@ -483,10 +778,11 @@ def _cascade_year(
     tax = _split(float(annual["tax_lkr"]), time_w)
     aug = _split(float(annual["bess_augmentation_capex_lkr"]), time_w)
     haircut_pct = float(annual["risk_haircut_pct"])
-    # The haircut is a risk adjustment on the YEAR's post-tax cash flow, adverse in the
-    # year's direction (finance.cashflow_v14_production._apply_risk_haircut). A month's
-    # sign can differ from its year's; applying the year's factor keeps the months
-    # adding back to the year and keeps the adjustment one per year, as the engine has it.
+    # Under `year_sign` (dolphin 1 default), the year's adverse factor applies to every
+    # month so mixed-sign months still sum back to the annual figure. Under
+    # `month_adverse` (dolphin 3), each month applies _apply_risk_haircut(posttax, h)
+    # on its own sign so a negative month inside a positive year is stressed more
+    # negative rather than attenuated toward zero before quarterly/monthly DSCR.
     year_posttax = float(annual["posttax_cfads_lkr"])
     factor = (1.0 - haircut_pct) if year_posttax >= 0.0 else (1.0 + haircut_pct)
 
@@ -504,7 +800,10 @@ def _cascade_year(
             revenue - statutory["total_statutory_deductions"] - opex_lkr[k] - fee[k]
         )
         posttax = ebitda - tax[k]
-        after_haircut = posttax * factor
+        if risk_haircut_rule == HAIRCUT_RULE_MONTH_ADVERSE:
+            after_haircut = _apply_risk_haircut(posttax, haircut_pct)
+        else:
+            after_haircut = posttax * factor
         cfads_lkr = after_haircut - aug[k] - receivables_change[k]
         if fx_rate > 0.0:
             revenue_usd = _hedged_usd(revenue, fx_rate, forward, hedge_ratio, spread)
@@ -565,13 +864,37 @@ def _check_reconciliation(
     annual: Mapping[str, float],
     months: Sequence[Mapping[str, float]],
     year_index: int,
-) -> None:
+    *,
+    risk_haircut_rule: str = HAIRCUT_RULE_YEAR_SIGN,
+    hedge_ratio: float = 0.0,
+    spread: float = 0.0,
+    forward: float = 0.0,
+) -> float:
     """Refuse a year whose 12 months do not add back to the annual engine's figures.
 
-    CFADS is checked in both currencies; the USD view uses the same conversion as the
-    annual engine, so it too must add back.
+    Under ``month_adverse``, every pre-haircut line adds back exactly, and
+    ``risk_haircut_amount_lkr`` / ``cfads_final_lkr`` / ``cfads_usd`` reconcile against
+    the exact triangle-inequality excess ``h * (sum(|p_k|) - |sum(p_k)|) >= 0``.
+    Returns that non-negative LKR excess (``0.0`` under ``year_sign`` or same-sign months).
     """
     tol = _tolerance(annual)
+    fx_rate = float(annual["fx_rate"])
+    excess_lkr = 0.0
+    excess_usd = 0.0
+    if risk_haircut_rule == HAIRCUT_RULE_MONTH_ADVERSE:
+        haircut_pct = float(annual["risk_haircut_pct"])
+        monthly_abs_posttax = math.fsum(
+            abs(float(m["posttax_cfads_lkr"])) for m in months
+        )
+        annual_abs_posttax = abs(float(annual["posttax_cfads_lkr"]))
+        raw_excess = haircut_pct * (monthly_abs_posttax - annual_abs_posttax)
+        if abs(raw_excess) > tol:
+            excess_lkr = max(0.0, raw_excess)
+            if fx_rate > 0.0 and excess_lkr != 0.0:
+                excess_usd = _hedged_usd(
+                    excess_lkr, fx_rate, forward, hedge_ratio, spread
+                )
+
     for line in LINE_BASIS:
         if line not in annual:
             if any(float(m.get(line, 0.0)) != 0.0 for m in months):
@@ -582,10 +905,17 @@ def _check_reconciliation(
             continue
         total = math.fsum(float(m[line]) for m in months)
         want = float(annual[line])
+        if risk_haircut_rule == HAIRCUT_RULE_MONTH_ADVERSE:
+            if line == "risk_haircut_amount_lkr":
+                want = want + excess_lkr
+            elif line == "cfads_final_lkr":
+                want = want - excess_lkr
+            elif line == "cfads_usd":
+                want = want - excess_usd
         if line in {"gross_kwh", "net_kwh", "grid_loss"}:
             line_tol = RECONCILIATION_REL_TOLERANCE * max(abs(want), 1.0)
         elif line in {"revenue_usd", "cfads_usd", "opex_usd"}:
-            fx = float(annual["fx_rate"]) or 1.0
+            fx = fx_rate or 1.0
             line_tol = tol / fx
         else:
             line_tol = tol
@@ -596,6 +926,7 @@ def _check_reconciliation(
                 f"{total - want!r}, tolerance {line_tol!r}). The monthly cascade must "
                 "reconcile to the annual figures; refusing to return it."
             )
+    return excess_lkr
 
 
 def receivables_balances(
