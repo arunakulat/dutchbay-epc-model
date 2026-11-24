@@ -327,6 +327,15 @@ def _enrich_annual_rows_with_debt(
         try:
             bridge_extra_cfads = float(debt_result.get("cfads_bridge_usd") or 0.0)
             if bridge_extra_cfads == 0.0:
+                qs_bridge = (debt_result.get("quarterly_sculpting") or {}).get(
+                    "bridge_period"
+                )
+                if (
+                    isinstance(qs_bridge, Mapping)
+                    and qs_bridge.get("cfads_usd") is not None
+                ):
+                    bridge_extra_cfads = float(qs_bridge["cfads_usd"])
+            if bridge_extra_cfads == 0.0:
                 first_row_cf = annual_rows[0].get(
                     "cfads_usd", annual_rows[0].get("cf_pre_debt", 0.0)
                 )
