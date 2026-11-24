@@ -120,8 +120,13 @@ def test_retired_formatter_has_no_mutation(linked: tuple[Path, Path, str]) -> No
 
 def test_r10_local_hooks_and_ci_type_gates_remain_bound() -> None:
     with (ROOT / "go_with_the_flow_rules_v3_0_clean.csv").open(newline="") as stream:
-        rules = {r["rule_id"]: r for r in csv.DictReader(stream)}
-    assert len(rules) == 79
+        rows = list(csv.DictReader(stream))
+        rules = {r["rule_id"]: r for r in rows}
+    assert len(rules) == len(rows), "duplicate rule identity"
+    assert set(("R10", "R23", "R21", "CLEANUP-01")) <= rules.keys()
+    assert all(
+        rules[key]["status"] == "active" for key in ("R10", "R23", "R21", "CLEANUP-01")
+    )
     policy = rules["R10"]["description"] + rules["R10"]["enforcement"]
     config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
     hooks = {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}

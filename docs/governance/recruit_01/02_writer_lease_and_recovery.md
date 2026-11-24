@@ -159,6 +159,22 @@ execution, ownership, source rights or reviewer identity. Coordinator review,
 live-base and scope adequacy checks, full pre-push tests and formal independent
 R3 and CI remain mandatory. Version 1 records are historical claims only.
 
+### 4.4 Predecessor disposition and verification limits
+
+The #1270 owner decision retains the disabled automatic local mypy hook;
+R10 names the configured hooks and R21/R23 and applicable CI gates retain
+mandatory type verification. Local implementation is not issue closure;
+independent exact-object review and required CI still apply. #1262 remains
+separate and open: the hook installation-tail tests do not establish complete
+setup-path reachability. Do not claim that readiness or the v2 journal closes
+that gap. The scope of branch retirement remains §8 and CLEANUP-01; no new
+authority to retire unrelated or recovery branches is conferred.
+
+Policy fences check required active rule identities and scoped normative
+clauses, not a frozen total rule count. They detect specific hostile context
+mutations, not arbitrary natural-language contradictions. Independent semantic
+review and actual behavioral oracles remain mandatory.
+
 ## 5. Interruption and collision recovery
 
 Any interruption, target drift, patch-context failure, unexpected writer activity, worktree-owner
