@@ -267,9 +267,6 @@ def _escalated_usd_total(path: Path) -> float:
 
 
 def test_fx_tenor_screening_reads_the_financed_capex() -> None:
-    from analytics.finance.blue_whale_fx_tenor_screening import (
-        load_governed_basecase_inputs,
-    )
     from analytics.finance.fx_tenor_screening import (
         run_fx_tenor_screening_for_scenario,
     )
@@ -291,10 +288,6 @@ def test_fx_tenor_screening_reads_the_financed_capex() -> None:
     )
     stated = float(_raw(WIND)["capex"]["usd_total"])
     assert out["scenario_inputs_applied"]["capex_usd"] > stated
-    # The single-site Blue Whale screening loads its governed scenario the same way.
-    assert load_governed_basecase_inputs(WIND)["capex_usd"] == pytest.approx(
-        _escalated_usd_total(WIND), rel=1e-12
-    )
 
 
 def test_the_solar_assessment_loads_the_financed_capex() -> None:

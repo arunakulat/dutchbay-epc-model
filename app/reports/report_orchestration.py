@@ -37,6 +37,7 @@ from app.reports.report_model import (
     LenderSensitivityBlock,
     ReportContext,
     SectionNotRun,
+    WhatIfLenderRiskBlock,
     build_report_context,
 )
 from app.services.pipeline_service import run_finance_case
@@ -366,12 +367,13 @@ def build_report_context_from_case(
     capital_structure: Optional[CapitalStructureBlock] = None,
     lender_sensitivities: Optional[LenderSensitivityBlock] = None,
     cost_storage: Optional[CostStorageBlock] = None,
+    what_if_lender_risk: Optional[WhatIfLenderRiskBlock] = None,
 ) -> ReportContext:
     """Assemble a render-ready context from already-computed typed inputs.
 
     ``capital_risk``, ``sections_not_run``, ``aep_resource_sensitivity`` (#1615 step B),
-    ``capital_structure`` (#1825 slice i), ``lender_sensitivities`` (#1825 slice ii) and
-    ``cost_storage`` (#1825 slice iii) are
+    ``capital_structure`` (#1825 slice i), ``lender_sensitivities`` (#1825 slice ii),
+    ``cost_storage`` (#1825 slice iii) and ``what_if_lender_risk`` (#1825 slice iv) are
     supplied only by the batch CLI's lender report (#1752); the API route passes none.
 
     Every lender report built through this seam carries the F-5 non-reliance notice on its
@@ -405,4 +407,6 @@ def build_report_context_from_case(
         update["lender_sensitivities"] = lender_sensitivities
     if cost_storage is not None:
         update["cost_storage"] = cost_storage
+    if what_if_lender_risk is not None:
+        update["what_if_lender_risk"] = what_if_lender_risk
     return context.model_copy(update=update)

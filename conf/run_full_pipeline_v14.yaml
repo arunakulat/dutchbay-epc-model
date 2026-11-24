@@ -268,3 +268,14 @@ lender_report:
     capex_mc:
       trials: 1000
       seed: 12345
+  # #1825 slice (iv): what-if cases (#1403 with #1523 caveats) and FRAMEWORK-01 CASPER
+  # lender-risk blocks (build_casper_risk_blocks under capital_risk_emit lender guards).
+  # OPT-IN: off unless enabled. Each part runs only where the scenario declares its inputs
+  # and is otherwise listed with its reason. Monte Carlo trials may not go under the
+  # lender-grade floor of 1000, and allow_toy_fallback is forced off.
+  what_if_lender_risk:
+    enabled: false
+    what_if_dir: scenarios/what_if
+    mc:
+      trials: 1000
+      seed: null

@@ -286,16 +286,10 @@ modules:
     role_description: Loads the 20-section feasibility report taxonomy and evaluates scenario coverage compliance.
     excel_representation: governance_metadata
 
-  - module_path: analytics.finance.blue_whale_fx_tenor_screening
-    pipeline_stage: core_finance
-    role_description: Site-specific configuration adapter delegating to analytics.finance.fx_tenor_screening.
-    excel_representation: non_model_adapter
-
   - module_path: analytics.finance.f5_exit_evidence
     pipeline_stage: governance
     role_description: Produces and verifies the audited F-5 exit evidence pack across Dolphins 1-3, P90 cover/downside, and three-statement waterfall parity without lifting F-5.
     excel_representation: governance_metadata
-
   - module_path: analytics.finance.p90_recomputed_downside
     pipeline_stage: core_finance
     role_description: Reports a P90 case recomputed through the engine and taxed on the committed loan's interest, beside the scenario's own sizing downside factor and the P90/P50 CFADS ratio, on the committed debt; no sizing change.
@@ -946,11 +940,6 @@ modules:
     role_description: Computes one-way tornado sensitivities across wind speed, shear, losses, and power curves.
     excel_representation: engine_table_plus_rollup
 
-  - module_path: analytics.wind.blue_whale_equipment_parity
-    pipeline_stage: cost_levies_epc
-    role_description: Single-site configuration adapter delegating to analytics.wind.equipment_parity.
-    excel_representation: non_model_adapter
-
   - module_path: analytics.wind.crossval_interface_schema
     pipeline_stage: resource_yield
     role_description: Validates opt-in resource.crossval schema for second-source wind-resource comparison.
@@ -1289,6 +1278,11 @@ modules:
   - module_path: app.reports.tender_gap_dossier_emit
     pipeline_stage: reporting_delivery
     role_description: Vendor-neutral OEM tender gap dossier builder tracking extraction provenance and caveats.
+    excel_representation: non_model_adapter
+
+  - module_path: app.reports.what_if_lender_risk_section
+    pipeline_stage: reporting_delivery
+    role_description: Builds the lender report's opt-in what-if (#1403/#1523) and FRAMEWORK-01 CASPER lender-risk blocks section beside the committed case.
     excel_representation: non_model_adapter
 
   - module_path: app.reports.wind_rose_plot

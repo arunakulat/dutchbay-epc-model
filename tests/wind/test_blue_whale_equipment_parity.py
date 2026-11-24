@@ -1,7 +1,8 @@
-"""Tests for Blue Whale equipment-cost parity benchmark and cost-buildup guards."""
+"""Tests for equipment-cost parity benchmark and cost-buildup guards."""
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import subprocess
@@ -13,33 +14,40 @@ from typing import Any
 import pytest
 import yaml
 
-from analytics.wind.blue_whale_equipment_parity import (
-    compute_equipment_parity,
+from analytics.wind.equipment_parity import (
+    compute_equipment_parity_from_block,
     evaluate_cost_buildup,
+    run_equipment_parity_for_scenario,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONF_PATH = REPO_ROOT / "conf" / "blue_whale_equipment_parity.yaml"
+SCENARIO_PATH = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
+METHOD_PATH = REPO_ROOT / "conf" / "equipment_parity.yaml"
 
 
-def _load_cfg() -> dict[str, Any]:
-    loaded = yaml.safe_load(CONF_PATH.read_text(encoding="utf-8"))
+def _load_block() -> dict[str, Any]:
+    loaded = yaml.safe_load(SCENARIO_PATH.read_text(encoding="utf-8"))
     assert isinstance(loaded, dict)
-    return {str(k): v for k, v in loaded.items()}
+    return copy.deepcopy(loaded["equipment_cost_parity"])
+
+
+def _load_method() -> dict[str, Any]:
+    loaded = yaml.safe_load(METHOD_PATH.read_text(encoding="utf-8"))
+    assert isinstance(loaded, dict)
+    return dict(loaded["method"])
 
 
 def test_equipment_parity_matches_2026_11_14_review_brief() -> None:
     """Reproduces exact Decimal outputs from the owner's private review brief of 2026-11-14."""
-    cfg = _load_cfg()
-    out = compute_equipment_parity(cfg, REPO_ROOT)
+    out = compute_equipment_parity_from_block(_load_block(), _load_method(), REPO_ROOT)
     res = out["results"]
 
-    assert res["mannar_equipment_usd_per_mw"] == "389800"
-    assert res["mannar_equipment_usd_per_lifetime_mwh"].startswith(
+    assert res["benchmark_equipment_usd_per_mw"] == "389800"
+    assert res["benchmark_equipment_usd_per_lifetime_mwh"].startswith(
         "4.7077294685990338164"
     )
-    assert res["blue_whale_annual_mwh"] == "40574.749451543354000"
-    assert res["blue_whale_lifetime_mwh"] == "811494.989030867080000"
+    assert res["site_annual_mwh"] == "40574.749451543354000"
+    assert res["site_lifetime_mwh"] == "811494.989030867080000"
     assert res["constant_price_per_mw_equipment_cost_usd"] == "3703100.0"
     assert res["constant_price_per_mw_equipment_usd_per_lifetime_mwh"].startswith(
         "4.5633060586393147362"
@@ -56,22 +64,21 @@ def test_equipment_parity_matches_2026_11_14_review_brief() -> None:
     assert res["road_allowance_usd"] == "380000.00"
     assert res["road_allowance_plus_epc_wrap_usd"] == "399000.0000"
     assert res[
-        "ashuri_5_to_10mw_common_life_equipment_usd_per_mwh_change_pct"
+        "reference_scaling_first_to_second_rating_usd_per_mwh_change_pct"
     ].startswith("28.718969119847209104")
-    assert "HOLD" in out["blue_whale_aep_hold_status"]
-    assert "P50/P90 and lender use stands" in out["blue_whale_aep_hold_status"]
+    assert "HOLD" in out["site_aep_hold_status"]
+    assert "P50/P90 and lender use stands" in out["site_aep_hold_status"]
     assert all(out["checks"].values())
 
 
 def test_equipment_parity_algebraic_and_monotonicity_invariants() -> None:
     """TEST-01: independent algebraic identities and sensitivity monotonicity."""
-    cfg = _load_cfg()
-    out = compute_equipment_parity(cfg, REPO_ROOT)
+    out = compute_equipment_parity_from_block(_load_block(), _load_method(), REPO_ROOT)
     res = out["results"]
 
-    rate_m = Decimal(res["mannar_equipment_usd_per_lifetime_mwh"])
+    rate_m = Decimal(res["benchmark_equipment_usd_per_lifetime_mwh"])
     rate_cap = Decimal(res["constant_price_per_mw_equipment_usd_per_lifetime_mwh"])
-    yield_ratio = Decimal(res["blue_whale_to_mannar_yield_per_mw_ratio"])
+    yield_ratio = Decimal(res["site_to_benchmark_yield_per_mw_ratio"])
     parity_cost = Decimal(res["same_usd_per_mwh_parity_equipment_cost_usd"])
     cap_cost = Decimal(res["constant_price_per_mw_equipment_cost_usd"])
     premium = Decimal(res["break_even_equipment_price_per_mw_premium_pct"]) / Decimal(
@@ -82,18 +89,20 @@ def test_equipment_parity_algebraic_and_monotonicity_invariants() -> None:
     assert abs(parity_cost - cap_cost * (Decimal("1") + premium)) < Decimal("1e-35")
 
     cases = out["sensitivity_cases"]
-    changes = [Decimal(c["change_vs_mannar_pct"]) for c in cases]
+    changes = [Decimal(c["change_vs_benchmark_pct"]) for c in cases]
     assert changes == sorted(changes)
     assert changes[0] < Decimal("0") < changes[-1]
 
-    break_even_case = min(cases, key=lambda c: abs(Decimal(c["change_vs_mannar_pct"])))
-    assert abs(Decimal(break_even_case["change_vs_mannar_pct"])) < Decimal("1e-35")
+    break_even_case = min(
+        cases, key=lambda c: abs(Decimal(c["change_vs_benchmark_pct"]))
+    )
+    assert abs(Decimal(break_even_case["change_vs_benchmark_pct"])) < Decimal("1e-35")
 
 
 def test_cost_buildup_refuses_unpriced_totals_and_negative_amounts() -> None:
     """Unpriced (None) packages must never be treated as zero or summed."""
-    cfg = _load_cfg()
-    packages = cfg["cost_buildup_packages"]
+    block = _load_block()
+    packages = block["cost_buildup_packages"]
 
     road = evaluate_cost_buildup(packages, "road")
     assert road["status"] == "UNPRICED_EVIDENCE_GAPS"
@@ -137,7 +146,8 @@ def test_hydra_cli_emits_valid_json() -> None:
     proc = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "run_blue_whale_equipment_parity_v14.py"),
+            str(REPO_ROOT / "scripts" / "run_equipment_parity_v14.py"),
+            "scenario=scenarios/blue_whale_wind_lot5b_2026.yaml",
         ],
         cwd=str(REPO_ROOT),
         env=env,
@@ -153,17 +163,14 @@ def test_hydra_cli_emits_valid_json() -> None:
 
 
 def test_capex_site_inputs_are_read_from_capex_config_without_duplicates() -> None:
-    """#1686 L-16 pattern: site capex inputs live in capex_solar_resource_config only."""
-    cfg = _load_cfg()
-    bw = cfg["blue_whale"]
+    """#1686 L-16 pattern: site capex inputs live in capex_config only."""
+    block = _load_block()
     assert not {
         "rated_capacity_mw",
         "road_allowance_usd_per_kw",
         "epc_wrap_pct",
-    } & set(bw)
-    assert (
-        bw["capex_solar_resource_config"] == "conf/blue_whale_capex_solar_resource.yaml"
-    )
+    } & set(block)
+    assert block["capex_config"] == "conf/blue_whale_capex_solar_resource.yaml"
 
 
 def test_capex_site_inputs_follow_capex_config_changes(tmp_path: Path) -> None:
@@ -176,12 +183,11 @@ def test_capex_site_inputs_follow_capex_config_changes(tmp_path: Path) -> None:
     moved = tmp_path / "capex.yaml"
     moved.write_text(yaml.safe_dump(capex_data), encoding="utf-8")
 
-    cfg = _load_cfg()
-    cfg["blue_whale"] = {
-        **cfg["blue_whale"],
-        "capex_solar_resource_config": str(moved),
-    }
-    res = compute_equipment_parity(cfg, REPO_ROOT)["results"]
+    block = _load_block()
+    block["capex_config"] = str(moved)
+    res = compute_equipment_parity_from_block(block, _load_method(), REPO_ROOT)[
+        "results"
+    ]
     assert Decimal(res["constant_price_per_mw_equipment_cost_usd"]) == Decimal(
         "3898000"
     )
@@ -192,40 +198,33 @@ def test_capex_site_inputs_follow_capex_config_changes(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
-        ({"rated_capacity_mw": 9.5}, "must not repeat capex site inputs"),
-        ({"road_allowance_usd_per_kw": 40}, "must not repeat capex site inputs"),
-        ({"epc_wrap_pct": 5}, "must not repeat capex site inputs"),
-        (
-            {"capex_solar_resource_config": None},
-            "capex_solar_resource_config is required",
-        ),
+        ({"rated_capacity_mw": 9.5}, "unknown"),
+        ({"road_allowance_usd_per_kw": 40}, "unknown"),
+        ({"epc_wrap_pct": 5}, "unknown"),
+        ({"capex_config": None}, "capex_config"),
     ],
 )
 def test_duplicate_capex_site_inputs_or_missing_config_refused(
     changes: dict[str, Any], message: str
 ) -> None:
-    """Refuse duplicate capex site inputs or missing capex_solar_resource_config."""
-    cfg = _load_cfg()
-    cfg["blue_whale"] = {**cfg["blue_whale"], **changes}
+    """Refuse duplicate capex site inputs or missing capex_config."""
+    block = _load_block()
+    block.update(changes)
     with pytest.raises(ValueError, match=message):
-        compute_equipment_parity(cfg, REPO_ROOT)
+        run_equipment_parity_for_scenario(
+            {"equipment_cost_parity": block}, _load_method(), REPO_ROOT
+        )
 
 
 def test_loss_retention_factors_come_from_yaml_and_validate() -> None:
     """FRAMEWORK-02: loss_retention_factors come from YAML and fail loudly if invalid."""
-    cfg = _load_cfg()
-    assert cfg["blue_whale"]["loss_retention_factors"] == [0.97, 0.98, 0.98, 0.99]
+    block = _load_block()
+    assert block["loss_retention_factors"] == [0.97, 0.98, 0.98, 0.99]
 
-    empty_cfg = {
-        **cfg,
-        "blue_whale": {**cfg["blue_whale"], "loss_retention_factors": []},
-    }
+    empty_block = {**block, "loss_retention_factors": []}
     with pytest.raises(ValueError, match="non-empty"):
-        compute_equipment_parity(empty_cfg, REPO_ROOT)
+        compute_equipment_parity_from_block(empty_block, _load_method(), REPO_ROOT)
 
-    bad_cfg = {
-        **cfg,
-        "blue_whale": {**cfg["blue_whale"], "loss_retention_factors": [1.05]},
-    }
+    bad_block = {**block, "loss_retention_factors": [1.05]}
     with pytest.raises(ValueError, match="must be in"):
-        compute_equipment_parity(bad_cfg, REPO_ROOT)
+        compute_equipment_parity_from_block(bad_block, _load_method(), REPO_ROOT)

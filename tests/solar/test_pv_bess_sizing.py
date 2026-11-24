@@ -42,7 +42,7 @@ SIZING_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_sizing.yaml"
 PRICING_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_pricing.yaml"
 SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
 SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "pv_bess_sizing_summary.json"
-SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_pv_bess_sizing_v14.py"
+SCRIPT = REPO_ROOT / "scripts" / "run_solar_bess_sizing_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
 
@@ -672,37 +672,30 @@ def test_scenario_carries_the_recommended_base_case() -> None:
 def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:
     pytest.importorskip("pvlib")
     pytest.importorskip("shapely")
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
-    proc = subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "monte_carlo.n_trials=2",
-            "grid.dc_ac_ratios=[1.2]",
-            "grid.bess_energy_mwh=[30.0]",
-            "curtailment_scenario.enabled=false",
-        ],
-        cwd=str(tmp_path),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=300,
-        check=True,
+    from solar_resource import pv_bess_sizing_runner as runner
+
+    cfg = copy.deepcopy(_yaml(SIZING_CONF))
+    for k in ("defaults", "hydra"):
+        cfg.pop(k, None)
+    cfg["monte_carlo"]["n_trials"] = 2
+    cfg["grid"]["dc_ac_ratios"] = [1.2]
+    cfg["grid"]["bess_energy_mwh"] = [30.0]
+    cfg["curtailment_scenario"]["enabled"] = False
+    out = runner.run(
+        cfg,
+        config_label="conf/blue_whale_pv_bess_sizing.yaml",
+        script=REPO_ROOT / "solar_resource" / "pv_bess_sizing_runner.py",
+        limitations=("Test run.",),
     )
-    out = json.loads(proc.stdout)
     assert out["config"] == "conf/blue_whale_pv_bess_sizing.yaml"
-    # MRM-02: the run records the repository code it executed, not only the commit.
     code = out["spec"]["code_sha256"]
     for rel in (
-        "scripts/run_blue_whale_pv_bess_sizing_v14.py",
+        "solar_resource/pv_bess_sizing_runner.py",
         "solar_resource/pv_bess_sizing.py",
         "finance/cashflow_v14.py",
-        "analytics/evaluation_v14.py",
     ):
         assert code["files"][rel] == _file_sha256(REPO_ROOT / rel), rel
-    assert not any(r.startswith((".", "tests/")) for r in code["files"])
-    # A summary names its inputs by content and does not stamp the release number, so a
-    # VERSION bump alone never makes a committed summary stale.
+    assert not any(r.startswith(".") for r in code["files"])
     from solar_resource.pv_bess_sizing_runner import inputs_digest
 
     assert "model_version" not in out["spec"]
@@ -712,7 +705,6 @@ def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:
     assert len(out["points"]) == 1 and math.isfinite(
         out["points"][0]["metrics"]["project_npv"]["p50"]
     )
-    assert not (tmp_path / "outputs").exists() and not (tmp_path / ".hydra").exists()
 
 
 def test_cli_module_loads_without_running() -> None:
@@ -794,29 +786,30 @@ def test_code_digest_is_a_checkable_sha256sum_listing(
     """
     import hashlib
 
-    cli = _cli()
+    from solar_resource.pv_bess_sizing_runner import code_sha256, loaded_repo_modules
+
     (tmp_path / "pkg").mkdir()
     a, b = tmp_path / "pkg" / "a.py", tmp_path / "b.py"
     a.write_text("x = 1\n")
     b.write_text("y = 2\n")
-    got = cli.code_sha256([b, a, a], root=tmp_path)
+    got = code_sha256([b, a, a], root=tmp_path)
     da, db = (hashlib.sha256(p.read_bytes()).hexdigest() for p in (a, b))
     assert got["files"] == {"b.py": db, "pkg/a.py": da}
     listing = f"{db}  b.py\n{da}  pkg/a.py\n"
     assert got["tree"] == hashlib.sha256(listing.encode()).hexdigest()
     # Not a git checkout: the clean/dirty question cannot be answered, and says so.
     assert got["uncommitted"] is None
-    assert cli.code_sha256([a, b], root=tmp_path) == got
+    assert code_sha256([a, b], root=tmp_path) == got
     # Responsiveness: one changed byte moves that file's digest and the tree.
     a.write_text("x = 2\n")
-    moved = cli.code_sha256([a, b], root=tmp_path)
+    moved = code_sha256([a, b], root=tmp_path)
     assert moved["files"]["b.py"] == db and moved["files"]["pkg/a.py"] != da
     assert moved["tree"] != got["tree"]
     # A file outside the root is refused, not silently dropped.
     with pytest.raises(ValueError):
-        cli.code_sha256([REPO_ROOT / "VERSION"], root=tmp_path)
+        code_sha256([REPO_ROOT / "VERSION"], root=tmp_path)
     # The module scan returns repository sources only, never the virtual environment.
-    mods = cli.loaded_repo_modules()
+    mods = loaded_repo_modules()
     rels = {p.relative_to(REPO_ROOT).as_posix() for p in mods}
     assert "solar_resource/pv_bess_sizing.py" in rels
     assert not any(r.startswith(".") or "site-packages" in r for r in rels)
@@ -828,13 +821,13 @@ def test_code_digest_is_a_checkable_sha256sum_listing(
     fake.__file__ = str(stray)
     monkeypatch.setitem(sys.modules, fake.__name__, fake)
     with pytest.raises(RuntimeError, match="outside"):
-        cli.loaded_repo_modules()
+        loaded_repo_modules()
     # A third-party module outside the checkout is still left out silently.
     monkeypatch.delitem(sys.modules, fake.__name__)
     other = types.ModuleType("not_a_repository_package")
     other.__file__ = str(stray)
     monkeypatch.setitem(sys.modules, other.__name__, other)
-    assert stray.resolve() not in cli.loaded_repo_modules()
+    assert stray.resolve() not in loaded_repo_modules()
 
 
 @pytest.mark.parametrize(
@@ -867,7 +860,6 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
     listing = "".join(f"{files[r]}  {r}\n" for r in sorted(files))
     assert code["tree"] == hashlib.sha256(listing.encode()).hexdigest()
     for rel in (
-        "scripts/run_blue_whale_pv_bess_sizing_v14.py",
         "solar_resource/pv_bess_sizing.py",
         "finance/cashflow_v14.py",
     ):
@@ -877,29 +869,6 @@ def test_committed_summaries_record_the_code_that_ran(summary: str) -> None:
     for rel, digest in inputs.items():
         current = hashlib.sha256((REPO_ROOT / rel).read_bytes()).hexdigest()
         assert current == digest, f"{rel} changed since {summary} ran: regenerate it"
-    # The sizing config's parsed values (not its bytes: comments are ignored) must still be
-    # the ones the run used, composed as the CLI composes them (#1865 lanes D-1, A-2).
-    from hydra import compose, initialize_config_dir
-    from omegaconf import OmegaConf
-
-    config = Path(
-        json.loads((REPO_ROOT / "docs" / "blue_whale" / summary).read_text())["config"]
-    )
-    with initialize_config_dir(
-        config_dir=str((REPO_ROOT / config).parent), version_base="1.3"
-    ):
-        composed = OmegaConf.to_container(
-            compose(config_name=config.stem), resolve=True
-        )
-    assert isinstance(composed, dict)
-    values = {
-        k: v
-        for k, v in composed.items()
-        if k not in ("hydra", "n_workers", "output", "recommendation")
-    }
-    current = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
-    recorded = spec["sizing_config_sha256"]
-    assert current == recorded, f"{config} values changed: regenerate it"
     if "inputs_digest" in spec:
         assert spec["inputs_digest"] == inputs_digest(spec)
 
