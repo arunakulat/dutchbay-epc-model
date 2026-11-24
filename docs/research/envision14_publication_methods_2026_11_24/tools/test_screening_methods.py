@@ -1,6 +1,8 @@
 """Independent hand-calculable synthetic cases; no site inputs."""
 
 import hashlib
+from pathlib import Path
+from typing import TypedDict, cast
 
 import pytest
 from path_guard import TRUSTED_CHECKOUT, require_external_path
@@ -11,7 +13,31 @@ from screening_methods import (
 )
 
 
-def test_wind_denominator_and_loss_stack():
+class WindInputs(TypedDict):
+    owned_units: int
+    nameplate_mw: float
+    cap_mw: float
+    gross_mwh: float
+    wake_loss: float
+    nonwake_retention: float
+    hours: float
+
+
+class GridInputs(TypedDict):
+    nominal_kv: float
+    source_fault_mva: float
+    line_r_ohm: float
+    line_x_ohm: float
+    own_mva: float
+    own_mw: float
+    external_mva: float
+    external_mw: float
+    transformer_mva: float
+    transformer_count: int
+    power_factor: float
+
+
+def test_wind_denominator_and_loss_stack() -> None:
     result = wind_accounting(
         owned_units=4,
         nameplate_mw=5,
@@ -45,8 +71,8 @@ def test_wind_denominator_and_loss_stack():
         {"owned_units": 10**500},
     ],
 )
-def test_wind_rejects_invalid_inputs(changes):
-    base = dict(
+def test_wind_rejects_invalid_inputs(changes: dict[str, object]) -> None:
+    base: dict[str, object] = dict(
         owned_units=4,
         nameplate_mw=5,
         cap_mw=3,
@@ -57,11 +83,12 @@ def test_wind_rejects_invalid_inputs(changes):
     )
     base.update(changes)
     with pytest.raises(ValueError):
-        wind_accounting(**base)
+        # The cast is deliberately confined to the hostile-input boundary.
+        wind_accounting(**cast(WindInputs, base))
 
 
-def grid_inputs():
-    return dict(
+def grid_inputs() -> GridInputs:
+    return GridInputs(
         nominal_kv=33,
         source_fault_mva=200,
         line_r_ohm=3,
@@ -76,7 +103,7 @@ def grid_inputs():
     )
 
 
-def test_paired_export_and_static_limit():
+def test_paired_export_and_static_limit() -> None:
     result = paired_export_screen(**grid_inputs())
     own, shared = result["cases"]
     # 3-4-5 impedance triangle and fixed source impedance 1089/200.
@@ -105,18 +132,19 @@ def test_paired_export_and_static_limit():
         {"own_mva": 1e308, "external_mva": 1e308},
     ],
 )
-def test_grid_rejects_invalid_inputs(changes):
-    base = grid_inputs()
+def test_grid_rejects_invalid_inputs(changes: dict[str, object]) -> None:
+    base: dict[str, object] = dict(grid_inputs())
     base.update(changes)
     with pytest.raises(ValueError):
-        paired_export_screen(**base)
+        # The cast is deliberately confined to the hostile-input boundary.
+        paired_export_screen(**cast(GridInputs, base))
 
 
-def curve():
+def curve() -> bytes:
     return b"wind_speed_ms,power_kw,thrust_coefficient\n1,0,0.2\n2,100,0.3\n"
 
 
-def test_curve_single_snapshot_and_digest():
+def test_curve_single_snapshot_and_digest() -> None:
     data = curve()
     assert validate_curve_snapshot(data, hashlib.sha256(data).hexdigest(), 200) == (
         (1, 0, 0.2),
@@ -139,13 +167,13 @@ def test_curve_single_snapshot_and_digest():
         b"2,100\n",
     ],
 )
-def test_curve_rejects_malformed_rows(row):
+def test_curve_rejects_malformed_rows(row: bytes) -> None:
     data = curve().splitlines(keepends=True)[0] + b"1,0,0.2\n" + row
     with pytest.raises(ValueError):
         validate_curve_snapshot(data, hashlib.sha256(data).hexdigest(), 200)
 
 
-def test_external_output_guard_no_caller_override(tmp_path):
+def test_external_output_guard_no_caller_override(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         require_external_path(
             TRUSTED_CHECKOUT / "restricted.csv", declared_repo=tmp_path

@@ -5,7 +5,7 @@ import hashlib
 import pytest
 
 
-def _synthetic_raw_pdf(*, mode="valid"):
+def _synthetic_raw_pdf(*, mode: str = "valid") -> bytes:
     """Construct a tiny structural oracle independent of PyMuPDF serialization."""
     import zlib
 
@@ -32,7 +32,7 @@ def _synthetic_raw_pdf(*, mode="valid"):
     elif mode == "decodeparms":
         attrs += b"/DecodeParms <<>>"
 
-    def stream(number, attrs, payload):
+    def stream(number: int, attrs: bytes, payload: bytes) -> bytes:
         encoded = zlib.compress(payload)
         if mode == "deflate" and number == 2:
             encoded = b"invalid"
@@ -58,7 +58,7 @@ def _synthetic_raw_pdf(*, mode="valid"):
         obj += b" \t\n"
     xref_offset = object_offset + len(obj)
 
-    def entry(kind, first, second):
+    def entry(kind: int, first: int, second: int) -> bytes:
         return bytes([kind]) + first.to_bytes(3, "big") + second.to_bytes(2, "big")
 
     entries = (
@@ -91,7 +91,7 @@ def _synthetic_raw_pdf(*, mode="valid"):
     return header + obj + xref + footer
 
 
-def test_raw_pdf_synthetic_profile_positive():
+def test_raw_pdf_synthetic_profile_positive() -> None:
     from pdf_profile import verify_generated_pdf_raw_structure
 
     verify_generated_pdf_raw_structure(_synthetic_raw_pdf())
@@ -124,14 +124,14 @@ def test_raw_pdf_synthetic_profile_positive():
         ("forbidden", "active PDF object"),
     ],
 )
-def test_raw_pdf_synthetic_rejects_structural_drift(mode, message):
+def test_raw_pdf_synthetic_rejects_structural_drift(mode: str, message: str) -> None:
     from pdf_profile import verify_generated_pdf_raw_structure
 
     with pytest.raises(ValueError, match=message):
         verify_generated_pdf_raw_structure(_synthetic_raw_pdf(mode=mode))
 
 
-def test_digest_mismatch_precedes_parser():
+def test_digest_mismatch_precedes_parser() -> None:
     from pdf_profile import verify_bound_generated_pdf
 
     with pytest.raises(ValueError, match="digest mismatch"):

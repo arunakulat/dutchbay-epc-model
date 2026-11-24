@@ -11,6 +11,38 @@ import hashlib
 import io
 import math
 import re
+from typing import TypedDict
+
+
+class WindAccountingResult(TypedDict):
+    status: str
+    owned_nameplate_mw: float
+    owned_active_cap_mw: float
+    gross_mwh: float
+    waked_mwh: float
+    net_mwh: float
+    net_capacity_factor_on_assumed_cap: float
+    probability_quantiles: None
+
+
+class ExportCase(TypedDict):
+    boundary: str
+    selected_design: bool
+    plant_rating_mva: float
+    active_mw: float
+    scr_magnitude_only: float
+    n_minus_one_static_active_limit_mw: float
+    n_minus_one_static_shortfall_mw: float
+
+
+class ExportScreenResult(TypedDict):
+    status: str
+    physical_boundary: str
+    cases: list[ExportCase]
+    annual_energy_curtailment: None
+    shared_asset_allocation: None
+    transformer_impedance_modelled: bool
+    utility_approval: bool
 
 
 def positive(value: float, label: str) -> float:
@@ -48,7 +80,7 @@ def wind_accounting(
     wake_loss: float,
     nonwake_retention: float,
     hours: float,
-) -> dict:
+) -> WindAccountingResult:
     units = count(owned_units, "unit count")
     rating = positive(nameplate_mw, "nameplate")
     cap = positive(cap_mw, "active cap")
@@ -90,7 +122,7 @@ def paired_export_screen(
     transformer_mva: float,
     transformer_count: int,
     power_factor: float,
-) -> dict:
+) -> ExportScreenResult:
     v = positive(nominal_kv, "voltage")
     fault = positive(source_fault_mva, "source fault")
     r = positive(line_r_ohm, "line resistance")
@@ -114,7 +146,7 @@ def paired_export_screen(
     static_limit = (n - 1) * tx * pf
     if not all(math.isfinite(q) and q > 0 for q in (equivalent_fault, static_limit)):
         raise ValueError("invalid illustrative fault or capacity")
-    cases = []
+    cases: list[ExportCase] = []
     for label, shared in (("export_excluded", False), ("shared_export", True)):
         mw = active + (ext_active if shared else 0)
         mva = rating + (ext_rating if shared else 0)
@@ -145,7 +177,7 @@ def paired_export_screen(
 
 def validate_curve_snapshot(
     data: bytes, expected_sha256: str, nameplate_kw: float
-) -> tuple:
+) -> tuple[tuple[float, float, float], ...]:
     """Validate caller-supplied tabular bytes without retaining or emitting them."""
     rating = positive(nameplate_kw, "nameplate kW")
     if not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
@@ -157,7 +189,7 @@ def validate_curve_snapshot(
     reader = csv.DictReader(io.StringIO(data.decode("utf-8"), newline=""))
     if reader.fieldnames != ["wind_speed_ms", "power_kw", "thrust_coefficient"]:
         raise ValueError("curve schema mismatch")
-    parsed = []
+    parsed: list[tuple[float, float, float]] = []
     for row in reader:
         if None in row or any(v is None for v in row.values()):
             raise ValueError("curve row shape mismatch")
