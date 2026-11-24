@@ -356,6 +356,14 @@ guard above fails if a sixth copy appears.
 ## Verification
 
 Run the narrowest meaningful checks while iterating, then broaden in proportion to risk.
+
+Before typed-code checkpoint qualification, run successful targeted mypy on final
+formatter-stable bytes using the governed interpreter and applicable CI gate
+configuration, including the affected type/import surface. Bind the command,
+versions, configuration, scope, result, log digest and candidate hashes to the
+receipt (R21, VERIFY-01, RECRUIT-01 module 2 §4.1). Missing or failing type
+evidence blocks qualification. A persistence-only rescue is not qualified.
+All existing pre-push and CI gates remain mandatory.
 Preferred focused commands are:
 
 ```bash

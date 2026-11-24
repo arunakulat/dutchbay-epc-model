@@ -153,6 +153,15 @@ Notes:
 
 ### Pre-commit hooks
 
+Typed-code checkpoint qualification requires successful targeted mypy on final
+formatter-stable bytes in the governed environment, using the applicable
+existing CI configuration and covering the affected type/import surface. Record
+command, versions, configuration identity, scope, result, log digest and final
+candidate hashes. Missing or failing type evidence blocks qualification; a
+persistence-only rescue is not qualified. This routine does not replace the
+existing full pre-push or CI gates or enable the disabled local mypy hook
+(see RECRUIT-01 module 2 §4.1 and #1270).
+
 `./setup_venv.sh` (and therefore `make setup`) installs the configured hooks so the
 enabled formatting, lint, import-order and file checks run automatically and GOV-02's
 `no-commit-to-branch` guard is active. Hooks live in `.git/hooks`, which git does not

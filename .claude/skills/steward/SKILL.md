@@ -117,6 +117,12 @@ Green means every *required* check reports success on the exact current head wit
 - **Financial-model changes.** Follow `AGENTS.md` "Financial-model changes": regression tests,
   impact disclosure, a `VERSION` bump in the same PR (`DOC-02`; `CHANGELOG.md` is compiled
   only at release cuts), and `TEST-01`'s independent oracle.
+- **Typed-code checkpoints.** Require successful targeted mypy on final formatter-stable
+  bytes, with the governed interpreter and applicable CI gate configuration.
+  Record command, versions, configuration, scope, result, log digest and candidate
+  hashes. Missing or failing type evidence blocks qualification; persistence-only
+  rescue is not qualified. Re-run after relevant drift; preserve all existing
+  local and CI type gates (R21, VERIFY-01, RECRUIT-01 module 2 §4.1).
 - **Local runs.** Use `PYTHONDONTWRITEBYTECODE=1` and `-p no:cacheprovider`. Some failures in
   `tests/lint/test_cloud_audit_review_sandbox.py` are local to cloud containers and
   pre-existing; `CLAUDE.md` "Known local-only failures" says which and how many. Declare the

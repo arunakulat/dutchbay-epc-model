@@ -65,6 +65,24 @@ The checkpoint receipt states HEAD, tree, base, dirty paths, changed paths, hash
 results, concurrent drift, staged/committed/pushed state, limitations, and active HOLDs. A claimed
 checkpoint without on-disk proof is not a checkpoint.
 
+### 4.1 Typed-code checkpoint qualification
+
+Before qualifying a checkpoint that changes typed Python, stubs, or a type/import
+contract, run successful targeted mypy against the affected surface with the
+governed interpreter and applicable existing CI gate configuration. Include
+affected dependants when the interface or import boundary changes; broaden the
+scope when impact is uncertain. Run on final formatter-stable bytes, before
+staging; repeat after relevant byte, configuration or environment drift. Bind
+the command, interpreter and mypy version, configuration identity, target scope,
+exit result, log digest and candidate hashes to the checkpoint receipt. Missing
+or failing type evidence blocks qualification. A not-applicable disposition
+requires an explicit scope rationale subject to independent challenge; not run
+is not PASS. A persistence-only rescue is not qualified and grants no review
+or merge authority. Preserve R21 full-suite pre-push and R23 local type
+verification and every existing CI type gate; the #1270 local hook decision
+is unchanged. No error suppression or gate weakening is a remedy for a failed
+type check.
+
 ## 5. Interruption and collision recovery
 
 Any interruption, target drift, patch-context failure, unexpected writer activity, worktree-owner
