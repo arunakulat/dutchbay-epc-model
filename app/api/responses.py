@@ -57,7 +57,12 @@ from pydantic import BaseModel, Field
 #: ``null`` unless a capex amount beside or instead of ``capex.usd_total`` was escalated).
 #: No field is retyped. ``cost.capex_total_usd`` keeps its type; for a scenario with a
 #: declared ``capex.price_basis`` its value is now the escalated total the engine financed.
-API_CONTRACT_VERSION = "2.5"
+#: 2.6 (#1815): MINOR, additive. ``KpiCard`` gains optional ``unit`` and ``CaseSurface``
+#: gains optional ``run_manifest``, ``reliance_notice``, ``reliance_label``, and
+#: ``section_dispositions`` so the wizard API surface carries the same run identity, unit
+#: contracts, section dispositions, and F-5 non-reliance disclosure as the HTML/DBPL report
+#: and executive workbook. No existing field is retyped or removed.
+API_CONTRACT_VERSION = "2.6"
 
 
 class WindAssessment(BaseModel):
