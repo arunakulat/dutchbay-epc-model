@@ -1,0 +1,439 @@
+{
+  "dolphin": 4,
+  "f5_status": "IN_FORCE_PENDING_OWNER_AND_OPUS_REVIEW",
+  "gate_1_baseline_canon_invariance": {
+    "expected_baseline_kpis_sha256": "a4637464491877d7243293dea3faab37ac1d4e1b7efde1c5edefafb2c6a19a6f",
+    "monthly_enabled_scenarios": [],
+    "quarterly_sculpting_enabled_scenarios": [],
+    "receivables_enabled_scenarios": [],
+    "references": {
+      "bess_augmentation": {
+        "avg_dscr": 1.3433796688336053,
+        "equity_irr": -0.11538645631082123,
+        "kpi_count": 43,
+        "kpi_vector_sha256": "a0a04548b82f87bb8848dbc3408c75dcbd7bed06d637f17208d6baa146d461e6",
+        "llcr": 1.3298596256421003,
+        "max_debt_usd": 1424999.9999999998,
+        "min_dscr": 0.9022464554800647,
+        "plcr": 1.3881799854390975,
+        "project_irr": -0.05603868408711746,
+        "project_npv": -3174011.249911025,
+        "scenario_path": "scenarios/ceb_bess_10mw_capacity_charge.yaml",
+        "scenario_sha256": "9b87fc53074451ece4b138e7e345a89f448e49b33e4ea6d1255f5b4399c5f9cf"
+      },
+      "hybrid_bess": {
+        "avg_dscr": 1.539744338952761,
+        "equity_irr": -0.04155139552075571,
+        "kpi_count": 43,
+        "kpi_vector_sha256": "627a3a039fdd5cc8c4aef4292043b9088a44e41b22af7649f6502d0795fe38b6",
+        "llcr": 1.5657492837678726,
+        "max_debt_usd": 69250304.0,
+        "min_dscr": 1.2999999999999998,
+        "plcr": 1.611194792929661,
+        "project_irr": 0.00270048922024839,
+        "project_npv": -116316619.94761601,
+        "scenario_path": "scenarios/dutchbay_hybrid_bess_2025Q4.yaml",
+        "scenario_sha256": "a4adcc8a8d29d1811d7255c421c6afcf5e397b13d880faf407550a83c915b4eb"
+      },
+      "primary": {
+        "avg_dscr": 1.393606903991241,
+        "equity_irr": -0.07758702842754783,
+        "kpi_count": 43,
+        "kpi_vector_sha256": "f7c16d0129e0ad0f808641240637bd7a171b8fe4b2aa49201925bd4e6fb69c59",
+        "llcr": 1.379512325009476,
+        "max_debt_usd": 55292580.841819994,
+        "min_dscr": 1.2999999999999998,
+        "plcr": 1.4249053105005822,
+        "project_irr": -0.0013777935011814939,
+        "project_npv": -87976535.91571534,
+        "scenario_path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "scenario_sha256": "fb4cdaa645e6de61403ca375f7c486383208b7bd83cdf11003bc2994471dbf08"
+      },
+      "shortfall_reference": {
+        "avg_dscr": 1.36066190904521,
+        "equity_irr": 0.11034537510601128,
+        "kpi_count": 44,
+        "kpi_vector_sha256": "82fcf573d80c47d8750b174212a0442144914802b99b6ac0c2172943c6c3ffb3",
+        "llcr": 1.7534233856369383,
+        "max_debt_usd": 6335377.125000001,
+        "min_dscr": 0.867338551390403,
+        "plcr": 1.9635142924890057,
+        "project_irr": 0.12764205206673865,
+        "project_npv": 1729926.9205551958,
+        "scenario_path": "scenarios/blue_whale_wind_lot5b_2026.yaml",
+        "scenario_sha256": "cc1544a70fbda2b8c4a43af93d893081523ba7c9b8e2a509d77c909609448eff"
+      }
+    },
+    "runnable_scenarios_scanned": 47,
+    "status": "PASS"
+  },
+  "gate_2_monthly_cascade_and_lag": {
+    "augmentation_year_capex_lkr": 269174677.402035,
+    "hand_oracle_errors": {
+      "cfads_final_lkr_abs_err": 5.960464477539063e-08,
+      "cfads_usd_abs_err": 2.3283064365386963e-10,
+      "ebitda_lkr_abs_err": 1.1920928955078125e-07,
+      "net_kwh_abs_err": 0.0,
+      "revenue_lkr_abs_err": 1.1920928955078125e-07
+    },
+    "hybrid_hedged_bess_oracle_errors": {
+      "cfads_final_lkr_abs_err": 0.0,
+      "cfads_usd_abs_err": 0.0,
+      "ebitda_lkr_abs_err": 0.0,
+      "net_kwh_abs_err": 0.0,
+      "revenue_lkr_abs_err": 0.0
+    },
+    "line_count_checked": 440,
+    "max_relative_line_reconciliation_error": 2.2136289905684516e-16,
+    "receivables_lag_ebitda_drift_lkr": 0.0,
+    "receivables_lag_tax_drift_lkr": 0.0,
+    "receivables_lag_telescope_lkr": 0.0,
+    "status": "PASS",
+    "year1_mean_month_cfads_usd": 1509684.8535451845,
+    "year1_peak_calendar_month": 7,
+    "year1_peak_cfads_usd": 2491357.6532381587,
+    "year1_trough_calendar_month": 3,
+    "year1_trough_cfads_usd": 800207.3655147821
+  },
+  "gate_3_quarterly_sculpting_and_bridge": {
+    "c3_d_01_year1_fold_truth": {
+      "io0_annual_covenant_year1_dscr": 1.3000000000000003,
+      "io0_period_basis_year1_dscr": 0.8495427689879619,
+      "target_dscr": 1.3
+    },
+    "status": "PASS",
+    "time_weighted_fee_quarterly_vs_semiannual_usd": {
+      "quarterly_1234": 8170256.016990829,
+      "semi_annual_24": 11213231.358875528
+    },
+    "variants": {
+      "flat_cod_7": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 33305785.23869077,
+        "bridge_interest_oracle_err_usd": 4.656612873077393e-10,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 4.440892098500626e-16,
+        "equity_irr": -0.5513866391202471,
+        "instalment_quarters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.3348831594109214,
+        "max_debt_usd": 56883734.24733999,
+        "min_dscr": 1.2999999999999998,
+        "mixed_sign_excess_years": 0,
+        "plcr": 1.381649270467457,
+        "principal_conservation_err_usd": 1.1175870895385742e-08,
+        "project_irr": -0.0031456886798068395,
+        "project_npv": -88487943.33227046,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 12409955.407953823
+      },
+      "io0_annual_covenant": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 0.0,
+        "bridge_interest_oracle_err_usd": 0.0,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 2.220446049250313e-16,
+        "equity_irr": -0.04707399467541595,
+        "instalment_quarters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.3657674732274936,
+        "max_debt_usd": 55690369.19319999,
+        "min_dscr": 1.2999999999999998,
+        "mixed_sign_excess_years": 1,
+        "plcr": 1.4102480791378162,
+        "principal_conservation_err_usd": 7.450580596923828e-09,
+        "project_irr": -0.00010522245910639026,
+        "project_npv": -87251558.98293,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 6735458.709743728
+      },
+      "mixed_sign_sparse": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 28405081.14683584,
+        "bridge_interest_oracle_err_usd": 4.656612873077393e-10,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 4.440892098500626e-16,
+        "equity_irr": -0.49841167735313985,
+        "instalment_quarters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.3636391877547653,
+        "max_debt_usd": 53701427.4363,
+        "min_dscr": 1.2999999999999998,
+        "mixed_sign_excess_years": 20,
+        "plcr": 1.4047913497928233,
+        "principal_conservation_err_usd": 7.450580596923828e-09,
+        "project_irr": -0.0025581372060439534,
+        "project_npv": -88601274.62459843,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 11286553.298273621
+      },
+      "non_q4_maturity_q1_q3": {
+        "annual_covenant_dscr_min": 1.3199017329293068,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 0.0,
+        "bridge_interest_oracle_err_usd": 0.0,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 0.0,
+        "equity_irr": -0.01625925765104619,
+        "instalment_quarters": [
+          1,
+          3
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 8.004206313496105,
+        "max_debt_usd": 9546920.43312,
+        "min_dscr": 1.3,
+        "mixed_sign_excess_years": 1,
+        "plcr": 8.263676514639654,
+        "principal_conservation_err_usd": 0.0,
+        "project_irr": 0.0027424310382175446,
+        "project_npv": -91026964.66394684,
+        "quarterly_dscr_min": 1.3,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 467264.7267203578
+      },
+      "seasonal_cod_7": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 3212950.582833935,
+        "bridge_interest_oracle_err_usd": 0.0,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 2.220446049250313e-16,
+        "equity_irr": -0.06030474051948542,
+        "instalment_quarters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.5194986698672666,
+        "max_debt_usd": 50121332.27388,
+        "min_dscr": 1.2999999999999998,
+        "mixed_sign_excess_years": 1,
+        "plcr": 1.5692734298172906,
+        "principal_conservation_err_usd": 1.0710209608078003e-08,
+        "project_irr": -0.0007769917936268349,
+        "project_npv": -88331861.43938303,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 8170256.016990829
+      },
+      "seasonal_cod_7_lag_30": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 14967224.121922787,
+        "bridge_interest_oracle_err_usd": 4.656612873077393e-10,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 4.440892098500626e-16,
+        "equity_irr": -0.10074732265582698,
+        "instalment_quarters": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.3888936041573703,
+        "max_debt_usd": 53303639.08492,
+        "min_dscr": 1.2999999999999996,
+        "mixed_sign_excess_years": 1,
+        "plcr": 1.438995577176536,
+        "principal_conservation_err_usd": 3.725290298461914e-09,
+        "project_irr": -0.0028753110165558897,
+        "project_npv": -90260253.45694105,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 9810237.998914856
+      },
+      "semi_annual_q2_q4": {
+        "annual_covenant_dscr_min": 1.2999999999999998,
+        "audit_status": "PASS",
+        "balloon_remaining_usd": 24290161.920565,
+        "bridge_interest_oracle_err_usd": 4.656612873077393e-10,
+        "bridge_length_years": 0.4958904109589041,
+        "bridge_months": 6,
+        "dscr_by_year_parity_err": 4.440892098500626e-16,
+        "equity_irr": -0.4331540940581837,
+        "instalment_quarters": [
+          2,
+          4
+        ],
+        "interest_conservation_err_usd": 0.0,
+        "llcr": 1.387597933960129,
+        "max_debt_usd": 54894792.49043999,
+        "min_dscr": 1.2999999999999996,
+        "mixed_sign_excess_years": 1,
+        "plcr": 1.4351519947989035,
+        "principal_conservation_err_usd": 7.450580596923828e-09,
+        "project_irr": -0.0024613702901669543,
+        "project_npv": -88454526.6852691,
+        "quarterly_dscr_min": 1.2999999999999998,
+        "senior_fee_conservation_err_usd": 0.0,
+        "time_weighted_senior_fee_total_usd": 11213231.358875528
+      }
+    }
+  },
+  "gate_4_cross_feature_parity": {
+    "p90_cover_with_sculpting": {
+      "binding": true,
+      "declared_min_dscr": 1.15,
+      "declared_target_dscr": 1.3,
+      "independent_recheck_min_dscr": 1.1500166856655312,
+      "recomputed_min_dscr": 1.1500166856655312,
+      "recomputed_min_dscr_unbound": 1.0581457846783275,
+      "solved_target_dscr": 1.4129882812499999,
+      "solver_steps": 13
+    },
+    "p90_recomputed_downside_with_sculpting": {
+      "flat_cod_7": {
+        "base_dscr_parity_err": 0.0,
+        "base_min_dscr": 1.2999999999999998,
+        "ratio_method_min_dscr": 1.110848211004481,
+        "recomputed_avg_dscr": 1.1558351607213557,
+        "recomputed_llcr": 1.1088472110872472,
+        "recomputed_min_dscr": 1.0520852060852348,
+        "status": "ok"
+      },
+      "mixed_sign_sparse": {
+        "base_dscr_parity_err": 0.0,
+        "base_min_dscr": 1.2999999999999998,
+        "ratio_method_min_dscr": 1.1111603199786877,
+        "recomputed_avg_dscr": 1.1532623726455513,
+        "recomputed_llcr": 1.1251878437702834,
+        "recomputed_min_dscr": 1.0398089064359657,
+        "status": "ok"
+      },
+      "seasonal_cod_7": {
+        "base_dscr_parity_err": 0.0,
+        "base_min_dscr": 1.2999999999999998,
+        "ratio_method_min_dscr": 1.1211710769315697,
+        "recomputed_avg_dscr": 1.213664000384754,
+        "recomputed_llcr": 1.27653913379228,
+        "recomputed_min_dscr": 1.0581457846783275,
+        "status": "ok"
+      }
+    },
+    "status": "PASS",
+    "waterfall_and_three_statement": {
+      "mixed_sign_sparse": {
+        "max_cfads_coverage_usd_diff": 0.0,
+        "max_waterfall_covenant_dscr_diff": 0.0,
+        "three_statement_tieout_passed": true,
+        "workbook_frames": [
+          "cashflow",
+          "debt",
+          "ratios",
+          "scenario_summary",
+          "summary"
+        ]
+      },
+      "seasonal_cod_7": {
+        "max_cfads_coverage_usd_diff": 0.0,
+        "max_waterfall_covenant_dscr_diff": 0.0,
+        "three_statement_tieout_passed": true,
+        "workbook_frames": [
+          "cashflow",
+          "debt",
+          "ratios",
+          "scenario_summary",
+          "summary"
+        ]
+      },
+      "seasonal_cod_7_lag_30": {
+        "max_cfads_coverage_usd_diff": 0.0,
+        "max_waterfall_covenant_dscr_diff": 0.0,
+        "three_statement_tieout_passed": true,
+        "workbook_frames": [
+          "cashflow",
+          "debt",
+          "ratios",
+          "scenario_summary",
+          "summary"
+        ]
+      }
+    }
+  },
+  "gate_5_negative_controls": {
+    "controls": {
+      "non_reliance_notice_passes_hold_guard": true,
+      "refuses_annuity_style_with_sculpting": true,
+      "refuses_bridge_months_out_of_range": true,
+      "refuses_receivable_days_over_365": true,
+      "refuses_unilateral_f5_withdrawal_text": true,
+      "refuses_unsorted_instalment_quarters": true,
+      "refuses_year_sign_with_quarterly_sculpting": true
+    },
+    "status": "PASS"
+  },
+  "gate_6_f5_authority_and_open_gates": {
+    "completed_technical_deliverables_1893": [
+      "Dolphin 1 (#1894, #1901): opt-in monthly CFADS cascade (LINE_BASIS computed/time_accrued/allocated, strict 1e-12 annual reconciliation)",
+      "Dolphin 2 (#1911): offtaker receivables lag (cashflow.monthly.receivable_days) conserving project-life cash",
+      "Dolphin 3 (#1928): quarterly debt sculpting on declared/assumed instalment dates, month_adverse negative-month haircut, true-length calendar bridge, time-weighted senior fees, maturity stub settlement, C3-D-01 / #1845 Year-1 folded bridge",
+      "Dolphin 4 (#1893): pipeline_v14_enhanced cfads_coverage_usd mixed-sign waterfall parity, #1836/#1895 recomputed P90 & p90_cover_min_dscr parity with quarterly sculpting, audited 6-gate F-5 exit evidence pack"
+    ],
+    "f5_exit_lifted": false,
+    "hold_union": [
+      "F-5",
+      "#1110",
+      "v15.6.1"
+    ],
+    "open_gates_required_for_f5_exit_disposition": [
+      "Explicit owner F-5 exit decision following independent Opus domain + assurance review (#1893 Dolphin 4)",
+      "Authenticated financing term-sheet debt & bridge instalment schedule (#920, #1399, #1400) replacing labelled defaults",
+      "Authenticated Sri Lanka tax-law instalment schedule / tax advice (#920) replacing within-year tax allocation",
+      "Separate #1110 programme audit completion and Board/lender circulation authorization"
+    ]
+  },
+  "hold_union": [
+    "F-5",
+    "#1110",
+    "v15.6.1"
+  ],
+  "issue": 1893,
+  "non_reliance_notice": "HOLD (F-5, #1110, v15.6.1): Non-reliance notice. F-5, #1110, and v15.6.1 remain in force; this evidence pack verifies technical parity across Dolphins 1-4 (#1893) with no lender reliance and no covenant, IC, or Board authority until explicit owner disposition following independent domain and assurance review.",
+  "schema": "dutchbay.f5_exit_evidence_pack.v1",
+  "source_file_sha256": {
+    "analytics/finance/f5_exit_evidence.py": "4aea996062758eba8d69926c2e4b89acf5a1c751f6be594951d52912a31e59d4",
+    "analytics/finance/p90_cover.py": "e548cf342199b9619ce1094f56ca6ba2c55d512abde4294738674b7f5224612b",
+    "analytics/finance/p90_recomputed_downside.py": "1059869250a282cb2ebed24593fd8548da8170ca9ea6c5154c3b47ee26f000db",
+    "analytics/pipeline_v14_enhanced.py": "ad874976c1500c9d4acb6f61a28d50e7245d0680ea6fcc59e0a762fc39d53961",
+    "analytics/run_identity.py": "0bc2ccd6baf1425960e77a4753f1b4bfb0925cb0c10186bbaa1a962be86d25d4",
+    "analytics/three_statement.py": "96b80f48dd7174ae6d3c888fde8b88516d0360684b00a506cbf1c0684d247afc",
+    "conf/f5_exit_evidence_1893.yaml": "4818141c22630d0a66c9af935c78624b1604d399f62341c44185194213e762df",
+    "finance/debt/layer.py": "2c3b1846ad0224b4cb8d5defc1a9cf4cdf9a4c999fc26778deb3159b42b98a53",
+    "finance/debt/plan.py": "73190301980e48ab78d75f5d238e093e1d26ba8d0d3135fc65804cfd92b6513b",
+    "finance/debt/sizing.py": "c7b3e55b093384697afbcbea8d7a09223a7842fb5c15197afd85c7e24c6119b9",
+    "finance/monthly_cascade_v14.py": "fba4a97dd563d0e65827f53e8a2d36a78e8e89804447df7ae83a5388b5571215",
+    "finance/quarterly_sculpting_v14.py": "857974a0d5fdbf875533dec43aae2be0aab77da8e1bf7a655b14da9e966df38b",
+    "scripts/run_f5_exit_evidence_v14.py": "5b7f7c956e27bdea5b01cb13f289498675ab5abd4b8db541fcc142d06aca1a90"
+  }
+}
