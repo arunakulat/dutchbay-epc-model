@@ -233,20 +233,69 @@ def test_anchored_cli_lifecycle(tmp_path: Path, external: bool) -> None:
     assert result.returncode == 0, result.stderr
     assert b"READY_FOR_FINAL_BYTE_TESTS" in result.stdout
     observe("readiness", cmd, log, result.returncode)
-    cmd = start["type_commands"]["types:strict"]
-    result = subprocess.run(cmd, cwd=root, capture_output=True)
-    log = tmp_path / "types.log"
-    log.write_bytes(result.stdout + result.stderr)
-    assert result.returncode == 0
-    observe(
-        "types:strict", cmd, log, result.returncode, type_evidence=lease["type_plan"][0]
-    )
-    cmd = ready.git_command("diff", "--check")
-    result = subprocess.run(cmd, cwd=root, capture_output=True)
-    log = tmp_path / "regression.log"
-    log.write_bytes(result.stdout + result.stderr)
-    assert result.returncode == 0
-    observe("regression", cmd, log, result.returncode)
+    if external:
+
+        def execute(
+            cid: str, *, pin_value: str = subject, ok: bool = True
+        ) -> dict[str, Any]:
+            return call(
+                "execute",
+                *common,
+                "--expected-tip",
+                tip,
+                "--expected-subject",
+                pin_value,
+                "--check-id",
+                cid,
+                ok=ok,
+            )
+
+        original = j.read_bytes()
+        execute("types:strict", pin_value="0" * 64, ok=False)
+        execute("regression", ok=False)
+        execute("commit", ok=False)
+        assert j.read_bytes() == original
+        log = tmp_path / "types.log"
+        log.write_text("existing evidence")
+        execute("types:strict", ok=False)
+        assert log.read_text() == "existing evidence"
+        log.unlink()
+        for cid, name in (
+            ("types:strict", "types.log"),
+            ("regression", "regression.log"),
+        ):
+            observation = execute(cid)
+            assert observation["observed_exit_code"] == 0
+            sidecar = tmp_path / (name + ".execution.json")
+            assert observation["execution_observation_sha256"] == ready.digest(sidecar)
+            evidence = json.loads(sidecar.read_text())
+            assert evidence["observation"]["log_sha256"] == ready.digest(
+                tmp_path / name
+            )
+            assert evidence["prior_tip"] == tip
+            assert evidence["candidate_state_unchanged"] is True
+            assert evidence["execution_authenticated"] is False
+            tip = observation["tip_sha256"]
+            execute(cid, ok=False)
+    else:
+        cmd = start["type_commands"]["types:strict"]
+        result = subprocess.run(cmd, cwd=root, capture_output=True)
+        log = tmp_path / "types.log"
+        log.write_bytes(result.stdout + result.stderr)
+        assert result.returncode == 0
+        observe(
+            "types:strict",
+            cmd,
+            log,
+            result.returncode,
+            type_evidence=lease["type_plan"][0],
+        )
+        cmd = ready.git_command("diff", "--check")
+        result = subprocess.run(cmd, cwd=root, capture_output=True)
+        log = tmp_path / "regression.log"
+        log.write_bytes(result.stdout + result.stderr)
+        assert result.returncode == 0
+        observe("regression", cmd, log, result.returncode)
     git(root, "add", *scope)
     log = tmp_path / "staged.json"
     cmd = verifier_command(

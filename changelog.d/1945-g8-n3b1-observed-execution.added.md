@@ -1,0 +1,1 @@
+Capture actual planned type and regression subprocess exits and logs through a subject- and journal-tip-bound coordinator command with pre/post candidate checks and exclusive execution evidence. No staging, commit, authentication or authority is granted; independent custody and durable observation binding remain separate requirements. (#1945)

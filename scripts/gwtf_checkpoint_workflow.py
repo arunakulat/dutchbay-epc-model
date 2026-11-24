@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,6 +32,138 @@ def read_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("expected JSON object")
     return value
+
+
+def execute_check(args: argparse.Namespace, journal: Path) -> dict[str, Any]:
+    """Observe one planned test subprocess; no staging or commit authority.
+
+    The independently retained subject and journal tips are inputs, not proof
+    of custody. Tests themselves execute candidate code. This is not a sandbox,
+    and ordinary caller-supplied observations remain unauthenticated.
+    """
+    root = args.worktree.resolve()
+    lease = read_object(args.lease)
+    start = receipt.start_data(lease)
+    subject = start["subject"]
+    receipt.require(
+        receipt.command_contract_bound(subject)
+        and start["subject_sha256"] == args.expected_subject,
+        "externally retained bound subject required",
+    )
+    rows = receipt.parse_rows(ready.read_regular(journal).decode())
+    receipt.require(
+        bool(rows)
+        and rows[0]["data"] == start
+        and receipt.validate_chain(rows, journal.parent) == args.expected_tip,
+        "journal subject or tip mismatch",
+    )
+    receipt.require(
+        all(row["event"] in {"STARTED", "CHECK_OBSERVED"} for row in rows),
+        "execution already completed",
+    )
+    checks = [row["data"] for row in rows[1:]]
+    order = receipt.ordered_checks(subject)
+    cid = args.check_id
+    receipt.require(
+        len(checks) < len(order)
+        and cid == order[len(checks)]
+        and all(row["exit_code"] == 0 for row in checks),
+        "not next planned check or prior failure",
+    )
+    receipt.require(
+        cid.startswith("types:") or cid == "regression",
+        "only type and regression checks may execute",
+    )
+    planned = subject["command_contract"]["checks"][len(checks)]
+    cmd = planned["command"]
+    env = ready.hook_environment(root)
+    receipt.verify_contract_runtime(root, subject)
+    before = ready.verify_candidate(root, lease)
+    plan = None
+    if cid.startswith("types:"):
+        plan = next(item for item in subject["type_plan"] if item["check_id"] == cid)
+        receipt.require(
+            sys.version == plan["python_version"]
+            and ready.digest(root / "mypy.ini") == plan["config_sha256"]
+            and subprocess.check_output(
+                [sys.executable, "-I", "-m", "mypy", "--version"],
+                cwd=root,
+                env=env,
+                text=True,
+            ).strip()
+            == plan["mypy_version"],
+            "type runtime or configuration drift",
+        )
+    else:
+        # Independently approved pytest arguments may execute candidate code.
+        # The exact Git diff command is retained for synthetic fixture checks.
+        receipt.require(
+            cmd[:3] == [sys.executable, "-m", "pytest"]
+            or cmd == ready.git_command("diff", "--check"),
+            "unsupported regression command family",
+        )
+        if cmd[:3] == [sys.executable, "-m", "pytest"]:
+            # Explicit governed candidate imports for project tests, not for
+            # the externally pinned verifier or ordinary hooks.
+            env["PYTHONPATH"] = str(root)
+    log = receipt.safe_external(journal.parent / planned["log_name"])
+    sidecar = receipt.safe_external(log.with_name(log.name + ".execution.json"))
+    receipt.require(
+        not sidecar.exists() and not sidecar.is_symlink(),
+        "execution evidence already exists",
+    )
+    started = datetime.now(timezone.utc).isoformat()
+    fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        result = subprocess.run(
+            cmd, cwd=root, env=env, stdout=stream, stderr=subprocess.STDOUT, check=False
+        )
+        stream.flush()
+        os.fsync(stream.fileno())
+    finished = datetime.now(timezone.utc).isoformat()
+    receipt.verify_contract_runtime(root, subject)
+    receipt.require(
+        ready.verify_candidate(root, lease) == before,
+        "candidate drift during execution; preserve log",
+    )
+    if plan is not None:
+        receipt.require(
+            ready.digest(root / "mypy.ini") == plan["config_sha256"],
+            "type configuration drift during execution",
+        )
+    observation = {
+        **planned,
+        "subject_sha256": start["subject_sha256"],
+        "exit_code": result.returncode,
+        "log_sha256": ready.digest(log),
+    }
+    if plan is not None:
+        observation["type_evidence"] = plan
+    evidence = {
+        "schema": 1,
+        "observation": observation,
+        "worktree": str(root),
+        "prior_tip": args.expected_tip,
+        "started_utc": started,
+        "finished_utc": finished,
+        "candidate_state_unchanged": True,
+        "execution_authenticated": False,
+    }
+    fd = os.open(sidecar, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(receipt.canonical(evidence) + b"\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    tip = receipt._append_event(
+        journal, "CHECK_OBSERVED", observation, args.expected_tip
+    )
+    return {
+        "tip_sha256": tip,
+        "check_id": cid,
+        "observed_exit_code": result.returncode,
+        "execution_observation_sha256": ready.digest(sidecar),
+        "checkpoint_verified": False,
+    }
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -56,6 +190,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         }
     tip = args.expected_tip
     receipt.require(receipt.hex_value(tip), "externally retained prior tip required")
+    if action == "execute":
+        return execute_check(args, journal)
     if action in {"record", "verify"}:
         lease = read_object(args.lease)
         if action == "record":
@@ -121,6 +257,12 @@ def main() -> int:
         command.add_argument("--lease", type=Path, required=True)
         if name != "start":
             command.add_argument("--expected-tip", required=True)
+    execute = sub.add_parser("execute")
+    execute.add_argument("--worktree", type=Path, required=True)
+    execute.add_argument("--lease", type=Path, required=True)
+    execute.add_argument("--expected-tip", required=True)
+    execute.add_argument("--expected-subject", required=True)
+    execute.add_argument("--check-id", required=True)
     for name in ("observe", "complete", "report", "inspect"):
         command = sub.add_parser(name)
         command.add_argument("--expected-tip", required=name != "inspect")
@@ -159,7 +301,7 @@ def main() -> int:
         delivery_confirmed=False,
     )
     print(json.dumps(result, sort_keys=True))
-    return 0
+    return 2 if result.get("observed_exit_code", 0) != 0 else 0
 
 
 if __name__ == "__main__":
