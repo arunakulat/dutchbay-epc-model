@@ -27,14 +27,18 @@ No pipeline, API, report or workbook output reads these modules today. The v14 p
 one.
 
 **A fifth module computes some lines per month (#1893).** `finance/monthly_cascade_v14.py`, opted into with
-`cashflow.monthly`, is the first dolphin of the monthly CFADS cascade. It is separate from the
-grid above and does not use `cashflow.resolution`. Energy follows a scenario-declared
-calendar-month shape, and generation revenue, statutory charges and CFADS are computed from
-that month's energy. Fixed opex, the senior fee and a BESS capacity charge accrue by days. Tax
-and augmentation capex are still the annual figures spread by days. Its `LINE_BASIS` labels
+`cashflow.monthly`, implements the monthly CFADS cascade (Dolphin 1) consumed downstream by opt-in
+working-capital receivables lag (`receivables_lag`, Dolphin 2), opt-in quarterly debt sculpting
+(`quarterly_sculpting`, Dolphin 3), and the Dolphin 4 `F-5` exit evidence and parity checks. It is
+separate from the grid above and does not use `cashflow.resolution`. Energy follows a
+scenario-declared calendar-month shape, and generation revenue, statutory charges and CFADS are
+computed from that month's energy. Fixed opex, the senior fee and a BESS capacity charge accrue by
+days. Tax and augmentation capex are still the annual figures spread by days. Its `LINE_BASIS` labels
 each line `computed`, `time_accrued` or `allocated`, and every line still adds back to the
 annual figure. The rule in section 2 therefore describes the four modules above, not this
-one. Nothing reads it yet, and F-5 applies to it as to the others.
+one. With default `quarterly_sculpting.enabled=false`, annual sizing and waterfall behavior are
+unchanged; opt-in quarterly sculpting remains non-reliance and `F-5` continues to apply until
+explicitly lifted by project-owner sign-off after independent review.
 
 ## 2. The rule: allocated from the annual engine, never re-computed
 
@@ -193,9 +197,11 @@ or assumed dates. The assumed dates are listed by `EventCalendar.assumed` and
 `SubperiodCoverage.assumptions`.
 
 Lifting that bar needs the evidence the #1395 "Done when" list names: dated tax, bridge and debt
-instalments from the term sheet and tax advice (#920), and an independent finance review that
-states which figures may be used. This document records what the model does. It is not that
-review.
+instalments from the term sheet and tax advice (#920, #1399, #1400), the reproducible verification
+pack in [F5_EXIT_EVIDENCE_PACK_1893.md](F5_EXIT_EVIDENCE_PACK_1893.md) and
+[f5_exit_evidence_1893.json](f5_exit_evidence_1893.json), and an independent finance review and
+explicit owner sign-off stating which figures may be used. This document records what the model
+does; `F-5`, `#1110`, and `v15.6.1` remain in force, and this note is not that review.
 
 ## 7. Where each statement is pinned
 

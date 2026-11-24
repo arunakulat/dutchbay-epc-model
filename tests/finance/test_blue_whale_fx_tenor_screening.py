@@ -1,25 +1,20 @@
-"""Tests for Blue Whale dual-currency financing, FX, and tenor-tail screening.
+"""Unit tests for dual-currency financing, FX, and tenor-tail screening.
 
-Covers the 14-turbine DutchBay (#1587) governed basecase alignment to
-``scenarios/dutchbay_basecase_2025Q4.yaml``, explicit sensitivity labeling,
-F-5 HOLD caveat and screening-indicator status, assumed-downside labeling
-(no measured P90), engine path disclosure, TEST-01 closed-form oracles,
-monotonicity invariants, and Hydra CLI smoke test.
+Covers TEST-01 closed-form oracles, monotonicity invariants, and cash waterfall guards
+on :mod:`analytics.finance.fx_tenor_screening` using ``scenarios/dutchbay_basecase_2025Q4.yaml``.
 """
 
 from __future__ import annotations
 
-import json
 import math
-import subprocess
-import sys
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 import yaml
 
-from analytics.finance.blue_whale_fx_tenor_screening import (
+from analytics.evaluation_v14 import evaluated_scenario_config
+from analytics.finance.fx_tenor_screening import (
     amortize_tranche,
     annuity,
     complete_total,
@@ -28,73 +23,27 @@ from analytics.finance.blue_whale_fx_tenor_screening import (
     compute_fx_history_metrics,
     energy_scaled_price,
     evaluate_dual_currency_screening,
-    load_governed_basecase_inputs,
-    run_comprehensive_screening,
     run_fixed_debt_stress,
+    scenario_screening_inputs,
+    screening_config_from_block,
     size_debt_screening,
     validate_debt_tenor_against_ppa,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONFIG_PATH = REPO_ROOT / "conf" / "blue_whale_fx_tenor_screening.yaml"
 SCENARIO_PATH = REPO_ROOT / "scenarios" / "dutchbay_basecase_2025Q4.yaml"
 
 
 @pytest.fixture(scope="module")
 def screening_cfg() -> Dict[str, Any]:
-    """Load 14-turbine governed basecase screening config from YAML + scenario."""
-    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
-    governed = load_governed_basecase_inputs(raw["governed_scenario_path"])
-    params = raw["screening_parameters"]
-    case14 = raw["cases"]["14_governed_basecase"]
-    return {**governed, **params, **case14}
-
-
-# ==============================================================================
-# Part 1: Governance & 14 Nov review alignment checks
-# ==============================================================================
-
-
-def test_governed_basecase_inputs_match_scenario() -> None:
-    """Capex, tariff, O&M, and FX-at-close match dutchbay_basecase_2025Q4.yaml."""
+    """Load governed basecase screening config from the scenario's financing_screening block."""
     scenario = yaml.safe_load(SCENARIO_PATH.read_text(encoding="utf-8"))
-    governed = load_governed_basecase_inputs(SCENARIO_PATH)
-
-    assert governed["capex_usd"] == float(scenario["capex"]["usd_total"])
-    assert governed["opex_usd_equivalent_year1"] == float(
-        scenario["opex"]["usd_per_year"]
-    )
-    assert governed["tariff_fixed_lkr_per_kwh"] == float(
-        scenario["tariff"]["lkr_per_kwh"]
-    )
-    assert governed["tariff_om_lkr_per_kwh"] == 0.0
-    assert governed["fx_close_lkr_per_usd"] == float(
-        scenario["fx"]["start_lkr_per_usd"]
-    )
-    assert governed["fx_depreciation_decimal"] == float(scenario["fx"]["annual_depr"])
-
-
-def test_fifteen_turbine_case_dropped_and_14_retained() -> None:
-    """DutchBay has 14 turbines (#1587); 15-turbine case is dropped."""
-    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
-    assert "15" not in raw["cases"]
-    assert raw["cases"]["14_governed_basecase"]["turbine_count"] == 14
-    assert raw["cases"]["14_handoff_sensitivity"]["case_type"] == "sensitivity"
-    assert raw["cases"]["14_handoff_sensitivity"]["turbine_count"] == 14
-
-
-def test_conversation_transcription_figures_labeled_as_assumptions() -> None:
-    """Unverified prior-session FX figures are explicitly labeled as assumptions."""
-    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
-    for obs in raw["fx_observations"]:
-        assert "conversation_transcription" not in obs["evidence_status"]
-        if obs["date"] in {"2021-12-31", "2022-12-31", "2023-12-31", "2026-11-13"}:
-            assert obs["is_assumption"] is True
-            assert obs["evidence_status"].startswith("unverified_assumption")
+    governed = scenario_screening_inputs(evaluated_scenario_config(scenario))
+    return screening_config_from_block(governed, scenario["financing_screening"])
 
 
 # ==============================================================================
-# Part 2: Core math, cash waterfall, and guard tests
+# Part 1: Core math, cash waterfall, and guard tests
 # ==============================================================================
 
 
@@ -399,18 +348,6 @@ def test_fx_history_enrichment() -> None:
 # ==============================================================================
 
 
-def test_run_comprehensive_screening_direct() -> None:
-    """Directly test run_comprehensive_screening helper."""
-    raw = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
-    result = run_comprehensive_screening(raw)
-    assert result["schema_version"] == "blue_whale_fx_tenor_screening_v1"
-    assert result["status"] == "complete"
-    assert result["engine_path_status"] == "delivered_bw5_l12_d2"
-    assert "HOLD (F-5, #1110, v15.6.1)" in result["f5_hold_caveat"]
-    assert len(result["fx_metrics"]) == 3
-    assert result["fixed_debt_fx_stress_count"] == 21
-
-
 def test_run_fixed_debt_stress_direct(screening_cfg: Dict[str, Any]) -> None:
     """Directly test run_fixed_debt_stress helper."""
     results = run_fixed_debt_stress(
@@ -418,38 +355,3 @@ def test_run_fixed_debt_stress_direct(screening_cfg: Dict[str, Any]) -> None:
     )
     assert len(results) == 4
     assert all("min_dscr" in r for r in results)
-
-
-def test_hydra_cli_smoke() -> None:
-    """Invoke run_blue_whale_fx_tenor_screening_v14.py via subprocess and verify JSON."""
-    script_path = REPO_ROOT / "scripts" / "run_blue_whale_fx_tenor_screening_v14.py"
-    proc = subprocess.run(
-        [sys.executable, str(script_path)],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    payload = json.loads(proc.stdout)
-    assert payload["schema_version"] == "blue_whale_fx_tenor_screening_v1"
-    assert payload["status"] == "complete"
-    assert (
-        payload["governed_scenario_source"] == "scenarios/dutchbay_basecase_2025Q4.yaml"
-    )
-    assert payload["engine_path_status"] == "delivered_bw5_l12_d2"
-    assert "HOLD (F-5, #1110, v15.6.1)" in payload["f5_hold_caveat"]
-    assert payload["fixed_debt_fx_stress_count"] == 21
-
-    g15 = payload["governed_basecase_14turbine_15year_screening"]
-    assert g15["turbine_count"] == 14
-    assert g15["case_type"] == "governed_basecase_screening"
-    assert math.isclose(g15["debt_usd"], 69_961_839.89, rel_tol=1e-5)
-
-    g10 = payload["governed_basecase_14turbine_10year_screening"]
-    assert g10["turbine_count"] == 14
-    assert math.isclose(g10["debt_usd"], 63_198_313.61, rel_tol=1e-5)
-
-    sens = payload["sensitivity_14turbine_15year_screening"]
-    assert sens["case_type"] == "sensitivity"
-    assert sens["turbine_count"] == 14
-    assert math.isclose(sens["debt_usd"], 74_370_107.33, rel_tol=1e-5)

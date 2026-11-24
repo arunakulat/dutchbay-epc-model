@@ -46,6 +46,7 @@ from analytics.capital_risk_layer_v14 import (
     CapitalRiskReport,
     build_capital_risk_report_from_mc_result,
 )
+from analytics.contracts_v14 import MonteCarloResult
 from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.mc.engine import run_monte_carlo_analysis
 from analytics.scenario_loader import load_scenario_config
@@ -58,6 +59,7 @@ __all__ = [
     "LENDER_GRADE_MIN_TRIALS",
     "build_capital_risk_report_for_scenario",
     "emit_capital_risk_report_from_pipeline",
+    "run_lender_grade_monte_carlo",
 ]
 
 #: Lender-grade minimum trial count (CESSPIT floor). A capital-risk report shown to a lender must
@@ -78,6 +80,65 @@ LENDER_GRADE_MIN_TRIALS = 1000
 DEFAULT_CAPITAL_RISK_N_TRIALS = 2000
 
 
+def run_lender_grade_monte_carlo(
+    scenario: str | Path | Mapping[str, Any],
+    *,
+    n_trials: int = DEFAULT_CAPITAL_RISK_N_TRIALS,
+    min_trials: int = LENDER_GRADE_MIN_TRIALS,
+    seed: Optional[int] = None,
+) -> MonteCarloResult:
+    """Run the canonical MC under the lender guards (#779, #1825 slice iv).
+
+    Enforces ``n_trials >= min_trials`` (default :data:`LENDER_GRADE_MIN_TRIALS`),
+    requires ``monte_carlo.parameters``, forces ``monte_carlo.allow_toy_fallback`` off,
+    and refuses any result with ``toy_fallback_count > 0``.
+    """
+    if int(n_trials) < int(min_trials):
+        # Fail loud (CESSPIT) rather than emit a lender-grade risk number off a thin tail.
+        raise ValueError(
+            f"capital-risk report needs >= {min_trials} trials for a lender-grade VaR/CVaR tail; "
+            f"got n_trials={n_trials}. Raise capital_risk_report.n_trials (only a non-lender-grade "
+            "smoke may lower min_trials explicitly)."
+        )
+    if isinstance(scenario, Mapping):
+        scenario_dict = dict(scenario)
+        scenario_label = str(
+            (scenario_dict.get("project") or {}).get("name") or "<scenario>"
+        )
+    else:
+        scenario_dict = dict(load_scenario_config(str(scenario)))
+        scenario_label = str(scenario)
+    mc_block = scenario_dict.get("monte_carlo")
+    if not isinstance(mc_block, Mapping) or not mc_block.get("parameters"):
+        raise ValueError(
+            "capital-risk report needs a monte_carlo.parameters list to sample lender risk "
+            f"drivers; scenario {scenario_label} declares none"
+        )
+
+    # Force fail-loud (no fabricated toy trials) regardless of the scenario default, via a shallow
+    # copy so the caller's ``scenario`` mapping is left untouched.
+    mc_base = {
+        **scenario_dict,
+        "monte_carlo": {**dict(mc_block), "allow_toy_fallback": False},
+    }
+    mc_seed = int(seed) if seed is not None else int(mc_block.get("seed", 123))
+    mc_result = run_monte_carlo_analysis(
+        base_config=mc_base, n_trials=int(n_trials), seed=mc_seed
+    )
+    metadata = getattr(mc_result, "metadata", None)
+    toy = (
+        int(metadata.get("toy_fallback_count", 0))
+        if isinstance(metadata, Mapping)
+        else 0
+    )
+    if toy > 0:
+        raise ValueError(
+            f"MonteCarloResult has {toy} toy-fallback trial(s): lender-grade outputs "
+            "refuse fabricated fallback trials."
+        )
+    return mc_result
+
+
 def build_capital_risk_report_for_scenario(
     scenario_config_path: str | Path,
     output_dir: str | Path,
@@ -86,6 +147,7 @@ def build_capital_risk_report_for_scenario(
     min_trials: int = LENDER_GRADE_MIN_TRIALS,
     seed: Optional[int] = None,
     npv_metric: str = "equity_npv",
+    on_mc_result: Optional[Callable[[MonteCarloResult], None]] = None,
 ) -> CapitalRiskReport:
     """Run the canonical MC on a scenario and assemble its :class:`CapitalRiskReport` (#779).
 
@@ -106,6 +168,8 @@ def build_capital_risk_report_for_scenario(
             wiring smoke — the production CLI path always uses the default.
         seed: MC seed; defaults to the scenario's ``monte_carlo.seed`` (else the engine default).
         npv_metric: Which NPV bucket the distribution plots (``equity_npv`` or ``project_npv``).
+        on_mc_result: Optional callback receiving the :class:`MonteCarloResult` before
+            report assembly, so downstream blocks in the same run can reuse the trials.
 
     Returns:
         The unified :class:`CapitalRiskReport`.
@@ -115,36 +179,18 @@ def build_capital_risk_report_for_scenario(
             adequate sample), or if the scenario carries no ``monte_carlo.parameters`` list to
             sample (a lender-grade capital-risk report needs sampled risk drivers).
     """
-    if int(n_trials) < int(min_trials):
-        # Fail loud (CESSPIT) rather than emit a lender-grade risk number off a thin tail.
-        raise ValueError(
-            f"capital-risk report needs >= {min_trials} trials for a lender-grade VaR/CVaR tail; "
-            f"got n_trials={n_trials}. Raise capital_risk_report.n_trials (only a non-lender-grade "
-            "smoke may lower min_trials explicitly)."
-        )
     # Fail FAST (CESSPIT pre-flight) on a mistyped npv_metric — before the bounded MC runs, rather
     # than after (the downstream renderer guards the same NPV_METRICS set, but only post-run).
     if npv_metric not in NPV_METRICS:
         raise ValueError(f"npv_metric must be one of {NPV_METRICS}; got {npv_metric!r}")
-    scenario_dict = dict(load_scenario_config(str(scenario_config_path)))
-    mc_block = scenario_dict.get("monte_carlo")
-    if not isinstance(mc_block, Mapping) or not mc_block.get("parameters"):
-        raise ValueError(
-            "capital-risk report needs a monte_carlo.parameters list to sample lender risk "
-            f"drivers; scenario {scenario_config_path} declares none"
-        )
-
-    # Force fail-loud (no fabricated toy trials) regardless of the scenario default, via a shallow
-    # copy so ``scenario_dict`` (fed to the report context below) is left untouched.
-    mc_base = {
-        **scenario_dict,
-        "monte_carlo": {**dict(mc_block), "allow_toy_fallback": False},
-    }
-    mc_seed = int(seed) if seed is not None else int(mc_block.get("seed", 123))
-
-    mc_result = run_monte_carlo_analysis(
-        base_config=mc_base, n_trials=int(n_trials), seed=mc_seed
+    mc_result = run_lender_grade_monte_carlo(
+        scenario_config_path,
+        n_trials=int(n_trials),
+        min_trials=int(min_trials),
+        seed=seed,
     )
+    if on_mc_result is not None:
+        on_mc_result(mc_result)
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -168,6 +214,7 @@ def emit_capital_risk_report_from_pipeline(
     scenario_variant: Optional[str] = None,
     generated_at: Optional[str] = None,
     on_report: Optional[Callable[[CapitalRiskReport], None]] = None,
+    on_mc_result: Optional[Callable[[MonteCarloResult], None]] = None,
 ) -> Path:
     """Render a lender HTML report with the capital-risk section from a finance run (#779).
 
@@ -203,6 +250,7 @@ def emit_capital_risk_report_from_pipeline(
         min_trials=min_trials,
         seed=seed,
         npv_metric=npv_metric,
+        on_mc_result=on_mc_result,
     )
     if on_report is not None:
         on_report(report)
