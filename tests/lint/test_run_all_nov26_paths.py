@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -628,8 +629,13 @@ def test_out_owned_by_another_user_is_refused(tmp_path: Path) -> None:
 
 
 @_NEEDS_TOOLS
-def test_relative_private_paths_are_made_absolute_before_cd(tmp_path: Path) -> None:
+@pytest.mark.parametrize("directory", ["plain", "space ' quote"])
+def test_relative_private_paths_are_made_absolute_before_cd(
+    tmp_path: Path, directory: str
+) -> None:
     """#1659 N-4 (R10): a relative path means the caller's directory, not the checkout."""
+    tmp_path = tmp_path / directory
+    tmp_path.mkdir()
     env = {k: v for k, v in os.environ.items() if k not in _PRIVATE_ENV}
     (tmp_path / "nasa").mkdir()
     for var in _PRIVATE_ENV:
@@ -650,6 +656,11 @@ def test_relative_private_paths_are_made_absolute_before_cd(tmp_path: Path) -> N
     )
     assert proc.returncode == 1
     assert "writable by group or others" in proc.stderr
+    exports = [
+        shlex.split(line[2:])
+        for line in proc.stderr.splitlines()
+        if line.startswith("+ export ")
+    ]
     for var in _PRIVATE_ENV:
         name = "nasa" if var == "DUTCHBAY_NASA_POWER_DIR" else f"{var.lower()}.dat"
-        assert f"export {var}={tmp_path}/{name}" in proc.stderr, var
+        assert ["export", f"{var}={tmp_path}/{name}"] in exports, var
