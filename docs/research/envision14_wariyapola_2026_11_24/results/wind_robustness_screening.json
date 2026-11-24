@@ -1,0 +1,62 @@
+{
+  "status": "SCREENING_NOT_LENDER_GRADE",
+  "scope": "Five advisory sensitivity cases; non-probabilistic. OEM original Ct held at 10.5MW while clipping power; no bankable EYA.",
+  "method": "same screening PyWake as frozen seven cases with changed TI, +-22.5 degree sector rolls, and four TEC-open machines excluded",
+  "baseline_screening_net_gwh": 462.9226999232198,
+  "cases": [
+    {
+      "case": "MCP_NASA_T2_external_TI_site_0p070",
+      "turbulence_intensity": 0.07,
+      "n_counted": 14,
+      "flow_turbines": 15,
+      "gross_gwh": 616.0428789205927,
+      "waked_gwh": 487.93976795066476,
+      "wake_loss_pct": 20.79451209538943,
+      "net_screening_gwh": 450.0132442201676
+    },
+    {
+      "case": "MCP_NASA_T2_external_TI_site_0p085",
+      "turbulence_intensity": 0.085,
+      "n_counted": 14,
+      "flow_turbines": 15,
+      "gross_gwh": 616.0428789205927,
+      "waked_gwh": 495.3381330683284,
+      "wake_loss_pct": 19.593562393539653,
+      "net_screening_gwh": 456.83655010176926
+    },
+    {
+      "case": "MCP_NASA_T2_external_rose_minus_22p5deg",
+      "turbulence_intensity": 0.07,
+      "n_counted": 14,
+      "flow_turbines": 15,
+      "gross_gwh": 613.8473928973857,
+      "waked_gwh": 441.37444121942224,
+      "wake_loss_pct": 28.097040677143525,
+      "net_screening_gwh": 407.0673416172519
+    },
+    {
+      "case": "MCP_NASA_T2_external_rose_plus_22p5deg",
+      "turbulence_intensity": 0.07,
+      "n_counted": 14,
+      "flow_turbines": 15,
+      "gross_gwh": 613.8473928973857,
+      "waked_gwh": 525.8937697799184,
+      "wake_loss_pct": 14.328255546109336,
+      "net_screening_gwh": 485.01716194971726
+    },
+    {
+      "case": "MCP_NASA_TEC_open_T1_T13_T14_T15_excluded_TI_0p070",
+      "turbulence_intensity": 0.07,
+      "n_counted": 10,
+      "flow_turbines": 11,
+      "gross_gwh": 440.03062780042336,
+      "waked_gwh": 345.1821347296165,
+      "wake_loss_pct": 21.554975285453438,
+      "net_screening_gwh": 318.351859183209
+    }
+  ],
+  "source_quality": "PRIVATE_DERIVED_CONDITIONAL",
+  "review_status": "NOT_ACCEPTED",
+  "rose_comparison_baseline_TI0p07_gwh": 450.0132442201676,
+  "direction_sensitivity_benchmark": "Compare rotated \u00b122.5-degree cases against TI=0.070 no-rotation reference 450.013 GWh; not against TI=0.10 462.923 baseline"
+}

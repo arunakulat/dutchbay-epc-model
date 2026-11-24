@@ -1,0 +1,170 @@
+{
+  "status": "ILLUSTRATIVE_NON_BANKABLE",
+  "route_eia_pdf_pages": [
+    138,
+    139,
+    140,
+    141,
+    142,
+    160
+  ],
+  "route_km": 104.77,
+  "conductors": "ACSR Zebra, 2 circuits with twin bundle",
+  "AC_resistance_25C_ohm_km_per_conductor": 0.0702,
+  "assumed_X_ohm_km_per_circuit": 0.27,
+  "collector_transformers": "2x90MVA 33/220kV",
+  "terminal": "Proposed Wariyapola switching station",
+  "line_thermal_Nminus1_MVA_in_EIA": 290,
+  "plant_rating_mva_SCREENING_ASSUMPTION": 147.0,
+  "source_fault_illustrative_MVA": [
+    500,
+    700,
+    900,
+    1100,
+    1500
+  ],
+  "cases": [
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 500.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 2.964549884934597,
+      "bankable": false
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 500.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 2.6271633993454095,
+      "bankable": false
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 700.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 3.9475865288950276,
+      "bankable": false
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 700.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 3.371104573651516,
+      "bankable": false
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 900.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.839037410670112,
+      "bankable": false
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 900.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.000447888403211,
+      "bankable": false
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1100.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 5.6511318913407935,
+      "bankable": false
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1100.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 4.539778987805382,
+      "bankable": false
+    },
+    {
+      "case": "both_220kV_circuits",
+      "circuits": 2,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1500.0,
+      "line_R_ohm_at25C": 1.83871,
+      "line_X_ohm_ASSUMED": 14.14395,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 7.076172484681782,
+      "bankable": false
+    },
+    {
+      "case": "Nminus1_single_220kV_circuit",
+      "circuits": 1,
+      "source_fault_level_mva_SCREENING_ASSUMPTION": 1500.0,
+      "line_R_ohm_at25C": 3.67743,
+      "line_X_ohm_ASSUMED": 28.2879,
+      "plant_rating_mva_ASSUMED": 147.0,
+      "poc_kv": 220,
+      "short_circuit_mva": null,
+      "scr": 5.415983354427967,
+      "bankable": false
+    }
+  ],
+  "status_flags": [
+    "POC_SOURCE_TOPOLOGY_NOT_APPROVED",
+    "FAULT_LEVEL_UNVALIDATED",
+    "REACTANCE_UNVALIDATED",
+    "TRANSFORMER_N_MINUS_ONE_NOT_MODELED",
+    "F5_HOLD",
+    "2030_COD_MISMATCH"
+  ],
+  "excluded_source": [
+    "private EIA route image",
+    "confidential original annex and report PDF"
+  ],
+  "use": "Reproduction test/reference only; no grid-code approval",
+  "method": "magnitude_only_screening_evaluate_grid_no_pandapower_no_reactive",
+  "poc_definition": "Dutch Bay plant-side collector 220kV point; EIA line between project collector and proposed Wariyapola source",
+  "upstream_bus": "Wariyapola 220kV hypothetical equivalent; CEB/NSO fault model NOT PROVIDED",
+  "plant_side_poc_mva_assumed": 147,
+  "transformer_n_minus_one": "NOT MODELLED: losing one of 2x90MVA leaves 90MVA at PF1 versus 133MW assumed curtailed WTG active output; minimum 32.3% curtailment / loss of deliverability",
+  "transformer_impedance": "UNMODELLED; can materially change SCR",
+  "line_charging": "UNMODELLED",
+  "conductor_thermal_rating": "EIA 290MVA N-1 provisional; not reconciled with twin Zebra ampacity",
+  "network_input_authority": "ILLUSTRATIVE only; 900MVA reused from Puttalam sample, not Wariyapola source"
+}

@@ -1,0 +1,21 @@
+{
+  "status": "R3_CHANGES_REQUESTED_REVISED_PENDING_F5_HOLD",
+  "integrity_receipt_only_not_independent_source_certification": true,
+  "source_inputs_sha256": {
+    "results/wake_7_case_screening.csv": "b3128230ea3d81493bf5ee2af3e8195dd17810db9017f2ed6012ae6a9fd49ec9",
+    "results/wind_robustness_screening.json": "2f20c070def4c5f73bc3f75f81b7700f473fd8818260f4f8910f63982cbb352e",
+    "results/grid_10_case_screening.json": "8b909607c3e22f96adee68798c4689822df034456dd31e8d8e75b9a49e693420",
+    "results/finance_screening_hold.json": "cbc1870e76ab8bea88ee4456dcdc7ebc826ad687fa9d63e64379435ffef9146b",
+    "evidence/CP_feasibility_33_EIA_crosswalk.csv": "1c0a7e8d214fd8e87d6861b6179138f866c01ffe6269fadd95ce868c3f39cd0d",
+    "evidence/consolidated_input_21.csv": "4b07596bcd84a3f2cc536086cd1bc967b0caf356301a3f991fa2f4d360c6b560",
+    "evidence/COVERAGE_RUBRIC_AND_BASELINE.md": "7dcd61b2e0615b1cfd84bd3c616c405489ec1653785c5de6f72d948b750f2b35",
+    "tools/render_source_safe_dbpl.py": "9a391a8113d2f95276a53bf6ec4f4a6c2c70df2070f76b5018ca0744e5abb7f5"
+  },
+  "source_safe": true,
+  "pages": 16,
+  "module_count": 25,
+  "CP_and_feasibility_count": 33,
+  "inputs_in_register": 21,
+  "sha256": "c5a9c03919322723c188366f3915e97130810f21114a6b0e2f00fff5411d7fca",
+  "fonts_embedded": true
+}
