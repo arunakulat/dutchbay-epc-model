@@ -316,6 +316,11 @@ def plan_debt(
     # terms and is what stops a sub-1.0 non-operating ratio setting a lender-facing floor.
     operating_min = _operating_dscr_minimum(dscr_periods)
     raw_min = operating_min if operating_min is not None else core.get("dscr_min", 0.0)
+    qs_detail = core.get("quarterly_sculpting")
+    if isinstance(qs_detail, Mapping):
+        q_min = qs_detail.get("quarterly_dscr_min")
+        if q_min is not None:
+            raw_min = min(float(raw_min), float(q_min))
     # Single source of truth for the covenant minimum (round-5 #3). The lender-facing
     # min_dscr must agree with the bridge-corrected per-year covenant table (dscr_by_year),
     # not only the per-period series. The period series carries the sub-annual bridge
@@ -343,7 +348,7 @@ def plan_debt(
             by_year_min = _val if by_year_min is None else min(by_year_min, _val)
     min_dscr = min(raw_min, by_year_min) if by_year_min is not None else raw_min
 
-    return {
+    result: Dict[str, Any] = {
         "construction_years": core.get("construction_periods", 0),
         "tenor_years": core.get("tenor_years", 0),
         "timeline_periods": timeline,
@@ -443,3 +448,6 @@ def plan_debt(
         "senior_fee_deferred_usd": senior_fee_deferred,
         "senior_fee_deferred_residual": senior_fee_deferred_residual,
     }
+    if qs_detail is not None:
+        result["quarterly_sculpting"] = qs_detail
+    return result

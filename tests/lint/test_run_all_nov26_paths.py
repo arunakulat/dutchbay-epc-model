@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -142,11 +143,9 @@ def test_every_pytest_marker_the_runner_selects_is_registered() -> None:
 def test_every_hydra_config_name_entry_point_and_repo_path_exists() -> None:
     text = _runner_text()
     names = _CONFIG_NAME.findall(text)
-    # Non-vacuous: the runner names at least the Blue Whale project sizing config. (Two until
-    # #1691 retired the fixed-battery child config the runner also named.)
-    assert "blue_whale_solar_bess_project_sizing" in names
     entry_points = _ENTRY_POINT.findall(text)
     assert "run_full_pipeline_v14.py" in entry_points
+    assert "scripts/run_solar_bess_sizing_v14.py" in text
     repo_paths = _REPO_VAR_PATH.findall(text)
     missing = [
         f"conf/{n}.yaml"
@@ -281,7 +280,7 @@ def test_every_hydra_entry_point_gets_a_run_dir_under_out() -> None:
             if _resolve(s).is_file()
         )
     ]
-    assert len(hydra_lines) >= 10
+    assert len(hydra_lines) >= 9
     assert _hydra_calls_without_run_dir(text) == []
     mc_run = (KIT / "lib" / "mc_run.py").read_text(encoding="utf-8")
     assert "f\"hydra.run.dir={outdir / 'hydra'}\"," in mc_run
@@ -630,8 +629,13 @@ def test_out_owned_by_another_user_is_refused(tmp_path: Path) -> None:
 
 
 @_NEEDS_TOOLS
-def test_relative_private_paths_are_made_absolute_before_cd(tmp_path: Path) -> None:
+@pytest.mark.parametrize("directory", ["plain", "space ' quote"])
+def test_relative_private_paths_are_made_absolute_before_cd(
+    tmp_path: Path, directory: str
+) -> None:
     """#1659 N-4 (R10): a relative path means the caller's directory, not the checkout."""
+    tmp_path = tmp_path / directory
+    tmp_path.mkdir()
     env = {k: v for k, v in os.environ.items() if k not in _PRIVATE_ENV}
     (tmp_path / "nasa").mkdir()
     for var in _PRIVATE_ENV:
@@ -652,6 +656,11 @@ def test_relative_private_paths_are_made_absolute_before_cd(tmp_path: Path) -> N
     )
     assert proc.returncode == 1
     assert "writable by group or others" in proc.stderr
+    exports = [
+        shlex.split(line[2:])
+        for line in proc.stderr.splitlines()
+        if line.startswith("+ export ")
+    ]
     for var in _PRIVATE_ENV:
         name = "nasa" if var == "DUTCHBAY_NASA_POWER_DIR" else f"{var.lower()}.dat"
-        assert f"export {var}={tmp_path}/{name}" in proc.stderr, var
+        assert ["export", f"{var}={tmp_path}/{name}"] in exports, var

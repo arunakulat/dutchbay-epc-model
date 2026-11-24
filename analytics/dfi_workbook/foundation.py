@@ -155,24 +155,167 @@ _SUPPORTED_NUMERIC_FORMAT_RE = re.compile(
     re.VERBOSE | re.IGNORECASE | re.ASCII,
 )
 
-# A quoted literal may hold only a unit token (optionally with one space on
-# either side) or one character that could also be written escaped. Free
-# wording beside a value would bypass the literal-text and reliance controls
-# (#1828).
-_QUOTED_UNIT_TOKENS: frozenset[str] = frozenset(
-    {"%", "x", "MW", "MWh", "kWh", "GWh", "USD", "LKR", "days", "years", "yrs"}
+# A quoted literal may hold only a unit expression from the grammar below
+# (optionally with one space on either side) or one character that could also
+# be written escaped. Free wording beside a value would bypass the literal-text
+# and reliance controls (#1828, #1906).
+#
+# Transactional ISO-4217 3-letter currency codes frozen from SIX ISO-4217
+# Maintenance Agency List One on 2026-08-24 (same cutoff as
+# analysis_tools.f5_02_lender_return, excluding non-transactional XTS/XXX).
+_ISO_4217_CURRENCY_CODES: frozenset[str] = frozenset("""
+    AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BOV
+    BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUP
+    CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF
+    GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR
+    KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT
+    MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN
+    PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE
+    SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX
+    USD USN UYI UYU UYW UZS VED VES VND VUV WST XAD XAF XAG XAU XBA XBB XBC
+    XBD XCD XCG XDR XOF XPD XPF XPT XSU XUA YER ZAR ZMW ZWG
+    """.split())
+_CURRENCY_SYMBOLS: frozenset[str] = frozenset({"$", "€", "£", "¥"})
+_ENERGY_POWER_UNIT_RE = re.compile(
+    r"^(?:(?:[kMGT])?(?:Wh|Wp|W|VA|VAr|var)|(?:[kM])?V|(?:[kMG])?Hz)$"
 )
+_TIME_UNIT_WORDS: frozenset[str] = frozenset(
+    {
+        "s",
+        "sec",
+        "secs",
+        "second",
+        "seconds",
+        "min",
+        "mins",
+        "minute",
+        "minutes",
+        "h",
+        "hr",
+        "hrs",
+        "hour",
+        "hours",
+        "d",
+        "day",
+        "days",
+        "wk",
+        "wks",
+        "week",
+        "weeks",
+        "mo",
+        "mos",
+        "month",
+        "months",
+        "qtr",
+        "qtrs",
+        "quarter",
+        "quarters",
+        "yr",
+        "yrs",
+        "year",
+        "years",
+    }
+)
+_MAGNITUDE_SCALES: Mapping[str, int] = {
+    "k": 1,
+    "K": 1,
+    "m": 2,
+    "mn": 2,
+    "M": 2,
+    "MM": 2,
+    "b": 3,
+    "bn": 3,
+    "B": 3,
+    "t": 4,
+    "tn": 4,
+    "T": 4,
+}
+_RATIO_UNIT_WORDS: frozenset[str] = frozenset({"%", "x", "bps"})
+
 _QUOTED_SINGLE_CHARACTERS: frozenset[str] = frozenset(" ;:,.%$€£¥()+-")
 _FORMAT_TOKEN_RE = re.compile(r'"[^"]*"|\\.|.', re.DOTALL)
-_TEXT_OR_BOOL_FORMATS: frozenset[str] = frozenset({"General", "@"})
+_LEADING_COLOR_TAG_RE = re.compile(r"^\[[A-Za-z]+\]")
+_MANTISSA_RE = re.compile(r"([0#?]+(?:,[0#?]+)*)(?:\.([0#?]+))?(,*)")
+_TEXT_FORMATS: frozenset[str] = frozenset({"General", "@"})
 
 
-def _quoted_literal_allowed(content: str) -> bool:
+def _is_currency_atom(token: str) -> bool:
+    return token in _ISO_4217_CURRENCY_CODES or token in _CURRENCY_SYMBOLS
+
+
+def _is_energy_power_atom(token: str) -> bool:
+    return bool(_ENERGY_POWER_UNIT_RE.fullmatch(token))
+
+
+def _parse_currency_magnitude_or_atom(
+    expr: str, *, allow_bare_magnitude: bool
+) -> tuple[bool, Optional[int]]:
+    """Parse a unit atom or ``<currency>[ ]<magnitude>`` expression."""
+    if expr in _MAGNITUDE_SCALES:
+        return (
+            (True, _MAGNITUDE_SCALES[expr]) if allow_bare_magnitude else (False, None)
+        )
+    if (
+        _is_currency_atom(expr)
+        or _is_energy_power_atom(expr)
+        or expr in _TIME_UNIT_WORDS
+        or expr in _RATIO_UNIT_WORDS
+    ):
+        return True, None
+    # Symbol + optional space + magnitude (e.g. "$m", "$ mn", "€bn").
+    if expr and expr[0] in _CURRENCY_SYMBOLS:
+        rest = expr[1:].lstrip(" ") if expr[1:].startswith(" ") else expr[1:]
+        if rest in _MAGNITUDE_SCALES and len(expr) - len(rest) in (1, 2):
+            return True, _MAGNITUDE_SCALES[rest]
+    # ISO 4217 code + single space + magnitude (e.g. "USD m", "EUR mn").
+    if " " in expr:
+        head, _, tail = expr.partition(" ")
+        if head in _ISO_4217_CURRENCY_CODES and tail in _MAGNITUDE_SCALES:
+            return True, _MAGNITUDE_SCALES[tail]
+    return False, None
+
+
+def _parse_unit_token(core: str) -> tuple[bool, Optional[int]]:
+    """Validate ``core`` against the DFI unit grammar and return magnitude scale."""
+    if not core:
+        return False, None
+    if "/" in core:
+        numerator, _, denominator = core.partition("/")
+        if "/" in denominator or not numerator or not denominator:
+            return False, None
+        if not (
+            _is_energy_power_atom(denominator)
+            or denominator in _TIME_UNIT_WORDS
+            or _is_currency_atom(denominator)
+        ):
+            return False, None
+        return _parse_currency_magnitude_or_atom(numerator, allow_bare_magnitude=False)
+    return _parse_currency_magnitude_or_atom(core, allow_bare_magnitude=True)
+
+
+def _quoted_literal_info(content: str) -> tuple[bool, Optional[int]]:
+    """Return ``(allowed, magnitude_scale)`` for the text inside quotes."""
     if content in _QUOTED_SINGLE_CHARACTERS:
-        return True
+        return True, None
     core = content[1:] if content.startswith(" ") else content
     core = core[:-1] if core.endswith(" ") else core
-    return core in _QUOTED_UNIT_TOKENS
+    return _parse_unit_token(core)
+
+
+def _numeric_section_structure(
+    section: list[tuple[str, bool]],
+) -> tuple[bool, int, int]:
+    """Return ``(has_zero_in_integer, percent_count, scaling_commas)``."""
+    raw_unquoted = "".join(char for char, literal in section if not literal)
+    body = _LEADING_COLOR_TAG_RE.sub("", raw_unquoted)
+    if "general" in body.lower():
+        return True, 0, 0
+    match = _MANTISSA_RE.search(body)
+    if match is None:  # pragma: no cover - guarded by _SUPPORTED_NUMERIC_FORMAT_RE
+        return False, body.count("%"), 0
+    integer_part = match.group(1)
+    scaling_commas = len(match.group(3))
+    return ("0" in integer_part), body.count("%"), scaling_commas
 
 
 def _numeric_format_display_problem(number_format: str) -> Optional[str]:
@@ -182,21 +325,30 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
     Conditional sections are refused because spreadsheet readers disagree on
     whether such a section prints the minus sign (#1828). With an explicit
     negative section, the minus sign must be written into that section, either
-    as ``-`` or as parentheses, and no other section may print one.
+    as ``-`` or as parentheses, and no other section may print one. Numeric
+    sections must also agree on ``%`` and trailing scaling commas, carry a ``0``
+    in the integer part, and pair trailing scaling commas with a matching
+    magnitude unit token (#1906).
     """
     # Each section is a list of (character, written_as_literal) pairs.
     sections: list[list[tuple[str, bool]]] = [[]]
+    section_quoted_scales: list[list[int]] = [[]]
     for token in _FORMAT_TOKEN_RE.findall(number_format):
         if token == ";":
             sections.append([])
+            section_quoted_scales.append([])
         elif token.startswith('"'):
             content = token[1:-1]
-            if not _quoted_literal_allowed(content):
+            allowed, scale = _quoted_literal_info(content)
+            if not allowed:
                 return (
                     f"quoted literal {token} is not an allowed unit token; allowed "
-                    f"are {', '.join(sorted(_QUOTED_UNIT_TOKENS))} or one "
-                    "punctuation character."
+                    "are an ISO 4217 currency code, energy/power unit, time unit, "
+                    "magnitude word (k/m/mn/bn/tn), ratio unit (%, x, bps), "
+                    "per-unit form (X/Y), or one punctuation character."
                 )
+            if scale is not None:
+                section_quoted_scales[-1].append(scale)
             sections[-1].extend((char, True) for char in content)
         elif token.startswith("\\"):
             sections[-1].append((token[1:], True))
@@ -205,6 +357,7 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
     if "[<" in number_format or "[>" in number_format or "[=" in number_format:
         return "conditional sections are not supported."
     numeric_sections = sections[:3]
+    scaling_signatures: list[tuple[int, int]] = []
     for index, section in enumerate(numeric_sections):
         # The sign of a scientific exponent (E-00, E+00) is not a value sign.
         text = "".join(
@@ -229,6 +382,32 @@ def _numeric_format_display_problem(number_format: str) -> Optional[str]:
                 f"section {index + 1} prints a minus sign or parentheses, so a "
                 "non-negative value would read as negative."
             )
+        has_zero_in_int, percent_count, scaling_commas = _numeric_section_structure(
+            section
+        )
+        if not has_zero_in_int:
+            return (
+                f"section {index + 1} has no '0' placeholder in its integer part, "
+                "so zero or small values would be hidden."
+            )
+        if scaling_commas > 0:
+            scales = section_quoted_scales[index]
+            if not scales:
+                return (
+                    f"section {index + 1} uses {scaling_commas} trailing scaling "
+                    "comma(s) without a magnitude unit token declaring the scale."
+                )
+            if len(set(scales)) != 1 or scales[0] != scaling_commas:
+                return (
+                    f"section {index + 1} has {scaling_commas} trailing scaling "
+                    "comma(s), which does not match its magnitude unit token."
+                )
+        scaling_signatures.append((percent_count, scaling_commas))
+    if len(set(scaling_signatures)) > 1:
+        return (
+            "numeric sections must not mix '%' or trailing scaling commas across "
+            "sections."
+        )
     return None
 
 
@@ -362,18 +541,23 @@ class WorkbookInputItem(BaseModel):
     percentages and signed scientific exponents. Each numeric section may have
     one of the eight standard named colors. Affixes may use spaces, signs,
     parentheses, currency symbols ($, €, £, ¥), backslash-escaped punctuation
-    from the allowlist, or quoted literals holding a unit token or one such
-    punctuation character. An optional fourth section after three numeric
-    sections accepts a single @ with literal affixes. Formats that openpyxl
-    would reopen as a date, time, or duration are also refused.
+    from the allowlist, or quoted literals holding a grammar-valid unit
+    expression (ISO 4217 currency code, energy/power unit, time unit, magnitude
+    word, ratio unit, or ``X/Y`` per-unit form) or one such punctuation
+    character. An optional fourth section after three numeric sections accepts a
+    single @ with literal affixes. Formats that openpyxl would reopen as a date,
+    time, or duration are also refused.
 
-    A format must not change what a reader sees (#1828). Text and boolean
-    values accept only General or @. Conditional sections are refused. An
+    A format must not change what a reader sees (#1828, #1906). Text values
+    accept only General or @, and boolean values accept only General (since @
+    renders booleans as 1/0 in Calc). Conditional sections are refused. An
     explicit negative section must print the sign as ``-`` or parentheses, and
-    the positive and zero sections must print neither. Preserve unsupported
-    sources externally and supply a supported textual reference as the input
-    value. Text must satisfy the literal-text contract, including its
-    formula-prefix restriction.
+    the positive and zero sections must print neither. Numeric sections must
+    share identical ``%`` and trailing scaling-comma scaling, carry a ``0`` in
+    the integer part, and pair trailing scaling commas with a matching
+    magnitude unit token. Preserve unsupported sources externally and supply a
+    supported textual reference as the input value. Text must satisfy the
+    literal-text contract, including its formula-prefix restriction.
     """
 
     model_config = ConfigDict(
@@ -463,14 +647,23 @@ class WorkbookInputItem(BaseModel):
 
     @model_validator(mode="after")
     def _validate_scalar_format(self) -> Self:
-        if isinstance(self.value, (str, bool)):
-            if self.number_format in _TEXT_OR_BOOL_FORMATS:
+        if isinstance(self.value, bool):
+            if self.number_format == "General":
                 return self
             raise ValueError(
                 f"WorkbookInputItem {self.key!r} has number_format "
-                f"{self.number_format!r} for a {type(self.value).__name__} value. "
-                "Text and boolean inputs accept only 'General' or '@', so the "
-                "displayed text always equals the stored value (#1828)."
+                f"{self.number_format!r} for a bool value. Boolean inputs accept "
+                "only 'General' ('@' renders boolean values as '1'/'0' in Calc), "
+                "so the displayed text always equals the stored boolean (#1906)."
+            )
+        if isinstance(self.value, str):
+            if self.number_format in _TEXT_FORMATS:
+                return self
+            raise ValueError(
+                f"WorkbookInputItem {self.key!r} has number_format "
+                f"{self.number_format!r} for a str value. Text inputs accept "
+                "only 'General' or '@', so the displayed text always equals the "
+                "stored value (#1828)."
             )
         if self.number_format == "General":
             return self

@@ -2851,9 +2851,14 @@ esac
             "FAKE_CP_EXIT": str(cp_exit),
             "FAKE_FIRST_SSH_EXIT": str(ssh_exit),
         }
-        command = f"source {UPLOAD!s}; run_transport_smoke fake-codespace"
         result = subprocess.run(
-            ("bash", "-c", command),
+            (
+                "bash",
+                "-c",
+                'source "$1"; run_transport_smoke fake-codespace',
+                "bash",
+                str(UPLOAD),
+            ),
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,

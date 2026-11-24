@@ -1,10 +1,4 @@
-"""PV + BESS sizing for any scenario that declares a ``solar_storage_sizing`` block (#1578 U3).
-
-The oracle is the single-site script: the config built from the scenario's block and the method
-config equals ``conf/blue_whale_solar_bess_project_sizing.yaml``, and a reduced run through
-the block reproduces the same reduced run through that config, point for point. Runs here
-use reduced grids and trial counts (TEST-03).
-"""
+"""PV + BESS sizing for any scenario that declares a ``solar_storage_sizing`` block (#1578 U3)."""
 
 from __future__ import annotations
 
@@ -25,10 +19,8 @@ from solar_resource import pv_bess_sizing_runner as runner
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 NO_BLOCK_SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
-SITE_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess_project_sizing.yaml"
 METHOD_CONF = REPO_ROOT / "conf" / "solar_bess_sizing.yaml"
 SCRIPT = REPO_ROOT / "scripts" / "run_solar_bess_sizing_v14.py"
-SINGLE_SITE_SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_pv_bess_sizing_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
 #: One grid point: the committed size.
@@ -58,8 +50,14 @@ def _method() -> Dict[str, Any]:
     return _yaml(METHOD_CONF)["method"]
 
 
-def _site_cfg() -> Dict[str, Any]:
-    return {k: v for k, v in _yaml(SITE_CONF).items() if k not in ("defaults", "hydra")}
+def _load(path: Path) -> Any:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _reduce(block_or_cfg: Dict[str, Any]) -> None:
@@ -73,21 +71,7 @@ def _rel(path: Path) -> str:
     return path.relative_to(REPO_ROOT).as_posix()
 
 
-# ------------------------------------------------------------------ the oracle
-
-
-def test_block_built_config_equals_the_single_site_config() -> None:
-    block = resolve_site_analysis_block(_yaml(SCENARIO), runner.BLOCK)
-    assert block is not None
-    built = runner.config_from_block(block, _method(), scenario_label=_rel(SCENARIO))
-    legacy = _site_cfg()
-    assert set(built) == set(legacy)
-    # Only the schema's site prefix differs: the block's config is the generic family.
-    assert built["schema_version"] == "solar_bess_project_sizing_v1"
-    assert legacy["schema_version"].endswith("_" + built["schema_version"])
-    for key in legacy:
-        if key != "schema_version":
-            assert built[key] == legacy[key], key
+# ------------------------------------------------------------------ the block
 
 
 #: Block keys that describe the run rather than size it: the run reads ``site``, ``notes``
@@ -135,49 +119,6 @@ def test_every_block_number_reaches_the_built_config() -> None:
     built = runner.config_from_block(moved, _method(), scenario_label="x")
     for n, path in enumerate(leaves):
         assert _at(built, path) == 7_000_000.0 + n, path
-
-
-def test_block_run_reproduces_the_single_site_run() -> None:
-    pytest.importorskip("pvlib")
-    pytest.importorskip("shapely")
-    pytest.importorskip("pyproj")
-    scenario = _yaml(SCENARIO)
-    _reduce(scenario[runner.BLOCK])
-    method = _method()
-    method["monte_carlo"]["n_trials"] = 2
-    new = runner.run_solar_bess_sizing_for_scenario(
-        scenario, method, scenario_label=_rel(SCENARIO), script=SCRIPT
-    )
-    legacy_cfg = _site_cfg()
-    _reduce(legacy_cfg)
-    legacy_cfg["monte_carlo"]["n_trials"] = 2
-    old = runner.run(
-        legacy_cfg,
-        config_label="legacy",
-        script=SINGLE_SITE_SCRIPT,
-        limitations=list(scenario[runner.BLOCK]["limitations"]),
-    )
-    assert new["status"] == "completed"
-    assert new["config"] == f"{_rel(SCENARIO)}#solar_storage_sizing"
-    assert new["points"] and new["points"] == old["points"]
-    assert new["recommendation"] == old["recommendation"]
-    assert new["sensitivities"] == old["sensitivities"]
-    keep = {k: v for k, v in new["spec"].items() if k not in VOLATILE_SPEC}
-    assert keep == {k: v for k, v in old["spec"].items() if k not in VOLATILE_SPEC}
-    assert new["spec"]["effective_evaluations"] * 2 <= _hard_cap()
-    # The single-site script's own stated limitations are the block's.
-    cli = _load(SINGLE_SITE_SCRIPT)
-    assert [*cli.LIMITATIONS, *cli.PROJECT_LIMITATIONS] == new["spec"]["limitations"]
-
-
-def _load(path: Path) -> Any:
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(path.stem, path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def test_the_block_moves_the_result() -> None:
@@ -388,28 +329,3 @@ def test_the_result_site_is_the_scenario_blocks(
     )
     assert out["status"] == "completed"
     assert out["site"] == {"name": "Somewhere Else 1", "location": "Another district"}
-
-
-@pytest.mark.parametrize(
-    "config_name, project",
-    [
-        ("blue_whale_solar_bess_project_sizing", True),
-        ("blue_whale_pv_bess_sizing", False),
-    ],
-)
-def test_the_single_site_script_states_its_limitations_and_names_itself(
-    monkeypatch: pytest.MonkeyPatch, config_name: str, project: bool
-) -> None:
-    """A-5: the shim's run lists its limitations and digests its own script (MRM-02)."""
-    monkeypatch.setattr(runner, "run_project_sizing", lambda *a, **k: _Stub())
-    monkeypatch.setattr(runner, "run_sizing", lambda *a, **k: _Stub())
-    cli = _load(SINGLE_SITE_SCRIPT)
-    cfg = _yaml(REPO_ROOT / "conf" / f"{config_name}.yaml")
-    cfg.pop("defaults", None)
-    out = cli.run(cfg, config_name=config_name)
-    want = [*cli.LIMITATIONS, *(cli.PROJECT_LIMITATIONS if project else ())]
-    assert out["spec"]["limitations"] == want
-    assert out["config"] == f"conf/{config_name}.yaml"
-    files = out["spec"]["code_sha256"]["files"]
-    assert "scripts/run_blue_whale_pv_bess_sizing_v14.py" in files
-    assert "solar_resource/pv_bess_sizing_runner.py" in files

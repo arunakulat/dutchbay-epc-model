@@ -1,14 +1,8 @@
-"""Tests for the scenario-driven FX and tenor screening (#1578 U4).
-
-The oracle is the single-site run: the ``financing_screening`` block that the base-case
-scenario now carries must reproduce ``run_comprehensive_screening`` on
-``conf/blue_whale_fx_tenor_screening.yaml`` exactly, figure for figure.
-"""
+"""Tests for the scenario-driven FX and tenor screening (#1578 U4)."""
 
 from __future__ import annotations
 
 import copy
-import hashlib
 import importlib.util
 import json
 import os
@@ -20,10 +14,8 @@ from typing import Any, Dict
 import pytest
 import yaml
 
-from analytics.finance import blue_whale_fx_tenor_screening as single_site
 from analytics.finance import fx_tenor_screening as fx
 from analytics.finance.fx_tenor_screening import (
-    SCENARIO_INPUT_KEYS,
     SUMMARY_SCHEMA,
     compute_fx_tenor_screening_from_block,
     run_fx_tenor_screening_for_scenario,
@@ -32,24 +24,15 @@ from analytics.finance.fx_tenor_screening import (
 from finance.capex_price_basis import apply_capex_price_basis
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SITE_CONF = REPO_ROOT / "conf" / "blue_whale_fx_tenor_screening.yaml"
 METHOD_CONF = REPO_ROOT / "conf" / "fx_tenor_screening.yaml"
 BASECASE = REPO_ROOT / "scenarios" / "dutchbay_basecase_2025Q4.yaml"
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 #: A scenario whose tariff has a fixed part and an indexed O&M part (L-9).
 TWO_PART_SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
 MODULE = REPO_ROOT / "analytics" / "finance" / "fx_tenor_screening.py"
-SHIM = REPO_ROOT / "analytics" / "finance" / "blue_whale_fx_tenor_screening.py"
 RUNNER = REPO_ROOT / "scripts" / "run_fx_tenor_screening_v14.py"
-SINGLE_SITE_SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_fx_tenor_screening_v14.py"
 
-#: sha256 of the single-site script's stdout on main 61fb72c5, before #1578 U4. The move to
-#: the site-neutral module must not change a byte of it.
-SINGLE_SITE_STDOUT_SHA256 = (
-    "5d6d3588c08914348e76757b747caf11b7f17b41ee75cb2dac2f0f65f667a75c"
-)
-
-#: Keys only the single-site output carries: its case labels and site turbine count.
+#: Keys only case labels carry, excluded when comparing numeric figures.
 _LABEL_KEYS = ("case_type", "turbine_count", "description", "overrides")
 
 
@@ -83,62 +66,6 @@ def _run(scenario: Dict[str, Any]) -> Dict[str, Any]:
     return run_fx_tenor_screening_for_scenario(
         scenario, _method(), scenario_label="test"
     )
-
-
-# ------------------------------------------------------------------ the oracle
-
-
-def test_scenario_block_reproduces_the_single_site_result_exactly() -> None:
-    legacy = single_site.run_comprehensive_screening(_yaml(SITE_CONF))
-    new = _run(_basecase())
-    assert new["status"] == "completed"
-    assert new["scenario_inputs_applied"] == legacy["governed_inputs_applied"]
-    assert _figures(new["base_case"]) == _figures(
-        legacy["governed_basecase_14turbine_15year_screening"]
-    )
-    assert _figures(new["tenor_variants"]["dfi_10y_ppa_12y_tail_2y"]) == _figures(
-        legacy["governed_basecase_14turbine_10year_screening"]
-    )
-    assert _figures(new["sensitivities"]["handoff_sensitivity"]) == _figures(
-        legacy["sensitivity_14turbine_15year_screening"]
-    )
-    assert new["fixed_debt_fx_stress"] == legacy["fixed_debt_fx_stress_summary"]
-    assert new["fx_cagr_windows"] == legacy["fx_metrics"]
-    assert new["hold_caveat"] == legacy["f5_hold_caveat"]
-    assert new["engine_path_status"] == legacy["engine_path_status"]
-    assert new["engine_path_note"] == legacy["engine_path_note"]
-
-
-def test_block_carries_the_single_site_assumptions() -> None:
-    """Each moved value equals the single-site config's, so the two cannot drift apart."""
-    conf = _yaml(SITE_CONF)
-    block = _basecase()["financing_screening"]
-    params = conf["screening_parameters"]
-    assert block["debt"] == {
-        "dfi_share": params["dfi_share"],
-        "dfi_rate_decimal": params["dfi_rate_decimal"],
-        "local_rate_decimal": params["local_rate_decimal"],
-        "dfi_tenor_years": params["dfi_tenor_years"],
-        "local_tenor_years": params["local_tenor_years"],
-        "lender_tail_years": params["lender_tail_years"],
-        "annual_credit_fee_decimal": params["annual_credit_fee_decimal"],
-    }
-    assert block["fx_history"]["observations"] == conf["fx_observations"]
-    assert block["fx_history"]["cagr_windows"] == conf["fx_cagr_benchmark_windows"]
-    stress = conf["stress_grid"]
-    assert block["fixed_debt_stress"] == {
-        "held_debt_usd": stress["held_debt_usd"],
-        "operating_year": stress["shock_operating_year"],
-        "depreciation_rates": stress["depreciation_rates"],
-        "shock_decimals": stress["shock_decimals"],
-    }
-    case = conf["cases"]["14_governed_basecase"]
-    assert block["generation"]["p50_gwh"] == case["p50_gwh"]
-    assert block["generation"]["assumed_downside_gwh"] == case["assumed_downside_gwh"]
-    sensitivity = conf["cases"]["14_handoff_sensitivity"]
-    moved = block["sensitivities"][0]
-    for key in SCENARIO_INPUT_KEYS:
-        assert moved.get(key) == sensitivity.get(key), key
 
 
 # ------------------------------------------------------------- applicability
@@ -313,45 +240,6 @@ def test_a_tenor_variant_is_checked_against_its_own_ppa_term() -> None:
     ]
     with pytest.raises(ValueError, match="exceeds contracted revenue less lender tail"):
         _run(scenario)
-
-
-# ----------------------------------------------------------- the single-site shim
-
-
-def test_shim_re_exports_the_moved_functions() -> None:
-    for name in (
-        "annuity",
-        "amortize_tranche",
-        "compute_fx_cagr",
-        "evaluate_dual_currency_screening",
-        "size_debt_screening",
-        "run_fixed_debt_stress",
-        "compute_fx_history_metrics",
-        "DEFAULT_F5_HOLD_CAVEAT",
-    ):
-        assert getattr(single_site, name) is getattr(fx, name), name
-
-
-def test_single_site_run_needs_its_scenario_named() -> None:
-    raw = _yaml(SITE_CONF)
-    del raw["governed_scenario_path"]
-    with pytest.raises(KeyError, match="governed_scenario_path"):
-        single_site.run_comprehensive_screening(raw)
-    assert not hasattr(single_site, "DEFAULT_GOVERNED_SCENARIO_PATH")
-
-
-def test_single_site_script_output_is_byte_identical() -> None:
-    """The single-site script prints exactly the bytes it printed before #1578 U4."""
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
-    proc = subprocess.run(
-        [sys.executable, str(SINGLE_SITE_SCRIPT)],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        check=True,
-        timeout=300,
-    )
-    assert hashlib.sha256(proc.stdout).hexdigest() == SINGLE_SITE_STDOUT_SHA256
 
 
 # --------------------------------------------------------------------- runner

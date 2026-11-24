@@ -12,7 +12,7 @@ from solar_resource import pv_bess_sizing_runner as runner
 from solar_resource.pv_bess_sizing import _validate_n_workers
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROJECT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess_project_sizing.yaml"
+METHOD_CONF = REPO_ROOT / "conf" / "solar_bess_sizing.yaml"
 UNIT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess.yaml"
 PRICING_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_pricing.yaml"
 REG_CONF = REPO_ROOT / "conf" / "blue_whale_pucsl_fit_2026.yaml"
@@ -20,8 +20,13 @@ SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
 
 
 def _reduced_project_cfg() -> Dict[str, Any]:
-    raw = yaml.safe_load(PROJECT_CONF.read_text(encoding="utf-8"))
-    cfg = {k: v for k, v in raw.items() if k not in ("defaults", "hydra")}
+    scenario = yaml.safe_load(SCENARIO.read_text(encoding="utf-8"))
+    method = yaml.safe_load(METHOD_CONF.read_text(encoding="utf-8"))["method"]
+    cfg = runner.config_from_block(
+        scenario["solar_storage_sizing"],
+        method,
+        scenario_label="scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+    )
     cfg["grid"]["pv_tables"] = [107, 120]
     cfg["grid"]["pv_ac_mw"] = [3.5]
     cfg["grid"]["bess_power_mw"] = [0.1]
@@ -47,14 +52,14 @@ def test_parallel_project_sizing_is_bit_identical_to_serial() -> None:
     limitations = ("Test limitation.",)
     serial = runner.run(
         serial_cfg,
-        config_label="conf/blue_whale_solar_bess_project_sizing.yaml",
-        script=REPO_ROOT / "scripts" / "run_blue_whale_pv_bess_sizing_v14.py",
+        config_label="scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+        script=REPO_ROOT / "scripts" / "run_solar_bess_sizing_v14.py",
         limitations=limitations,
     )
     parallel = runner.run(
         parallel_cfg,
-        config_label="conf/blue_whale_solar_bess_project_sizing.yaml",
-        script=REPO_ROOT / "scripts" / "run_blue_whale_pv_bess_sizing_v14.py",
+        config_label="scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+        script=REPO_ROOT / "scripts" / "run_solar_bess_sizing_v14.py",
         limitations=limitations,
     )
 
