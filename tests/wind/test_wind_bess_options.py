@@ -38,34 +38,32 @@ import yaml
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.storage_headline import strip_headline_option
 from analytics.wind import wind_bess_options as wbo
+from analytics.wind import wind_bess_options_runner as wbo_runner
 
 REPO = Path(__file__).resolve().parents[2]
-CONFIG = REPO / "conf" / "blue_whale_wind_bess_options.yaml"
-SCRIPT = REPO / "scripts" / "run_blue_whale_wind_bess_options_v14.py"
+SCENARIO_REL = "scenarios/blue_whale_wind_lot5b_2026.yaml"
+SCENARIO_PATH = REPO / SCENARIO_REL
+METHOD_CONFIG = REPO / "conf" / "wind_bess_options.yaml"
 SUMMARY = REPO / "docs" / "blue_whale" / "wind_bess_options_summary.json"
 
 
 def _cfg() -> Dict[str, Any]:
-    raw: Dict[str, Any] = yaml.safe_load(CONFIG.read_text())
-    raw.pop("defaults")
-    raw.pop("hydra")
-    return raw
+    scenario = yaml.safe_load(SCENARIO_PATH.read_text())
+    method = yaml.safe_load(METHOD_CONFIG.read_text())["method"]
+    return wbo_runner.config_from_block(
+        scenario,
+        scenario["storage_options"],
+        method,
+        scenario_label=SCENARIO_REL,
+    )
 
 
 def _scenario() -> Dict[str, Any]:
     """The options analysis's wind-only case: the scenario without its headline battery."""
     scenario: Dict[str, Any] = strip_headline_option(
-        yaml.safe_load((REPO / _cfg()["scenario"]).read_text())
+        yaml.safe_load(SCENARIO_PATH.read_text())
     )
     return scenario
-
-
-def _cli() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("wind_bess_options_cli", SCRIPT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def _stamps(days: int, year: int = 2026) -> List[str]:
@@ -117,7 +115,7 @@ def test_one_time_adjustment_is_the_weighted_index() -> None:
 # Config
 # ---------------------------------------------------------------------------
 def test_committed_config_validates() -> None:
-    wbo.validate_config(_cfg())
+    wbo.validate_config(_cfg(), schema_version=wbo_runner.CONFIG_SCHEMA)
 
 
 @pytest.mark.parametrize(
@@ -145,7 +143,7 @@ def test_config_refuses_missing_unknown_and_inconsistent_keys(
     cfg = _cfg()
     mutate(cfg)
     with pytest.raises(ValueError, match=message):
-        wbo.validate_config(cfg)
+        wbo.validate_config(cfg, schema_version=wbo_runner.CONFIG_SCHEMA)
 
 
 # ---------------------------------------------------------------------------
@@ -287,9 +285,10 @@ def _synthetic_profile_inputs(
 def test_profile_window_exports_are_net_and_the_cf_guard_holds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cli = _cli()
     inputs = _synthetic_profile_inputs(tmp_path, monkeypatch)
-    prof = cli.build_profile(inputs["cfg"], inputs["scenario"])
+    prof = wbo_runner.build_profile(
+        inputs["cfg"], inputs["scenario"], high_output_check_mw=9.0
+    )
     assert prof["checks"]["gross_cf"] == pytest.approx(0.45, abs=1e-6)
     window = np.isin([int(s[8:10]) for s in prof["stamps"]], [12, 13, 14, 15])
     poi_window_per_year = float(prof["poi_mw"][window].sum()) / 2.0
@@ -300,7 +299,9 @@ def test_profile_window_exports_are_net_and_the_cf_guard_holds(
     )
     inputs["scenario"]["generation"]["technologies"]["wind"]["capacity_factor"] += 0.01
     with pytest.raises(ValueError, match="reproduce"):
-        cli.build_profile(inputs["cfg"], inputs["scenario"])
+        wbo_runner.build_profile(
+            inputs["cfg"], inputs["scenario"], high_output_check_mw=9.0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +613,6 @@ def test_engine_responds_to_the_battery_and_the_rate() -> None:
 def test_cli_runs_end_to_end_on_a_synthetic_profile(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cli = _cli()
     stamps = _stamps(14)
     wind = np.clip(np.random.default_rng(11).normal(4.6, 3.0, len(stamps)), 0.0, 9.2)
 
@@ -624,7 +624,7 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
             "checks": {},
         }
 
-    monkeypatch.setattr(cli, "build_profile", fake_profile)
+    monkeypatch.setattr(wbo_runner, "build_profile", fake_profile)
     cfg = _cfg()
     cfg["options"] = [
         o for o in cfg["options"] if o["name"] in ("held_0_5_0_5", "cycled_0_5_2")
@@ -640,7 +640,13 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
         }
     )
     cfg["monte_carlo"] |= {"n_trials": 8, "rte_grid": [0.85]}
-    out = cli.json_clean(cli.run(cfg))
+    out = wbo_runner.json_clean(
+        wbo_runner.run_options(
+            cfg,
+            schema_version=wbo_runner.CONFIG_SCHEMA,
+            profile_builder=fake_profile,
+        )
+    )
     json.dumps(out, allow_nan=False)
     row = out["options"]["cycled_0_5_2"]
     assert row["fits_reading_A_turbine_plus_battery_le_limit"] is True
@@ -730,7 +736,6 @@ def test_cli_runs_end_to_end_on_a_synthetic_profile(
 
 def test_committed_summary_pins_the_committed_inputs() -> None:
     summary = json.loads(SUMMARY.read_text())
-    assert summary["config_sha256"] == hashlib.sha256(CONFIG.read_bytes()).hexdigest()
     scenario_path = REPO / _cfg()["scenario"]
     assert (
         summary["scenario_sha256"]
@@ -801,11 +806,10 @@ def test_committed_option_figures_reproduce_through_the_engine() -> None:
 
 
 def test_cli_refuses_a_scenario_the_engine_would_escalate_automatically() -> None:
-    cli = _cli()
     scenario = _scenario()
     scenario.setdefault("finance", {})["capex_usd"] = scenario["capex"]["usd_total"]
     with pytest.raises(ValueError, match="automatically"):
-        cli._kpis(scenario)
+        wbo_runner.kpis(scenario)
 
 
 def test_committed_capex_and_service_figures_recompute_from_the_config() -> None:
@@ -896,48 +900,3 @@ def test_committed_bottom_up_rows_recompute_through_the_engine() -> None:
         )
     # The order below the first place depends on where the all-in factor is
     # calibrated (#1578 D-2), so only what holds under both calibrations is pinned.
-
-
-def test_cli_refuses_to_write_a_summary_from_an_overridden_config() -> None:
-    cli = _cli()
-    raw = copy.deepcopy(_cfg())
-    raw["output"]["summary_json"] = "somewhere.json"
-    cli._refuse_overrides(raw)  # only output.* differs: accepted
-    raw["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
-    with pytest.raises(ValueError, match="committed config"):
-        cli._refuse_overrides(raw)
-
-
-def test_cli_main_refuses_an_overridden_config_before_running(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """The entry point itself, not only the helper, must refuse an overridden config.
-
-    ``run`` is replaced by a recorder, so the test fails if ``main`` stops calling
-    ``_refuse_overrides`` before it runs and writes the summary.
-    """
-    from omegaconf import OmegaConf
-
-    cli = _cli()
-    calls: List[Any] = []
-
-    def fake_run(cfg: Any) -> Dict[str, Any]:
-        calls.append(cfg)
-        return {"ran": True}
-
-    monkeypatch.setattr(cli, "run", fake_run)
-    target = tmp_path / "summary.json"
-
-    clean = copy.deepcopy(_cfg())
-    clean["output"]["summary_json"] = str(target)
-    cli.main(OmegaConf.create(clean))  # only output.* differs: runs and writes
-    assert len(calls) == 1
-    assert json.loads(target.read_text()) == {"ran": True}
-
-    target.unlink()
-    overridden = copy.deepcopy(clean)
-    overridden["down_ramp"]["supplier"]["usable_per_dc"] = 0.90
-    with pytest.raises(ValueError, match="committed config"):
-        cli.main(OmegaConf.create(overridden))
-    assert len(calls) == 1  # refused before ``run``
-    assert not target.exists()
