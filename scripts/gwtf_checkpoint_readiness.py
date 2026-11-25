@@ -134,19 +134,35 @@ def hook_environment(root: Path) -> dict[str, str]:
     hook and cache custody. This is not a sandbox or an authentication claim.
     """
     git_command("version")  # Refuse existing Git and hook bypass overrides.
-    require(
-        not any(
-            k in {"PRE_COMMIT_HOME", "BASH_ENV", "ENV", "LD_PRELOAD", "LD_LIBRARY_PATH"}
-            or k.startswith(("DYLD_", "BASH_FUNC_"))
-            for k in os.environ
-        ),
-        "hook loader, shell or cache override present",
-    )
     interpreter_dir = Path(sys.executable).parent
     require(
         interpreter_dir.is_absolute()
         and not interpreter_dir.resolve().is_relative_to(root.resolve()),
         "governed interpreter must be outside candidate worktree",
+    )
+    ld_library_path = os.environ.get("LD_LIBRARY_PATH")
+    trusted_lib_dir = interpreter_dir.parent.resolve()
+    untrusted_ld_path = False
+    if ld_library_path:
+        for part in ld_library_path.split(os.pathsep):
+            if not part:
+                continue
+            try:
+                p = Path(part).resolve()
+                if not p.is_relative_to(trusted_lib_dir):
+                    untrusted_ld_path = True
+                    break
+            except Exception:
+                untrusted_ld_path = True
+                break
+    require(
+        not any(
+            k in {"PRE_COMMIT_HOME", "BASH_ENV", "ENV", "LD_PRELOAD"}
+            or k.startswith(("DYLD_", "BASH_FUNC_"))
+            for k in os.environ
+        )
+        and not untrusted_ld_path,
+        "hook loader, shell or cache override present",
     )
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTHON")}
     env.update(
