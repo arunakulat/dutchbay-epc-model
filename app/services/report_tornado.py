@@ -48,12 +48,16 @@ class TornadoRow(BaseModel):
 
 
 #: Display names for the metrics a report tornado sweeps (#1487: the heading named the
-#: project IRR whatever was swept). The report formats the values as percentages, so only
-#: rate metrics are listed; any other key is shown as written.
+#: project IRR whatever was swept). Rate metrics format as percentages; currency
+#: metrics (#1819 NPV fallback when IRR does not rank) format as USD.
 METRIC_LABELS: Mapping[str, str] = {
     "project_irr": "Project IRR",
     "equity_irr": "Equity IRR",
+    "project_npv": "Project NPV",
+    "equity_npv": "Equity NPV",
 }
+
+CURRENCY_METRICS: frozenset[str] = frozenset({"project_npv", "equity_npv"})
 
 
 class TornadoBlock(BaseModel):
@@ -78,6 +82,11 @@ class TornadoBlock(BaseModel):
     def metric_label(self) -> str:
         """The swept metric's display name, for the heading and caption (#1487)."""
         return METRIC_LABELS.get(self.metric, self.metric)
+
+    @property
+    def is_currency(self) -> bool:
+        """True when the swept metric is a USD amount rather than a rate (#1819)."""
+        return self.metric in CURRENCY_METRICS
 
     @property
     def has_undefined(self) -> bool:
@@ -160,6 +169,19 @@ def compute_report_tornado(
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             yaml.safe_dump(dict(scenario_config), fh)
         suite = runner(path, metric=metric)
+        base_kpis = getattr(suite, "base_kpis", None) or {}
+        if metric in ("project_irr", "equity_irr") and (
+            base_kpis.get("equity_irr_ranks_reliably") is False
+            or (
+                base_kpis.get("project_irr_status") == "undefined"
+                and not any(
+                    math.isfinite(tr.impact_abs) for tr in (suite.tornado_results or ())
+                )
+            )
+        ):
+            # #1819: follow the run's own ranking flag, not the scenario name (#1456).
+            metric = "equity_npv" if metric == "equity_irr" else "project_npv"
+            suite = runner(path, metric=metric)
     except (
         Exception
     ):  # noqa: BLE001 - supplementary section: log + degrade, never 500 the report

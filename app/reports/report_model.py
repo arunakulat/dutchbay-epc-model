@@ -133,6 +133,11 @@ def fmt_ratio_pct_or_undefined(value: Optional[float]) -> str:
     return _UNDEFINED if value is None else fmt_ratio_pct(value)
 
 
+def fmt_usd_or_undefined(value: Optional[float]) -> str:
+    """Display a USD amount, or ``undefined`` for None (#1819)."""
+    return _UNDEFINED if value is None else fmt_usd(value)
+
+
 def fmt_pct(value: Optional[float]) -> str:
     """Display an ALREADY-percentage number, e.g. ``13.39 -> 13.39%`` (None -> em-dash)."""
     return _ABSENT if value is None else f"{value:.2f}%"
