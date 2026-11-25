@@ -507,10 +507,11 @@
 
   {# 4e. Sensitivity tornado (one-at-a-time) — RPT-1 #}
   {% if ctx.tornado and ctx.tornado.rows %}
+  {% set fmt_t = fmt_usd_or_undefined if ctx.tornado.is_currency else fmt_ratio_pct_or_undefined %}
   <section class="page">
     <h2>Sensitivity Tornado &mdash; {{ ctx.tornado.metric_label }}</h2>
     <p class="muted">One-at-a-time sensitivity of the {{ ctx.tornado.metric_label }} to each
-      driver (base {{ fmt_ratio_pct_or_undefined(ctx.tornado.rows[0].base) }}); drivers ordered
+      driver (base {{ fmt_t(ctx.tornado.rows[0].base) }}); drivers ordered
       by swing magnitude, widest first
       {%- if ctx.tornado.rows | selectattr("impact_abs", "none") | selectattr("not_computed", "none") | list %}, and drivers whose
       swing is undefined last{% endif %}
@@ -531,9 +532,9 @@
           {% if r.not_computed %}
           <td class="num" colspan="3">not computed</td>
           {% else %}
-          <td class="num">{{ fmt_ratio_pct_or_undefined(r.low_case) }}</td>
-          <td class="num">{{ fmt_ratio_pct_or_undefined(r.high_case) }}</td>
-          <td class="num">{{ fmt_ratio_pct_or_undefined(r.impact_abs) }}</td>
+          <td class="num">{{ fmt_t(r.low_case) }}</td>
+          <td class="num">{{ fmt_t(r.high_case) }}</td>
+          <td class="num">{{ fmt_t(r.impact_abs) }}</td>
           {% endif %}
         </tr>
         {% endfor %}

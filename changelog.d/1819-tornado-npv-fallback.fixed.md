@@ -1,0 +1,1 @@
+- Fall back to ``project_npv`` / ``equity_npv`` in ``compute_report_tornado`` when ``equity_irr_ranks_reliably`` is ``False`` or IRR is undefined across the sweep, formatting currency tornado rows with ``fmt_usd_or_undefined`` (#1819).
