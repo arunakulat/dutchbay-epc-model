@@ -1,0 +1,42 @@
+{
+  "screening_gross_gwh": 616.0428789205927,
+  "screening_net_gwh": 462.9226999232198,
+  "legacy_policy_haircut_pct": 2.0,
+  "project_nominal_mw": 147,
+  "old_legacy_2025_tariff_lkr_per_kwh": 20.3,
+  "pipeline_status": "FAILED_LOUD: NON_BANKABLE_AEP_SOURCE_PROVENANCE",
+  "finance_KPIs_promoted": false,
+  "claim": "No IRR, DSCR, P90 or lendercase promotion from this source. The refusal is expected and must not be bypassed.",
+  "conditional_2pct_haircut_screen_gwh_NOT_P50": 453.6642459247554,
+  "illustrative_uncertainty_ratio_transfer_gwh_NOT_P90": 377.1750133471547,
+  "illustrative_ratio_derivation": {
+    "reference_source": "Blue Whale frozen one-turbine uncertainty summary (wake_model_pct: 0.0), not independently qualified",
+    "reference_sigma_one_year_pct": 13.155678505693409,
+    "z_normal_for_90_percent_one_sided": 1.2816,
+    "illustrative_ratio": 0.8313968242710332,
+    "ratio_applied_to": "conditional_2pct_haircut_screen_gwh_NOT_P50",
+    "formula": "(screening_net_gwh * (1 - 0.02)) * (1 - 1.2816 * 0.13155678505693409)",
+    "excluded_uncertainties": [
+      "farm wake",
+      "layout and T2 operation",
+      "directional shear and transfer uncertainty",
+      "near-wake model validity"
+    ],
+    "status": "ILLUSTRATIVE_ONLY_NOT_BANKABLE_P90"
+  },
+  "WTG_derated_active_maximum_mw_ASSUMED": 133,
+  "finance_reference_case_mismatch": "Existing lendercase still 14 IEA reference at Puttalam with wake 7.32%; do not adopt new Envision values.",
+  "nonreliance_cause": "screening source quality and unvalidated uncertainties; pipeline refusal from external private verification only, not independently reproducible from this public branch",
+  "finance_verification_record_status": "A private analytical replay indicated refusal at nonbankable source provenance; no public executable lender pipeline receipt included; not source-certified from public files.",
+  "historic_transmission_commercial_discrepancy": {
+    "legacy_poi": "Puttalam 220kV",
+    "proposed_poi": "unapproved project-side collector to Wariyapola",
+    "old_note": "separately CEB-funded route in lendercase/developer dossier",
+    "old_line_capex_usd": 7660800,
+    "old_substation_capex_usd": 5107200,
+    "old_combined_capex_usd": 12768000,
+    "line_km_assumed_from_unapproved_EIA": 104.77,
+    "implied_legacy_line_allocation_usd_per_km_NOT_COST_BENCHMARK": 73120.16798701919,
+    "status": "UNRECONCILED; NO OWNER/NTNSP FINANCING OR RIGHTS DECISION"
+  }
+}

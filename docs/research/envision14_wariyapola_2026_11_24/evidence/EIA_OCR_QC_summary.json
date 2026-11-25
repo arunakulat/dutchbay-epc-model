@@ -1,0 +1,6 @@
+{
+  "source_set": "Final EIA R2 (344 PDF pages), Annex I-VI (292 PDF pages)",
+  "ocr": {"targeted_pages": 98, "substantial_recovery_pages": 93, "weak_pages": 5, "untargeted_unchanged": 194},
+  "status": "RESTRICTED_PRIVATE_SOURCE: no OCR text, PDF or page image published",
+  "notes": "OCR supports review, not proof of an issued EIA consent or legal right."
+}

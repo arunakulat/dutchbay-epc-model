@@ -1,0 +1,1 @@
+Add the source-safe Dutch Bay Envision 14-turbine, Blue Whale T2 wake, Wariyapola 220 kV, and EIA evidence screening package and controlled DBPL P05 annex for independent R3 review. No lendercase inputs, accepted P50/P90, grid approval, financial KPIs or F-5 release are changed. Do not merge without prior explicit approval from Aruna.
