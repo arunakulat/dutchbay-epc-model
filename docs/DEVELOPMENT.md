@@ -153,13 +153,35 @@ Notes:
 
 ### Pre-commit hooks
 
+For checkpoint operations follow RECRUIT-01 module 2 §4.2: canonical allowlisted
+hook readiness, final-byte tests/type evidence, staged and committed blob/mode
+reconciliation, and an external evidence journal. Record execution completion
+separately from reporting observation. Use read-only recovery and fixed-schema
+incident classification; never bypass platform restrictions. These tools
+do not authenticate a writer or grant approval.
+
+Typed-code checkpoint qualification requires successful targeted mypy on final
+formatter-stable bytes in the governed environment, using the applicable
+existing CI configuration and covering the affected type/import surface. Record
+command, versions, configuration identity, scope, result, log digest and final
+candidate hashes. Missing or failing type evidence blocks qualification; a
+persistence-only rescue is not qualified. This routine does not replace the
+existing full pre-push or CI gates or enable the disabled local mypy hook
+(see RECRUIT-01 module 2 §4.1 and #1270).
+
 `./setup_venv.sh` (and therefore `make setup`) installs the configured hooks so the
 enabled formatting, lint, import-order and file checks run automatically and GOV-02's
 `no-commit-to-branch` guard is active. Hooks live in `.git/hooks`, which git does not
-track, so a fresh clone starts with none. R10 also names mypy, but the current hook
-configuration does not enable it; [issue #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270)
-tracks that contract/configuration mismatch. The separate `make type` and CI type gates
-remain mandatory.
+track, so a fresh clone starts with none. The local hook configuration does not enable mypy, consistent with the owner decision in
+[the 26 October 2026 owner decision on #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270#issuecomment-6407805476). R10 names
+the active local hooks and mandatory CI type gates: `test-suite.yml` strict library/engine
+and scripts mypy checks, plus scoped checks in `ci_v14_fastlane.yml`, `fx-tests.yml` and
+`regression-smoke.yml`. The separate `make type` and CI type gates remain mandatory;
+the Makefile type target and CI scripts scope are not identical. The existing FX
+scoped mypy step has `continue-on-error: true`; it is advisory, not a substitute
+for the blocking strict and scripts gates. No workflow failure setting is changed.
+Full installer reachability
+remains separately tracked by #1262.
 
 To restore them in an existing checkout without a full environment reconcile, or to run
 the set on demand:

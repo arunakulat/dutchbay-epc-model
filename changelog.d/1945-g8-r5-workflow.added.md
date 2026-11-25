@@ -1,0 +1,1 @@
+Expose the v2 checkpoint lifecycle through an anchored coordinator CLI and document its operational sequence. Every journal append after start requires a separately retained prior tip. Explicit writer staging/commit and independent evidence remain mandatory; the CLI grants no execution, writer or merge authority. (#1945)

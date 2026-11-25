@@ -1,0 +1,1 @@
+Bind incident drift to a supplied pre-operation baseline digest, reconcile unknown reporting and missing execution evidence, and return nonzero for held/incomplete execution even after receipt persistence. Reject malformed or special CLI inputs with bounded diagnostics and retain authority boundaries. (#1945)

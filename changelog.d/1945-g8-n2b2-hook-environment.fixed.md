@@ -1,0 +1,1 @@
+Control Python import paths and executable lookup for readiness and ordinary commit children; refuse shell, loader and cache overrides and symlinked installed hooks. Exercise a real ordinary commit with hostile imports and an actual failing hook. (#1945)

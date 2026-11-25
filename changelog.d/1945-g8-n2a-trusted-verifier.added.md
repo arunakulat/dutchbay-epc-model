@@ -1,0 +1,1 @@
+Add an isolated external verifier bootstrap that checks the fixed module closure against an independently retained manifest pin and rejects substituted, extra or uncontrolled bundle sources. Candidate-owned copies and self-issued pins do not establish trust; independent bootstrap review and custody remain prerequisites. (#1945)
