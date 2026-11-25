@@ -44,8 +44,10 @@ def _unique(mapping: Mapping[str, Any], path: str) -> None:
 def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
     """Resolve native CAPEX to USD once, preserving its declared provenance.
 
-    Conversion FX must be explicitly declared as the financial-close rate, dated
-    at that close, and equal the model's close spot. No source is authenticated.
+    Conversion FX is declared as the financial-close rate, dated at that close, and on
+    authored configurations is derived from ``fx.start_lkr_per_usd`` (DOM-1645-03). On
+    already-resolved configurations, ``native_input_applied`` must still match
+    ``fx.start_lkr_per_usd``. No source is authenticated.
 
     Args:
         config: Authored or already resolved scenario. ``capex.input`` contains
@@ -170,9 +172,9 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
         )
     _unique(fx, "fx")
     spot = _number(fx.get("start_lkr_per_usd"), "fx.start_lkr_per_usd")
-    if spot != rate:
+    if applied is not None and spot != rate:
         raise ValueError(
-            "capex.input conversion rate must equal fx.start_lkr_per_usd at financial close"
+            "native CAPEX provenance is stale; start from the authored config"
         )
     aliases = {
         "usd_total",
@@ -248,7 +250,7 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 "capex.price_basis contains an invalid numeric input"
             ) from exc
-    usd = amount / rate if currency == "LKR" else amount
+    usd = amount / spot if currency == "LKR" else amount
     if not math.isfinite(usd) or usd <= 0:
         raise ValueError("capex.input resolves to a nonfinite or zero USD amount")
     if applied is not None:
@@ -307,8 +309,10 @@ def normalize_native_capex(config: Mapping[str, Any]) -> dict[str, Any]:
     out_cap = out["capex"]
     out_cap.pop("input")
     out_cap["usd_total"] = usd
+    saved_block = copy.deepcopy(dict(block))
+    saved_block["conversion"]["rate_lkr_per_usd"] = spot
     out_cap["native_input_applied"] = {
-        "input": copy.deepcopy(dict(block)),
+        "input": saved_block,
         "usd_at_price_date": usd,
     }
     return out

@@ -1,83 +1,40 @@
 #!/bin/bash
-# GWTF R25 Pre-Flight Checklist
-# Run before ANY git merge, pull, or push operation
-
-echo ""
-echo "═══════════════════════════════════════════════════════════════"
-echo "  GWTF R25 PRE-FLIGHT CHECKLIST"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
-
-# 1. Check current branch
-CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-echo "📍 Current branch: $CURRENT_BRANCH"
-echo ""
-
-if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]]; then
-    echo "⚠️  WARNING: You are on protected branch '$CURRENT_BRANCH'!"
-    echo ""
-    echo "🔴 GWTF R25 VIOLATION RISK:"
-    echo "   - Direct commits to main are forbidden"
-    echo "   - All work must go through feature branch + PR"
-    echo ""
-    echo "✅ CORRECT WORKFLOW:"
-    echo "   git fetch origin"
-    echo "   git worktree add -b <type>/<descriptive-name> <worktree-path> origin/main"
-    echo ""
-    echo "🚨 Continue on main anyway? (y/N)"
-    read -r response
-    if [[ ! "$response" =~ ^[Yy]$ ]]; then
-        echo ""
-        echo "✅ Aborting. Please switch to feature branch."
-        echo ""
-        exit 1
-    fi
-    echo ""
-    echo "⚠️  Proceeding on main (override acknowledged)"
-    echo ""
+# Read-only R25 preflight for a feature writer. Not a lease or permission to push/merge.
+set -euo pipefail
+stop() { printf 'STOP: %s\n' "$*" >&2; exit 1; }
+[[ $# == 3 ]] || stop 'usage: gwtf-preflight.sh EXPECTED_WORKTREE EXPECTED_BRANCH EXPECTED_BASE_SHA'
+for variable in SKIP GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_EXEC_PATH GIT_REPLACE_REF_BASE GIT_NO_REPLACE_OBJECTS GIT_EXTERNAL_DIFF GIT_NAMESPACE GIT_SHALLOW_FILE GIT_GRAFT_FILE PRE_COMMIT_ALLOW_NO_CONFIG; do
+    [[ ! ${!variable+x} ]] || stop 'execution environment override present'
+done
+for variable in ${!GIT_CONFIG_KEY_@} ${!GIT_CONFIG_VALUE_@}; do
+    stop 'execution environment override present'
+done
+# Fixed system search path for Git only; do not change the caller's PATH.
+git_bin=$(PATH=/usr/bin:/bin command -v git) || stop 'system Git unavailable'
+git() { "$git_bin" --no-replace-objects "$@"; }
+expected_root=$(cd "$1" && pwd -P) || stop 'expected worktree unavailable'
+expected_branch=$2
+expected_base=$3
+[[ "$expected_base" =~ ^[0-9a-f]{40}$ ]] || stop 'exact base SHA required'
+root=$(git rev-parse --show-toplevel) || stop 'not a Git worktree'
+root=$(cd "$root" && pwd -P)
+[[ "$root" == "$expected_root" && "$(pwd -P)" == "$root" ]] || stop 'worktree mismatch; run at the expected root'
+branch=$(git branch --show-current)
+[[ -n "$branch" && "$branch" != main && "$branch" != master ]] || stop 'protected or detached branch; no override'
+[[ "$branch" == "$expected_branch" ]] || stop 'branch mismatch'
+git_dir=$(git rev-parse --path-format=absolute --git-dir)
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir)
+[[ "$git_dir" != "$common_dir" ]] || stop 'dedicated linked worktree required by this writer preflight'
+[[ "$(git rev-parse --verify refs/remotes/origin/main)" == "$expected_base" ]] || stop 'local origin/main differs from expected base'
+remote=$(git ls-remote --exit-code origin refs/heads/main) || stop 'live protected base unavailable'
+[[ "$remote" == "$expected_base"$'\t'refs/heads/main ]] || stop 'live protected base differs; refresh and reconcile'
+git merge-base --is-ancestor "$expected_base" HEAD || stop 'expected base is not an ancestor of HEAD'
+printf 'Verified linked worktree: %s\nBranch: %s\nLive base: %s\n' "$root" "$branch" "$expected_base"
+if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null); then
+    ahead=$(git rev-list --count '@{u}..HEAD') || stop 'upstream comparison unavailable'
+    printf 'Commits ahead of configured upstream %s: %s (not proof of publication)\n' "$upstream" "$ahead"
+else
+    printf 'Upstream comparison: UNKNOWN (no resolvable upstream)\n'
 fi
-
-# 2. GWTF R25 reminder
-echo "📋 GWTF R25 Requirements:"
-echo "   ✅ Start a short-lived branch from current origin/main"
-echo "   ✅ Use a dedicated worktree for each concurrent writing session"
-echo "   ✅ Push the current feature/fix/docs branch only"
-echo "   ✅ Merge to main ONLY via Pull Request"
-echo "   ✅ Merge only after required CI is green and the branch is current"
-echo ""
-
-# 3. Show uncommitted changes
-UNCOMMITTED=$(git status --porcelain | wc -l)
-if [[ $UNCOMMITTED -gt 0 ]]; then
-    echo "📝 Uncommitted changes: $UNCOMMITTED files"
-    echo ""
-fi
-
-# 4. Show unpushed commits
-UNPUSHED=$(git log @{u}.. --oneline 2>/dev/null | wc -l)
-if [[ $UNPUSHED -gt 0 ]]; then
-    echo "📤 Unpushed commits: $UNPUSHED"
-    echo ""
-    echo "Recent commits:"
-    git log @{u}.. --oneline | head -5
-    echo ""
-fi
-
-# 5. Final confirmation
-echo "═══════════════════════════════════════════════════════════════"
-echo "✅ Pre-flight checklist complete"
-echo "═══════════════════════════════════════════════════════════════"
-echo ""
-echo "Proceed with git operation? (y/N)"
-read -r proceed
-if [[ ! "$proceed" =~ ^[Yy]$ ]]; then
-    echo ""
-    echo "❌ Aborted by user"
-    echo ""
-    exit 1
-fi
-
-echo ""
-echo "✅ Proceeding with git operation..."
-echo ""
-exit 0
+git --no-optional-locks status --short
+printf 'R25 identity preflight passed. Coordinator must separately verify ownership, lease, allowlist, tests, review, CI and authority.\n'

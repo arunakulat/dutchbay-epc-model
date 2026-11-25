@@ -60,6 +60,10 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
+from finance.cashflow_v14_tax import (
+    declared_project_jurisdiction,
+    resolve_direct_tax_from_pack,
+)
 from finance.cashflow_v14_utils import (
     _as_float_or_none,
     _pct_to_decimal,
@@ -451,6 +455,8 @@ def compute_build_up_wacc(
     cost_of_equity = resolve_cost_of_equity(wacc_cfg)
 
     tax_raw = wacc_cfg.get("tax_rate")
+    if tax_raw is None and declared_project_jurisdiction(config) is not None:
+        tax_raw = resolve_direct_tax_from_pack(config).corporate_tax_rate
     if tax_raw is None:
         tax_raw = get_nested(config, ["tax", "corporate_tax_rate_pct"])
     if tax_raw is None:
@@ -649,6 +655,8 @@ def compute_wacc_from_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
     # Tax rate
     tax_rate_raw = wacc_cfg.get("tax_rate")
+    if tax_rate_raw is None and declared_project_jurisdiction(config) is not None:
+        tax_rate_raw = resolve_direct_tax_from_pack(config).corporate_tax_rate
     if tax_rate_raw is None:
         tax_rate_raw = get_nested(config, ["tax", "corporate_tax_rate_pct"])
     if tax_rate_raw is None:

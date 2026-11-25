@@ -454,6 +454,21 @@ def _enrich_annual_rows_with_debt(
 # lender surface reports and well above float noise on nine-figure cashflows.
 _CFADS_FIXED_POINT_TOL_USD = 0.01
 
+# Tighter fixed-point tolerance when opt-in quarterly debt sculpting is active (#1893),
+# keeping returned interest and debt_result["annual_row_debt_period_map"] aligned well
+# inside downstream rebuild checks (e.g. #1836 REBUILD_TOLERANCE_USD = 1e-6).
+_CFADS_QUARTERLY_FIXED_POINT_TOL_USD = 1e-7
+
+
+def _cfads_fixed_point_tolerance(cfg: Mapping[str, Any]) -> float:
+    """Return levered-CFADS convergence tolerance for ``cfg`` (USD)."""
+    from finance.quarterly_sculpting_v14 import is_quarterly_sculpting_enabled
+
+    if is_quarterly_sculpting_enabled(cfg):
+        return _CFADS_QUARTERLY_FIXED_POINT_TOL_USD
+    return _CFADS_FIXED_POINT_TOL_USD
+
+
 # A ceiling, not an expectation. The map is a contraction in practice -- each iteration's
 # interest change feeds tax at the marginal rate, so the CFADS correction shrinks by
 # roughly the tax rate each time and the lender case converges in a handful of passes.
@@ -514,6 +529,7 @@ def _size_debt_on_levered_cfads(
     tax_block = cfg.get("tax", {}) or {}
     interest_deductible = bool(tax_block.get("interest_deductibility", True))
     balloon_basis = _balloon_interest_tax_basis(cfg)
+    fixed_point_tol = _cfads_fixed_point_tolerance(cfg)
 
     interest_lkr: list[float] | None = None
     interest_paid_lkr: list[float] | None = None
@@ -554,7 +570,7 @@ def _size_debt_on_levered_cfads(
                 ),
                 default=0.0,
             )
-            <= _CFADS_FIXED_POINT_TOL_USD
+            <= fixed_point_tol
         ):
             logger.info(
                 "Debt sized on levered CFADS: converged in %d iteration(s)", iteration
@@ -576,7 +592,7 @@ def _size_debt_on_levered_cfads(
     raise PipelineValidationError(
         "Debt sizing did not converge on a levered-tax CFADS basis within "
         f"{_CFADS_FIXED_POINT_MAX_ITERATIONS} iterations: the largest per-row CFADS "
-        f"movement in the last pass stayed above USD {_CFADS_FIXED_POINT_TOL_USD}. The "
+        f"movement in the last pass stayed above USD {fixed_point_tol}. The "
         "schedule is oscillating rather than settling, so no sized facility, DSCR series "
         "or coverage ratio from this run is reportable."
     )
@@ -622,6 +638,7 @@ def _settle_sweep_on_waterfall_cash(
     # call site in run_v14_pipeline).
     from finance.equity_distribution_v14_hydra import waterfall_sweep_cash
 
+    fixed_point_tol = _cfads_fixed_point_tolerance(cfg)
     sweep_cash: list[float | None] | None = None
     for passes in range(1, _SWEEP_CASH_MAX_PASSES + 1):
         senior_fee_lkr_series = _senior_fee_lkr_series(debt_result, sizing_rows)
@@ -652,7 +669,7 @@ def _settle_sweep_on_waterfall_cash(
                 ),
                 default=0.0,
             )
-            if gap <= _CFADS_FIXED_POINT_TOL_USD:
+            if gap <= fixed_point_tol:
                 logger.info(
                     "Cash sweep settled on the waterfall's cash in %d pass(es)", passes
                 )
@@ -672,7 +689,7 @@ def _settle_sweep_on_waterfall_cash(
     raise PipelineValidationError(
         "The post-maturity cash sweep did not settle on the equity waterfall's cash "
         f"within {_SWEEP_CASH_MAX_PASSES} passes (#1736): the cash moved by more than "
-        f"USD {_CFADS_FIXED_POINT_TOL_USD} between the last two. No balloon sweep, fee "
+        f"USD {fixed_point_tol} between the last two. No balloon sweep, fee "
         "deferral or equity figure from this run is reportable."
     )
 
@@ -1513,12 +1530,22 @@ def run_v14_pipeline_enhanced(
         # Publish both bases on the row, so a reader can see which CFADS carries which
         # claim instead of inferring it. `cfads_usd` stays the project basis every
         # existing consumer reads; `cfads_coverage_usd` is the levered-tax figure the
-        # facility was sized on and the DSCR series divides.
-        for project_row, sizing_row in zip(
-            annual_rows_enriched, sizing_rows, strict=True
+        # facility was sized on and the DSCR series divides (reading from the debt
+        # engine's row->period map when populated so month_adverse mixed-sign rows
+        # match `dscr_by_year` exactly).
+        coverage_by_row: dict[int, float] = {}
+        for mapping in debt_result.get("annual_row_debt_period_map") or []:
+            if not isinstance(mapping, Mapping):
+                continue
+            row_idx = mapping.get("annual_row_index")
+            cfads_val = mapping.get("cfads_usd")
+            if type(row_idx) is int and cfads_val is not None:
+                coverage_by_row[row_idx] = float(cfads_val)
+        for row_idx, (project_row, sizing_row) in enumerate(
+            zip(annual_rows_enriched, sizing_rows, strict=True)
         ):
-            project_row["cfads_coverage_usd"] = float(
-                sizing_row.get("cfads_usd") or 0.0
+            project_row["cfads_coverage_usd"] = coverage_by_row.get(
+                row_idx, float(sizing_row.get("cfads_usd") or 0.0)
             )
         logger.info(
             "Debt sized on levered-tax CFADS in %d fixed-point iteration(s)",

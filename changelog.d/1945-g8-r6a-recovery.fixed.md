@@ -1,0 +1,1 @@
+Recompute recovery identity, scope and preserved working/index bytes against the exact revoked lease and actual Git state. Minimize observations to aggregate state digests and authorized scope; refuse malformed or special evidence objects, and expose read-only assessment without granting takeover authority. Residual ignored-path and concurrent-observation limits remain. (#1945)

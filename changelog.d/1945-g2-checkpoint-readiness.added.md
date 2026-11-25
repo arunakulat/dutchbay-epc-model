@@ -1,0 +1,1 @@
+Add an opt-in, lease-bound checkpoint readiness utility that runs the exact configured pre-commit hook set twice on an authorized candidate and rejects Git-visible content, index or identity drift. Readiness is not a checkpoint, independent review, CI or release decision. The normal commit hooks remain mandatory. (#1945)

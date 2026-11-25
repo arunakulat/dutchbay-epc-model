@@ -31,7 +31,6 @@ from finance.debt_v14 import apply_debt_layer, plan_debt
 from finance.monthly_cascade_v14 import (
     HAIRCUT_RULE_MONTH_ADVERSE,
     HAIRCUT_RULE_YEAR_SIGN,
-    MONTHS_PER_YEAR,
     build_monthly_cascade,
     build_monthly_cascade_from_annual_rows,
     resolve_monthly_spec,

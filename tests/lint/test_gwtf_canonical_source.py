@@ -19,11 +19,112 @@ RECRUIT_MODULES = (
 )
 
 
+# Mandatory identities retained from the protected-base predecessor 7d2e2103.
+# Additions are permitted; deleting or deactivating any predecessor requires
+# an explicit governed policy amendment and corresponding review.
+REQUIRED_ACTIVE_IDS = frozenset(
+    (
+        "ADD-01",
+        "ADD-02",
+        "ADD-03",
+        "ARCH-01",
+        "ARCH-02",
+        "ARCH-03",
+        "ARCH-04",
+        "CLEANUP-01",
+        "CLI-01",
+        "CLI-02",
+        "CLI-03",
+        "CST-01",
+        "CST-02",
+        "DATA-01",
+        "DBPL-01",
+        "DELIVERY-01",
+        "DOC-01",
+        "DOC-02",
+        "DOC-03",
+        "ENV-01",
+        "FIN-01",
+        "FIN-02",
+        "FRAMEWORK-01",
+        "FRAMEWORK-02",
+        "FRAMEWORK-03",
+        "GOV-01",
+        "GOV-02",
+        "INTAKE-01",
+        "MERGE-01",
+        "MRM-01",
+        "MRM-02",
+        "PERSIST-01",
+        "R1",
+        "R10",
+        "R11",
+        "R12",
+        "R13",
+        "R14",
+        "R15",
+        "R16",
+        "R17",
+        "R18",
+        "R19",
+        "R2",
+        "R20",
+        "R21",
+        "R22",
+        "R23",
+        "R24",
+        "R25",
+        "R26",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7",
+        "R8",
+        "R9",
+        "RECRUIT-01",
+        "REFACTOR-01",
+        "REFACTOR-02",
+        "REFACTOR-03",
+        "REFACTOR-04",
+        "REVIEW-01",
+        "SECDEP-01",
+        "SPRINT16_DOC_MGMT_R1",
+        "SPRINT_BOOTSTRAP_PROC_R1",
+        "TEST-01",
+        "TEST-02",
+        "TEST-03",
+        "TEST-04",
+        "TEST-05",
+        "THREAD-01",
+        "TRAIN-01",
+        "TYPE-01",
+        "VAL-01",
+        "VAL-02",
+        "VERIFY-01",
+        "WORKTREE-01",
+    )
+)
+OWNER_1270 = (
+    "https://github.com/arunakulat/dutchbay-epc-model/"
+    "issues/1270#issuecomment-6407805476"
+)
+
+
+def _validated_rules(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    rules = {row["rule_id"]: row for row in rows}
+    assert len(rules) == len(rows), "duplicate rule identity"
+    assert REQUIRED_ACTIVE_IDS <= {
+        key for key, row in rules.items() if row["status"] == "active"
+    }, "missing or inactive predecessor rule"
+    return rules
+
+
 def _rules_by_id() -> dict[str, dict[str, str]]:
     """Load the canonical ruleset keyed by its unique rule identifiers."""
     with CANONICAL_RULESET.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    return {row["rule_id"]: row for row in rows}
+    return _validated_rules(rows)
 
 
 def test_bootstrap_uses_the_canonical_ruleset() -> None:
@@ -1190,3 +1291,37 @@ def test_cleanup_01_branch_gate_refuses_malformed_inputs(
     assert "OK:" not in out
     assert _deletes(calls) == []
     assert [c for c in calls if c.startswith("gh ")] == []
+
+
+def test_owner_decision_provenance_is_explicit() -> None:
+    assert OWNER_1270 in _rules_by_id()["R10"]["description"]
+    for name in (
+        "docs/DEVELOPMENT.md",
+        "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
+    ):
+        assert OWNER_1270 in (REPO_ROOT / name).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("rule_id", sorted(REQUIRED_ACTIVE_IDS))
+@pytest.mark.parametrize("mutation", ["delete", "deactivate"])
+def test_predecessor_identity_cannot_silently_disappear(
+    rule_id: str, mutation: str
+) -> None:
+    rows = [dict(row) for row in _rules_by_id().values()]
+    if mutation == "delete":
+        rows = [row for row in rows if row["rule_id"] != rule_id]
+    else:
+        for row in rows:
+            if row["rule_id"] == rule_id:
+                row["status"] = "inactive"
+    with pytest.raises(AssertionError, match="missing or inactive predecessor"):
+        _validated_rules(rows)
+
+
+def test_additive_rule_allowed_but_duplicate_identity_refused() -> None:
+    rows = list(_rules_by_id().values())
+    added = {"rule_id": "TEST-ADDITIVE-ORACLE", "status": "active"}
+    assert added["rule_id"] not in {row["rule_id"] for row in rows}
+    assert _validated_rules([*rows, added])[added["rule_id"]] == added
+    with pytest.raises(AssertionError, match="duplicate rule identity"):
+        _validated_rules([*rows, rows[0]])

@@ -1,0 +1,167 @@
+{#- What-if cases (#1403/#1523) and CASPER lender-risk blocks (#1825 slice iv),
+    built by app/reports/what_if_lender_risk_section.py.
+    Included by report.html.j2 only when ctx.what_if_lender_risk is set, so other
+    reports stay byte-identical. Beside the committed case, never a replacement for it. -#}
+{%- set wi = ctx.what_if_lender_risk %}
+  <section class="page what-if-lender-risk">
+    <h2>What-If Cases &amp; Lender Risk</h2>
+    <p class="muted"><strong>Non-canonical / beside the committed case.</strong> Nothing in
+      this section changes the committed case or any KPI elsewhere in this report.</p>
+    {% for case in wi.what_if_cases %}
+    <h3>What-If: {{ case.label }}</h3>
+    <p class="muted">Case ID: <code>{{ case.case_id }}</code> &middot; Kind:
+      <code>{{ case.kind }}</code> &middot; Canonical:
+      <strong>{{ "yes" if case.canonical else "false (non-canonical)" }}</strong>{% if case.case_file %}
+      &middot; File: <code>{{ case.case_file }}</code>{% endif %}</p>
+    <p><strong>Source (#1403):</strong> {{ case.source }}</p>
+    {% if case.parameters %}
+    <p><strong>Parameters and provenance:</strong></p>
+    <ul class="notes what-if-provenance">
+      {% for p in case.parameters %}
+      <li><code>{{ p.name }}</code> ({{ p.value_display }}): {{ p.provenance }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if case.limitations %}
+    <p><strong>Limitations and caveats (#1523):</strong></p>
+    <ul class="notes what-if-limitations">
+      {% for lim in case.limitations %}
+      <li>{{ lim }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if case.notes %}<p class="muted">Notes: {{ case.notes }}</p>{% endif %}
+    {% for var in case.variants %}
+    <p><strong>Variant: {{ var.label }}</strong>{% if var.changed_paths %}
+      <span class="muted">(modified: <code>{{ var.changed_paths | join(", ") }}</code>)</span>{% endif %}</p>
+    <table>
+      <thead>
+        <tr>
+          <th>KPI</th>
+          <th style="text-align:right;">Base</th>
+          <th style="text-align:right;">What-If</th>
+          <th style="text-align:right;">Delta</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in var.kpis %}
+        <tr>
+          <td>{{ r.label }}</td>
+          {% if r.unit == "usd" %}
+          <td class="num">{{ fmt_usd(r.base) }}</td>
+          <td class="num">{{ fmt_usd(r.case) }}</td>
+          <td class="num">{{ fmt_usd(r.delta) }}</td>
+          {% elif r.unit == "pct" %}
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.base) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.case) }}</td>
+          <td class="num">{{ fmt_pp(r.delta) }}</td>
+          {% elif r.unit == "ratio" %}
+          <td class="num">{{ fmt_x(r.base) }}</td>
+          <td class="num">{{ fmt_x(r.case) }}</td>
+          <td class="num">{% if r.delta is not none %}{{ "%+.2fx"|format(r.delta) }}{% else %}&mdash;{% endif %}</td>
+          {% else %}
+          <td class="num">{{ r.base if r.base is not none else "&mdash;"|safe }}</td>
+          <td class="num">{{ r.case if r.case is not none else "&mdash;"|safe }}</td>
+          <td class="num">{{ r.delta if r.delta is not none else "&mdash;"|safe }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if var.total_uses_usd is not none %}
+    <p class="muted">Variant sources &amp; uses: debt {{ fmt_usd(var.debt_usd) }},
+      equity {{ fmt_usd(var.equity_usd) }}, total uses {{ fmt_usd(var.total_uses_usd) }}.</p>
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
+    {% if wi.casper_lender_risk %}
+    {% set lr = wi.casper_lender_risk %}
+    <h3>CASPER Lender-Risk Blocks (FRAMEWORK-01)</h3>
+    <p class="muted">{{ lr.n_trials }} trials ({{ lr.method }}){% if lr.seed is not none %},
+      seed {{ lr.seed }}{% endif %}, scenario {{ lr.scenario }}. Lender guards:
+      <code>allow_toy_fallback={{ "true" if lr.allow_toy_fallback else "false" }}</code>.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Covenant check</th>
+          <th style="text-align:right;">Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>DSCR covenant floor</td><td class="num">{{ fmt_x(lr.covenant.dscr_floor) }}</td></tr>
+        <tr><td>Prob(DSCR &lt; {{ "%.2f"|format(lr.covenant.dscr_floor) }})</td><td class="num">{{ fmt_ratio_pct(lr.covenant.prob_breach) }}</td></tr>
+        <tr><td>Worst-year DSCR (P95 downside)</td><td class="num">{{ fmt_x(lr.covenant.worst_year_dscr_p95_downside) }}</td></tr>
+        <tr><td>Dual-DSCR floor pinned</td><td class="num">{{ "yes" if lr.covenant.floor_pinned else "no" }}</td></tr>
+      </tbody>
+    </table>
+    {% if lr.floor_pinned_note %}
+    <p class="fx-warning"><strong>DSCR floor pinned:</strong> {{ lr.floor_pinned_note }}</p>
+    {% endif %}
+    {% for note in lr.coverage_notes %}
+    <p class="fx-warning"><strong>IRR coverage:</strong> {{ note }}</p>
+    {% endfor %}
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th style="text-align:right;">Defined / Total</th>
+          <th style="text-align:right;">P50</th>
+          <th style="text-align:right;">P90 (downside)</th>
+          <th style="text-align:right;">P95 (downside)</th>
+          <th style="text-align:right;">Mean</th>
+          <th style="text-align:right;">Std</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in lr.rows %}
+        <tr>
+          <td>{{ r.metric }}{% if r.coverage_note %} *{% endif %}</td>
+          <td class="num">{{ r.defined_trials }} / {{ r.total_trials }}</td>
+          {% if r.metric.startswith("Prob(") %}
+          <td class="num">&mdash;</td>
+          <td class="num">&mdash;</td>
+          <td class="num">&mdash;</td>
+          <td class="num">{{ fmt_ratio_pct(r.mean) }}</td>
+          <td class="num">&mdash;</td>
+          {% elif r.metric == "Worst-year DSCR (P95 downside)" %}
+          <td class="num">&mdash;</td>
+          <td class="num">&mdash;</td>
+          <td class="num">&mdash;</td>
+          <td class="num">{{ fmt_x(r.mean) }}</td>
+          <td class="num">&mdash;</td>
+          {% elif r.unit == "usd" %}
+          <td class="num">{{ fmt_usd(r.p50) }}</td>
+          <td class="num">{{ fmt_usd(r.p90) }}</td>
+          <td class="num">{{ fmt_usd(r.p95) }}</td>
+          <td class="num">{{ fmt_usd(r.mean) }}</td>
+          <td class="num">{{ fmt_usd(r.std) }}</td>
+          {% elif r.unit == "pct" %}
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.p50) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.p90) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.p95) }}</td>
+          <td class="num">{{ fmt_ratio_pct_or_undefined(r.mean) }}</td>
+          <td class="num">{{ fmt_ratio_pct(r.std) }}</td>
+          {% else %}
+          <td class="num">{{ fmt_x(r.p50) }}</td>
+          <td class="num">{{ fmt_x(r.p90) }}</td>
+          <td class="num">{{ fmt_x(r.p95) }}</td>
+          <td class="num">{{ fmt_x(r.mean) }}</td>
+          <td class="num">{{ fmt_x(r.std) }}</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Bankable exceedance convention: P90 and P95 report the 10th and 5th
+      percentiles (the downside value exceeded 90% and 95% of trials).</p>
+    {% endif %}
+    {% if wi.parts_not_run %}
+    <p class="muted">Parts not run:</p>
+    <ul class="notes what-if-lender-risk-not-run">
+      {% for line in wi.parts_not_run %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ctx.f5_notice %}
+    <p class="muted f5-caption"><strong>F-5:</strong> {{ ctx.f5_notice }}</p>
+    {% endif %}
+  </section>

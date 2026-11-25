@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from analytics.capital_risk_layer_v14 import CapitalRiskReport
+from analytics.contracts_v14 import MonteCarloResult
 from analytics.executive_workbook import EXECUTIVE_WORKBOOK_F5_CAVEAT
 from analytics.scenario_loader import load_scenario_config
 from app.reports.aep_resource_sensitivity import (
@@ -92,6 +93,7 @@ from app.reports.report_model import (
     ReportContext,
     SectionNotRun,
     TariffLegalStatusBlock,
+    WhatIfLenderRiskBlock,
 )
 from app.reports.report_orchestration import (
     PRODUCTION_REPORT_SENSITIVITY_PROFILE,
@@ -105,6 +107,15 @@ from app.reports.report_orchestration import (
 )
 from app.reports.site_analysis_model import SiteAnalysesBlock
 from app.reports.tariff_status_section import build_tariff_status, label_site_analyses
+from app.reports.what_if_lender_risk_section import (
+    DEFAULT_WHAT_IF_LENDER_RISK_SETTINGS,
+    SECTION_WHAT_IF_LENDER_RISK,
+    WhatIfLenderRiskSettings,
+    build_what_if_lender_risk_section,
+)
+from app.reports.what_if_lender_risk_section import (
+    settings_from_config as what_if_lender_risk_settings_from_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +131,7 @@ __all__ = [
     "capital_structure_settings_from_config",
     "cost_storage_settings_from_config",
     "lender_sensitivity_settings_from_config",
+    "what_if_lender_risk_settings_from_config",
     "sections_not_run",
     "to_dbpl_print_html",
 ]
@@ -153,6 +165,8 @@ CapitalStructureBuilder = Callable[..., Union[CapitalStructureBlock, str]]
 LenderSensitivityBuilder = Callable[..., Union[LenderSensitivityBlock, str]]
 #: Returns the section block, or a "not run: ..." reason (#1825 slice iii).
 CostStorageBuilder = Callable[..., Union[CostStorageBlock, str]]
+#: Returns the section block, or a "not run: ..." reason (#1825 slice iv).
+WhatIfLenderRiskBuilder = Callable[..., Union[WhatIfLenderRiskBlock, str]]
 SiteAnalysesBuilder = Callable[..., Optional[SiteAnalysesBlock]]
 RecomputedP90Builder = Callable[..., Union[RecomputedP90Block, str]]
 
@@ -200,6 +214,7 @@ def sections_not_run(
     capital_structure_not_run: Optional[str] = None,
     lender_sensitivities_not_run: Optional[str] = None,
     cost_storage_not_run: Optional[str] = None,
+    what_if_lender_risk_not_run: Optional[str] = None,
 ) -> List[SectionNotRun]:
     """List the sections the report will not render, each with its reason.
 
@@ -219,6 +234,8 @@ def sections_not_run(
             built, or ``None`` when they were.
         cost_storage_not_run: Why the cost and storage section (#1825 slice iii) was not
             built, or ``None`` when it was.
+        what_if_lender_risk_not_run: Why the what-if and lender-risk section (#1825 slice iv)
+            was not built, or ``None`` when it was.
 
     Returns:
         The left-out sections, in report order.
@@ -267,6 +284,13 @@ def sections_not_run(
     if capital_risk_not_run is not None:
         out.append(
             SectionNotRun(section=SECTION_CAPITAL_RISK, reason=capital_risk_not_run)
+        )
+    if what_if_lender_risk_not_run is not None:
+        out.append(
+            SectionNotRun(
+                section=SECTION_WHAT_IF_LENDER_RISK,
+                reason=what_if_lender_risk_not_run,
+            )
         )
     return out
 
@@ -579,6 +603,9 @@ def emit_lender_report_from_pipeline(
     sensitivities_builder: LenderSensitivityBuilder = build_lender_sensitivity_section,
     cost_storage: CostStorageSettings = DEFAULT_COST_STORAGE_SETTINGS,
     cost_storage_builder: CostStorageBuilder = build_cost_storage_section,
+    what_if_lender_risk: WhatIfLenderRiskSettings = DEFAULT_WHAT_IF_LENDER_RISK_SETTINGS,
+    what_if_lender_risk_builder: WhatIfLenderRiskBuilder = build_what_if_lender_risk_section,
+    mc_result: Optional[MonteCarloResult] = None,
     site_analyses_builder: Optional[SiteAnalysesBuilder] = None,
     recomputed_p90_builder: RecomputedP90Builder = build_recomputed_p90_block,
 ) -> LenderReportOutput:
@@ -621,6 +648,11 @@ def emit_lender_report_from_pipeline(
             default (#1825 slice iii).
         cost_storage_builder: Seam for tests; production uses
             :func:`~app.reports.cost_storage_section.build_cost_storage_section`.
+        what_if_lender_risk: The what-if and CASPER lender-risk settings
+            (``lender_report.what_if_lender_risk``); off by default (#1825 slice iv).
+        what_if_lender_risk_builder: Seam for tests; production uses
+            :func:`~app.reports.what_if_lender_risk_section.build_what_if_lender_risk_section`.
+        mc_result: Pre-computed lender-grade :class:`MonteCarloResult` from this run, if any.
         site_analyses_builder: Seam for tests; production uses
             :func:`~app.reports.site_analysis_sections.build_site_analyses_block`.
         recomputed_p90_builder: Seam for tests; production uses
@@ -641,6 +673,7 @@ def emit_lender_report_from_pipeline(
         else html_path.with_suffix(".pdf")
     )
     scenario = dict(load_scenario_config(str(scenario_config_path)))
+    captured_mc: list[MonteCarloResult] = []
 
     if capital_risk is None and capital_risk_not_run is None:
         mc = scenario.get("monte_carlo")
@@ -654,14 +687,22 @@ def emit_lender_report_from_pipeline(
 
             builder = capital_risk_builder or build_capital_risk_report_for_scenario
             try:
+                cr_kwargs: Dict[str, Any] = {
+                    "n_trials": (
+                        DEFAULT_CAPITAL_RISK_N_TRIALS if n_trials is None else n_trials
+                    ),
+                    "seed": seed,
+                    "npv_metric": npv_metric,
+                }
+                if (
+                    mc_result is None
+                    and builder is build_capital_risk_report_for_scenario
+                ):
+                    cr_kwargs["on_mc_result"] = captured_mc.append
                 capital_risk = builder(
                     scenario_config_path,
                     html_path.parent / LENDER_REPORT_FILES_DIR,
-                    n_trials=(
-                        DEFAULT_CAPITAL_RISK_N_TRIALS if n_trials is None else n_trials
-                    ),
-                    seed=seed,
-                    npv_metric=npv_metric,
+                    **cr_kwargs,
                 )
             except (
                 Exception
@@ -670,6 +711,12 @@ def emit_lender_report_from_pipeline(
                     "not run: the Monte Carlo could not run under the lender guards "
                     f"({type(exc).__name__}: {exc})"
                 )
+
+    active_mc_result = (
+        mc_result
+        if mc_result is not None
+        else (captured_mc[0] if captured_mc else None)
+    )
 
     sensitivity = sensitivity_computer(scenario, profile=profile)
     aep_built = aep_resource_builder(scenario, result)
@@ -702,6 +749,22 @@ def emit_lender_report_from_pipeline(
         logger.exception("Cost and storage section could not be built")
         csx_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
     csx_block = csx_built if isinstance(csx_built, CostStorageBlock) else None
+    try:
+        wi_built: Union[WhatIfLenderRiskBlock, str] = what_if_lender_risk_builder(
+            scenario_config_path,
+            scenario,
+            what_if_lender_risk,
+            mc_result=active_mc_result,
+        )
+    except (ValueError, FileNotFoundError):
+        if what_if_lender_risk.enabled:
+            raise
+        logger.exception("What-if and lender-risk section could not be built")
+        wi_built = "not run: could not be built (misconfigured while disabled)"
+    except Exception as exc:  # noqa: BLE001 - an opt-in section never sinks the report
+        logger.exception("What-if and lender-risk section could not be built")
+        wi_built = f"not run: could not be built ({type(exc).__name__}: {exc})"
+    wi_block = wi_built if isinstance(wi_built, WhatIfLenderRiskBlock) else None
     left_out = sections_not_run(
         sensitivity,
         scenario,
@@ -710,6 +773,7 @@ def emit_lender_report_from_pipeline(
         capital_structure_not_run=None if cs_block is not None else str(cs_built),
         lender_sensitivities_not_run=None if ls_block is not None else str(ls_built),
         cost_storage_not_run=None if csx_block is not None else str(csx_built),
+        what_if_lender_risk_not_run=None if wi_block is not None else str(wi_built),
     )
     site_analyses, site_analyses_not_run = _site_analyses_for(
         scenario, Path(str(scenario_config_path)), site_analyses_builder
@@ -774,6 +838,7 @@ def emit_lender_report_from_pipeline(
         capital_structure=cs_block,
         lender_sensitivities=ls_block,
         cost_storage=csx_block,
+        what_if_lender_risk=wi_block,
     ).model_copy(
         update={
             "site_analyses": site_analyses,

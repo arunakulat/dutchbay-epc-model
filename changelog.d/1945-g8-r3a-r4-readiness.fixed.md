@@ -1,0 +1,1 @@
+Bind readiness to the initial index identity and candidate Git file modes; reject pre-staged or partially staged input, compare actual staged stage-zero blob contents and modes read-only, and invoke configured pre-commit with isolated Python module resolution. This is a local comparison, not writer authority, post-commit verification or approval. (#1945)

@@ -26,7 +26,28 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from datetime import date
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+
+from analytics.feasibility_report_contract.project_case import (
+    JurisdictionBinding,
+    JurisdictionSubject,
+)
+from analytics.jurisdiction_packs.resolver import (
+    DirectoryPackSource,
+    JurisdictionRefusal,
+    JurisdictionResolution,
+    PackSource,
+    ProjectOverride,
+    RefusalReason,
+    SubjectDisposition,
+)
+from analytics.jurisdiction_packs.resolver import resolve as resolve_jurisdiction_pack
+from analytics.jurisdiction_packs.scenario_binding import (
+    ScenarioBindingRegistry,
+    scenario_jurisdiction_bindings,
+)
 
 #: A tax-loss carry-forward ledger: an immutable tuple of (origin_year, amount)
 #: vintages. Tracking vintages (not a single scalar) lets losses EXPIRE after the
@@ -200,6 +221,524 @@ def _get_enhanced_allowance_with_compat(tax: Mapping[str, Any]) -> float:
     )
 
 
+#: Direct-tax scenario fields governed by a jurisdiction pack's ``tax`` subject (#1841 PR 4).
+#: Maps scenario ``tax.<field>`` -> pack ``scenario_key`` so the engine never hardcodes
+#: country-specific parameter IDs.
+PACK_GOVERNED_TAX_FIELDS: Dict[str, str] = {
+    "corporate_tax_rate": "tax.corporate_tax_rate",
+    "loss_carryforward_years": "tax.loss_carryforward_years",
+    "plant_depreciation_years": "tax.plant_depreciation_years",
+    "civil_depreciation_years": "tax.civil_depreciation_years",
+    "wht_on_interest_to_nonresidents": "tax.wht_on_interest_to_nonresidents",
+    "wht_on_dividends": "tax.wht_on_dividends",
+}
+
+_SCENARIO_KEY_TO_TAX_FIELD: Dict[str, str] = {
+    scenario_key: field_name
+    for field_name, scenario_key in PACK_GOVERNED_TAX_FIELDS.items()
+}
+
+_TAX_RATE_COMPAT_ALIASES: Tuple[str, ...] = (
+    "corporate_tax_rate",
+    "corporate_rate",
+    "corporate_tax_rate_pct",
+)
+
+
+class DirectTaxJurisdictionError(ValueError):
+    """Raised when pack-backed direct-tax resolution fails closed (#1841 PR 4)."""
+
+
+@dataclass(frozen=True)
+class ResolvedDirectTax:
+    """Statutory direct-tax values resolved from a scenario's jurisdiction pack."""
+
+    corporate_tax_rate: float
+    loss_carryforward_years: int
+    wht_on_interest_to_nonresidents: float
+    wht_on_dividends: Optional[float]
+    plant_depreciation_years: Optional[int]
+    civil_depreciation_years: Optional[int]
+    corporate_tax_rate_by_year: Optional[Tuple[Tuple[int, float], ...]] = None
+    wht_on_interest_by_year: Optional[Tuple[Tuple[int, float], ...]] = None
+    resolution: Optional[JurisdictionResolution] = None
+
+
+def declared_project_jurisdiction(cfg: Mapping[str, Any]) -> Any:
+    """Return ``project.jurisdiction`` when declared and non-null, else ``None``."""
+    project = _lookup_case_insensitive(cfg, "project")
+    if not isinstance(project, Mapping):
+        return None
+    return _lookup_case_insensitive(project, "jurisdiction")
+
+
+def _parse_optional_iso_date(raw: Any, field_name: str) -> Optional[date]:
+    if raw is None:
+        return None
+    if isinstance(raw, date):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return date.fromisoformat(raw.strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"{field_name} must be an ISO YYYY-MM-DD date; got {raw!r}"
+            ) from exc
+    raise ValueError(f"{field_name} must be an ISO YYYY-MM-DD date; got {raw!r}")
+
+
+def _ops_years_for_valuation(cfg: Mapping[str, Any]) -> int:
+    for section_name, key in (
+        ("timeline", "ops_years"),
+        ("returns", "project_life_years"),
+        ("project", "life_years"),
+        ("project", "project_life_years"),
+    ):
+        section = _lookup_case_insensitive(cfg, section_name)
+        if isinstance(section, Mapping):
+            raw = _lookup_case_insensitive(section, key)
+            if raw is not None:
+                if isinstance(raw, bool):
+                    raise ValueError(f"{section_name}.{key} must be an integer >= 1")
+                years = int(raw)
+                if years < 1:
+                    raise ValueError(f"{section_name}.{key} must be >= 1, got {years}")
+                return years
+    return 1
+
+
+def _resolve_operating_valuation_dates(
+    cfg: Mapping[str, Any],
+    bindings: Sequence[JurisdictionBinding],
+    pack_source: PackSource,
+    explicit_dates: Optional[Iterable[date]],
+) -> Tuple[date, ...]:
+    """Return operating-period valuation dates for direct-tax pack resolution.
+
+    Direct tax applies only to operating periods (construction periods are excluded so
+    pre-COD construction years never probe before the pack's statutory floor; #1841 PR 4).
+    Each operating year uses its year-end assessment date (``YYYY-12-31``) with no
+    mid-period pro-rating. Scenarios without ``project.cod_year`` or ``valuation_date``
+    use the bound pack's ``effective_date``.
+    """
+    if explicit_dates is not None:
+        return tuple(explicit_dates)
+
+    project = _lookup_case_insensitive(cfg, "project")
+    raw_val_date = (
+        _lookup_case_insensitive(project, "valuation_date")
+        if isinstance(project, Mapping)
+        else None
+    )
+    if raw_val_date is None:
+        raw_val_date = _lookup_case_insensitive(cfg, "valuation_date")
+    parsed_val_date = _parse_optional_iso_date(raw_val_date, "project.valuation_date")
+    if parsed_val_date is not None:
+        return (parsed_val_date,)
+
+    raw_cod_year = (
+        _lookup_case_insensitive(project, "cod_year")
+        if isinstance(project, Mapping)
+        else None
+    )
+    if raw_cod_year is not None:
+        if isinstance(raw_cod_year, bool) or not isinstance(raw_cod_year, int):
+            raise ValueError(
+                f"project.cod_year must be an integer calendar year; got {raw_cod_year!r}"
+            )
+        ops_years = _ops_years_for_valuation(cfg)
+        return tuple(date(raw_cod_year + offset, 12, 31) for offset in range(ops_years))
+
+    effective_dates: List[date] = []
+    for binding in bindings:
+        if (
+            binding.support_status.value != "unsupported"
+            and binding.contract_pack_version
+            in pack_source.versions(binding.jurisdiction_code)
+        ):
+            try:
+                pack = pack_source.load(
+                    binding.jurisdiction_code, binding.contract_pack_version
+                )
+                effective_dates.append(pack.effective_date)
+            except (FileNotFoundError, ValueError):
+                continue
+    if effective_dates:
+        return (max(effective_dates),)
+    return (date(2026, 11, 21),)
+
+
+def _normalize_tax_override_key(raw_key: str) -> Optional[str]:
+    key_lower = raw_key.strip().lower()
+    if key_lower in ("corporate_rate", "corporate_tax_rate_pct"):
+        return "tax.corporate_tax_rate"
+    if key_lower in PACK_GOVERNED_TAX_FIELDS:
+        return PACK_GOVERNED_TAX_FIELDS[key_lower]
+    if key_lower in _SCENARIO_KEY_TO_TAX_FIELD:
+        return key_lower
+    return None
+
+
+def _override_value_from_tax_section(
+    tax_section: Optional[Mapping[str, Any]],
+    field_name: str,
+    raw_key: str,
+) -> Any:
+    if tax_section is None:
+        raise KeyError(
+            f"tax.pack_overrides[{raw_key!r}] requires a value or tax.{field_name}"
+        )
+    if field_name == "corporate_tax_rate":
+        return _get_tax_rate_with_compat(tax_section)
+    value = _lookup_case_insensitive(tax_section, field_name)
+    if value is None:
+        raise KeyError(
+            f"tax.pack_overrides[{raw_key!r}] requires a value or tax.{field_name}"
+        )
+    return value
+
+
+def _extract_pack_overrides(
+    cfg: Mapping[str, Any],
+    bindings: Sequence[JurisdictionBinding],
+    pack_source: PackSource,
+) -> Tuple[ProjectOverride, ...]:
+    tax_section_raw = _lookup_case_insensitive(cfg, "tax")
+    if tax_section_raw is not None and not isinstance(tax_section_raw, Mapping):
+        return ()
+    tax_section = tax_section_raw
+    raw_overrides = (
+        _lookup_case_insensitive(tax_section, "pack_overrides")
+        if tax_section is not None
+        else None
+    )
+    if raw_overrides is None:
+        return ()
+    if not isinstance(raw_overrides, Mapping):
+        raise ValueError("tax.pack_overrides must be a mapping")
+    if not raw_overrides:
+        return ()
+
+    tax_bindings = [b for b in bindings if b.subject is JurisdictionSubject.TAX]
+    scenario_key_to_pid: Dict[str, str] = {}
+    known_pids: set[str] = set()
+    for binding in tax_bindings:
+        if (
+            binding.support_status.value != "unsupported"
+            and binding.contract_pack_version
+            in pack_source.versions(binding.jurisdiction_code)
+        ):
+            try:
+                pack = pack_source.load(
+                    binding.jurisdiction_code, binding.contract_pack_version
+                )
+            except (FileNotFoundError, ValueError):
+                continue
+            for param in pack.parameters:
+                if param.subject is JurisdictionSubject.TAX:
+                    scenario_key_to_pid.setdefault(
+                        param.scenario_key, param.parameter_id
+                    )
+                    known_pids.add(param.parameter_id)
+
+    overrides: List[ProjectOverride] = []
+    for raw_key, spec in raw_overrides.items():
+        key_str = str(raw_key).strip()
+        if key_str in known_pids:
+            parameter_id = key_str
+            scenario_key = next(
+                (sk for sk, pid in scenario_key_to_pid.items() if pid == parameter_id),
+                None,
+            )
+        else:
+            scenario_key = _normalize_tax_override_key(key_str)
+            if scenario_key is None:
+                raise JurisdictionRefusal(
+                    RefusalReason.UNKNOWN_OVERRIDE,
+                    f"tax.pack_overrides[{key_str!r}] names no direct-tax pack parameter",
+                )
+            parameter_id = scenario_key_to_pid.get(scenario_key, key_str)
+
+        field_name = (
+            _SCENARIO_KEY_TO_TAX_FIELD.get(scenario_key, key_str)
+            if scenario_key is not None
+            else key_str
+        )
+
+        if isinstance(spec, Mapping):
+            raw_prov = spec.get("provenance")
+            if "value" in spec:
+                value = spec["value"]
+            else:
+                value = _override_value_from_tax_section(
+                    tax_section, field_name, key_str
+                )
+        else:
+            raw_prov = spec
+            value = _override_value_from_tax_section(tax_section, field_name, key_str)
+
+        if raw_prov is None or (isinstance(raw_prov, str) and not raw_prov.strip()):
+            provenance: Optional[str] = None
+        else:
+            provenance = str(raw_prov).strip()
+
+        overrides.append(
+            ProjectOverride(
+                parameter_id=parameter_id,
+                value=value,
+                provenance=provenance,
+            )
+        )
+    return tuple(overrides)
+
+
+def _extract_scalar_or_series(
+    periods: Sequence[Any],
+    scenario_key: str,
+    *,
+    required: bool,
+    allow_time_varying: bool,
+) -> Tuple[Optional[Any], Optional[Tuple[Tuple[int, float], ...]]]:
+    values: List[Any] = []
+    for period in periods:
+        found = next(
+            (item.value for item in period.values if item.scenario_key == scenario_key),
+            None,
+        )
+        values.append(found)
+    if all(v is None for v in values):
+        if required:
+            raise DirectTaxJurisdictionError(
+                f"tax: resolved jurisdiction pack does not supply required direct-tax "
+                f"parameter {scenario_key!r} (#1841)"
+            )
+        return None, None
+    if any(v is None for v in values):
+        raise DirectTaxJurisdictionError(
+            f"tax: parameter {scenario_key!r} is missing on some operating valuation dates (#1841)"
+        )
+    first = values[0]
+    if all(v == first for v in values):
+        return first, None
+    if not allow_time_varying:
+        raise DirectTaxJurisdictionError(
+            f"tax: parameter {scenario_key!r} varies across operating valuation dates "
+            f"({values!r}), which is not supported as a schedule scalar (#1841)"
+        )
+    by_year = tuple((idx, float(val)) for idx, val in enumerate(values, start=1))
+    return first, by_year
+
+
+def resolve_direct_tax_from_pack(
+    cfg: Mapping[str, Any],
+    *,
+    bindings: Optional[Iterable[JurisdictionBinding]] = None,
+    source: Optional[PackSource] = None,
+    registry: Optional[ScenarioBindingRegistry] = None,
+    packs_root: Optional[Path] = None,
+    valuation_dates: Optional[Iterable[date]] = None,
+) -> ResolvedDirectTax:
+    """Resolve statutory direct-tax parameters from the scenario's jurisdiction pack.
+
+    Refuses unknown/unsupported jurisdictions, reported conflict records
+    (``not_run_conflict``), unsupported subject dispositions
+    (``not_run_unsupported_jurisdiction``), overrides without provenance, and valuation
+    dates outside the pack's effective windows (#1841 PR 4).
+    """
+    bound = (
+        tuple(bindings)
+        if bindings is not None
+        else scenario_jurisdiction_bindings(
+            cfg, registry=registry, packs_root=packs_root
+        )
+    )
+    pack_source: PackSource = (
+        DirectoryPackSource(packs_root) if source is None else source
+    )
+    dates = _resolve_operating_valuation_dates(cfg, bound, pack_source, valuation_dates)
+    overrides = _extract_pack_overrides(cfg, bound, pack_source)
+
+    resolution = resolve_jurisdiction_pack(
+        bound,
+        dates,
+        required_subjects=(JurisdictionSubject.TAX,),
+        overrides=overrides,
+        source=pack_source,
+    )
+
+    if resolution.conflicts:
+        summary = "; ".join(
+            f"{c.kind.value} on {c.subject.value}.{c.parameter_id} @ {c.valuation_date} "
+            f"(candidates: {', '.join(f'{cand.origin}={cand.value!r}' for cand in c.candidates)})"
+            for c in resolution.conflicts
+        )
+        raise DirectTaxJurisdictionError(
+            f"tax: jurisdiction resolution refused due to not_run_conflict ({summary}) (#1841)"
+        )
+
+    tax_subject = resolution.subject(JurisdictionSubject.TAX)
+    if tax_subject.disposition is SubjectDisposition.NOT_RUN_CONFLICT:
+        raise DirectTaxJurisdictionError(
+            "tax: jurisdiction resolution returned disposition not_run_conflict (#1841)"
+        )
+    if tax_subject.disposition is SubjectDisposition.NOT_RUN_UNSUPPORTED_JURISDICTION:
+        raise DirectTaxJurisdictionError(
+            "tax: jurisdiction resolution returned disposition "
+            "not_run_unsupported_jurisdiction; refusing to apply fallback tax rules (#1841)"
+        )
+    if (
+        tax_subject.disposition is not SubjectDisposition.SUPPORTED
+        or not tax_subject.periods
+    ):
+        raise DirectTaxJurisdictionError(
+            f"tax: jurisdiction resolution for subject 'tax' is not supported "
+            f"(disposition={tax_subject.disposition.value}) (#1841)"
+        )
+
+    cit_val, cit_by_year = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.corporate_tax_rate",
+        required=True,
+        allow_time_varying=True,
+    )
+    lcf_val, _ = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.loss_carryforward_years",
+        required=True,
+        allow_time_varying=False,
+    )
+    wht_int_val, wht_int_by_year = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.wht_on_interest_to_nonresidents",
+        required=True,
+        allow_time_varying=True,
+    )
+    wht_div_val, _ = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.wht_on_dividends",
+        required=False,
+        allow_time_varying=False,
+    )
+    plant_years_val, _ = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.plant_depreciation_years",
+        required=False,
+        allow_time_varying=False,
+    )
+    civil_years_val, _ = _extract_scalar_or_series(
+        tax_subject.periods,
+        "tax.civil_depreciation_years",
+        required=False,
+        allow_time_varying=False,
+    )
+
+    if cit_val is None or lcf_val is None or wht_int_val is None:
+        raise DirectTaxJurisdictionError(
+            "tax: resolved jurisdiction pack is missing a required direct-tax value (#1841)"
+        )
+
+    return ResolvedDirectTax(
+        corporate_tax_rate=float(cit_val),
+        loss_carryforward_years=int(lcf_val),
+        wht_on_interest_to_nonresidents=float(wht_int_val),
+        wht_on_dividends=_opt_float(wht_div_val),
+        plant_depreciation_years=_opt_int(plant_years_val),
+        civil_depreciation_years=_opt_int(civil_years_val),
+        corporate_tax_rate_by_year=cit_by_year,
+        wht_on_interest_by_year=wht_int_by_year,
+        resolution=resolution,
+    )
+
+
+def with_tax_pack_override_provenance(
+    merged_cfg: Dict[str, Any],
+    expanded_overrides: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Attach explicit provenance to runtime ``tax.*`` overrides on bound scenarios.
+
+    Evaluation gateways (``analytics.evaluation_v14`` and ``analytics.evaluate_scenario``)
+    merge sensitivity/optimization/test overrides into ``merged_cfg``. When the scenario
+    declares ``project.jurisdiction``, any runtime override touching a pack-governed direct-tax
+    field is recorded under ``tax.pack_overrides`` with provenance so the resolver applies
+    the override rather than overwriting it with the pack value, while still respecting any
+    caller-supplied ``tax.pack_overrides`` entry.
+    """
+    if declared_project_jurisdiction(merged_cfg) is None:
+        return merged_cfg
+    ovr_tax = _lookup_case_insensitive(expanded_overrides, "tax")
+    if not isinstance(ovr_tax, Mapping):
+        return merged_cfg
+
+    overridden: List[Tuple[str, str, Any]] = []
+    for raw_key, raw_val in ovr_tax.items():
+        key_lower = str(raw_key).strip().lower()
+        if key_lower in _TAX_RATE_COMPAT_ALIASES:
+            overridden.append(("corporate_tax_rate", str(raw_key), raw_val))
+        elif key_lower in PACK_GOVERNED_TAX_FIELDS:
+            overridden.append((key_lower, str(raw_key), raw_val))
+
+    if not overridden:
+        return merged_cfg
+
+    existing_tax = _lookup_case_insensitive(merged_cfg, "tax")
+    if not isinstance(existing_tax, Mapping):
+        return merged_cfg
+
+    existing_pack_ovr = _lookup_case_insensitive(existing_tax, "pack_overrides")
+    if existing_pack_ovr is not None and not isinstance(existing_pack_ovr, Mapping):
+        return merged_cfg
+
+    caller_pack_ovr = _lookup_case_insensitive(ovr_tax, "pack_overrides")
+    caller_ovr_keys = (
+        {str(k).strip().lower() for k in caller_pack_ovr}
+        if isinstance(caller_pack_ovr, Mapping)
+        else set()
+    )
+
+    pack_overrides = (
+        dict(existing_pack_ovr) if isinstance(existing_pack_ovr, Mapping) else {}
+    )
+    for canonical_field, raw_key, raw_val in overridden:
+        if (
+            canonical_field in caller_ovr_keys
+            or raw_key.strip().lower() in caller_ovr_keys
+        ):
+            continue
+        provenance = f"runtime override via evaluation gateway (tax.{raw_key})"
+        if (
+            canonical_field == "corporate_tax_rate"
+            and raw_key.strip().lower() != "corporate_tax_rate"
+        ):
+            normalized = _get_tax_rate_with_compat({raw_key: raw_val})
+            pack_overrides[canonical_field] = {
+                "value": normalized,
+                "provenance": provenance,
+            }
+        else:
+            pack_overrides[canonical_field] = {
+                "value": raw_val,
+                "provenance": provenance,
+            }
+
+    out = dict(merged_cfg)
+    tax_copy = dict(existing_tax)
+    tax_copy["pack_overrides"] = pack_overrides
+    out["tax"] = tax_copy
+    return out
+
+
+def _refuse_explicit_null_tax_fields(tax: Mapping[str, Any]) -> None:
+    """Reject explicit ``null`` values on core statutory fields (e.g. invalid fixtures)."""
+    for key in (
+        "corporate_tax_rate",
+        "loss_carryforward_years",
+        "wht_on_interest_to_nonresidents",
+    ):
+        for existing_key, value in tax.items():
+            if str(existing_key).lower() == key and value is None:
+                raise KeyError(f"Missing required YAML key: tax.{key}")
+
+
 @dataclass(frozen=True)
 class TaxConfig:
     corporate_tax_rate: float
@@ -228,6 +767,8 @@ class TaxConfig:
     civil_depreciation_years: Optional[int] = (
         None  # SL Class 4 buildings/civils = 20 yr
     )
+    corporate_tax_rate_by_year: Optional[Tuple[Tuple[int, float], ...]] = None
+    wht_on_interest_by_year: Optional[Tuple[Tuple[int, float], ...]] = None
 
     def __post_init__(self) -> None:
         # enhanced_capital_allowance_multiple is an explicit MULTIPLIER on the depreciable
@@ -256,20 +797,77 @@ class TaxConfig:
             )
 
     @classmethod
-    def from_yaml(cls, cfg: Mapping[str, Any]) -> "TaxConfig":
+    def from_yaml(
+        cls,
+        cfg: Mapping[str, Any],
+        *,
+        bindings: Optional[Iterable[JurisdictionBinding]] = None,
+        pack_source: Optional[PackSource] = None,
+        registry: Optional[ScenarioBindingRegistry] = None,
+        packs_root: Optional[Path] = None,
+        valuation_dates: Optional[Iterable[date]] = None,
+    ) -> "TaxConfig":
         """Build TaxConfig from the full scenario dict.
 
-        CESSPIT / R22 — schema-strict, no hidden defaults: every tax field is
-        REQUIRED and a missing key fails fast with ``KeyError: ... tax.<key>``
-        rather than silently substituting a default. The single optional field
-        is ``interest_deductibility`` (documented default ``True``).
-        """
-        require_sri_lanka_jurisdiction(cfg, "tax")
-        tax = _require_section(cfg, "tax")
+        When ``project.jurisdiction`` (or explicit ``bindings``) is supplied, statutory
+        direct-tax parameters (``corporate_tax_rate``, ``loss_carryforward_years``,
+        ``plant_depreciation_years``, ``civil_depreciation_years``,
+        ``wht_on_interest_to_nonresidents``) are resolved from the scenario's jurisdiction
+        pack via :func:`resolve_direct_tax_from_pack` (#1841 PR 4). When
+        ``project.jurisdiction`` is absent (standalone unit-test configs), the legacy
+        strict direct-YAML path applies.
 
-        # Required + range-validated; canonical/compact/deprecated aliases are
-        # accepted, but absence raises (no silent default fallback).
-        corporate_tax_rate = _get_tax_rate_with_compat(tax)
+        CESSPIT / R22 — schema-strict, no hidden defaults: every required project tax
+        field fails fast with ``KeyError: ... tax.<key>`` rather than silently
+        substituting a default. The single optional field is ``interest_deductibility``
+        (documented default ``True``).
+        """
+        has_jurisdiction = (
+            bindings is not None or declared_project_jurisdiction(cfg) is not None
+        )
+        if has_jurisdiction:
+            resolved = resolve_direct_tax_from_pack(
+                cfg,
+                bindings=bindings,
+                source=pack_source,
+                registry=registry,
+                packs_root=packs_root,
+                valuation_dates=valuation_dates,
+            )
+            tax = _require_section(cfg, "tax")
+            _refuse_explicit_null_tax_fields(tax)
+            corporate_tax_rate = resolved.corporate_tax_rate
+            loss_carryforward_years = resolved.loss_carryforward_years
+            wht_on_interest_to_nonresidents = resolved.wht_on_interest_to_nonresidents
+            plant_depreciation_years = (
+                resolved.plant_depreciation_years
+                if resolved.plant_depreciation_years is not None
+                else _opt_int(_lookup_case_insensitive(tax, "plant_depreciation_years"))
+            )
+            civil_depreciation_years = (
+                resolved.civil_depreciation_years
+                if resolved.civil_depreciation_years is not None
+                else _opt_int(_lookup_case_insensitive(tax, "civil_depreciation_years"))
+            )
+            rate_by_year = resolved.corporate_tax_rate_by_year
+            wht_by_year = resolved.wht_on_interest_by_year
+        else:
+            tax = _require_section(cfg, "tax")
+            corporate_tax_rate = _get_tax_rate_with_compat(tax)
+            loss_carryforward_years = int(
+                _require_key(tax, "loss_carryforward_years", "tax")
+            )
+            wht_on_interest_to_nonresidents = float(
+                _require_key(tax, "wht_on_interest_to_nonresidents", "tax")
+            )
+            plant_depreciation_years = _opt_int(
+                _lookup_case_insensitive(tax, "plant_depreciation_years")
+            )
+            civil_depreciation_years = _opt_int(
+                _lookup_case_insensitive(tax, "civil_depreciation_years")
+            )
+            rate_by_year = None
+            wht_by_year = None
 
         obj = cls(
             corporate_tax_rate=corporate_tax_rate,
@@ -284,16 +882,12 @@ class TaxConfig:
             enhanced_capital_allowance_multiple=_get_enhanced_allowance_with_compat(
                 tax
             ),
-            loss_carryforward_years=int(
-                _require_key(tax, "loss_carryforward_years", "tax")
-            ),
+            loss_carryforward_years=loss_carryforward_years,
             tax_holiday_start_year=int(
                 _require_key(tax, "tax_holiday_start_year", "tax")
             ),
             tax_holiday_years=int(_require_key(tax, "tax_holiday_years", "tax")),
-            wht_on_interest_to_nonresidents=float(
-                _require_key(tax, "wht_on_interest_to_nonresidents", "tax")
-            ),
+            wht_on_interest_to_nonresidents=wht_on_interest_to_nonresidents,
             wht_on_interest_enabled=bool(
                 _require_key(tax, "wht_on_interest_enabled", "tax")
             ),
@@ -310,12 +904,10 @@ class TaxConfig:
             plant_capex_share=_opt_float(
                 _lookup_case_insensitive(tax, "plant_capex_share")
             ),
-            plant_depreciation_years=_opt_int(
-                _lookup_case_insensitive(tax, "plant_depreciation_years")
-            ),
-            civil_depreciation_years=_opt_int(
-                _lookup_case_insensitive(tax, "civil_depreciation_years")
-            ),
+            plant_depreciation_years=plant_depreciation_years,
+            civil_depreciation_years=civil_depreciation_years,
+            corporate_tax_rate_by_year=rate_by_year,
+            wht_on_interest_by_year=wht_by_year,
         )
         obj._validate()
         return obj
@@ -358,6 +950,18 @@ class TaxConfig:
                 raise ValueError(
                     "tax.civil_depreciation_years must be >= 1 when plant_capex_share is set"
                 )
+        if self.corporate_tax_rate_by_year is not None:
+            for yr, rate in self.corporate_tax_rate_by_year:
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError(
+                        f"tax.corporate_tax_rate_by_year[{yr}] must be in [0,1], got {rate}"
+                    )
+        if self.wht_on_interest_by_year is not None:
+            for yr, rate in self.wht_on_interest_by_year:
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError(
+                        f"tax.wht_on_interest_by_year[{yr}] must be in [0,1], got {rate}"
+                    )
 
 
 @dataclass(frozen=True)
@@ -374,6 +978,8 @@ class TaxProfile:
     #: TaxProfile constructions stay byte-identical). A loss originating in year ``y``
     #: can offset income through year ``y + loss_carryforward_years``.
     loss_carryforward_years: int = 0
+    tax_rate_by_year: Optional[Dict[int, float]] = None
+    withholding_tax_rate_by_year: Optional[Dict[int, float]] = None
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.tax_rate <= 1.0):
@@ -382,6 +988,18 @@ class TaxProfile:
             raise ValueError(
                 f"withholding_tax_rate must be in [0,1], got {self.withholding_tax_rate}"
             )
+        if self.tax_rate_by_year is not None:
+            for yr, rate in self.tax_rate_by_year.items():
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError(
+                        f"tax_rate_by_year[{yr}] must be in [0,1], got {rate}"
+                    )
+        if self.withholding_tax_rate_by_year is not None:
+            for yr, rate in self.withholding_tax_rate_by_year.items():
+                if not (0.0 <= rate <= 1.0):
+                    raise ValueError(
+                        f"withholding_tax_rate_by_year[{yr}] must be in [0,1], got {rate}"
+                    )
         if self.depreciation_method not in (
             "straight_line",
             "accelerated",
@@ -524,6 +1142,16 @@ def build_tax_profile(
         if config.wht_on_interest_enabled
         else 0.0
     )
+    tax_rate_by_year = (
+        dict(config.corporate_tax_rate_by_year)
+        if config.corporate_tax_rate_by_year is not None
+        else None
+    )
+    wht_by_year = (
+        dict(config.wht_on_interest_by_year)
+        if config.wht_on_interest_enabled and config.wht_on_interest_by_year is not None
+        else None
+    )
     return TaxProfile(
         tax_rate=config.corporate_tax_rate,
         interest_deductibility=config.interest_deductibility,
@@ -533,6 +1161,8 @@ def build_tax_profile(
         loss_carryforward_years=config.loss_carryforward_years,
         withholding_tax_rate=wht_rate,
         tax_holidays_by_year=tax_holidays,
+        tax_rate_by_year=tax_rate_by_year,
+        withholding_tax_rate_by_year=wht_by_year,
     )
 
 
@@ -621,14 +1251,26 @@ def calculate_tax(
         taxable_income = max(taxable_after, 0.0)
         new_losses = sum(amt for _, amt in new_vintages)
 
-    tax_liability = 0.0 if is_holiday else taxable_income * tax_profile.tax_rate
+    applicable_tax_rate = (
+        tax_profile.tax_rate_by_year.get(year, tax_profile.tax_rate)
+        if tax_profile.tax_rate_by_year is not None
+        else tax_profile.tax_rate
+    )
+    tax_liability = 0.0 if is_holiday else taxable_income * applicable_tax_rate
     # FIN-3 (#482): the effective tax rate is tax / TAXABLE INCOME (the base the rate is
     # applied to), not tax / EBIT (which ignores the interest + depreciation deductions and
     # would report a misleadingly low rate). Reporting-only — CFADS uses tax_liability
     # directly — so this is KPI-neutral, but the lender-audit figure must be honest.
     effective_rate = tax_liability / taxable_income if taxable_income > 0.0 else 0.0
     wht_base = interest_expense if interest_paid is None else interest_paid
-    wht_on_interest = wht_base * tax_profile.withholding_tax_rate
+    applicable_wht_rate = (
+        tax_profile.withholding_tax_rate_by_year.get(
+            year, tax_profile.withholding_tax_rate
+        )
+        if tax_profile.withholding_tax_rate_by_year is not None
+        else tax_profile.withholding_tax_rate
+    )
+    wht_on_interest = wht_base * applicable_wht_rate
 
     return TaxResult(
         year=year,
@@ -681,10 +1323,16 @@ __all__ = [
     "TaxProfile",
     "TaxResult",
     "DepreciationSchedule",
+    "DirectTaxJurisdictionError",
+    "ResolvedDirectTax",
+    "PACK_GOVERNED_TAX_FIELDS",
     "build_tax_profile",
     "build_tax_series",
     "calculate_tax",
     "build_tax_holiday_map",
+    "declared_project_jurisdiction",
+    "resolve_direct_tax_from_pack",
+    "with_tax_pack_override_provenance",
     "require_sri_lanka_jurisdiction",
     "SRI_LANKA_JURISDICTION_NAMES",
 ]

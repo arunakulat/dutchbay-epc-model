@@ -1,0 +1,1 @@
+Resolve verifier Git commands through the system executable, disable Git replacement objects, pin the exact remote-tracking ref and refuse additional environment overrides. Exercise real replacement and ambiguous ref negative controls. (#1945)
