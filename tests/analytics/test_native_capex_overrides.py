@@ -250,11 +250,27 @@ def test_mc_refuses_sweeps_every_native_trial_would_reject(
     from analytics.mc.engine import MonteCarloConfigError, MonteCarloEngine
 
     usd, native = cases()
-    for cfg in (native, normalize_native_capex(native)):
-        cfg = copy.deepcopy(cfg)
-        cfg["monte_carlo"] = {"parameters": [param]}
+    is_fx_sweep = (
+        param.get("distribution") == "fx_calibrated"
+        or param["name"] == "fx.start_lkr_per_usd"
+    )
+    resolved_native = normalize_native_capex(native)
+    if is_fx_sweep:
+        # DOM-1645-03: authored native configs derive LKR conversion from fx.start_lkr_per_usd,
+        # while already-resolved configs still refuse FX sweeps as stale provenance.
+        authored_cfg = copy.deepcopy(native)
+        authored_cfg["monte_carlo"] = {"parameters": [param]}
+        MonteCarloEngine(authored_cfg)
+        resolved_cfg = copy.deepcopy(resolved_native)
+        resolved_cfg["monte_carlo"] = {"parameters": [param]}
         with pytest.raises(MonteCarloConfigError, match="native-CAPEX.*#1629"):
-            MonteCarloEngine(cfg)
+            MonteCarloEngine(resolved_cfg)
+    else:
+        for cfg in (native, resolved_native):
+            cfg = copy.deepcopy(cfg)
+            cfg["monte_carlo"] = {"parameters": [param]}
+            with pytest.raises(MonteCarloConfigError, match="#1629"):
+                MonteCarloEngine(cfg)
     if param["name"].strip().lower() in {
         "capex",
         "capex.usd_total",
@@ -302,6 +318,63 @@ def test_mc_dry_run_refuses_what_every_native_trial_refuses(
         cfg["monte_carlo"] = {"parameters": [{"name": name, "low": low, "high": high}]}
         with pytest.raises(MonteCarloConfigError, match="refused before sampling"):
             MonteCarloEngine(cfg)
+
+
+def test_lone_fx_spot_override_moves_native_capex_and_matches_usd_twin() -> None:
+    """DOM-1645-03: a lone fx.start_lkr_per_usd override moves LKR->USD CAPEX and matches
+    the equivalent USD-twin evaluation."""
+    usd, native = cases()
+    base_rate = float(native["fx"]["start_lkr_per_usd"])
+    new_rate = base_rate + 25.0
+    lkr_amount = float(native["capex"]["input"]["amount"])
+
+    base_native = evaluate_with_overrides(raw_config=native)
+    moved_native = evaluate_with_overrides(
+        raw_config=native,
+        overrides={"fx.start_lkr_per_usd": new_rate},
+    )
+    usd_oracle = evaluate_with_overrides(
+        raw_config=usd,
+        overrides={
+            "fx.start_lkr_per_usd": new_rate,
+            "capex.usd_total": lkr_amount / new_rate,
+        },
+    )
+    assert moved_native["project_npv"] != pytest.approx(
+        base_native["project_npv"], rel=1e-6
+    )
+    assert moved_native["project_npv"] == pytest.approx(
+        usd_oracle["project_npv"], rel=1e-9
+    )
+    assert moved_native["equity_irr"] == pytest.approx(
+        usd_oracle["equity_irr"], rel=1e-9
+    )
+
+
+def test_mc_fx_spot_sweep_runs_on_authored_native_scenario() -> None:
+    """DOM-1645-03: Monte Carlo sweeps of fx.start_lkr_per_usd succeed on authored native
+    configs with zero failed trials."""
+    from analytics.mc.engine import MonteCarloEngine
+
+    _, native = cases()
+    base_rate = float(native["fx"]["start_lkr_per_usd"])
+    cfg = copy.deepcopy(native)
+    cfg["monte_carlo"] = {
+        "n_simulations": 4,
+        "seed": 42,
+        "parameters": [
+            {
+                "name": "fx.start_lkr_per_usd",
+                "low": base_rate - 15.0,
+                "high": base_rate + 15.0,
+            }
+        ],
+    }
+    engine = MonteCarloEngine(cfg)
+    results = engine.run(n_trials=4)
+    assert results.failed_iterations == 0
+    assert results.iterations == 4
+    assert len(set(results.trials["project_npv"])) > 1
 
 
 def test_mc_dry_run_sends_a_resolved_config_back_to_the_authored_one() -> None:
