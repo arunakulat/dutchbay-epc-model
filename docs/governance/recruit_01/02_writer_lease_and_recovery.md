@@ -65,6 +65,154 @@ The checkpoint receipt states HEAD, tree, base, dirty paths, changed paths, hash
 results, concurrent drift, staged/committed/pushed state, limitations, and active HOLDs. A claimed
 checkpoint without on-disk proof is not a checkpoint.
 
+### 4.1 Typed-code checkpoint qualification
+
+Before qualifying a checkpoint that changes typed Python, stubs, or a type/import
+contract, run successful targeted mypy against the affected surface with the
+governed interpreter and applicable existing CI gate configuration. Include
+affected dependants when the interface or import boundary changes; broaden the
+scope when impact is uncertain. Run on final formatter-stable bytes, before
+staging; repeat after relevant byte, configuration or environment drift. Bind
+the command, interpreter and mypy version, configuration identity, target scope,
+exit result, log digest and candidate hashes to the checkpoint receipt. Missing
+or failing type evidence blocks qualification. A not-applicable disposition
+requires an explicit scope rationale subject to independent challenge; not run
+is not PASS. A persistence-only rescue is not qualified and grants no review
+or merge authority. Preserve R21 full-suite pre-push and R23 local type
+verification and every existing CI type gate; the #1270 local hook decision
+is unchanged. No error suppression or gate weakening is a remedy for a failed
+type check.
+
+### 4.2 Operational checkpoint and incident routing
+
+Use the R25 preflight with the exact coordinator-verified worktree, branch and
+live base. Before staging, run canonical allowlisted hook readiness
+(`scripts/gwtf_checkpoint_readiness.py`); any formatter mutation stops
+qualification, preserves bytes and requires reconciliation and a fresh lease.
+Run the required final-byte tests and typed-code checks under §4.1, compare
+the staged blobs and modes with the tested candidate, then use ordinary
+commit hooks. Reconcile committed blobs, parent, tree and clean worktree.
+Use `scripts/gwtf_checkpoint_receipt.py` for the external evidence journal;
+preserve its digest independently. A journal entry alone is not proof of
+execution, approval, signer identity or notification delivery. Record execution
+completion separately from reporting observation; persist observed process
+identity, exit and evidence immediately. Poll active processes within the active
+execution session where practical. If interrupted, record outstanding process
+identity and last observed state for the next authorized session; do not claim
+background chat delivery.
+
+Use `scripts/gwtf_interruption_recovery.py` for read-only observation and
+explicitly authorized byte preservation, and `scripts/gwtf_incident.py` for
+fixed-schema incident classification. Reconcile owner, stop, base and source
+rights independently before any new lease. Unknown outcomes, missing evidence,
+out-of-scope drift and platform execution restrictions fail closed; never
+bypass platform restrictions. These tools do not grant writer authority,
+retry permission, independent acceptance, required CI or merge authority.
+Incident v2 drift is measured against the expected Git-visible state immediately
+before the observed operation (including the authorized candidate and index),
+not against HEAD. Retain the baseline digest and execution-evidence digest;
+without them completion/unchanged claims cannot qualify. Unknown reporting of
+a completed operation requires reconciliation. Incident CLI exit 0 denotes
+only an observed successful, non-reconciliation disposition; exit 2 records
+a held or incomplete disposition, exit 1 refuses malformed evidence. A receipt
+write never authorizes retry or confirms delivery. CLI inputs must be regular
+external files, and failures use bounded diagnostics; original logs and
+authorized scope evidence still require controlled custody.
+
+Ignored paths and concurrent changes between observations are residual
+limitations, not certified isolation. The stricter applicable rule always wins.
+
+### 4.3 Coordinator CLI for the v2 checkpoint journal
+
+Use the governed Python interpreter and external, access-controlled evidence
+directory. Before operational reliance, an independent reviewer must inspect
+the exact launcher and verifier module closure and verify their source object
+identities. An independent custodian must retain the launcher digest and the
+complete manifest digest outside the candidate worktree and writer control.
+The bundle contains only the reviewed launcher, readiness, receipt, recovery,
+incident and workflow Python files, plus the exact manifest with source commit
+and SHA256 of each file. Verify the launcher bytes against the independently
+retained pin before starting Python. Use the governed interpreter and its
+independently verified runtime; the private external bundle is not a sandbox.
+A copied candidate, fixture manifest or writer-issued pin is not independent
+approval. If the reviewed source, custody, pins or runtime are unavailable,
+stop operational qualification; direct candidate CLI runs are diagnostics only.
+
+After R25 and the lease checks, the reviewed external launcher can be invoked
+with this shape, where B is the private external bundle and PIN is the
+independently retained manifest digest (not recomputed from mutable input):
+
+```bash
+"$DUTCHBAY_VENV/bin/python" -I -S -B "$B/gwtf_trusted_verifier.py" \
+  --bundle "$B" --manifest-sha256 "$PIN" gwtf_checkpoint_workflow \
+  --journal "$J" start --worktree "$W" --lease "$L"
+```
+
+Supply the exact applied-patch lease, including initial index digest, candidate
+hashes and Git modes, and approved type plan. Retain the returned subject
+digest and journal tip in independent custody. The CLI returns planned type
+commands; it does not execute them. Route subsequent workflow subcommands
+through the same pinned launcher; use its readiness entry for both canonical
+readiness and staged comparison. Use the reviewed recovery and incident entries
+for those operations. Keep actual coordinator execution evidence separate
+from source pins and journal assertions.
+
+Run canonical readiness, the required targeted mypy and regression checks
+under the lease. For each actual observed result, prepare an external JSON
+object containing check_id, subject_sha256, command (argument list), exit_code,
+log_name (basename in journal directory), log_sha256 and, for a type check,
+type_evidence (the corresponding plan record). Append using
+`observe --expected-tip "$TIP" --observation "$OBS"` after the same journal
+prefix. Independently retain each returned tip. Failed observations are not
+PASS; stop and reconcile rather than replacing evidence. Do not expose secrets
+in command arguments, logs or evidence files.
+
+Only the authorized writer may explicitly stage the exact tested allowlist,
+run the readiness utility's --verify-staged comparison and ordinary commit
+hooks. For both readiness and the ordinary commit child, use the controlled
+hook environment from the independently trusted verifier's
+`hook_environment(worktree)`: remove inherited Python import-path overrides,
+enable safe-path and no-user-site behavior, and use the governed interpreter
+directory plus the system executable search path. Loader, shell, hook-cache
+and bypass overrides require reconciliation, not execution. The coordinator
+checks installed-hook, interpreter and cache custody separately; the helper
+only constructs the environment and does not commit or grant authority.
+Record the staged and commit observations with their actual logs.
+Use `complete --expected-tip "$TIP" --exit-code 0` only on observed successful
+completion, then retain that pre-checkpoint tip separately. Invoke
+`record --worktree "$W" --lease "$L" --expected-tip "$TIP"`, retain the new tip,
+and invoke `verify --worktree "$W" --lease "$L" --expected-tip "$TIP"` with that
+new anchor. The latter re-compares actual Git objects. Inspect alone never
+establishes checkpoint qualification. The report subcommand records observed
+reporting separately and cannot confirm delivery. Every mutation after start
+requires the independently retained previous tip; a mismatch stops execution.
+
+The CLI never stages, commits, pushes or merges and does not authenticate
+execution, ownership, source rights or reviewer identity. Coordinator review,
+live-base and scope adequacy checks, full pre-push tests and formal independent
+R3 and CI remain mandatory. Version 1 records are historical claims only.
+
+### 4.4 Predecessor disposition and verification limits
+
+The [#1270 owner decision of 26 October 2026](https://github.com/arunakulat/dutchbay-epc-model/issues/1270#issuecomment-6407805476)
+retains the disabled automatic local mypy hook;
+R10 names the configured hooks and R21/R23 and applicable CI gates retain
+mandatory type verification. Local implementation is not issue closure;
+independent exact-object review and required CI still apply. #1262 remains
+separate and open: the hook installation-tail tests do not establish complete
+setup-path reachability. Do not claim that readiness or the v2 journal closes
+that gap. The scope of branch retirement remains §8 and CLEANUP-01; no new
+authority to retire unrelated or recovery branches is conferred.
+
+Policy fences preserve every active predecessor rule identity, reject duplicate
+identities and allow additive rules. They check scoped normative
+clauses, not a frozen total rule count. They detect specific hostile context
+mutations, including hidden or negated routed paragraphs and altered CI step
+commands or failure settings. The inherited FX scoped mypy step is advisory;
+blocking strict and scripts gates remain mandatory. These fences do not prove
+workflow reachability or arbitrary natural-language consistency. Independent semantic
+review and actual behavioral oracles remain mandatory.
+
 ## 5. Interruption and collision recovery
 
 Any interruption, target drift, patch-context failure, unexpected writer activity, worktree-owner

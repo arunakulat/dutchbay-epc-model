@@ -1,0 +1,1 @@
+Route canonical checkpoint readiness, final-byte verification, external journal, interruption recovery and incident classification through existing GWTF routines. Separate execution completion from reporting observation, preserve outstanding process handovers and retain all authority boundaries. (#1945)

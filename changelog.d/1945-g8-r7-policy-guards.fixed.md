@@ -1,0 +1,1 @@
+Replace frozen rule-count checks with required active identity and duplicate checks, and strengthen policy fences with scoped full normative clauses and hostile context controls. Record #1270 and #1262 predecessor boundaries without claiming closure or changing branch retirement authority. (#1945)

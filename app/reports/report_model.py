@@ -1369,6 +1369,124 @@ class CostStorageBlock(BaseModel):
     parts_not_run: List[str] = Field(default_factory=list)
 
 
+class WhatIfParameterSummary(BaseModel):
+    """One what-if case parameter with its provenance (#1403 / #1523)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    value_display: str
+    provenance: str
+
+
+class WhatIfKpiRow(BaseModel):
+    """One KPI comparison row (base vs what-if variant, #1403)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kpi: str
+    label: str
+    unit: str  # "pct" | "usd" | "ratio" | "raw"
+    base: Optional[float] = None
+    case: Optional[float] = None
+    delta: Optional[float] = None
+
+
+class WhatIfVariantBlock(BaseModel):
+    """One runnable parameter variant of a #1403 what-if case."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    label: str
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    changed_paths: List[str] = Field(default_factory=list)
+    kpis: List[WhatIfKpiRow] = Field(default_factory=list)
+    debt_usd: Optional[float] = None
+    equity_usd: Optional[float] = None
+    total_uses_usd: Optional[float] = None
+
+
+class WhatIfCaseBlock(BaseModel):
+    """One #1403 non-canonical what-if case with #1523 caveats preserved verbatim."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    case_id: str
+    kind: str
+    label: str
+    canonical: bool = False
+    base_scenario: str
+    case_file: Optional[str] = None
+    source: str
+    limitations: List[str] = Field(default_factory=list)
+    parameters: List[WhatIfParameterSummary] = Field(default_factory=list)
+    notes: str = ""
+    variants: List[WhatIfVariantBlock] = Field(default_factory=list)
+
+
+class CasperLenderRiskRow(BaseModel):
+    """One row of the CASPER lender-risk table (``build_casper_risk_blocks``)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    metric: str
+    unit: str  # "ratio" | "pct" | "usd"
+    p50: Optional[float] = None
+    p90: Optional[float] = None
+    p95: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    defined_trials: int
+    total_trials: int
+    unavailable_trials: int
+    coverage_note: Optional[str] = None
+
+
+class CasperCovenantSummary(BaseModel):
+    """Covenant block emitted by ``build_casper_risk_blocks`` (FRAMEWORK-01)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    dscr_floor: float
+    prob_breach: float
+    floor_pinned: bool
+    worst_year_dscr_p95_downside: Optional[float] = None
+    n_trials: int
+    n_total_trials: int
+    unavailable_trials: int
+
+
+class CasperLenderRiskBlock(BaseModel):
+    """CASPER lender-risk blocks under ``capital_risk_emit`` lender guards (#1825 slice iv)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    scenario: str
+    method: str
+    n_trials: int
+    seed: Optional[int] = None
+    allow_toy_fallback: bool = False
+    covenant: CasperCovenantSummary
+    rows: List[CasperLenderRiskRow] = Field(default_factory=list)
+    floor_pinned_note: Optional[str] = None
+    coverage_notes: List[str] = Field(default_factory=list)
+
+
+class WhatIfLenderRiskBlock(BaseModel):
+    """What-if cases (#1403/#1523) and CASPER lender-risk blocks (#1825 slice iv).
+
+    Beside the committed case, never a replacement for it. Each part either runs or is
+    listed in ``parts_not_run`` with its reason. None of it moves a committed KPI.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    what_if_cases: List[WhatIfCaseBlock] = Field(default_factory=list)
+    casper_lender_risk: Optional[CasperLenderRiskBlock] = None
+    #: Parts of the section that could not run, each with its reason.
+    parts_not_run: List[str] = Field(default_factory=list)
+
+
 class SectionNotRun(BaseModel):
     """One report section that was not rendered, and why (#1752)."""
 
@@ -1554,6 +1672,9 @@ class ReportContext(BaseModel):
     #: dispatch, LCOS, battery-project economics and EPC margin. The command-line lender
     #: report fills it when switched on; None (the default) omits the section.
     cost_storage: Optional[CostStorageBlock] = None
+    #: What-if cases (#1403/#1523) and FRAMEWORK-01 CASPER lender-risk blocks (#1825 slice iv).
+    #: The command-line lender report fills it when switched on; None (the default) omits it.
+    what_if_lender_risk: Optional[WhatIfLenderRiskBlock] = None
 
 
 def _build_kpi_rows(

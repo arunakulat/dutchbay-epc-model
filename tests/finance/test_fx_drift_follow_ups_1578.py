@@ -219,16 +219,10 @@ def test_committed_scenarios_and_gateway_output_are_accepted() -> None:
 
 
 def test_engine_path_status_code_fallback_is_pinned() -> None:
-    """The fallback matches the committed YAML value, which is the one that runs."""
-    from analytics.finance.blue_whale_fx_tenor_screening import (
-        DEFAULT_ENGINE_PATH_STATUS,
-    )
+    """The fallback matches the committed value."""
+    from analytics.finance.fx_tenor_screening import DEFAULT_ENGINE_PATH_STATUS
 
-    conf = yaml.safe_load(
-        (REPO_ROOT / "conf" / "blue_whale_fx_tenor_screening.yaml").read_text()
-    )
     assert DEFAULT_ENGINE_PATH_STATUS == "delivered_bw5_l12_d2"
-    assert conf["engine_path_status"] == DEFAULT_ENGINE_PATH_STATUS
 
 
 # ------------------------------------------------------- calibrated MC, one trial

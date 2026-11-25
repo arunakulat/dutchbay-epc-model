@@ -61,7 +61,7 @@ setup:
 # outside the checkout - so the bare-PATH fallback was doing all the work.
 # Install the configured git pre-commit hook set. `setup` already does this; this target
 # lets an existing checkout restore the enabled local checks and GOV-02 guard without a
-# full environment reconcile. R10's mypy mismatch remains tracked in #1270. Idempotent.
+# full environment reconcile. R10 type-check scope follows #1270. Idempotent.
 # Hooks are untracked, so a fresh clone has none.
 HOOK_PY := $(if $(DUTCHBAY_VENV),$(DUTCHBAY_VENV)/bin/python,$(VENV_PY))
 hooks:
@@ -78,7 +78,7 @@ lint:
 	black --check .
 	isort --check-only --profile=black .
 
-# Strict, complete-annotation mypy over the whole typed surface (mirrors CI test-suite.yml).
+# Strict mypy over SURFACE and ENTRYPOINTS; CI test-suite.yml separately checks scripts/.
 type:
 	mypy $(SURFACE) $(ENTRYPOINTS)
 

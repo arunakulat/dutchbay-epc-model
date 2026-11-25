@@ -1,0 +1,1 @@
+Add a fixed-schema local incident classifier separating execution failure, formatter drift, platform restrictions and reporting disposition. Ambiguous evidence remains subject to reconciliation; classification never grants execution, recovery, merge or notification authority. (#1945)

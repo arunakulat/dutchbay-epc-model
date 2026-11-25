@@ -1,0 +1,1 @@
+Add a read-only interruption observation and reconciliation helper. Authorized candidate-byte preservation is explicit, observed state must remain stable, and ownership and stop evidence must be independently reconciled before a coordinator issues a fresh lease. No automatic takeover, restore, commit or platform retry is authorized. (#1945)

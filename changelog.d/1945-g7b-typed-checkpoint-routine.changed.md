@@ -1,0 +1,1 @@
+Require governed targeted mypy evidence on final formatter-stable typed-code candidates before checkpoint qualification. Bind command, versions, configuration, scope, result, log and candidate hashes; missing or failing evidence blocks qualification and persistence-only rescue remains unqualified. Existing local and CI type gates and #1270 hook decision remain unchanged. (#1945)

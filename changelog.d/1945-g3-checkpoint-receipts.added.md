@@ -1,0 +1,1 @@
+Add a local hash-linked checkpoint journal and Git-object reconciliation helper. Execution completion, recorded checkpoint and observed reporting remain distinct; receipts cannot confer independent acceptance, merge authority or confirm notification delivery. (#1945)

@@ -1,33 +1,32 @@
 # GWTF R25 Compliance Scripts
 
-Prevention scripts for GWTF R25 (Branch Protection) violations.
+## Feature-writer preflight
 
-See: `GWTF_R25_VIOLATION_REPORT.md` in repository root.
+Run the read-only identity preflight from the exact authorized linked worktree root
+with the coordinator-verified worktree, branch and full protected base SHA:
 
-## Scripts
+```bash
+bash scripts/gwtf-preflight.sh "$EXPECTED_WORKTREE" "$EXPECTED_BRANCH" "$EXPECTED_BASE_SHA"
+```
 
-### Pre-Flight Checklist (`gwtf-preflight.sh`)
-Run before ANY git merge, pull, or push operation.
+No interactive override is available. Protected and detached branches, mismatched
+identity, unavailable or stale live base and non-ancestor bases fail closed.
+Missing upstream is explicitly UNKNOWN, not zero unpushed commits. An upstream
+comparison does not establish a remote feature branch's identity.
 
-### Daily Audit (`gwtf-daily-audit.sh`)
-Run at end of each work session.
+The preflight is not writer ownership proof, a lease, scope authorization, test
+qualification, CI acceptance, push or merge authority. The primary protected
+checkout must be synchronized separately under CLEANUP-01, not with this feature
+writer entrypoint.
 
-## Usage
+The retired root-level `fix_precommit.sh` only emits a diagnostic and exits
+nonzero. Use canonical configured hooks on the fresh lease's exact allowlist;
+preserve and reconcile any formatter mutation before testing or staging.
 
-Pre-flight
-bash scripts/gwtf-preflight.sh
+## Daily audit
 
-Daily audit
+Run at the end of each work session:
+
+```bash
 bash scripts/gwtf-daily-audit.sh
-
-text
-
-## Aliases
-
-Add to your shell config (~/.zshrc or ~/.bashrc):
-
-REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
-alias gpf='bash $REPO_ROOT/scripts/gwtf-preflight.sh'
-alias gaud='bash $REPO_ROOT/scripts/gwtf-daily-audit.sh'
-
-text
+```

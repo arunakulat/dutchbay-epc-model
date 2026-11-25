@@ -91,6 +91,12 @@ jobs:
       - name: Evidence corpus - manifest and single-source handling gate
         run: python -m pytest tests/lint/test_nso_corpus_manifest_integrity.py -q
 
+      - name: Source-independent screening methods - strict type checking
+        run: python -m mypy --config-file mypy.ini --follow-imports=skip docs/research/envision14_publication_methods_2026_11_24/tools
+
+      - name: Source-independent screening methods - synthetic verification
+        run: python -m pytest -q -p no:cacheprovider docs/research/envision14_publication_methods_2026_11_24/tools
+
       # The full tests/ tree runs in test-suite.yml's sharded `test` job (gated by the
       # required `Test Summary` check), NOT here — see the header note (#760). This lane is
       # lint-only so it cannot be the merge long pole or a redundant second full-suite run.

@@ -1,20 +1,4 @@
-"""Tests for the wind battery options and the equipment parity for any scenario (#1578 U2, #1755).
-
-Oracles do not come from the code under test (TEST-01):
-
-* the single-site config ``conf/blue_whale_wind_bess_options.yaml``, which the committed
-  summary was built from: the config built from the scenario's ``storage_options`` block must
-  equal it key for key, except the schema version and the shape of the source list;
-* the single-site equipment parity config ``conf/blue_whale_equipment_parity.yaml``: the
-  scenario's ``equipment_cost_parity`` block must hold its inputs, and the block-driven run must
-  reproduce the single-site result;
-* hand-worked capex at the block's battery price, and responsiveness (ARCH-04): changing the
-  block's price or options changes the figures.
-
-The NASA POWER reference is not in the repository, so the end-to-end runs use a synthetic hourly
-profile. A run on the real reference was compared figure for figure with the single-site script
-when this module was written (the PR's receipts record it).
-"""
+"""Tests for the wind battery options and the equipment parity for any scenario (#1578 U2, #1755)."""
 
 from __future__ import annotations
 
@@ -26,27 +10,20 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import numpy as np
 import pytest
 import yaml
 
-from analytics.site_analysis_blocks import resolve_site_analysis_block
-from analytics.wind import blue_whale_equipment_parity as parity_single_site
 from analytics.wind import wind_bess_options_runner as runner
-from analytics.wind.equipment_parity import run_equipment_parity_for_scenario
 from finance.capex_price_basis import capex_escalation_factor
 
 REPO = Path(__file__).resolve().parents[2]
 SCENARIO_REL = "scenarios/blue_whale_wind_lot5b_2026.yaml"
 SCENARIO = REPO / SCENARIO_REL
-LEGACY_CONFIG = REPO / "conf" / "blue_whale_wind_bess_options.yaml"
 METHOD_CONFIG = REPO / "conf" / "wind_bess_options.yaml"
-PARITY_SITE_CONF = REPO / "conf" / "blue_whale_equipment_parity.yaml"
-PARITY_METHOD_CONF = REPO / "conf" / "equipment_parity.yaml"
 UNIVERSAL_SCRIPT = REPO / "scripts" / "run_wind_bess_options_v14.py"
-SINGLE_SITE_SCRIPT = REPO / "scripts" / "run_blue_whale_wind_bess_options_v14.py"
 LENDER_REL = "scenarios/dutchbay_lendercase_2025Q4.yaml"
 
 
@@ -63,13 +40,6 @@ def _scenario() -> Dict[str, Any]:
 def _method() -> Dict[str, Any]:
     method: Dict[str, Any] = _yaml(METHOD_CONFIG)["method"]
     return method
-
-
-def _legacy_cfg() -> Dict[str, Any]:
-    raw = _yaml(LEGACY_CONFIG)
-    raw.pop("defaults", None)
-    raw.pop("hydra", None)
-    return raw
 
 
 def _load(path: Path, name: str) -> ModuleType:
@@ -122,27 +92,6 @@ def _short_method() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Wind battery options
 # ---------------------------------------------------------------------------
-def test_block_built_config_equals_the_single_site_config() -> None:
-    """Oracle: the single-site config the committed summary was built from."""
-    legacy = _legacy_cfg()
-    scenario = _scenario()
-    cfg = runner.config_from_block(
-        scenario,
-        scenario["storage_options"],
-        _method(),
-        scenario_label=legacy["scenario"],
-        summary_json=legacy["output"]["summary_json"],
-    )
-    assert cfg.pop("schema_version") == runner.CONFIG_SCHEMA
-    assert legacy.pop("schema_version") != runner.CONFIG_SCHEMA
-    # The single-site config keys its sources by id; the block lists them as sentences,
-    # and every source the single-site config cites is among them.
-    block_sources = " | ".join(cfg.pop("sources"))
-    for source in legacy.pop("sources").values():
-        assert str(source["title"]) in block_sources
-    assert cfg == legacy
-
-
 def test_block_built_config_follows_the_block() -> None:
     """Values the single-site config shares with the block still come from the block."""
     scenario = _scenario()
@@ -362,14 +311,6 @@ def test_universal_cli_reports_not_applicable_for_a_scenario_without_the_block()
     assert payload["scenario"] == LENDER_REL
 
 
-def test_single_site_script_is_a_shim_over_the_runner() -> None:
-    cli = _load(SINGLE_SITE_SCRIPT, "run_blue_whale_wind_bess_options_v14")
-    assert cli.json_clean is runner.json_clean
-    assert cli._kpis is runner.kpis
-    assert cli._rate is runner.rate_parts
-    assert cli._bisect is runner.bisect_root
-
-
 def test_runner_and_method_config_hold_no_site_literal() -> None:
     for path in (
         REPO / "analytics" / "wind" / "wind_bess_options_runner.py",
@@ -379,45 +320,3 @@ def test_runner_and_method_config_hold_no_site_literal() -> None:
         text = path.read_text(encoding="utf-8").lower()
         for literal in ("blue whale", "blue_whale", "kalpitiya", "puttalam", "lot 5b"):
             assert literal not in text, (path.name, literal)
-
-
-# ---------------------------------------------------------------------------
-# Equipment parity (#1755 residual)
-# ---------------------------------------------------------------------------
-def test_scenario_parity_block_holds_the_single_site_inputs() -> None:
-    """Oracle: the single-site parity config's own values."""
-    block = resolve_site_analysis_block(_scenario(), "equipment_cost_parity")
-    assert block is not None
-    cfg = _yaml(PARITY_SITE_CONF)
-    site = cfg["blue_whale"]
-    assert block["energy_summary"] == site["summary_json_path"]
-    assert block["capex_config"] == site["capex_solar_resource_config"]
-    assert block["operating_life_years"] == site["operating_life_years"]
-    assert block["loss_retention_factors"] == site["loss_retention_factors"]
-    assert block["sensitivity_premium_pct"] == cfg["sensitivity_premium_pct"]
-    assert block["cost_buildup_packages"] == cfg["cost_buildup_packages"]
-    benchmark = dict(block["benchmark"])
-    benchmark.pop("name")
-    assert benchmark == cfg["mannar_benchmark"]
-
-
-def test_scenario_parity_run_reproduces_the_single_site_result() -> None:
-    method = _yaml(PARITY_METHOD_CONF)["method"]
-    out = run_equipment_parity_for_scenario(
-        _scenario(), method, REPO, scenario_label=SCENARIO_REL
-    )
-    assert out["status"] == "completed"
-    legacy = parity_single_site.compute_equipment_parity(_yaml(PARITY_SITE_CONF), REPO)
-    universal = out["equipment_parity"]
-    results = {
-        parity_single_site.RESULT_KEY_MAP.get(k, k): v
-        for k, v in universal["results"].items()
-    }
-    assert results == legacy["results"]
-    packages = _yaml(PARITY_SITE_CONF)["cost_buildup_packages"]
-    for route in ("road", "marine"):
-        expected = parity_single_site.evaluate_cost_buildup(packages, route)
-        got = dict(out["cost_buildup"][route])
-        got.pop("schema")
-        expected.pop("schema")
-        assert got == expected

@@ -303,7 +303,7 @@ required=(
   scripts/run_blue_whale_wind_siting_v14.py
   scripts/run_blue_whale_met_mast_transfer_v14.py
   scripts/run_blue_whale_solar_bess_v14.py
-  scripts/run_blue_whale_pv_bess_sizing_v14.py
+  scripts/run_solar_bess_sizing_v14.py
   scripts/run_blue_whale_capex_solar_resource_v14.py
   scenarios/dutchbay_lendercase_2025Q4.yaml
   scenarios/blue_whale_wind_lot5b_2026.yaml
@@ -374,11 +374,9 @@ if [[ "$PROFILE" == full ]]; then
     "$PY" -m pytest -n 2 tests/integration/test_lender_report_e2e.py \
     tests/integration/test_synthetic_qsts_finance_report.py \
     -m report_qualification --tb=short --junitxml="$OUT/pytest_report.xml"
-  run_step "blue-whale-unit-monte-carlo" capture_json "$OUT/blue_whale_sizing_unit.json" \
-    "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py "$(hydra_dir blue-whale-unit-monte-carlo)"
   run_step "blue-whale-project-monte-carlo" capture_json "$OUT/blue_whale_sizing_project.json" \
-    "$PY" scripts/run_blue_whale_pv_bess_sizing_v14.py \
-    --config-name blue_whale_solar_bess_project_sizing \
+    "$PY" scripts/run_solar_bess_sizing_v14.py \
+    scenario=scenarios/blue_whale_solar_bess_lot5b_2026.yaml \
     "$(hydra_dir blue-whale-project-monte-carlo)"
   # The fixed-battery child config (PR 7) is retired: the battery is a search variable of
   # the project run above (#1691).
