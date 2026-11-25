@@ -255,7 +255,7 @@ pymupdf==2.1
 pymupdf_layout==2.1
 pyogrio==0.13.0
 pyomo==6.10.1
-pyparsing==3.3.2
+pyparsing==3.3.3
 pypdfium2==5.13.0
 pyphen==0.18.1
 pyproj==3.8.0
