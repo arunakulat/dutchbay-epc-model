@@ -47,18 +47,18 @@ Usage:
     Basic (uses default validation):
         python run_full_pipeline_v14.py \\
             config=scenarios/dutchbay_lendercase_2025Q4.yaml
-    
+
     With explicit validation options:
         python run_full_pipeline_v14.py \\
             config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
             validation_mode=strict \\
             validation_modules=cashflow,debt
-    
+
     Skip validation (faster, for debugging):
         python run_full_pipeline_v14.py \\
             config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
             validation_mode=off
-    
+
     Custom artifact location (CI):
         python run_full_pipeline_v14.py \\
             config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
@@ -93,7 +93,7 @@ Output:
     - debt_result: Debt structuring with DSCR series
     - equity_distribution: Equity waterfall and distribution schedule
     - metrics: Pipeline execution metrics (if monitoring enabled)
-    
+
     Optional file artifacts (if write_artifacts=true):
     - summary.json: Full pipeline result
     - kpis.json: KPI dictionary
@@ -1628,6 +1628,7 @@ def cli(cfg: DictConfig) -> None:
         # #1752: the capital-risk emitter hands its report here, so the lender report below
         # reuses this run's Monte Carlo rather than running a second one.
         shared_capital_risk: list[Any] = []
+        shared_mc_result: list[Any] = []
         if emit_capital_risk_report and isinstance(result, dict):
 
             def _emit_capital_risk_report() -> None:
@@ -1657,6 +1658,7 @@ def cli(cfg: DictConfig) -> None:
                         capital_risk_report_cfg.get("npv_metric", "equity_npv")
                     ),
                     on_report=shared_capital_risk.append,
+                    on_mc_result=shared_mc_result.append,
                 )
                 result["capital_risk_report_path"] = str(cr_written)
                 logger.info("Wrote capital-risk report to %s", cr_written)
@@ -1678,6 +1680,7 @@ def cli(cfg: DictConfig) -> None:
                     cost_storage_settings_from_config,
                     emit_lender_report_from_pipeline,
                     lender_sensitivity_settings_from_config,
+                    what_if_lender_risk_settings_from_config,
                 )
 
                 lr_path_raw = lender_report_cfg.get("path", None)
@@ -1725,6 +1728,10 @@ def cli(cfg: DictConfig) -> None:
                     cost_storage=cost_storage_settings_from_config(
                         lender_report_cfg.get("cost_storage", None)
                     ),
+                    what_if_lender_risk=what_if_lender_risk_settings_from_config(
+                        lender_report_cfg.get("what_if_lender_risk", None)
+                    ),
+                    mc_result=shared_mc_result[0] if shared_mc_result else None,
                 )
                 result["lender_report"] = written.as_dict()
                 logger.info("Wrote lender report to %s", written.html_path)

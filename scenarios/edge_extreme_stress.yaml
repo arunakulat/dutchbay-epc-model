@@ -121,6 +121,8 @@ tax:
   wht_on_interest_enabled: true            # ← ADDED: Enable WHT calculation
   wht_gross_up: false                      # ← ADDED: Don't gross up for WHT
   interest_deductibility: true             # ← ADDED: Allow interest deduction
+  pack_overrides:
+    loss_carryforward_years: "synthetic_fixture: extreme stress case retains 25-year loss carryforward (#1841)"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Statutory Charges (EXTREME: Severe grid curtailment)

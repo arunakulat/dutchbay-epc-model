@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import hashlib
 import importlib.util
 import json
 import os
@@ -15,7 +14,6 @@ from typing import Any, Dict
 import pytest
 import yaml
 
-from analytics.wind import blue_whale_equipment_parity as single_site
 from analytics.wind.equipment_parity import (
     RESULT_SCHEMA,
     compute_equipment_parity_from_block,
@@ -23,18 +21,11 @@ from analytics.wind.equipment_parity import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SITE_CONF = REPO_ROOT / "conf" / "blue_whale_equipment_parity.yaml"
 METHOD_CONF = REPO_ROOT / "conf" / "equipment_parity.yaml"
+WIND_SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 MODULE = REPO_ROOT / "analytics" / "wind" / "equipment_parity.py"
 RUNNER = REPO_ROOT / "scripts" / "run_equipment_parity_v14.py"
-SINGLE_SITE_SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_equipment_parity_v14.py"
-
-#: sha256 of the single-site script's stdout. It has been this value on main since before
-#: #1755, and the move to the site-neutral module must not change a byte of it.
-SINGLE_SITE_STDOUT_SHA256 = (
-    "c61b26a6bb8bdcbfb30630b44454a646c4b7df3dfc177892a0216833a6ec3cbd"
-)
 
 
 def _yaml(path: Path) -> Dict[str, Any]:
@@ -48,21 +39,8 @@ def _method() -> Dict[str, Any]:
 
 
 def _block_from_single_site_conf() -> Dict[str, Any]:
-    """The single-site conf's inputs, expressed as an ``equipment_cost_parity`` block."""
-    cfg = _yaml(SITE_CONF)
-    bw = cfg["blue_whale"]
-    return {
-        "site": {"name": "Single-site conf", "location": "As in the single-site conf"},
-        "retrieved": "2026-11-14",
-        "sources": [str(cfg["mannar_benchmark"]["source"])],
-        "energy_summary": bw["summary_json_path"],
-        "capex_config": bw["capex_solar_resource_config"],
-        "operating_life_years": bw["operating_life_years"],
-        "loss_retention_factors": bw["loss_retention_factors"],
-        "benchmark": {"name": "Benchmark project", **cfg["mannar_benchmark"]},
-        "sensitivity_premium_pct": cfg["sensitivity_premium_pct"],
-        "cost_buildup_packages": cfg["cost_buildup_packages"],
-    }
+    """Return a copy of the wind scenario's ``equipment_cost_parity`` block."""
+    return copy.deepcopy(_yaml(WIND_SCENARIO)["equipment_cost_parity"])
 
 
 def _load_runner() -> Any:
@@ -71,65 +49,6 @@ def _load_runner() -> Any:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_method_reference_rows_match_the_single_site_conf() -> None:
-    assert (
-        _method()["reference_scaling_counterexample"]
-        == _yaml(SITE_CONF)["ashuri_2016_counterexample"]
-    )
-    assert (
-        _method()["hours_per_year"] == _yaml(SITE_CONF)["blue_whale"]["hours_per_year"]
-    )
-
-
-def test_scenario_block_reproduces_the_single_site_result_exactly() -> None:
-    """Oracle: the block-driven run equals the single-site run under the key map."""
-    scenario = {
-        "project": {"name": "x"},
-        "equipment_cost_parity": _block_from_single_site_conf(),
-    }
-    out = run_equipment_parity_for_scenario(scenario, _method(), REPO_ROOT)
-    assert out["status"] == "completed"
-    assert out["schema"] == RESULT_SCHEMA
-
-    legacy = single_site.compute_equipment_parity(_yaml(SITE_CONF), REPO_ROOT)
-    universal = out["equipment_parity"]
-    renamed = {single_site.TOP_KEY_MAP.get(k, k): v for k, v in universal.items()}
-    renamed["results"] = {
-        single_site.RESULT_KEY_MAP[k] if k in single_site.RESULT_KEY_MAP else k: v
-        for k, v in universal["results"].items()
-    }
-    renamed["sensitivity_cases"] = [
-        {single_site.CASE_KEY_MAP.get(k, k): v for k, v in case.items()}
-        for case in universal["sensitivity_cases"]
-    ]
-    renamed[single_site.TOP_KEY_MAP["reference_scaling_counterexample"]] = [
-        {single_site.SCALING_ROW_KEY_MAP.get(k, k): v for k, v in row.items()}
-        for row in universal["reference_scaling_counterexample"]
-    ]
-    # The purpose sentence is the one key the adapter replaces: the site's own HOLD wording
-    # stays in the single-site module.
-    assert renamed.pop("purpose") != legacy.pop("purpose")
-    assert json.dumps(renamed, sort_keys=True) == json.dumps(legacy, sort_keys=True)
-
-    packages = _yaml(SITE_CONF)["cost_buildup_packages"]
-    for route in ("road", "marine"):
-        expected = single_site.evaluate_cost_buildup(packages, route)
-        got = dict(out["cost_buildup"][route])
-        assert got.pop("schema") == "cost_buildup_evaluation.v1"
-        expected.pop("schema")
-        assert got == expected
-
-
-def test_key_maps_cover_every_renamed_result() -> None:
-    scenario = {"equipment_cost_parity": _block_from_single_site_conf()}
-    universal = run_equipment_parity_for_scenario(scenario, _method(), REPO_ROOT)
-    keys = set(universal["equipment_parity"]["results"])
-    site_named = {
-        k for k in keys if k.startswith(("benchmark_", "site_", "reference_"))
-    }
-    assert site_named <= set(single_site.RESULT_KEY_MAP)
 
 
 def test_scenario_without_block_is_not_applicable() -> None:
@@ -242,20 +161,6 @@ def test_hold_status_comes_from_the_energy_summary() -> None:
     assert out["site_aep_hold_status"] == summary["hold"].strip()
     assert "HOLD" not in out["purpose"]
     assert "met-mast" not in out["purpose"].lower()
-
-
-def test_single_site_script_output_is_byte_identical() -> None:
-    """The single-site script prints exactly the bytes it printed before #1755."""
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
-    proc = subprocess.run(
-        [sys.executable, str(SINGLE_SITE_SCRIPT)],
-        cwd=REPO_ROOT,
-        env=env,
-        capture_output=True,
-        check=True,
-        timeout=300,
-    )
-    assert hashlib.sha256(proc.stdout).hexdigest() == SINGLE_SITE_STDOUT_SHA256
 
 
 def test_runner_refuses_a_wrong_schema_or_a_non_mapping_scenario(

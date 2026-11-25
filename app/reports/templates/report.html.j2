@@ -961,6 +961,7 @@
     {% endif %}
   </section>
   {% endif %}
+  {% if ctx.what_if_lender_risk %}{% include "_what_if_lender_risk.html.j2" %}{% endif %}
 
   {# 4i. Two-factor sensitivity interaction grid — #739 slice-2. Render-when-present; the N×M
      grid is a full-pipeline evaluation per cell, so it runs out-of-band (heavy) and is passed

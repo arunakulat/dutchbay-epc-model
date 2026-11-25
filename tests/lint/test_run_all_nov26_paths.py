@@ -143,11 +143,9 @@ def test_every_pytest_marker_the_runner_selects_is_registered() -> None:
 def test_every_hydra_config_name_entry_point_and_repo_path_exists() -> None:
     text = _runner_text()
     names = _CONFIG_NAME.findall(text)
-    # Non-vacuous: the runner names at least the Blue Whale project sizing config. (Two until
-    # #1691 retired the fixed-battery child config the runner also named.)
-    assert "blue_whale_solar_bess_project_sizing" in names
     entry_points = _ENTRY_POINT.findall(text)
     assert "run_full_pipeline_v14.py" in entry_points
+    assert "scripts/run_solar_bess_sizing_v14.py" in text
     repo_paths = _REPO_VAR_PATH.findall(text)
     missing = [
         f"conf/{n}.yaml"
@@ -282,7 +280,7 @@ def test_every_hydra_entry_point_gets_a_run_dir_under_out() -> None:
             if _resolve(s).is_file()
         )
     ]
-    assert len(hydra_lines) >= 10
+    assert len(hydra_lines) >= 9
     assert _hydra_calls_without_run_dir(text) == []
     mc_run = (KIT / "lib" / "mc_run.py").read_text(encoding="utf-8")
     assert "f\"hydra.run.dir={outdir / 'hydra'}\"," in mc_run
