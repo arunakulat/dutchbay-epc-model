@@ -1,0 +1,1 @@
+Add explicit historical object comparison against a retained journal anchor and full commit ID, checking recorded parent/tree/base ancestry, scope, blob/mode and configuration evidence independently of current worktree state. Historical comparison is not live qualification, execution authentication or authority. (#1945)

@@ -641,37 +641,43 @@ class MonteCarloEngine:
         """Refuse sweeps that every trial of a native-CAPEX scenario would reject.
 
         A scenario authored with ``capex.input`` (or already resolved to
-        ``capex.native_input_applied``) owns its USD CAPEX and pins its conversion rate to
-        ``fx.start_lkr_per_usd``. A sampled ``capex.usd_total`` or FX spot is refused by
-        ``normalize_native_capex`` inside each trial, so a permissive failure policy would
-        report fallback KPIs instead of a risk distribution (DOM-1645-02). Fail before
-        sampling instead. Sweep ``capex.input.amount`` to vary native CAPEX; FX sweeps on
-        native scenarios are the open #1629 design question. The "capex" alias,
-        ``capex.contingency_pct`` and the conversion rate are refused for the same reason
-        (#1629, DOM-1645-R5-01).
+        ``capex.native_input_applied``) owns its USD CAPEX. On an authored config,
+        ``fx.start_lkr_per_usd`` and ``fx_calibrated`` sweeps are supported because
+        ``normalize_native_capex`` derives the LKR conversion rate from
+        ``fx.start_lkr_per_usd`` (DOM-1645-03). On an already-resolved config
+        (``capex.native_input_applied``), FX sweeps would fail every trial with
+        stale provenance, so they remain refused before sampling. The ``capex``
+        alias, ``capex.usd_total``, ``capex.contingency_pct``, and
+        ``capex.input.conversion.rate_lkr_per_usd`` are always refused (#1629,
+        DOM-1645-R5-01).
         """
         capex = cfg.get("capex") if isinstance(cfg, Mapping) else None
         if not isinstance(capex, Mapping) or not (
             "input" in capex or "native_input_applied" in capex
         ):
             return
-        # Every name here fails each native trial: the USD total and its "capex" alias,
-        # the FX spot, a contingency percentage (capex.input owns the whole amount) and
-        # the conversion rate (pinned to fx.start). Names are matched case-insensitively.
+        is_resolved = "native_input_applied" in capex
         blocked = {
             "capex",
             "capex.usd_total",
             "capex.contingency_pct",
             "capex.input.conversion.rate_lkr_per_usd",
-            "fx.start_lkr_per_usd",
         }
         for name, kind in zip(names, kinds, strict=True):
-            if kind == "fx_calibrated" or name.strip().lower() in blocked:
+            lowered = name.strip().lower()
+            if lowered in blocked:
                 raise MonteCarloConfigError(
                     f"monte_carlo parameter {name!r} cannot be swept on a native-CAPEX "
                     "scenario (capex.input): every trial would refuse it. Sweep "
-                    "capex.input.amount for CAPEX; FX sweeps with native CAPEX are not "
-                    "supported yet (#1629)."
+                    "capex.input.amount for CAPEX or fx.start_lkr_per_usd for FX (#1629)."
+                )
+            if is_resolved and (
+                kind == "fx_calibrated" or lowered == "fx.start_lkr_per_usd"
+            ):
+                raise MonteCarloConfigError(
+                    f"monte_carlo parameter {name!r} cannot be swept on an already-resolved "
+                    "native-CAPEX scenario (capex.native_input_applied): every trial would "
+                    "refuse stale provenance. Start from the authored config (#1629)."
                 )
 
     @staticmethod

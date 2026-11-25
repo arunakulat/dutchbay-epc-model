@@ -1,0 +1,5 @@
+Derived LKR native CAPEX conversion from `fx.start_lkr_per_usd` on authored configurations (`DOM-1645-03`, `#1629`), and landed `#1696` API/packaging follow-ups:
+
+- `normalize_native_capex` now derives the effective LKR-to-USD conversion rate from `fx.start_lkr_per_usd` when resolving authored `capex.input` configurations, so lone `fx.start_lkr_per_usd` overrides move native CAPEX conversion cleanly instead of being refused. Already-resolved `capex.native_input_applied` configurations still refuse FX spot mismatches as stale provenance, and `capex.input.conversion.rate_lkr_per_usd` remains required and validated.
+- Monte Carlo (`_refuse_native_capex_conflicts`) now permits `fx.start_lkr_per_usd` and `fx_calibrated` sweeps on authored native-CAPEX scenarios while keeping them refused on already-resolved `capex.native_input_applied` scenarios and keeping `capex.input.conversion.rate_lkr_per_usd` refused.
+- Raised `pydantic>=2.12` floor in `pyproject.toml` (matching `Field(exclude_if=...)`) and tightened `ManifestBlock.native_capex` OpenAPI schema to a non-nullable optional object.

@@ -1,0 +1,1 @@
+Correct GWTF checkpoint utility import resolution for the existing scripts mypy gate while retaining both direct-script and module entrypoints; narrow malformed receipt data explicitly and return the computed digest as a string. No type suppression or gate changes. (#1945)

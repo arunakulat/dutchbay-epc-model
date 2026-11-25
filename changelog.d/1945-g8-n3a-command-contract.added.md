@@ -1,0 +1,1 @@
+Add schema-3 candidate-bound ordered command/log contracts, reject observation mismatches and false successful completion, and bind readiness configuration and hook argv. Preserve version-2 diagnostic compatibility; a plan remains a claim, not authentication or proof of command adequacy. (#1945)

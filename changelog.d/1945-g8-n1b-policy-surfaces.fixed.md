@@ -1,0 +1,1 @@
+Guard operative checkpoint instructions and canonical rule clauses against hidden, negated or relocated text; preserve exact CI type-check commands and existing failure settings, including the advisory FX step. (#1945)

@@ -47,10 +47,11 @@ import yaml
 from analytics.evaluation_v14 import evaluate_with_overrides
 from solar_resource import pv_bess_dispatch as pbd
 from solar_resource import pv_bess_sizing as sz
+from solar_resource import pv_bess_sizing_runner as sz_runner
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess.yaml"
-PROJECT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess_project_sizing.yaml"
+METHOD_CONF = REPO_ROOT / "conf" / "solar_bess_sizing.yaml"
 REG_CONF = REPO_ROOT / "conf" / "blue_whale_pucsl_fit_2026.yaml"
 PRICING_CONF = REPO_ROOT / "conf" / "blue_whale_pv_bess_pricing.yaml"
 SOLAR_BESS = REPO_ROOT / "scenarios" / "blue_whale_solar_bess_lot5b_2026.yaml"
@@ -159,9 +160,13 @@ def _hard_cap() -> int:
 
 
 def _project_cfg() -> Dict[str, Any]:
-    return {
-        k: v for k, v in _yaml(PROJECT_CONF).items() if k not in ("defaults", "hydra")
-    }
+    scenario = _yaml(SOLAR_BESS)
+    method = _yaml(METHOD_CONF)["method"]
+    return sz_runner.config_from_block(
+        scenario["solar_storage_sizing"],
+        method,
+        scenario_label="scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+    )
 
 
 def _project_unit() -> Dict[str, Any]:

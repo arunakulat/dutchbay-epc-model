@@ -1,9 +1,9 @@
 """Guard installation of the configured pre-commit checks and GOV-02 hook.
 
 The configured set enables black, ruff, isort, file checks and GOV-02's
-`no-commit-to-branch` defence. R10 also names mypy, but that hook is currently disabled;
-#1270 tracks the contract/configuration mismatch. These tests do not claim complete R10
-enforcement.
+`no-commit-to-branch` defence. The local mypy hook remains disabled by owner decision
+#1270; mandatory local and CI type verification remain in force. These tests do not
+claim complete R10 enforcement.
 
 These tests deliberately do NOT assert that a hook is installed on the running host: CI
 checks out a fresh clone and correctly has none, and a test that failed there would be
@@ -110,7 +110,7 @@ def test_setup_script_installs_the_precommit_hooks() -> None:
     script = SETUP_SCRIPT.read_text(encoding="utf-8")
 
     assert "-m pre_commit install" in script
-    # The scope and unresolved contract mismatch must travel with the step.
+    # The owner-decided type-check scope must travel with the step.
     assert "#1270" in script
     assert "GOV-02" in script
     # An opt-out must exist and be named, so a host that cannot install is not stuck.

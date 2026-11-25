@@ -1,0 +1,1 @@
+Bind actual execution sidecar digests to anchored journal records under an explicit observed-execution contract. Require exact prior tip, worktree, observation, time bounds and absence of authentication claims; reject missing, altered or inconsistent sidecars and log collisions. Retain older diagnostic compatibility; independent custody remains essential. (#1945)

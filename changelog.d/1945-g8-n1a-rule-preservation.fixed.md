@@ -1,0 +1,1 @@
+Restore byte-identical Codex and Claude steward instructions, cite the recorded #1270 owner decision, and retain every active predecessor rule identity with deletion, deactivation and duplication negative controls while permitting additions. (#1945)

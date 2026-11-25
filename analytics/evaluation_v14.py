@@ -13,6 +13,7 @@ from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14_params import with_usd_opex_fx_reference
+from finance.cashflow_v14_tax import with_tax_pack_override_provenance
 from finance.cashflow_v14_utils import pct_to_decimal
 from finance.self_curtailment_v14 import (
     compose_curtailment,
@@ -388,8 +389,11 @@ def evaluate_scenario_from_dict(
         0.142
     """
     expanded = expand_dotted_overrides(overrides or {})
-    merged_config = with_usd_opex_fx_reference(
-        config, _deep_merge_config(config, expanded), expanded
+    merged_config = with_tax_pack_override_provenance(
+        with_usd_opex_fx_reference(
+            config, _deep_merge_config(config, expanded), expanded
+        ),
+        expanded,
     )
     result = _run_pipeline_with_config(merged_config)
 
@@ -472,6 +476,7 @@ def evaluate_with_overrides(
     # An override of ``fx`` must also reach a USD opex share that has its own FX
     # path (opex.currency_split.usd_lkr_depreciation_pct; #1578 L-12).
     merged_config = with_usd_opex_fx_reference(base_config, merged_config, expanded)
+    merged_config = with_tax_pack_override_provenance(merged_config, expanded)
 
     # Run pipeline
     full_result = _run_pipeline_with_config(

@@ -10,6 +10,7 @@ from analytics.evaluation_v14 import expand_dotted_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from finance.cashflow_v14_params import with_usd_opex_fx_reference
+from finance.cashflow_v14_tax import with_tax_pack_override_provenance
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +105,11 @@ def evaluate_with_overrides(
     #    optimizer's gateway honours it. Nested-dict overrides pass through unchanged.
     expanded = expand_dotted_overrides(overrides) if overrides else {}
     merged_cfg = (
-        with_usd_opex_fx_reference(
-            raw_cfg, _deep_merge_dicts(raw_cfg, expanded), expanded
+        with_tax_pack_override_provenance(
+            with_usd_opex_fx_reference(
+                raw_cfg, _deep_merge_dicts(raw_cfg, expanded), expanded
+            ),
+            expanded,
         )
         if overrides
         else raw_cfg

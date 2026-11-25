@@ -27,6 +27,10 @@ tax:
   wht_on_interest_to_nonresidents: 0.0
   wht_on_interest_enabled: false
   wht_gross_up: false
+  pack_overrides:
+    corporate_tax_rate: "synthetic_fixture: example scenario not modelling Sri Lanka statutory tax (#1841)"
+    loss_carryforward_years: "synthetic_fixture: example scenario not modelling Sri Lanka statutory tax (#1841)"
+    wht_on_interest_to_nonresidents: "synthetic_fixture: example scenario not modelling Sri Lanka statutory tax (#1841)"
 risk:
   haircut_pct: 12
 Financing_Terms:

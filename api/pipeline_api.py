@@ -15,10 +15,10 @@ import copy
 import json
 import logging
 import math
-from typing import Any, Dict, List, Literal, Mapping, Optional
+from typing import Annotated, Any, Dict, List, Literal, Mapping, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, WithJsonSchema, model_validator
 
 from analytics.aep_provenance import (
     AepProvenanceError,
@@ -202,6 +202,11 @@ class CapexPriceBasisBlock(BaseModel):
     warning: str
 
 
+def _drop_default_schema(schema: Dict[str, Any]) -> None:
+    """Remove ``default: null`` from an optional non-nullable OpenAPI field."""
+    schema.pop("default", None)
+
+
 class ManifestBlock(BaseModel):
     """Auditable reproducibility stamp: ties the output to inputs + engine + commit."""
 
@@ -216,8 +221,13 @@ class ManifestBlock(BaseModel):
     # provenance. A USD-authored run has none: its manifest stays schema 1.0 and the key
     # is left out of the JSON, as RunManifest.as_dict does, so a USD response keeps the
     # manifest keys it had before (API contract 2.2).
-    native_capex: Optional[Dict[str, Any]] = Field(
-        default=None, exclude_if=lambda value: value is None
+    native_capex: Annotated[
+        Optional[Dict[str, Any]],
+        WithJsonSchema({"type": "object", "additionalProperties": True}),
+    ] = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+        json_schema_extra=_drop_default_schema,
     )
 
 

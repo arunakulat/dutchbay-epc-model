@@ -259,10 +259,10 @@ REFUSALS: list[tuple[str, Callable[[], dict[str, Any]], Mutation, str]] = [
         "project.cod_year must be a whole calendar year",
     ),
     (
-        "spot differs from rate",
-        config,
+        "spot differs from rate on resolved config",
+        lambda: normalize_native_capex(config()),
         lambda c: c["fx"].update(start_lkr_per_usd=300.0),
-        "capex.input conversion rate must equal fx.start_lkr_per_usd",
+        "native CAPEX provenance is stale; start from the authored config",
     ),
     (
         "cost basis year differs",
@@ -562,21 +562,43 @@ def test_resolved_values_are_checked_exactly(priced: bool, up: bool) -> None:
 @pytest.mark.parametrize("up", [True, False], ids=["above", "below"])
 @pytest.mark.parametrize(
     "build",
-    [config, lambda: normalize_native_capex(config()), priced_resolved],
-    ids=["authored", "resolved", "priced_resolved"],
+    [lambda: normalize_native_capex(config()), priced_resolved],
+    ids=["resolved", "priced_resolved"],
 )
-def test_spot_must_equal_the_conversion_rate_exactly(
+def test_spot_must_equal_the_conversion_rate_exactly_on_resolved(
     build: Callable[[], dict[str, Any]], up: bool
 ) -> None:
-    """One ulp between spot and rate converts at one rate and runs at another
-    (ASSURANCE-1645-05c), including on an already-resolved config, where CAPEX
-    would otherwise stay at the old rate (ASSURANCE-1645-06)."""
+    """One ulp between spot and rate on an already-resolved config is stale provenance
+    (ASSURANCE-1645-06, DOM-1645-03)."""
     cfg = build()
     cfg["fx"]["start_lkr_per_usd"] = _one_ulp(317.25, up)
     with pytest.raises(
-        ValueError, match="conversion rate must equal fx.start_lkr_per_usd"
+        ValueError,
+        match="native CAPEX provenance is stale; start from the authored config",
     ):
         normalize_native_capex(cfg)
+
+
+@pytest.mark.parametrize("up", [True, False], ids=["above", "below"])
+def test_authored_spot_override_derives_lkr_conversion_rate(up: bool) -> None:
+    """On an authored config, LKR native CAPEX derives conversion from fx.start_lkr_per_usd
+    (DOM-1645-03) and records the effective spot in native_input_applied."""
+    cfg = config()
+    spot = _one_ulp(317.25, up)
+    cfg["fx"]["start_lkr_per_usd"] = spot
+    resolved = normalize_native_capex(cfg)
+    expected_usd = 6_345_000.0 / spot
+    assert resolved["capex"]["usd_total"] == expected_usd
+    assert (
+        resolved["capex"]["native_input_applied"]["usd_at_price_date"] == expected_usd
+    )
+    assert (
+        resolved["capex"]["native_input_applied"]["input"]["conversion"][
+            "rate_lkr_per_usd"
+        ]
+        == spot
+    )
+    assert normalize_native_capex(resolved) == resolved
 
 
 @pytest.mark.parametrize("cod_year", [2028, 2030])

@@ -103,7 +103,9 @@ def test_the_project_section_is_found_case_insensitively() -> None:
 
 
 def test_direct_tax_refuses_another_jurisdiction(lender: dict[str, Any]) -> None:
-    with pytest.raises(ValueError, match=r"^tax: .*'XX'.*#1841"):
+    with pytest.raises(
+        ValueError, match=r"(?:tax|unknown_jurisdiction): .*'XX'.*#1841"
+    ):
         TaxConfig.from_yaml(_with_jurisdiction(lender, "XX"))
 
 

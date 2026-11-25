@@ -1,0 +1,1 @@
+Reject duplicate keys, excessive JSON nesting and size, nonfinite values and non-UTF-8 in operational checkpoint, readiness, recovery and incident evidence. Detect intent-to-add index entries using explicit Git index views without rejecting genuinely staged empty files. (#1945)
