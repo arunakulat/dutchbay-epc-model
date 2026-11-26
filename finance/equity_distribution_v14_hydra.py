@@ -76,7 +76,7 @@ class EquityDistributionConfig(BaseModel):
     enabled: bool = Field(default=True)
     project_life_years: int = Field(default=25, ge=1, le=50)
 
-    min_dscr_threshold: float = Field(default=1.25, ge=0.0, le=5.0)
+    min_dscr_threshold: float = Field(..., ge=0.0, le=5.0)
     min_reserve_months: int = Field(default=6, ge=0, le=24)
     # #920 DOM-1: the scenario key that set min_reserve_months, or "code_default" when no
     # equity section authors a numeric value and the 6-month default applies. None when

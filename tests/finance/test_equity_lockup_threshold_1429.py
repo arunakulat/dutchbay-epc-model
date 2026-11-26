@@ -7,11 +7,15 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
+from pydantic_core import ValidationError
 
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
-from finance.equity_distribution_v14_hydra import resolve_equity_min_dscr_threshold
+from finance.equity_distribution_v14_hydra import (
+    EquityDistributionConfig,
+    resolve_equity_min_dscr_threshold,
+)
 
 LENDER = str(
     Path(__file__).resolve().parents[2]
@@ -75,6 +79,12 @@ def test_explicit_null_equity_threshold_shadows_constraints_and_fails_loud() -> 
     cfg["equity_distribution"] = {"min_dscr_threshold": None}
     with pytest.raises(ValueError, match=r"equity_distribution\.min_dscr_threshold"):
         resolve_equity_min_dscr_threshold(cfg)
+
+
+def test_direct_equity_distribution_config_requires_min_dscr_threshold() -> None:
+    """EQD-01: direct EquityDistributionConfig() must not silently default to 1.25."""
+    with pytest.raises(ValidationError, match="min_dscr_threshold"):
+        EquityDistributionConfig()  # type: ignore[call-arg]
 
 
 def test_lender_pipeline_runs_cleanly_in_strict_mode() -> None:
