@@ -421,9 +421,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
             else 0.0
         )
 
-    # A2b/#33: the distribution-lockup DSCR covenant is the scenario's AUTHORED covenant,
-    # not an orphan library default. Resolve a fallback chain:
-    #   equity_distribution.min_dscr_threshold -> constraints.min_dscr_covenant -> 1.25
+    # A2b/#33 & #1429 E01: the distribution-lockup DSCR covenant is the scenario's AUTHORED
+    # covenant, with no code default:
+    #   <equity_section>.min_dscr_threshold -> constraints.min_dscr_covenant
     # so the lockup tests distributions against the value the debt sizer / covenant report
     # actually use (1.30) instead of an unauthored 1.25 that matches no stated covenant.
     # Paired with the FP-tolerant lockup comparison (_DSCR_LOCKUP_EPS), this is KPI-neutral
