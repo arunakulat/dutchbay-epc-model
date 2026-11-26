@@ -49,11 +49,6 @@ Usage:
         aep_data=aep_data
     )
 
-    # Full Pipeline (Config-Driven)
-    from analytics.wind import integrate_aep_pipeline
-
-    config = integrate_aep_pipeline(config)  # GWTF ARCH-01 compliant
-
 Framework Compliance:
     - GWTF ARCH-01: Config-driven (no hardcoded values)
     - GWTF R3: Type-safe with comprehensive docstrings
