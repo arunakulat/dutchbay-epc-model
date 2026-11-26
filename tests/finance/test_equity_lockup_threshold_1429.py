@@ -80,4 +80,6 @@ def test_explicit_null_equity_threshold_shadows_constraints_and_fails_loud() -> 
 def test_lender_pipeline_runs_cleanly_in_strict_mode() -> None:
     result = run_v14_pipeline(config=LENDER, validation_mode="strict")
     assert result["status"] == "success"
-    assert result["equity_distribution"]["equity_summary"]["min_dscr_threshold"] == pytest.approx(1.30)
+    assert result["equity_distribution"]["equity_summary"][
+        "min_dscr_threshold"
+    ] == pytest.approx(1.30)
