@@ -134,9 +134,6 @@ class TestNoMaskingDefaultLiterals:
         assert 'wake_loss_pct", 8.0' not in src  # uses DEFAULT_WIND_LOSSES
         assert "or CANONICAL_CURVE_KEY" not in src  # power_curve_key is required
 
-    def test_pipeline_aep_v14_uses_centralised_losses(self) -> None:
-        assert 'wake_loss_pct", 8.0' not in _src("analytics/wind/pipeline_aep_v14.py")
-
     def test_summary_builder_has_no_hub_height_fallback(self) -> None:
         assert 'get("hub_height_m", 150' not in _src("wind_resource/aep_summary.py")
 
