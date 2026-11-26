@@ -1350,6 +1350,11 @@ modules:
     role_description: Escalates CAPEX from its declared price-basis date to construction drawdown timing.
     excel_representation: formula
 
+  - module_path: finance.carbon_credits_v14
+    pipeline_stage: core_finance
+    role_description: Default-off carbon-credit eligibility, issuance, and cashflow contract using explicit placeholder inputs without altering canonical KPIs.
+    excel_representation: formula
+
   - module_path: finance.cashflow_v14
     pipeline_stage: core_finance
     role_description: Core v14 annual project cashflow engine computing revenue, OPEX, tax, CFADS, and returns.

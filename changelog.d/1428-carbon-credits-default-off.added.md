@@ -1,0 +1,1 @@
+- Add default-off carbon-credit eligibility, issuance, and cashflow contract (`finance/carbon_credits_v14.py`) with synthetic placeholder config (`conf/carbon_credits_placeholder.yaml`) and closed-form oracle tests (`tests/finance/test_carbon_credits_1428.py`), keeping carbon revenue strictly zero by default and out of covenants/canonical KPIs (#1428).

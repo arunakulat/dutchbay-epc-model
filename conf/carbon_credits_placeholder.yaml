@@ -1,0 +1,23 @@
+# SYNTHETIC PLACEHOLDER DATA — NOT FOR RELIANCE UNTIL USER/REGISTRY DATA RECEIVED (#1428)
+#
+# This configuration is strictly default-off (`enabled: false`). All numeric inputs
+# are synthetic placeholders for schema and oracle verification only. They carry no
+# registry, Article 6, ESG, legal title, or lender/covenant authority.
+
+carbon_credits:
+  enabled: false
+  placeholder_data: true
+  covenant_eligible: false
+  included_in_canonical_kpis: false
+  registry_name: "PLACEHOLDER_REGISTRY_UNVERIFIED"
+  methodology_id: "PLACEHOLDER_METH_001"
+  methodology_version: "v0.0-placeholder"
+  project_life_years: 20
+  gross_eligible_tco2e_per_year: 150000.0
+  deduction_pct: 5.0
+  rejection_rate_pct: 10.0
+  issuance_delay_years: 1
+  price_usd_per_tco2e: 12.0
+  issuance_cost_usd_per_tco2e: 0.5
+  tax_rate_pct: 15.0
+  revenue_share_pct: 10.0
