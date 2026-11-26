@@ -218,7 +218,7 @@ parso==0.8.7
 pathos==0.3.5
 pathspec==1.1.1
 pdfminer.six==20260107
-pdfplumber==0.11.10
+pdfplumber==0.11.11
 peewee==4.3.0
 pexpect==4.9.0
 pillow==13.0.0

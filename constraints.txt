@@ -28,7 +28,7 @@ requests==2.34.2
 # Document-ingestion output and hook behaviour are reproducibility surfaces. Pymupdf
 # upgraded to 2.1 via dedicated ingestion upgrade dolphin (unblocking #1596/#1597).
 markitdown==0.1.9
-pdfplumber==0.11.10
+pdfplumber==0.11.11
 pymupdf==2.1
 pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
