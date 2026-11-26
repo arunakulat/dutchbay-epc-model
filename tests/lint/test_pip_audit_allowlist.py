@@ -164,6 +164,9 @@ NO_FIX = "no-fix-published"
 PLACEHOLDERS = frozenset({"", "-", "?", "n/a", "na", "none", "tbd", "todo", "unknown"})
 GOVERNED_SOURCE_RECIPES = {
     "audit": ("\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",),
+    "audit-declared": (
+        "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)",
+    ),
     "security": (
         "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium",
         "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
@@ -569,7 +572,7 @@ lifted-by: certifi 2026.10.19 | reason: no installable certifi clears it under t
 PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 """
 EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
-GOVERNED_TARGETS = ("audit", "security")
+GOVERNED_TARGETS = ("audit", "audit-declared", "security")
 PIP_AUDIT_PREFIX = ["pip-audit", "-r", "requirements.txt"]
 PIP_AUDIT_DECLARED_PREFIX = [
     "pip-audit",
@@ -704,6 +707,7 @@ def _effective_target_violations(
     pip_audit_osv_command = [*PIP_AUDIT_OSV_PREFIX, *ignore_tokens]
     expected = {
         "audit": [pip_audit_command],
+        "audit-declared": [pip_audit_declared_command],
         "security": [
             BANDIT_COMMAND,
             pip_audit_command,
@@ -904,6 +908,80 @@ def _replace_empty_assignment(replacement: str) -> str:
     return prefix + replacement + suffix
 
 
+SYNTHETIC_DECLARATION = (
+    "# ignore-vuln: PYSEC-2026-4320 | package: certifi==2026.7.22 | "
+    "cap: requests<2.33 | lifted-by: certifi 2026.10.19 | reason: "
+    "no installable certifi clears it under the cap"
+)
+SYNTHETIC_IGNORE_TOKEN = "--ignore-vuln PYSEC-2026-4320"
+
+
+def _makefile_with_one_declared_entry(makefile_text: str) -> str:
+    """Return the committed Makefile with one well-formed declared entry added."""
+    lines = makefile_text.splitlines()
+    assignments = _assignments(lines)
+    assert len(assignments) == 1, assignments
+    start, end, _modifiers, operator, value = assignments[0]
+    assert operator == ":=", operator
+    updated_value = (
+        f"{value.strip()} {SYNTHETIC_IGNORE_TOKEN}".strip()
+        if value.strip()
+        else SYNTHETIC_IGNORE_TOKEN
+    )
+    updated_lines = [
+        *lines[:start],
+        SYNTHETIC_DECLARATION,
+        f"{VARIABLE} := {updated_value}",
+        *lines[end + 1 :],
+    ]
+    trailing_newline = "\n" if makefile_text.endswith("\n") else ""
+    result = "\n".join(updated_lines) + trailing_newline
+    assert audit(result) == [], audit(result)
+    return result
+
+
+def _dash_prefix_target_recipe(
+    makefile_text: str, target: str, recipe_line: str
+) -> str:
+    """Prefix one recipe line with ``-`` inside ``target`` only."""
+    lines = makefile_text.splitlines()
+    starts = [
+        index for index, line in enumerate(lines) if line.startswith(f"{target}:")
+    ]
+    assert len(starts) == 1, f"{target}: {len(starts)} target lines"
+    replaced = False
+    index = starts[0] + 1
+    while index < len(lines) and lines[index].startswith("\t"):
+        if lines[index] == recipe_line:
+            lines[index] = "\t-" + recipe_line[1:]
+            replaced = True
+            break
+        index += 1
+    assert replaced, f"{target}: recipe line not found: {recipe_line!r}"
+    trailing_newline = "\n" if makefile_text.endswith("\n") else ""
+    return "\n".join(lines) + trailing_newline
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("committed", id="committed-makefile"),
+        pytest.param("populated", id="makefile-with-one-entry"),
+    ]
+)
+def makefile_subject(request: pytest.FixtureRequest) -> str:
+    """Supply both the committed Makefile and the same file with one declared entry.
+
+    O-10: while the live allowlist is empty, reverting any declared-set read back to a
+    literal ``[]`` would still pass on the committed file alone. Running the
+    sentinel-receipt, sequence, forced-fail and hostile-control tests over both
+    subjects turns that regression red.
+    """
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    if request.param == "committed":
+        return makefile_text
+    return _makefile_with_one_declared_entry(makefile_text)
+
+
 def test_the_live_allowlist_satisfies_secdep_01() -> None:
     """The real Makefile must carry a lift condition for every suppressed advisory."""
     assert audit(MAKEFILE.read_text(encoding="utf-8")) == []
@@ -942,7 +1020,9 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist(
 
 
 @pytest.mark.parametrize("target", GOVERNED_TARGETS)
-def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
+def test_the_sequence_oracle_passes_the_committed_makefile(
+    target: str, makefile_subject: str
+) -> None:
     """Positive control for the complete-sequence oracle on the real file.
 
     W-10: the oracle had negatives and one positive on a crafted file, and was never
@@ -950,10 +1030,9 @@ def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
     on a real input is the absence that let F-1 through and then F-2, so it gets one:
     whatever the live allowlist holds, the committed recipes must satisfy it.
     """
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     assert (
         _effective_target_violations(
-            target, _declared_source_ids(makefile_text), makefile_text
+            target, _declared_source_ids(makefile_subject), makefile_subject
         )
         == []
     )
@@ -966,6 +1045,11 @@ def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
             "audit",
             {"pip-audit": [PIP_AUDIT_PREFIX[1:]]},
             id="audit invokes pip-audit",
+        ),
+        pytest.param(
+            "audit-declared",
+            {"pip-audit": [PIP_AUDIT_DECLARED_PREFIX[1:]]},
+            id="audit-declared invokes declared-pin pip-audit",
         ),
         pytest.param(
             "security",
@@ -982,21 +1066,23 @@ def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
     ],
 )
 def test_governed_targets_execute_the_expected_binaries(
-    tmp_path: Path, target: str, expected_receipts: dict[str, list[list[str]]]
+    tmp_path: Path,
+    target: str,
+    expected_receipts: dict[str, list[list[str]]],
+    makefile_subject: str,
 ) -> None:
     """Runtime sentinels prove the printed commands resolve to real executables."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     # The declared tokens are read from the subject and appended to each expected
     # pip-audit argv. The parametrized prefixes carry none, and the sentinel records
     # the real argv, so hard-coding them asserted that the allowlist is empty (F-2).
-    declared = _declared_ignore_tokens(makefile_text)
+    declared = _declared_ignore_tokens(makefile_subject)
     expected = {
         name: [
             [*argv, *declared] if name == "pip-audit" else argv for argv in invocations
         ]
         for name, invocations in expected_receipts.items()
     }
-    completed, receipts = _run_target_with_sentinels(tmp_path, target, makefile_text)
+    completed, receipts = _run_target_with_sentinels(tmp_path, target, makefile_subject)
     assert completed.returncode == 0, completed.stderr
     assert receipts == expected
 
@@ -1027,7 +1113,10 @@ def test_governed_targets_execute_the_expected_binaries(
     ],
 )
 def test_a_failing_governed_executable_fails_the_security_gate(
-    tmp_path: Path, failing: str, expected_calls: dict[str, int]
+    tmp_path: Path,
+    failing: str,
+    expected_calls: dict[str, int],
+    makefile_subject: str,
 ) -> None:
     """The gate must go nonzero when any governed audit fails.
 
@@ -1036,9 +1125,8 @@ def test_a_failing_governed_executable_fails_the_security_gate(
     from a gate whose failure was discarded. Each governed executable is therefore
     failed in turn here, on the real committed Makefile.
     """
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     completed, receipts = _run_target_with_sentinels(
-        tmp_path, "security", makefile_text, failing=failing
+        tmp_path, "security", makefile_subject, failing=failing
     )
 
     assert completed.returncode != 0, (
@@ -1050,15 +1138,37 @@ def test_a_failing_governed_executable_fails_the_security_gate(
     assert {name: len(calls) for name, calls in receipts.items()} == expected_calls
 
 
-def test_a_failing_audit_also_fails_the_convenience_target(tmp_path: Path) -> None:
-    """`audit` is not the merge gate, but it must not lie about an audit either."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+@pytest.mark.parametrize(
+    ("target", "failing", "expected_argv"),
+    [
+        pytest.param(
+            "audit",
+            "pip-audit-resolve",
+            PIP_AUDIT_PREFIX[1:],
+            id="audit fails on resolve-mode failure",
+        ),
+        pytest.param(
+            "audit-declared",
+            "pip-audit-declared",
+            PIP_AUDIT_DECLARED_PREFIX[1:],
+            id="audit-declared fails on declared-pin failure",
+        ),
+    ],
+)
+def test_a_failing_audit_also_fails_the_convenience_target(
+    tmp_path: Path,
+    target: str,
+    failing: str,
+    expected_argv: list[str],
+    makefile_subject: str,
+) -> None:
+    """Convenience audit targets must not lie about a failing audit either."""
     completed, receipts = _run_target_with_sentinels(
-        tmp_path, "audit", makefile_text, failing="pip-audit-resolve"
+        tmp_path, target, makefile_subject, failing=failing
     )
     assert completed.returncode != 0, completed.stderr
     assert receipts == {
-        "pip-audit": [[*PIP_AUDIT_PREFIX[1:], *_declared_ignore_tokens(makefile_text)]]
+        "pip-audit": [[*expected_argv, *_declared_ignore_tokens(makefile_subject)]]
     }
 
 
@@ -1076,7 +1186,7 @@ def test_a_failing_audit_also_fails_the_convenience_target(tmp_path: Path) -> No
     ],
 )
 def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
-    tmp_path: Path, label: str, prelude: str
+    tmp_path: Path, label: str, prelude: str, makefile_subject: str
 ) -> None:
     """Prove the bypass works before proving the fence rejects it.
 
@@ -1084,8 +1194,7 @@ def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
     which is the P-9 defect on #1353. So the hostile Makefile is executed first: the
     audits fail, the gate reports success, and the commands are untouched.
     """
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
-    mutated = prelude + makefile_text
+    mutated = prelude + makefile_subject
 
     completed, receipts = _run_target_with_sentinels(
         tmp_path, "security", mutated, failing="pip-audit-resolve"
@@ -1101,7 +1210,7 @@ def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
     # returns early on a declared-set mismatch and this assertion stops meaning
     # "the oracle is blind to it" as soon as the allowlist holds an entry (F-2).
     assert _dry_run_target_commands("security", mutated) == _dry_run_target_commands(
-        "security", makefile_text
+        "security", makefile_subject
     )
     assert (
         _effective_target_violations("security", _declared_source_ids(mutated), mutated)
@@ -1115,29 +1224,68 @@ def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
     ), violations
 
 
-def test_a_dash_prefixed_governed_recipe_line_is_rejected() -> None:
+@pytest.mark.parametrize(
+    ("target", "recipe_line", "failing"),
+    [
+        pytest.param(
+            "audit",
+            "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
+            "pip-audit-resolve",
+            id="audit dash prefix",
+        ),
+        pytest.param(
+            "audit-declared",
+            "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)",
+            "pip-audit-declared",
+            id="audit-declared dash prefix",
+        ),
+        pytest.param(
+            "security",
+            "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
+            "pip-audit-resolve",
+            id="security dash prefix",
+        ),
+    ],
+)
+def test_a_dash_prefixed_governed_recipe_line_is_rejected(
+    tmp_path: Path,
+    target: str,
+    recipe_line: str,
+    failing: str,
+    makefile_subject: str,
+) -> None:
     """`-command` is Make's third way to discard an exit status."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
-    mutated = makefile_text.replace(
-        "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
-        "\t-pip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
+    mutated = _dash_prefix_target_recipe(makefile_subject, target, recipe_line)
+    assert mutated != makefile_subject
+
+    # Prove the dash prefix really swallows the audit failure on this target alone.
+    completed, _receipts = _run_target_with_sentinels(
+        tmp_path, target, mutated, failing=failing
     )
-    assert mutated != makefile_text
+    assert completed.returncode == 0, (
+        f"dash-prefixed {target} recipe was expected to swallow {failing}: "
+        f"{completed.stderr}"
+    )
+
     violations = audit(mutated)
     assert violations, "the fence passed a recipe that ignores its own exit status"
-    assert any("recipe must be exactly" in item for item in violations), violations
+    assert any(
+        f"{target} complete source recipe must be exactly" in item
+        for item in violations
+    ), violations
 
 
-def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None:
+def test_security_recipe_cannot_carry_an_undeclared_direct_suppression(
+    makefile_subject: str,
+) -> None:
     """F-1S control: the required CI target cannot diverge from ``audit``."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
     hostile_recipe = (
         "\tpip-audit -r requirements.txt --ignore-vuln CVE-2026-999999 "
         "$(PIP_AUDIT_IGNORES)"
     )
-    assert makefile_text.count(canonical_recipe) == 2
-    mutated = makefile_text.replace(canonical_recipe, hostile_recipe, 1)
+    assert makefile_subject.count(canonical_recipe) == 2
+    mutated = makefile_subject.replace(canonical_recipe, hostile_recipe, 1)
 
     source_violations = audit(mutated)
     assert any(
@@ -1166,14 +1314,15 @@ def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None
     assert rejected_injected_id, effective_violations
 
 
-def test_oneshell_alias_cannot_intercept_the_security_audit(tmp_path: Path) -> None:
+def test_oneshell_alias_cannot_intercept_the_security_audit(
+    tmp_path: Path, makefile_subject: str
+) -> None:
     """F-1W control: printed command text cannot stand in for runtime identity."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
     hostile_recipe = (
         f"\talias pip-audit='echo SECURITY-AUDIT-INTERCEPTED'\n{canonical_recipe}"
     )
-    mutated = ".ONESHELL:\n" + makefile_text.replace(
+    mutated = ".ONESHELL:\n" + makefile_subject.replace(
         canonical_recipe, hostile_recipe, 1
     )
 
@@ -1201,37 +1350,48 @@ def test_oneshell_alias_cannot_intercept_the_security_audit(tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    ("recipe", "expected"),
+    ("target", "base_cmd"),
+    [
+        pytest.param("audit", "pip-audit -r requirements.txt", id="audit"),
+        pytest.param(
+            "audit-declared",
+            "pip-audit --no-deps --disable-pip -r requirements.txt",
+            id="audit-declared",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("recipe_template", "expected"),
     [
         pytest.param(
-            "\tpip-audit -r requirements.txt --ignore-v CVE-2026-999999\n",
+            "\t{base_cmd} --ignore-v CVE-2026-999999\n",
             "complete command sequence",
             id="abbreviated option",
         ),
         pytest.param(
-            "\tpip-audit -r requirements.txt || true\n",
+            "\t{base_cmd} || true\n",
             "complete command sequence",
             id="shell success override",
         ),
         pytest.param(
-            "\tenv pip-audit -r requirements.txt\n",
+            "\tenv {base_cmd}\n",
             "complete command sequence",
             id="alternate command wrapper",
         ),
         pytest.param(
-            "\tpip-audit -r requirements.txt\n"
-            "\tpython -m pip_audit -r requirements.txt\n",
+            "\t{base_cmd}\n\tpython -m pip_audit -r requirements.txt\n",
             "complete command sequence",
             id="second invocation",
         ),
     ],
 )
 def test_effective_target_oracle_rejects_noncanonical_commands(
-    recipe: str, expected: str
+    target: str, base_cmd: str, recipe_template: str, expected: str
 ) -> None:
     """The live oracle fails closed on options, wrappers and extra commands."""
-    makefile_text = f"{EMPTY}\naudit:\n{recipe}"
-    violations = _effective_target_violations("audit", [], makefile_text)
+    recipe = recipe_template.format(base_cmd=base_cmd)
+    makefile_text = f"{EMPTY}\n{target}:\n{recipe}"
+    violations = _effective_target_violations(target, [], makefile_text)
     assert any(expected in violation for violation in violations), violations
 
 
@@ -1466,17 +1626,16 @@ def test_an_ambiguous_abbreviation_is_rejected_although_it_cannot_suppress() -> 
 
 @pytest.mark.parametrize("abbreviation", ABBREVIATIONS)
 def test_an_abbreviated_recipe_suppression_is_effective_and_is_rejected(
-    abbreviation: str,
+    abbreviation: str, makefile_subject: str
 ) -> None:
     """Prove the recipe really suppresses before proving the fence rejects it."""
-    makefile_text = MAKEFILE.read_text(encoding="utf-8")
     canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
     hostile_recipe = (
         f"\tpip-audit -r requirements.txt {abbreviation} CVE-2026-999999 "
         "$(PIP_AUDIT_IGNORES)"
     )
-    mutated = makefile_text.replace(canonical_recipe, hostile_recipe, 1)
-    assert mutated != makefile_text
+    mutated = makefile_subject.replace(canonical_recipe, hostile_recipe, 1)
+    assert mutated != makefile_subject
 
     # The suppression really reaches the audit: it is in the emitted command, and
     # pip-audit's own parser reads it as an ignore flag.
@@ -1503,8 +1662,6 @@ def test_an_abbreviated_recipe_suppression_is_effective_and_is_rejected(
 # stays a faithful stand-in for the real file rather than a simplified one.
 POPULATED_TARGETS = COMPLIANT + (
     "SURFACE := finance\n"
-    "audit:\n"
-    "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
     "security:\n"
     "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium"
     " --confidence-level medium\n"
@@ -1512,6 +1669,10 @@ POPULATED_TARGETS = COMPLIANT + (
     "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
     "\tpip-audit --vulnerability-service osv --no-deps --disable-pip"
     " -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "audit:\n"
+    "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "audit-declared:\n"
+    "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
 )
 DECLARED_IDS = ["PYSEC-2026-4320"]
 
