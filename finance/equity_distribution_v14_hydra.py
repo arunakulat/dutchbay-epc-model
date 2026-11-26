@@ -27,6 +27,7 @@ GWTF Compliance:
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -271,6 +272,48 @@ def _min_reserve_months_source(section_name: str, section: Mapping[str, Any]) ->
     return f"{section_name}.min_reserve_months"
 
 
+def resolve_equity_min_dscr_threshold(config: Mapping[str, Any]) -> tuple[float, str]:
+    """Resolve the distribution-lockup DSCR threshold from YAML with no code default (#1429, E01).
+
+    Precedence: ``<equity_section>.min_dscr_threshold`` -> ``constraints.min_dscr_covenant``.
+    Refuses missing, null, boolean, non-finite, or out-of-range values naming the YAML path.
+    """
+    equity_section_name, equity_section = _named_equity_section(config)
+    candidates: list[tuple[str, Any]] = []
+    if equity_section_name and "min_dscr_threshold" in equity_section:
+        candidates.append(
+            (f"{equity_section_name}.min_dscr_threshold", equity_section["min_dscr_threshold"])
+        )
+    constraints_section = _section_case_insensitive(config, "constraints") or {}
+    for key, val in constraints_section.items():
+        if str(key).lower() == "min_dscr_covenant":
+            candidates.append((f"constraints.{key}", val))
+            break
+
+    if not candidates:
+        raise ValueError(
+            "equity_distribution.min_dscr_threshold (or constraints.min_dscr_covenant) is "
+            "required: the equity lock-up threshold has no code default (#1429, E01)."
+        )
+
+    path, raw = candidates[0]
+    if raw is None or isinstance(raw, bool):
+        raise ValueError(
+            f"{path} is required and must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        )
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{path} is required and must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        ) from exc
+    if not math.isfinite(numeric) or not (0.0 <= numeric <= 5.0):
+        raise ValueError(
+            f"{path} must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        )
+    return numeric, path
+
+
 def _normalise_percent(value: Any, default: float) -> float:
     """Normalize percentage inputs that may arrive as decimals or percent points."""
     numeric = _as_float(value, default)
@@ -391,12 +434,10 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     # 1.25-vs-1.30 gap was inert; it is real but only engages on genuine sub-covenant years —
     # and naively raising it WITHOUT the FP tolerance would have spuriously locked the sculpt
     # floor on sub-ULP rounding, a fake +27bps equity re-baseline.)
-    constraints_section = _section_case_insensitive(config, "constraints") or {}
-    lockup_threshold = equity_section.get("min_dscr_threshold")
-    if lockup_threshold is None:
-        lockup_threshold = _lookup_case_insensitive(
-            constraints_section, "min_dscr_covenant"
-        )
+    enabled = bool(equity_section.get("enabled", True))
+    lockup_threshold_value = (
+        resolve_equity_min_dscr_threshold(config)[0] if enabled else 0.0
+    )
 
     # The financed schedule (build_equity_distribution_schedule) consumes only the fields
     # parsed below. (The former priority-waterfall fields — target_equity_irr_pct,
@@ -405,9 +446,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     # EquityDistributionEngine and have been removed from the config.)
     return EquityDistributionConfig(
         scenario_name=scenario_name,
-        enabled=bool(equity_section.get("enabled", True)),
+        enabled=enabled,
         project_life_years=_as_int(project_life, 25),
-        min_dscr_threshold=float(_as_float(lockup_threshold, 1.25) or 0.0),
+        min_dscr_threshold=lockup_threshold_value,
         min_reserve_months=_as_int(equity_section.get("min_reserve_months"), 6),
         min_reserve_months_source=_min_reserve_months_source(
             equity_section_name, equity_section
@@ -1196,5 +1237,6 @@ __all__ = [
     "EquityDistributionConfig",
     "build_equity_distribution_schedule",
     "calculate_equity_distribution_from_pipeline",
+    "resolve_equity_min_dscr_threshold",
     "waterfall_sweep_cash",
 ]
