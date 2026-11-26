@@ -6,6 +6,7 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -616,3 +617,264 @@ def test_session_hook_writes_the_checkout_pth_on_a_cached_start(
     written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
     assert len(written) == 1
     assert written[0].read_text(encoding="utf-8").splitlines() == [str(repo)]
+
+
+def _emitted_pythonpath_line() -> str:
+    """The PYTHONPATH export the hook appends to CLAUDE_ENV_FILE, with a repo substituted."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r"printf '(case \":\$\{PYTHONPATH:-\}:\".*?esac)\\n' \"\$REPO\" \"\$REPO\"",
+        hook,
+    )
+    assert (
+        match is not None
+    ), "the hook no longer emits a recognisable PYTHONPATH export"
+    return match.group(1).replace("%s", "/tmp/probe-repo")
+
+
+def _pythonpath_after_sourcing(
+    line: str, times: int, *, initial: str | None = None
+) -> str:
+    """Source *line* *times* times in one shell and return the resulting PYTHONPATH."""
+
+    setup = (
+        "unset PYTHONPATH\n" if initial is None else f'export PYTHONPATH="{initial}"\n'
+    )
+    script = setup + (line + "\n") * times + 'printf "%s" "${PYTHONPATH:-}"'
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def test_session_hook_pythonpath_export_is_idempotent() -> None:
+    """Re-sourcing the env file must not accumulate duplicate PYTHONPATH entries (#1417)."""
+
+    line = _emitted_pythonpath_line()
+
+    from_unset = _pythonpath_after_sourcing(line, 5, initial=None)
+    assert from_unset == "/tmp/probe-repo"
+    assert from_unset.split(":").count("/tmp/probe-repo") == 1
+
+    from_existing = _pythonpath_after_sourcing(line, 5, initial="/tmp/existing")
+    assert from_existing == "/tmp/probe-repo:/tmp/existing"
+    assert from_existing.split(":").count("/tmp/probe-repo") == 1
+
+
+def test_session_hook_pythonpath_export_still_prepends_when_absent() -> None:
+    """Negative control (#1417): a no-op guard would look idempotent but drop the repo."""
+
+    line = _emitted_pythonpath_line()
+
+    assert _pythonpath_after_sourcing(line, 1, initial=None) == "/tmp/probe-repo"
+    entries = _pythonpath_after_sourcing(line, 1, initial="/tmp/existing").split(":")
+    assert entries == ["/tmp/probe-repo", "/tmp/existing"]
+
+    unguarded = 'export PYTHONPATH="/tmp/probe-repo${PYTHONPATH:+:$PYTHONPATH}"'
+    assert (
+        _pythonpath_after_sourcing(unguarded, 5, initial="/tmp/existing")
+        .split(":")
+        .count("/tmp/probe-repo")
+        == 5
+    )
+
+
+def test_session_hook_stamp_carries_no_project_suffix_and_invalidates_legacy_stamps(
+    tmp_path: Path,
+) -> None:
+    """Pin the ``|no-project`` stamp suffix and verify pre-#1376 stamps miss cache (#1417)."""
+
+    stamp_line = _hook_line("STAMP_VALUE=")
+    assert stamp_line == 'STAMP_VALUE="$(manifest_hash)|$DUTCHBAY_EXTRAS|no-project"'
+
+    condition_line = _hook_line('if [ -f "$STAMP" ]')
+    probe_body = (
+        "manifest_hash() { echo stub-manifest; }\n"
+        f'STAMP="{tmp_path / ".session-start-stamp"}"\n'
+        'DUTCHBAY_EXTRAS="dev"\n'
+        f"{stamp_line}\n"
+        f"{condition_line}\n"
+        '  echo "CACHE_HIT"\n'
+        "else\n"
+        '  echo "CACHE_MISS"\n'
+        "fi\n"
+    )
+
+    stamp_file = tmp_path / ".session-start-stamp"
+    # Legacy stamp without |no-project must force a refresh (negative control).
+    stamp_file.write_text("stub-manifest|dev", encoding="utf-8")
+    legacy = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", probe_body],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert legacy.stdout.strip() == "CACHE_MISS"
+
+    # Current stamp with |no-project must hit cache.
+    stamp_file.write_text("stub-manifest|dev|no-project", encoding="utf-8")
+    current = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", probe_body],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert current.stdout.strip() == "CACHE_HIT"
+
+
+def _extract_extras_expansion_script() -> str:
+    """Extract the embedded Python extras-expansion heredoc from the SessionStart hook."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r'"\$PY" - "\$DUTCHBAY_EXTRAS" > "\$EXTRA_REQS" <<\'PYEOF\'\n(.*?)\nPYEOF\n',
+        hook,
+        re.DOTALL,
+    )
+    assert (
+        match is not None
+    ), "the hook no longer contains the extras-expansion Python heredoc"
+    return match.group(1)
+
+
+def test_session_hook_extras_expansion_resolves_self_references_without_project() -> (
+    None
+):
+    """Extras expansion follows self-references and never installs the project itself (#1417)."""
+
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    active_lines = [
+        line.strip()
+        for line in hook.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any("pip install -e" in line for line in active_lines)
+    assert not any(re.search(r"pip install\b.*\s\.", line) for line in active_lines)
+    assert any('pip install --quiet -r "$EXTRA_REQS"' in line for line in active_lines)
+
+    script = _extract_extras_expansion_script()
+    completed = subprocess.run(
+        [sys.executable, "-c", script, "dev,feasibility"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    lines = [line for line in completed.stdout.splitlines() if line.strip()]
+    assert lines, "extras expansion produced no requirements"
+    assert len(lines) == len(set(lines)), "extras expansion emitted duplicate lines"
+
+    names = {canonicalize_name(Requirement(line).name) for line in lines}
+    assert "dutchbay-epc-model" not in names
+    assert {"pytest", "weasyprint", "pandapower"} <= names
+
+
+def test_session_hook_extras_expansion_fails_loudly_on_unknown_extra() -> None:
+    """Negative control (#1417): an unknown extra must fail loudly instead of silently skipping."""
+
+    script = _extract_extras_expansion_script()
+    completed = subprocess.run(
+        [sys.executable, "-c", script, "dev,nonexistent_extra_1417"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert "unknown extra 'nonexistent_extra_1417'" in completed.stderr
+
+
+def _extract_project_cleanup_snippet() -> str:
+    """Extract the project-uninstall and egg-info-removal block from the hook."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r'(  if "\$PY" -m pip show --quiet dutchbay-epc-model >/dev/null 2>&1; then\n'
+        r'    "\$PY" -m pip uninstall --quiet --yes dutchbay-epc-model\n'
+        r"  fi\n"
+        r'  rm -rf "\$REPO/dutchbay_epc_model\.egg-info")',
+        hook,
+    )
+    assert (
+        match is not None
+    ), "the hook no longer contains the project uninstall and egg-info cleanup block"
+    return match.group(1)
+
+
+def test_session_hook_uninstalls_legacy_project_and_removes_egg_info(
+    tmp_path: Path,
+) -> None:
+    """Pin ordering and behaviour of legacy project uninstall and egg-info removal (#1417)."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    install_idx = hook.index('"$PY" -m pip install --quiet -r "$EXTRA_REQS"')
+    show_idx = hook.index('"$PY" -m pip show --quiet dutchbay-epc-model')
+    uninstall_idx = hook.index(
+        '"$PY" -m pip uninstall --quiet --yes dutchbay-epc-model'
+    )
+    egg_idx = hook.index('rm -rf "$REPO/dutchbay_epc_model.egg-info"')
+    stamp_idx = hook.index('printf \'%s\' "$STAMP_VALUE" > "$STAMP"')
+    assert install_idx < show_idx < uninstall_idx < egg_idx < stamp_idx
+
+    snippet = _extract_project_cleanup_snippet()
+    log_file = tmp_path / "pip-calls.log"
+    stub_py = tmp_path / "stub-python"
+    stub_py.write_text(
+        "#!/bin/bash\n"
+        'printf "%s\\n" "$*" >> "$STUB_LOG"\n'
+        'if [ "${1:-}" = "-m" ] && [ "${2:-}" = "pip" ] && [ "${3:-}" = "show" ]; then\n'
+        '  exit "${STUB_SHOW_RC}"\n'
+        "fi\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    stub_py.chmod(0o755)
+
+    # Case 1: legacy project distribution present -> uninstall runs AND egg-info removed.
+    repo_present = tmp_path / "repo-present"
+    egg_present = repo_present / "dutchbay_epc_model.egg-info"
+    egg_present.mkdir(parents=True)
+    (egg_present / "PKG-INFO").write_text(
+        "Name: dutchbay-epc-model\n", encoding="utf-8"
+    )
+    log_file.write_text("", encoding="utf-8")
+    subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", snippet],
+        env={
+            **os.environ,
+            "PY": str(stub_py),
+            "REPO": str(repo_present),
+            "STUB_LOG": str(log_file),
+            "STUB_SHOW_RC": "0",
+        },
+        check=True,
+    )
+    calls_present = log_file.read_text(encoding="utf-8").splitlines()
+    assert "-m pip show --quiet dutchbay-epc-model" in calls_present
+    assert "-m pip uninstall --quiet --yes dutchbay-epc-model" in calls_present
+    assert not egg_present.exists()
+
+    # Case 2 (negative control): project absent -> uninstall skipped, egg-info still removed.
+    repo_absent = tmp_path / "repo-absent"
+    egg_absent = repo_absent / "dutchbay_epc_model.egg-info"
+    egg_absent.mkdir(parents=True)
+    (egg_absent / "PKG-INFO").write_text("Name: dutchbay-epc-model\n", encoding="utf-8")
+    log_file.write_text("", encoding="utf-8")
+    subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", snippet],
+        env={
+            **os.environ,
+            "PY": str(stub_py),
+            "REPO": str(repo_absent),
+            "STUB_LOG": str(log_file),
+            "STUB_SHOW_RC": "1",
+        },
+        check=True,
+    )
+    calls_absent = log_file.read_text(encoding="utf-8").splitlines()
+    assert "-m pip show --quiet dutchbay-epc-model" in calls_absent
+    assert "-m pip uninstall --quiet --yes dutchbay-epc-model" not in calls_absent
+    assert not egg_absent.exists()

@@ -302,6 +302,106 @@ def test_probe_sees_editable_install_behind_a_checkout_egg_info(tmp_path: Path) 
     assert raw["project_install_url"] == checkout.as_uri()
 
 
+def _portable_venv_editable_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """Create a checkout containing both an egg-info and an editable portable .venv."""
+
+    import venv
+
+    checkout = tmp_path / "checkout"
+    (checkout / "probe_target").mkdir(parents=True)
+    (checkout / "probe_target" / "__init__.py").write_text("", encoding="utf-8")
+    egg_info = checkout / "dutchbay_epc_model.egg-info"
+    egg_info.mkdir()
+    (egg_info / "PKG-INFO").write_text(
+        "Metadata-Version: 2.1\nName: dutchbay-epc-model\nVersion: 0.0.0\n",
+        encoding="utf-8",
+    )
+
+    venv_dir = checkout / ".venv"
+    venv.create(venv_dir, with_pip=False)
+    purelib = subprocess.run(
+        [
+            str(venv_dir / "bin" / "python"),
+            "-c",
+            'import sysconfig; print(sysconfig.get_paths()["purelib"])',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    dist_info = Path(purelib) / "dutchbay_epc_model-0.0.0.dist-info"
+    dist_info.mkdir(parents=True)
+    (dist_info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: dutchbay-epc-model\nVersion: 0.0.0\n",
+        encoding="utf-8",
+    )
+    (dist_info / "direct_url.json").write_text(
+        json.dumps({"dir_info": {"editable": True}, "url": checkout.as_uri()}),
+        encoding="utf-8",
+    )
+    return checkout, venv_dir
+
+
+def _run_probe_script(
+    venv_dir: Path, checkout: Path, probe_source: str
+) -> dict[str, object]:
+    """Execute *probe_source* inside *venv_dir* with *checkout* on PYTHONPATH."""
+
+    completed = subprocess.run(
+        [str(venv_dir / "bin" / "python"), "-c", probe_source],
+        cwd=checkout,
+        env={
+            **os.environ,
+            "DUTCHBAY_ACTIVE_CHECKOUT": str(checkout),
+            "DUTCHBAY_IMPORT_PROBE": "probe_target",
+            "DUTCHBAY_PROJECT_DISTRIBUTION": "dutchbay-epc-model",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONPATH": str(checkout),
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(completed.stdout)
+    assert isinstance(payload, dict)
+    return payload
+
+
+def test_probe_sees_editable_install_inside_portable_in_checkout_venv(
+    tmp_path: Path,
+) -> None:
+    """An in-checkout portable ``.venv`` must not be filtered out with the checkout (#1417).
+
+    When the venv lives at ``<checkout>/.venv``, its ``site-packages`` is relative to
+    both ``checkout`` and ``sys.prefix``.  The probe filter must skip checkout paths
+    (such as a stale ``egg-info``) while keeping ``sys.prefix`` entries so an editable
+    ``dist-info`` inside the portable venv is still detected.
+    """
+
+    checkout, venv_dir = _portable_venv_editable_fixture(tmp_path)
+    raw = _run_probe_script(venv_dir, checkout, environment._PROBE)
+
+    assert Path(str(raw["python_prefix"])).is_relative_to(checkout.resolve())
+    assert raw["editable_project_install"] is True
+    assert raw["project_install_url"] == checkout.as_uri()
+
+
+def test_probe_filter_drop_prefix_guard_hides_portable_editable_install(
+    tmp_path: Path,
+) -> None:
+    """Negative control (#1417): dropping the ``sys.prefix`` exemption breaks detection."""
+
+    clause = " and not candidate.is_relative_to(prefix)"
+    assert clause in environment._PROBE
+    mutated_probe = environment._PROBE.replace(clause, "", 1)
+
+    checkout, venv_dir = _portable_venv_editable_fixture(tmp_path)
+    raw = _run_probe_script(venv_dir, checkout, mutated_probe)
+
+    assert raw["editable_project_install"] is False
+    assert raw["project_install_url"] is None
+
+
 def test_foreign_checkout_path_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
