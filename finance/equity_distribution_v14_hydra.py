@@ -280,10 +280,11 @@ def resolve_equity_min_dscr_threshold(config: Mapping[str, Any]) -> tuple[float,
     """
     equity_section_name, equity_section = _named_equity_section(config)
     candidates: list[tuple[str, Any]] = []
-    if equity_section_name and "min_dscr_threshold" in equity_section:
-        candidates.append(
-            (f"{equity_section_name}.min_dscr_threshold", equity_section["min_dscr_threshold"])
-        )
+    if equity_section_name:
+        for key, val in equity_section.items():
+            if str(key).lower() == "min_dscr_threshold":
+                candidates.append((f"{equity_section_name}.{key}", val))
+                break
     constraints_section = _section_case_insensitive(config, "constraints") or {}
     for key, val in constraints_section.items():
         if str(key).lower() == "min_dscr_covenant":

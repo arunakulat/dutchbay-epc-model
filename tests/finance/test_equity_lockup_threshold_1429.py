@@ -62,6 +62,21 @@ def test_disabled_equity_distribution_skips_preflight_lockup_check() -> None:
     validate_config_for_v14(cfg, "disabled_equity.yaml", ["cashflow", "debt"])
 
 
+def test_case_insensitive_equity_threshold_overrides_constraints_covenant() -> None:
+    cfg = _lender_cfg()
+    cfg["equity_distribution"] = {"MIN_DSCR_THRESHOLD": 1.35}
+    val, src = resolve_equity_min_dscr_threshold(cfg)
+    assert val == pytest.approx(1.35)
+    assert src == "equity_distribution.MIN_DSCR_THRESHOLD"
+
+
+def test_explicit_null_equity_threshold_shadows_constraints_and_fails_loud() -> None:
+    cfg = _lender_cfg()
+    cfg["equity_distribution"] = {"min_dscr_threshold": None}
+    with pytest.raises(ValueError, match=r"equity_distribution\.min_dscr_threshold"):
+        resolve_equity_min_dscr_threshold(cfg)
+
+
 def test_lender_pipeline_runs_cleanly_in_strict_mode() -> None:
     result = run_v14_pipeline(config=LENDER, validation_mode="strict")
     assert result["status"] == "success"
