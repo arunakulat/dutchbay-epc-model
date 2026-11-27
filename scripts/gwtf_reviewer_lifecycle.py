@@ -20,13 +20,17 @@ database, or filesystem mutations.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import hydra
+from hydra.core.config_store import ConfigStore
+from omegaconf import DictConfig, OmegaConf
 
 SHARED_GOVERNED_VENV = "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
 
@@ -373,17 +377,23 @@ def reconcile_reviewer_evidence(
 
 
 def _is_shared_governed_venv(path_str: str) -> bool:
-    """Return True if path_str names or resolves inside the shared governed venv."""
+    """Return True if path_str equals, sits inside, or contains the shared governed venv."""
     norm_shared = os.path.normpath(os.path.realpath(SHARED_GOVERNED_VENV))
     norm_candidate = os.path.normpath(os.path.realpath(path_str))
-    if norm_candidate == norm_shared:
-        return True
-    if norm_candidate.startswith(norm_shared + os.sep):
+    if (
+        norm_candidate == norm_shared
+        or norm_candidate.startswith(norm_shared + os.sep)
+        or norm_shared.startswith(norm_candidate.rstrip(os.sep) + os.sep)
+    ):
         return True
     # Also check lexical normalization in case symlink/mount doesn't exist in test env.
     lex_shared = os.path.normpath(SHARED_GOVERNED_VENV)
     lex_candidate = os.path.normpath(path_str)
-    return lex_candidate == lex_shared or lex_candidate.startswith(lex_shared + os.sep)
+    return (
+        lex_candidate == lex_shared
+        or lex_candidate.startswith(lex_shared + os.sep)
+        or lex_shared.startswith(lex_candidate.rstrip(os.sep) + os.sep)
+    )
 
 
 def verify_safe_retirement(plan: dict[str, Any]) -> dict[str, Any]:
@@ -489,60 +499,84 @@ def _load_json_regular_file(path_str: str) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def main(argv: list[str] | None = None) -> int:
-    """CLI entrypoint for reviewer lifecycle reconciliation and safe retirement."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="command", required=True)
+@dataclass
+class ReviewerLifecycleConfig:
+    """Hydra structured configuration for reviewer lifecycle verification."""
 
-    rec = sub.add_parser(
-        "reconcile", help="Reconcile a reviewer session record against target SHAs."
-    )
-    rec.add_argument("--session", required=True, help="Path to session JSON file.")
-    rec.add_argument("--target-commit", required=True)
-    rec.add_argument("--target-tree", required=True)
-    rec.add_argument("--target-base", required=True)
-    rec.add_argument("--target-manifest-sha256", required=True)
-    rec.add_argument(
-        "--writer-session",
-        action="append",
-        default=[],
-        help="Writer session ID to check independence against.",
-    )
-    rec.add_argument("--live-locks", action="store_true")
-    rec.add_argument("--ambiguous-ownership", action="store_true")
-    rec.add_argument("--unresolved-scope", action="store_true")
+    command: str = "reconcile"
+    session: str | None = None
+    target_commit: str | None = None
+    target_tree: str | None = None
+    target_base: str | None = None
+    target_manifest_sha256: str | None = None
+    writer_sessions: list[str] = field(default_factory=list)
+    live_locks: bool = False
+    ambiguous_ownership: bool = False
+    unresolved_scope: bool = False
+    plan: str | None = None
 
-    ret = sub.add_parser(
-        "verify-retirement", help="Verify safe retirement preconditions."
-    )
-    ret.add_argument("--plan", required=True, help="Path to retirement plan JSON file.")
 
-    args = parser.parse_args(argv)
+cs = ConfigStore.instance()
+cs.store(name="reviewer_lifecycle", node=ReviewerLifecycleConfig)
+
+
+def run_cli(cfg: DictConfig) -> int:
+    """Execute reviewer lifecycle reconciliation or safe-retirement verification."""
     try:
-        if args.command == "reconcile":
-            record = _load_json_regular_file(args.session)
+        raw: Any = OmegaConf.to_container(cfg, resolve=True)
+        _require(isinstance(raw, dict), "invalid Hydra configuration")
+        command = _require_non_empty_str(raw.get("command"), "command")
+        if command == "reconcile":
+            session_path = _require_non_empty_str(raw.get("session"), "session")
+            target_commit = _require_non_empty_str(
+                raw.get("target_commit"), "target_commit"
+            )
+            target_tree = _require_non_empty_str(raw.get("target_tree"), "target_tree")
+            target_base = _require_non_empty_str(raw.get("target_base"), "target_base")
+            target_manifest_sha256 = _require_non_empty_str(
+                raw.get("target_manifest_sha256"), "target_manifest_sha256"
+            )
+            writer_sessions_raw = raw.get("writer_sessions") or []
+            _require(
+                isinstance(writer_sessions_raw, list)
+                and all(isinstance(item, str) for item in writer_sessions_raw),
+                "writer_sessions must be a list of strings",
+            )
+            record = _load_json_regular_file(session_path)
             result = reconcile_reviewer_evidence(
                 record,
-                target_commit=args.target_commit,
-                target_tree=args.target_tree,
-                target_base=args.target_base,
-                target_manifest_sha256=args.target_manifest_sha256,
-                writer_sessions=set(args.writer_session),
-                live_locks=bool(args.live_locks),
-                ambiguous_ownership=bool(args.ambiguous_ownership),
-                unresolved_scope=bool(args.unresolved_scope),
+                target_commit=target_commit,
+                target_tree=target_tree,
+                target_base=target_base,
+                target_manifest_sha256=target_manifest_sha256,
+                writer_sessions=set(writer_sessions_raw),
+                live_locks=bool(raw.get("live_locks", False)),
+                ambiguous_ownership=bool(raw.get("ambiguous_ownership", False)),
+                unresolved_scope=bool(raw.get("unresolved_scope", False)),
             )
             print(json.dumps(result, sort_keys=True))
             return 0 if result["qualified"] else 2
 
-        plan = _load_json_regular_file(args.plan)
-        result = verify_safe_retirement(plan)
-        print(json.dumps(result, sort_keys=True))
-        return 0 if result["allowed"] else 2
+        if command == "verify-retirement":
+            plan_path = _require_non_empty_str(raw.get("plan"), "plan")
+            plan = _load_json_regular_file(plan_path)
+            result = verify_safe_retirement(plan)
+            print(json.dumps(result, sort_keys=True))
+            return 0 if result["allowed"] else 2
+
+        raise ValueError(f"unsupported command: {command!r}")
     except (ValueError, json.JSONDecodeError, OSError) as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)
         return 1
 
 
+@hydra.main(version_base="1.3", config_path=None, config_name="reviewer_lifecycle")
+def main(cfg: DictConfig) -> None:
+    """Hydra CLI entrypoint for reviewer lifecycle reconciliation and safe retirement."""
+    exit_code = run_cli(cfg)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

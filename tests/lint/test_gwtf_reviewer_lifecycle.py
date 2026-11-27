@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from omegaconf import OmegaConf
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -277,11 +278,21 @@ def test_verify_safe_retirement_passes_when_all_gates_satisfied() -> None:
     assert result["ui_limitation_reported"] is True
 
 
-def test_verify_safe_retirement_protects_shared_governed_venv() -> None:
-    """Shared governed venv must never be targeted as a dedicated removable env."""
+@pytest.mark.parametrize(
+    "protected_path",
+    [
+        lifecycle.SHARED_GOVERNED_VENV,
+        f"{lifecycle.SHARED_GOVERNED_VENV}/bin",
+        str(Path(lifecycle.SHARED_GOVERNED_VENV).parent),
+    ],
+)
+def test_verify_safe_retirement_protects_shared_governed_venv(
+    protected_path: str,
+) -> None:
+    """Shared governed venv, its subpaths, and its ancestors must never be retired."""
     result = lifecycle.verify_safe_retirement(
         _valid_retirement_plan(
-            dedicated_env_path=lifecycle.SHARED_GOVERNED_VENV,
+            dedicated_env_path=protected_path,
             dedicated_env_owned=True,
         )
     )
@@ -322,53 +333,60 @@ def test_verify_safe_retirement_blocks_each_failed_gate(
 def test_cli_reconcile_and_verify_retirement(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """CLI emits JSON and returns 0 on pass, 2 on block, and 1 on malformed input."""
+    """Hydra CLI emits JSON and returns 0 on pass, 2 on block, and 1 on malformed input."""
+    script_source = (SCRIPTS_DIR / "gwtf_reviewer_lifecycle.py").read_text(
+        encoding="utf-8"
+    )
+    assert "import argparse" not in script_source
+    assert "@hydra.main" in script_source
+
     session_file = tmp_path / "session.json"
     session_file.write_text(json.dumps(_valid_session()), encoding="utf-8")
 
-    rc_pass = lifecycle.main(
-        [
-            "reconcile",
-            "--session",
-            str(session_file),
-            "--target-commit",
-            COMMIT_A,
-            "--target-tree",
-            TREE_A,
-            "--target-base",
-            BASE_A,
-            "--target-manifest-sha256",
-            MANIFEST_A,
-        ]
+    rc_pass = lifecycle.run_cli(
+        OmegaConf.create(
+            {
+                "command": "reconcile",
+                "session": str(session_file),
+                "target_commit": COMMIT_A,
+                "target_tree": TREE_A,
+                "target_base": BASE_A,
+                "target_manifest_sha256": MANIFEST_A,
+            }
+        )
     )
     assert rc_pass == 0
     assert json.loads(capsys.readouterr().out)["status"] == "QUALIFIED"
 
-    rc_block = lifecycle.main(
-        [
-            "reconcile",
-            "--session",
-            str(session_file),
-            "--target-commit",
-            COMMIT_B,
-            "--target-tree",
-            TREE_A,
-            "--target-base",
-            BASE_A,
-            "--target-manifest-sha256",
-            MANIFEST_A,
-        ]
+    rc_block = lifecycle.run_cli(
+        OmegaConf.create(
+            {
+                "command": "reconcile",
+                "session": str(session_file),
+                "target_commit": COMMIT_B,
+                "target_tree": TREE_A,
+                "target_base": BASE_A,
+                "target_manifest_sha256": MANIFEST_A,
+            }
+        )
     )
     assert rc_block == 2
     assert json.loads(capsys.readouterr().out)["status"] == "BLOCKED"
 
     plan_file = tmp_path / "plan.json"
     plan_file.write_text(json.dumps(_valid_retirement_plan()), encoding="utf-8")
-    rc_retire = lifecycle.main(["verify-retirement", "--plan", str(plan_file)])
+    rc_retire = lifecycle.run_cli(
+        OmegaConf.create({"command": "verify-retirement", "plan": str(plan_file)})
+    )
     assert rc_retire == 0
     assert json.loads(capsys.readouterr().out)["status"] == "SAFE_TO_RETIRE"
 
-    rc_bad = lifecycle.main(
-        ["verify-retirement", "--plan", str(tmp_path / "missing.json")]
+    rc_bad = lifecycle.run_cli(
+        OmegaConf.create(
+            {
+                "command": "verify-retirement",
+                "plan": str(tmp_path / "missing.json"),
+            }
+        )
     )
     assert rc_bad == 1
