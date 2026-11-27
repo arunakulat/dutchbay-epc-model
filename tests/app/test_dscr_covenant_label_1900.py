@@ -73,13 +73,17 @@ def test_declared_lockup_threshold_reconciles_with_equity_engine() -> None:
     declared_cfg: Dict[str, Any] = {
         "scenario_name": "declared",
         "constraints": {"min_dscr_covenant": 1.30},
+        "equity_distribution": {"min_reserve_months": 6},
     }
     explicit_cfg: Dict[str, Any] = {
         "scenario_name": "explicit",
         "constraints": {"min_dscr_covenant": 1.30},
-        "equity_distribution": {"min_dscr_threshold": 1.18},
+        "equity_distribution": {"min_dscr_threshold": 1.18, "min_reserve_months": 6},
     }
-    undeclared_cfg: Dict[str, Any] = {"scenario_name": "undeclared"}
+    undeclared_cfg: Dict[str, Any] = {
+        "scenario_name": "undeclared",
+        "equity_distribution": {"min_reserve_months": 6},
+    }
 
     assert declared_lockup_threshold(declared_cfg) == pytest.approx(
         _build_distribution_config(declared_cfg).min_dscr_threshold
