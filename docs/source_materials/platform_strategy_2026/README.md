@@ -22,9 +22,9 @@ citing it.
 | [`PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt`](PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt) | The plan text, as received (81 lines, 6,378 bytes, UTF-8) |
 | `MANIFEST.sha256` | The handling note, and the SHA-256 of every file in this area |
 
-The plan file is plain text rather than Markdown on purpose. It is a source object preserved
-verbatim under `DATA-01`, including its errors, so it must not be edited to satisfy the
-documentation style rules (`DOC-03`) that govern this repository's own prose.
+The plan file is plain text rather than Markdown on purpose; its preservation and `DATA-01` /
+`DOC-03` handling boundary are stated under `PLATFORM-PLAN-HANDLING-2026-09-26` in
+[`MANIFEST.sha256`](MANIFEST.sha256).
 
 ## Status: recorded, not accepted
 
