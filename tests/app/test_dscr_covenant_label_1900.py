@@ -88,9 +88,8 @@ def test_declared_lockup_threshold_reconciles_with_equity_engine() -> None:
         _build_distribution_config(explicit_cfg).min_dscr_threshold
     )
     assert declared_lockup_threshold(undeclared_cfg) is None
-    assert _build_distribution_config(
-        undeclared_cfg
-    ).min_dscr_threshold == pytest.approx(1.25)
+    with pytest.raises(ValueError, match="min_dscr_threshold"):
+        _build_distribution_config(undeclared_cfg)
 
 
 def test_dscr_threshold_name_defaults_to_minimum_dscr_covenant_for_scenario() -> None:

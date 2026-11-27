@@ -70,7 +70,10 @@ class TestCanonicalCLIProducesLenderStack:
                 "capex_total_usd": 200_000_000,
                 "opex_annual_usd": 5_000_000,
             },
-            "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
+            "constraints": {
+                "max_balloon_pct": 0.10,  # no code default since #1429
+                "min_dscr_covenant": 1.25,  # no code default since #1429 (E01)
+            },
             "Financing_Terms": {
                 "equity_pct": 0.30,
                 "debt_pct": 0.70,
@@ -392,7 +395,10 @@ class TestLenderStackOutputQuality:
                 "capex_total_usd": 200_000_000,
                 "opex_annual_usd": 5_000_000,
             },
-            "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
+            "constraints": {
+                "max_balloon_pct": 0.10,  # no code default since #1429
+                "min_dscr_covenant": 1.25,  # no code default since #1429 (E01)
+            },
             "Financing_Terms": {
                 "equity_pct": 0.30,
                 "debt_pct": 0.70,

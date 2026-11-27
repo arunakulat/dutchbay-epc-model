@@ -1639,7 +1639,11 @@ _DEBT_RESULT_3S = {
     "total_idc": 5.0,
     "balloon_residual": 0.0,
 }
-_SCEN_3S = {"capex": {"usd_total": 55.0}, "fx": {"start_lkr_per_usd": 100.0}}
+_SCEN_3S = {
+    "capex": {"usd_total": 55.0},
+    "fx": {"start_lkr_per_usd": 100.0},
+    "constraints": {"min_dscr_covenant": 1.25},
+}
 
 
 def test_three_statement_block_populated_and_ties_out() -> None:

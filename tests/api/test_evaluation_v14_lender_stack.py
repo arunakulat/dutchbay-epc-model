@@ -161,7 +161,10 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
             "annual_depr": 0.02,  # 2% annual LKR depreciation (scalar)
         },
         "returns": {"project_discount_rate": 0.10},  # required since #1429
-        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
+        "constraints": {
+            "max_balloon_pct": 0.10,  # no code default since #1429
+            "min_dscr_covenant": 1.25,  # no code default since #1429 (E01)
+        },
         "debt": {
             "debt_ratio": 0.70,  # no code default since #1429
             "target_dscr": 1.4,
@@ -241,7 +244,10 @@ def test_evaluation_can_apply_parameter_overrides():
             "annual_depr": 0.02,  # 2% annual depreciation (scalar)
         },
         "returns": {"project_discount_rate": 0.10},  # required since #1429
-        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
+        "constraints": {
+            "max_balloon_pct": 0.10,  # no code default since #1429
+            "min_dscr_covenant": 1.25,  # no code default since #1429 (E01)
+        },
         "debt": {
             "debt_ratio": 0.70,  # no code default since #1429
             "target_dscr": 1.4,
