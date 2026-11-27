@@ -118,19 +118,8 @@ def test_retired_formatter_has_no_mutation(linked: tuple[Path, Path, str]) -> No
     assert git(work, "status", "--porcelain") == before
 
 
-def test_r10_local_hooks_and_ci_type_gates_remain_bound() -> None:
-    with (ROOT / "go_with_the_flow_rules_v3_0_clean.csv").open(newline="") as stream:
-        rows = list(csv.DictReader(stream))
-        rules = {r["rule_id"]: r for r in rows}
-    assert len(rules) == len(rows), "duplicate rule identity"
-    assert set(("R10", "R23", "R21", "CLEANUP-01")) <= rules.keys()
-    assert all(
-        rules[key]["status"] == "active" for key in ("R10", "R23", "R21", "CLEANUP-01")
-    )
-    policy = rules["R10"]["description"] + rules["R10"]["enforcement"]
-    config = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text())
-    hooks = {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}
-    assert {
+EXPECTED_R10_PRECOMMIT_HOOKS: frozenset[str] = frozenset(
+    {
         "black",
         "ruff",
         "isort",
@@ -143,31 +132,129 @@ def test_r10_local_hooks_and_ci_type_gates_remain_bound() -> None:
         "trailing-whitespace",
         "check-merge-conflict",
         "debug-statements",
-    } <= hooks
+    }
+)
+REQUIRED_R10_CI_MYPY_WORKFLOWS: tuple[str, ...] = (
+    "test-suite.yml",
+    "ci_v14_fastlane.yml",
+    "fx-tests.yml",
+    "regression-smoke.yml",
+)
+
+
+def _assert_r10_reconciled(
+    *,
+    rules: dict[str, dict[str, str]],
+    precommit_text: str,
+    dev_docs_text: str,
+    workflow_texts: dict[str, str],
+) -> None:
+    """Assert R10, .pre-commit-config.yaml, docs/DEVELOPMENT.md, and CI gates agree."""
+    assert {"R10", "R23", "R21", "CLEANUP-01"} <= rules.keys()
+    assert all(
+        rules[key]["status"] == "active" for key in ("R10", "R23", "R21", "CLEANUP-01")
+    )
+    r10_desc = rules["R10"]["description"]
+    r10_enf = rules["R10"]["enforcement"]
+    policy = r10_desc + "\n" + r10_enf
+
+    config = yaml.safe_load(precommit_text)
+    hooks = {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}
+    assert hooks == EXPECTED_R10_PRECOMMIT_HOOKS
     assert "mypy" not in hooks
+    assert "#1270" in precommit_text
+    assert "Sprint Day N" not in precommit_text
+
+    assert "mypy (type checking)" not in r10_desc
     for control in (
         "#1270",
         "#1262",
         "mandatory local type verification",
-        "test-suite.yml",
-        "ci_v14_fastlane.yml",
-        "fx-tests.yml",
-        "regression-smoke.yml",
+        *REQUIRED_R10_CI_MYPY_WORKFLOWS,
     ):
         assert control in policy
-    for workflow in (
-        "test-suite.yml",
-        "ci_v14_fastlane.yml",
-        "fx-tests.yml",
-        "regression-smoke.yml",
-    ):
-        assert "mypy" in (ROOT / ".github/workflows" / workflow).read_text()
-    assert (
-        "mypy scripts/ --ignore-missing-imports"
-        in (ROOT / ".github/workflows/test-suite.yml").read_text()
-    )
+
+    normalized_docs = " ".join(dev_docs_text.split())
+    assert "#1270" in normalized_docs
+    assert "does not enable mypy" in normalized_docs
+    for token in ("black", "ruff", "isort", "no-commit-to-branch"):
+        assert token in normalized_docs
+    for workflow in REQUIRED_R10_CI_MYPY_WORKFLOWS:
+        assert workflow in normalized_docs
+        assert "mypy" in workflow_texts[workflow]
+    assert "mypy scripts/ --ignore-missing-imports" in workflow_texts["test-suite.yml"]
     assert "full suite before pushing" in rules["R23"]["description"]
     assert "CLEANUP-01" in rules["R23"]["description"]
+
+
+def _load_r10_surface() -> tuple[dict[str, dict[str, str]], str, str, dict[str, str]]:
+    with (ROOT / "go_with_the_flow_rules_v3_0_clean.csv").open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    rules = {r["rule_id"]: r for r in rows}
+    assert len(rules) == len(rows), "duplicate rule identity"
+    precommit_text = (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    dev_docs_text = (ROOT / "docs/DEVELOPMENT.md").read_text(encoding="utf-8")
+    workflow_texts = {
+        workflow: (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+        for workflow in REQUIRED_R10_CI_MYPY_WORKFLOWS
+    }
+    return rules, precommit_text, dev_docs_text, workflow_texts
+
+
+def test_r10_local_hooks_and_ci_type_gates_remain_bound() -> None:
+    rules, precommit_text, dev_docs_text, workflow_texts = _load_r10_surface()
+    _assert_r10_reconciled(
+        rules=rules,
+        precommit_text=precommit_text,
+        dev_docs_text=dev_docs_text,
+        workflow_texts=workflow_texts,
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "enable_mypy_hook",
+        "claim_mypy_in_r10",
+        "drop_1270_from_r10",
+        "drop_workflow_from_r10",
+        "drop_workflow_from_docs",
+        "restore_sprint_day_n_comment",
+    ],
+)
+def test_r10_reconciliation_fence_rejects_drift(mutation: str) -> None:
+    """Hostile negative controls: drift between R10, pre-commit, docs, and CI fails."""
+    rules, precommit_text, dev_docs_text, workflow_texts = _load_r10_surface()
+    rules = {k: dict(v) for k, v in rules.items()}
+
+    if mutation == "enable_mypy_hook":
+        precommit_text += (
+            "\n  - repo: https://github.com/pre-commit/mirrors-mypy\n"
+            "    rev: v1.18.2\n"
+            "    hooks:\n"
+            "      - id: mypy\n"
+        )
+    elif mutation == "claim_mypy_in_r10":
+        rules["R10"]["description"] += " mypy (type checking)"
+    elif mutation == "drop_1270_from_r10":
+        rules["R10"]["description"] = rules["R10"]["description"].replace("#1270", "")
+        rules["R10"]["enforcement"] = rules["R10"]["enforcement"].replace("#1270", "")
+    elif mutation == "drop_workflow_from_r10":
+        rules["R10"]["enforcement"] = rules["R10"]["enforcement"].replace(
+            "fx-tests.yml", ""
+        )
+    elif mutation == "drop_workflow_from_docs":
+        dev_docs_text = dev_docs_text.replace("fx-tests.yml", "")
+    else:
+        precommit_text = precommit_text.replace("#1270", "Sprint Day N")
+
+    with pytest.raises(AssertionError):
+        _assert_r10_reconciled(
+            rules=rules,
+            precommit_text=precommit_text,
+            dev_docs_text=dev_docs_text,
+            workflow_texts=workflow_texts,
+        )
 
 
 def test_preflight_uses_exact_remote_tracking_ref(
