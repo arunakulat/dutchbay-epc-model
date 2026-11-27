@@ -13,3 +13,5 @@
   - `analytics/finance/p90_recomputed_downside.py`: Recomputed P90 downside requires complete covenant
     coverage across all evaluated views (`ratio_rows`, `down_rows`, `own_rows_cov`, and `sizing_rows`
     if present), failing closed with `status: "unavailable"` upon any missing covenant row.
+  - `docs/finance/f5_exit_evidence_1893.json`: Refreshed source-file SHA-256 digest pin for `analytics/finance/p90_recomputed_downside.py` (`a3d5cb234890849dbb8b3363eb7b8eb0f8eb184fa3c67f20631eb8253f192d19`), with 100% bit-for-bit invariance verified across Gates 1–6 (`HOLD_UNION` unchanged: `F-5, #1110, v15.6.1`).
+  - Financial impact & DOC-02 Option B rationale: Zero baseline KPI movement (0.00% across all committed scenarios; all 48 runnable scenarios produce identical DSCR, IRR, and NPV metrics); pure fail-closed defensive completeness guard per #1826 Option B / #1951 precedent; `VERSION` remains `15.37.0`.
