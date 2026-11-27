@@ -36,6 +36,7 @@ from analytics.cost.benchmark import capex_benchmark
 from analytics.cost.cost_basis import resolve_cost_basis_year
 from analytics.cost.estimate_class import resolve_accuracy_band
 from analytics.development_readiness import validate_development_readiness
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.evaluation_v14 import evaluated_scenario_config, expand_dotted_overrides
 from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
@@ -112,6 +113,8 @@ class KpiBlock(BaseModel):
     #: ``project_irr`` means no rate solves the cashflows or the IRR was never attempted.
     project_irr_status: Optional[str] = None
     equity_irr: Optional[float] = None
+    #: #1456 ranking caveat when ``equity_irr_ranks_reliably`` is False (#1829).
+    equity_irr_caveat: Optional[str] = None
     project_npv_usd: Optional[float] = None
     equity_npv_usd: Optional[float] = None
     min_dscr: Optional[float] = None
@@ -579,7 +582,9 @@ def _extract_capex_price_basis(
     return CapexPriceBasisBlock(**dict(block))
 
 
-def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
+def _extract_kpis(
+    kpis: Mapping[str, Any], *, equity_irr_caveat: Optional[str] = None
+) -> KpiBlock:
     return KpiBlock(
         project_irr=_f(kpis.get("project_irr")),
         project_irr_status=(
@@ -588,6 +593,7 @@ def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
             else None
         ),
         equity_irr=_f(kpis.get("equity_irr")),
+        equity_irr_caveat=equity_irr_caveat,
         project_npv_usd=_f(kpis.get("project_npv")),
         equity_npv_usd=_f(kpis.get("equity_npv")),
         min_dscr=_f(kpis.get("min_dscr")),
@@ -758,7 +764,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         config_path=payload.config_path,
         validation_mode=payload.validation_mode,
         cost_basis_year=resolve_cost_basis_year(cfg),
-        kpis=_extract_kpis(kpis),
+        kpis=_extract_kpis(kpis, equity_irr_caveat=equity_irr_caveat_from_run(result)),
         aep=_extract_aep(cfg),
         debt=_extract_debt(debt),
         # The capex the engine financed: a declared capex.price_basis escalates the

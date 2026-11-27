@@ -69,6 +69,7 @@ def test_case_surface_public_field_set_is_frozen() -> None:
         "report_grade",
         "generated_at",
         "kpi_cards",
+        "equity_irr_caveat",
         "tornado",
         "global_sa_morris",
         "global_sa_pawn",

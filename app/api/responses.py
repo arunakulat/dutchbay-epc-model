@@ -62,7 +62,10 @@ from pydantic import BaseModel, Field
 #: ``section_dispositions`` so the wizard API surface carries the same run identity, unit
 #: contracts, section dispositions, and F-5 non-reliance disclosure as the HTML/DBPL report
 #: and executive workbook. No existing field is retyped or removed.
-API_CONTRACT_VERSION = "2.6"
+#: 2.7 (#1829): MINOR, additive. ``CaseSurface`` and ``api.pipeline_api.KpiBlock`` gain
+#: optional ``equity_irr_caveat`` so the #1456 equity IRR ranking caveat reaches the wizard
+#: case-surface API and web JSON KPI block. No existing field is retyped or removed.
+API_CONTRACT_VERSION = "2.7"
 
 
 class WindAssessment(BaseModel):

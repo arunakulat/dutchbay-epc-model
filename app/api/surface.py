@@ -195,6 +195,7 @@ class CaseSurface(BaseModel):
     report_grade: Optional[str] = None
     generated_at: str
     kpi_cards: List[KpiCard]
+    equity_irr_caveat: Optional[str] = None
     tornado: Optional[TornadoChart] = None
     global_sa_morris: Optional[GlobalSaChart] = None
     global_sa_pawn: Optional[GlobalSaChart] = None
@@ -233,6 +234,7 @@ class CaseSurface(BaseModel):
             report_grade=context.report_grade,
             generated_at=context.generated_at,
             kpi_cards=kpi_cards,
+            equity_irr_caveat=context.equity_irr_caveat,
             tornado=_project_tornado(context.tornado),
             global_sa_morris=_project_global_sa(context.global_sa),
             global_sa_pawn=_project_global_sa(context.global_sa_pawn),

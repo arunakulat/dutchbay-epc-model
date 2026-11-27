@@ -953,6 +953,9 @@
     <p class="muted">* Taken over the trials with a defined IRR only; see the IRR coverage
       note above.</p>
     {% endif %}
+    {% if ctx.equity_irr_caveat %}
+    <p class="muted equity-irr-caveat-capital-risk"><em>{{ ctx.equity_irr_caveat }}</em></p>
+    {% endif %}
     {% if ctx.capital_risk.npv_distribution_img %}
     <h3>NPV distribution</h3>
     <img src="{{ ctx.capital_risk.npv_distribution_img }}" alt="NPV distribution" style="max-width:100%;" />
@@ -1718,6 +1721,9 @@
         </tr>
       </tbody>
     </table>
+    {% if ctx.equity_irr_caveat %}
+    <p class="muted equity-irr-caveat-bridge"><em>{{ ctx.equity_irr_caveat }}</em></p>
+    {% endif %}
   </section>
   {% endif %}
 

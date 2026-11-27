@@ -95,6 +95,18 @@ def test_build_financial_model_returns_both_irrs():
     assert res["project_irr"] is not None and res["project_irr"] > 0
 
 
+def test_optimize_capital_structure_defaults_to_npv():
+    import inspect
+
+    sig = inspect.signature(opt.optimize_capital_structure)
+    assert sig.parameters["objective"].default == "npv"
+    res = opt.optimize_capital_structure(
+        constraints={"min_irr": 0.10, "min_dscr": 1.30}
+    )
+    assert res["convergence"] is True
+    assert 0.0 <= res["optimal_debt_ratio"] <= 1.0
+
+
 def test_optimize_capital_structure_runs():
     res = opt.optimize_capital_structure(
         objective="equity_irr", constraints={"min_irr": 0.10, "min_dscr": 1.30}

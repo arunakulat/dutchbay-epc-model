@@ -154,6 +154,9 @@
     </table>
     <p class="muted">Bankable exceedance convention: P90 and P95 report the 10th and 5th
       percentiles (the downside value exceeded 90% and 95% of trials).</p>
+    {% if ctx.equity_irr_caveat %}
+    <p class="muted equity-irr-caveat-lender-risk"><em>{{ ctx.equity_irr_caveat }}</em></p>
+    {% endif %}
     {% endif %}
     {% if wi.parts_not_run %}
     <p class="muted">Parts not run:</p>

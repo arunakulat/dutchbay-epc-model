@@ -40,12 +40,13 @@ _USD_AMORT_TOL = 1e-3
 
 
 def optimize_capital_structure(
-    objective: str = "equity_irr",
+    objective: str = "npv",
     constraints: Dict[str, float] = {"min_irr": 0.15, "min_dscr": 1.3},
 ) -> Dict[str, Any]:
     """Optimize capital structure with robust error handling.
     Args:
-        objective: Optimization target ('equity_irr', 'project_irr', 'npv')
+        objective: Optimization target ('npv', 'equity_irr', 'project_irr'). Defaults
+            to 'npv' per #1456 / #1829 (rank on NPV, not equity IRR).
         constraints: Dict with 'min_irr' and 'min_dscr' thresholds
     Returns:
         Dict with optimization results and convergence status
@@ -69,13 +70,13 @@ def optimize_capital_structure(
                 }
             )
             model = build_financial_model(params, debt)
+            if objective == "npv":
+                return -cast(float, model["npv_12pct"])
             if objective == "equity_irr":
                 return -cast(float, model["equity_irr"])
             if objective == "project_irr":
                 return -cast(float, model["project_irr"])
-            if objective == "npv":
-                return -cast(float, model["npv_12pct"])
-            return -cast(float, model["equity_irr"])
+            return -cast(float, model["npv_12pct"])
         except Exception as e:
             warnings.warn(f"Objective evaluation failed: {e}")
             return 1e10
