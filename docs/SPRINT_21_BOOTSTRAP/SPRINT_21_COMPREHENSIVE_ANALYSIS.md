@@ -498,7 +498,7 @@ The evaluation is not a rejection of the plan's direction. The plan correctly id
 | D1 | Sprint 21 direction: finding-led bankability work plus Lane A, or the plan's rebuild | Finding-led work plus Lane A | Finding-led work plus Lane A ("yes") |
 | D2 | Web product scope: a small set of known clients, or a multi-tenant service | Keep the current scope until a client need is stated; D2 alone decides database, client framework and orchestration | Known clients now; multi-tenant is the planned extension ("known clients currently - plan to extend to multi-tenant") |
 | D3 | A second jurisdiction: whether, which, and who owns its sources and review | Decide before any tax or depreciation generalisation | Open |
-| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge | Keep public; it contains no restricted content | Keep public ("keep on public branch") |
+| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge | Keep public; it contains no restricted content | Decided; recorded under `PLATFORM-PLAN-HANDLING-2026-09-26` in `docs/source_materials/platform_strategy_2026/MANIFEST.sha256` |
 | D5 | Recruit the `RECRUIT-01` review pair for this pull request | Required before merge | Review under the repository's rules, the harness and the framework principles ("follow repo rules, harness, frameworks") |
 | D6 | Confirm the sprint number | "Sprint 21" | Open |
 | D7 | Whether a lender-auditable formula workbook is wanted | If yes, scope it as an independent oracle | Open |
