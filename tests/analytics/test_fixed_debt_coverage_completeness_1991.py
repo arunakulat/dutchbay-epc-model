@@ -102,6 +102,16 @@ def test_negative_control_missing_required_row(missing_idx: int) -> None:
     assert _trial_fixed_debt_min_dscr(SYNTHETIC_BASE, trial) is None
 
 
+def test_negative_control_missing_trailing_positive_service_row() -> None:
+    """The final mapped row is required when committed debt service is positive."""
+    base = copy.deepcopy(SYNTHETIC_BASE)
+    base["debt_service_total"][3] = 25.0
+    trial = copy.deepcopy(base)
+    trial["annual_row_debt_period_map"].pop()
+    assert fixed_debt_coverage_by_row(base, trial) == []
+    assert _trial_fixed_debt_min_dscr(base, trial) is None
+
+
 def test_negative_control_duplicate_trial_row() -> None:
     """Duplicate annual_row_index in trial fails closed."""
     trial = copy.deepcopy(SYNTHETIC_BASE)
@@ -309,7 +319,7 @@ def test_mc_strict_mode_raises_on_incomplete_trial(
         fixed_debt_stress=True, allow_toy_fallback=False
     )
     engine = mc_engine.MonteCarloEngine(cfg, seed=42)
-    with pytest.raises(RuntimeError, match="published no CFADS|base case"):
+    with pytest.raises(RuntimeError, match="complete covenant-year CFADS coverage"):
         engine.run(n_trials=1)
 
 
@@ -337,6 +347,23 @@ def test_p90_consumer_rejects_incomplete_covenant_rows(
     )
     assert res["status"] == "unavailable"
     assert "incomplete fixed-debt covenant-year CFADS coverage" in res["reason"]
+
+
+def test_p90_consumer_rejects_empty_base_covenant_coverage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P90 is unavailable when the committed schedule has no covenant rows to cover."""
+    base = copy.deepcopy(SYNTHETIC_BASE)
+    base["debt_service_total"] = [0.0, 0.0, 0.0, 0.0]
+    calls = iter([{"debt_result": base}, {"debt_result": base}])
+    monkeypatch.setattr(p90, "evaluate_with_overrides", lambda **kwargs: next(calls))
+    monkeypatch.setattr(p90, "p90_production_config", lambda cfg, ratio: cfg)
+
+    res = p90.recomputed_p90_downside(
+        {"expected_results": {"net_aep_p50_gwh": 100.0, "net_aep_p90_gwh": 80.0}}
+    )
+    assert res["status"] == "unavailable"
+    assert res["reason"] == "no complete base fixed-debt covenant coverage"
 
 
 def test_p90_consumer_rejects_incomplete_sizing_downside(

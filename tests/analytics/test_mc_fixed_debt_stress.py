@@ -235,7 +235,7 @@ class TestFailLoud:
         logging.disable(logging.WARNING)
         try:
             with pytest.raises(
-                RuntimeError, match="MC trial 1 published no CFADS"
+                RuntimeError, match="MC trial 1 does not provide complete covenant-year"
             ) as err:
                 mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=1).run(
                     n_trials=2
@@ -321,5 +321,7 @@ def test_strict_engine_rejects_incomplete_covenant_row(
     monkeypatch.setattr(
         mc_engine, "evaluate_with_overrides", lambda *a, **k: next(calls)
     )
-    with pytest.raises(RuntimeError, match="MC trial 0 published no CFADS"):
+    with pytest.raises(
+        RuntimeError, match="MC trial 0 does not provide complete covenant-year"
+    ):
         mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=1).run(n_trials=2)

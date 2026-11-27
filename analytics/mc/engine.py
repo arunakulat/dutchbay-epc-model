@@ -1106,8 +1106,8 @@ class MonteCarloEngine:
                     base_debt_result = _bdr
             if _trial_fixed_debt_min_dscr(base_debt_result, base_debt_result) is None:
                 stress_unavailable = (
-                    "the base case has no operating period with committed debt service, "
-                    "so there is no covenant to stress"
+                    "the base case has no complete covenant-year CFADS coverage against "
+                    "its committed debt schedule"
                 )
                 self._fixed_debt_stress_unavailable(stress_unavailable)
 
@@ -1170,8 +1170,8 @@ class MonteCarloEngine:
                     fixed_dscr_vals.append(mfd)
                 elif not self._allow_toy_fallback:
                     self._fixed_debt_stress_unavailable(
-                        f"MC trial {i} published no CFADS for the base case's covenant "
-                        "periods"
+                        f"MC trial {i} does not provide complete covenant-year CFADS "
+                        "coverage for the base case's committed debt schedule"
                     )
 
         # Honor the scenario's monte_carlo reporting config (previously ignored): the
