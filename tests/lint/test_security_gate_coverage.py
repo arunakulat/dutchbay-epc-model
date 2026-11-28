@@ -59,9 +59,10 @@ that never runs, which skips the gate without failing it. The shared workflow gu
 pins those declarative context channels for both committed invocations. The daily main
 audit has no summary job behind it, so its guard also rejects a ``cancel-in-progress``
 that is not false, or a ``concurrency`` value written wholly as one expression, at
-workflow or job level, and any ``strategy`` on its gate job: a cancelled run leaves no
-audit status for its commit, and an empty matrix expands to zero jobs that GitHub reports
-as skipped (#1512). GitHub still cancels a pending run when a newer run joins the same
+workflow or job level, any ``strategy`` on its gate job, and any ``timeout-minutes`` on
+its gate job or gate step: a cancelled run leaves no audit status for its commit, an
+empty matrix expands to zero jobs that GitHub reports as skipped (#1512), and a short or
+conditional timeout can kill the ~2-minute audit before it finishes (#1411 R-2). GitHub still cancels a pending run when a newer run joins the same
 concurrency group. The default ``queue: single`` keeps at most one pending run,
 ``queue: max`` keeps up to 100, and this guard requires neither; it does not claim to stop
 that. Concurrency groups are repository-wide and case-insensitive, so another workflow or
@@ -76,17 +77,21 @@ network and a resolve - so the numbers above stay in the pull request's receipts
 ``Makefile``'s own comment, where a reviewer reads them.
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
-control that observes it firing: all are pure functions over text, exercised against mutated
-copies rather than trusted - 107 controls: 15 over the ``Makefile``, 47 over the main audit
-workflow, 15 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
+control that observes it firing: all are pure functions over text (or temporary ``Makefile``
+copies for GNU Make expansion), exercised against mutated copies rather than trusted - 116
+controls: 15 over the ``Makefile`` source, 5 over ``make -n`` expansion against the
+``Makefile`` source (#1411 W-4/W-9), 51 over the main audit workflow (including #1512's
+cancellation controls closing #1411 R-1 and 4 ``timeout-minutes`` controls closing #1411
+R-2), 15 over the pull-request gate in ``test-suite.yml``, 24 over the two audit jobs'
 hygiene (twelve shapes against each workflow file: cache, pins and canary), and 6 over the
 tooling pins against the lock. The canary's own verdict function carries its negative
 controls inline in one test, against crafted pip-audit reports. The claim is deliberately not
 made of the tests with no text to mutate: three are oracles against live objects (one re-runs
-``make -n``, two interrogate the installed ``pip_audit``), one asserts both committed
-workflows are clean under the shared guard, one asserts the live pins file agrees with the
-lock, and two assert that the fail-closed checks still accept what they must - the values
-that mean "always run", and an unrelated install standing beside the pinned tooling.
+``make -n`` against the live ``Makefile``, two interrogate the installed ``pip_audit``), one
+asserts both committed workflows are clean under the shared guard, one asserts the live pins
+file agrees with the lock, and three assert that the fail-closed checks still accept what
+they must - the values that mean "always run", an unrelated install standing beside the
+pinned tooling, and one well-formed declared ``PIP_AUDIT_IGNORES`` entry (#1411 W-9).
 
 That claim was once wider than the set. #1388's independent domain lane probed
 ``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
@@ -100,16 +105,19 @@ probe as its control.
 The ``Makefile`` half had the same reach problem, and the independent assurance lane found it:
 appending ``--ignore-vuln`` to ``security``'s resolve line, or ``|| true`` to either pass, left
 every containment check passing. An earlier draft of this docstring claimed
-``test_make_expansion_agrees_with_the_makefile_source`` was a backstop against exactly that.
-It is not, and the claim is withdrawn: that test asks GNU Make what ``security`` expands to and
-checks the answer agrees with the source, so a weakening WRITTEN INTO the source passes both
-sides of the comparison. ``make -n audit`` is untouched by any of it, so #1386's fence does not
-see it either. Both ``security`` audit lines are therefore pinned by equality to their
-canonical spelling, with the lane's two shapes and a third as their controls. One nuance from
-that lane is worth keeping: ``make -n`` is no backstop against an appended token, but it is
-not inert - a duplicated ``security:`` target (Make honours the LAST recipe while ``_recipe``
-returns on the first) and an extra ``exit 0`` recipe line are caught there and nowhere else.
-Asking the tool what it will do, rather than out-parsing the file, still earns its place.
+``test_make_expansion_agrees_with_the_makefile_source`` was a backstop against exactly that,
+and later misstated that the test compared GNU Make's expansion against the ``Makefile``
+source when it actually checked hard-coded patterns with a prefix-only bound on the resolve
+pass and tail bounds on the declared/OSV passes (#1411 W-4). Both ``security`` audit lines
+are therefore pinned by equality in ``audit_makefile`` (with the lane's shapes as controls),
+and ``test_make_expansion_agrees_with_the_makefile_source`` now delegates to
+``audit_make_expansion`` (#1411 W-4, W-9), which reads the ``Makefile`` source and
+``PIP_AUDIT_IGNORES :=`` assignment and compares GNU Make's ``-n`` expansion for every audit
+target against both the expanded source recipe and the canonical prefix plus declared
+allowlist tokens. That keeps GNU Make's own verdict load-bearing - catching a duplicated
+``security:`` target (Make honours the LAST recipe while ``_recipe`` returns on the first),
+a trailing ``PIP_AUDIT_IGNORES +=`` override, or an extra recipe line - while staying green
+when a well-formed declared entry is present in ``PIP_AUDIT_IGNORES``.
 
 The same lane then found the sixth and seventh shapes, in the two checks written to close its
 fifth. ``continue-on-error`` was an allowlist of two bad literals, so ``${{ true }}``,
@@ -499,11 +507,12 @@ def audit_workflow(workflow: Workflow) -> list[str]:
             )
         )
 
-    # Two more committed keys reach the silent outcome the `needs` ban exists to prevent
-    # (#1512). The pull-request gate has Test Summary behind it, which exits 1 on any
-    # non-success; the daily main audit has nothing behind it, so these bind here only.
+    # Three more committed keys reach the silent or truncated outcome the `needs` ban
+    # exists to prevent (#1512, #1411 R-2). The pull-request gate has Test Summary behind
+    # it, which exits 1 on any non-success; the daily main audit has nothing behind it, so
+    # these bind here only.
     violations.extend(_cancellation_violations(workflow.get("concurrency"), "workflow"))
-    for job, _step in gate_steps:
+    for job, step in gate_steps:
         if "concurrency" in job:
             violations.extend(_cancellation_violations(job["concurrency"], "job"))
         # Any strategy, not only an empty one: a matrix can be written as an expression
@@ -515,6 +524,17 @@ def audit_workflow(workflow: Workflow) -> list[str]:
                 "matrix expands to zero jobs and GitHub reports skipped rather than "
                 f"failed, got {job['strategy']!r}"
             )
+        # #1411 R-2: `timeout-minutes` on either the gate job or the gate step is rejected
+        # fail-closed. A short literal (such as `timeout-minutes: 1`) or an expression
+        # targeting scheduled runs would kill the ~2-minute audit before it finishes;
+        # GitHub Actions' default job timeout needs no override here.
+        for owner, node in (("job", job), ("step", step)):
+            if "timeout-minutes" in node:
+                violations.append(
+                    f"security-audit.yml: the `make security` {owner} must not set "
+                    "`timeout-minutes`; a short or conditional timeout can kill the "
+                    f"audit before it finishes (#1411 R-2), got {node['timeout-minutes']!r}"
+                )
 
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
     if "Security Scan" in names:
@@ -778,11 +798,44 @@ def audit_merge_gate(workflow: Workflow) -> list[str]:
     )
 
 
-def _make_commands(target: str) -> list[list[str]]:
+_ALLOWLIST_ASSIGNMENT = re.compile(r"^PIP_AUDIT_IGNORES\s*:=\s*(.*)$")
+
+
+def _declared_allowlist_tokens(makefile_text: str) -> tuple[list[str], list[str]]:
+    """Return ``(tokens, violations)`` from the Makefile's ``PIP_AUDIT_IGNORES :=`` line."""
+    matches: list[str] = []
+    lines = makefile_text.splitlines()
+    index = 0
+    while index < len(lines):
+        match = _ALLOWLIST_ASSIGNMENT.match(lines[index])
+        if not match:
+            index += 1
+            continue
+        value = match.group(1)
+        while value.endswith("\\") and index + 1 < len(lines):
+            index += 1
+            value = value[:-1] + " " + lines[index]
+        matches.append(value)
+        index += 1
+    if len(matches) != 1:
+        return [], [
+            "Makefile must declare exactly one literal `PIP_AUDIT_IGNORES :=` "
+            f"assignment, found {len(matches)}"
+        ]
+    return shlex.split(matches[0], comments=True), []
+
+
+def _expand_source_recipe_line(line: str, ignores: list[str]) -> list[str]:
+    """Expand ``$(PIP_AUDIT_IGNORES)`` in a source recipe line into argv tokens."""
+    expanded = line.replace(ALLOWLIST, " ".join(shlex.quote(tok) for tok in ignores))
+    return shlex.split(expanded)
+
+
+def _make_commands(target: str, *, makefile: Path = MAKEFILE) -> list[list[str]]:
     """Return GNU Make's effective commands for ``target``, as argv lists."""
     completed = subprocess.run(
-        ["make", "--no-print-directory", "-n", target],
-        cwd=REPO_ROOT,
+        ["make", "--no-print-directory", "-f", str(makefile), "-n", target],
+        cwd=makefile.parent,
         check=True,
         capture_output=True,
         text=True,
@@ -792,6 +845,75 @@ def _make_commands(target: str) -> list[list[str]]:
         for line in completed.stdout.splitlines()
         if line.strip()
     ]
+
+
+def audit_make_expansion(makefile_path: Path) -> list[str]:
+    """Verify GNU Make's ``-n`` expansion agrees with the Makefile source and allowlist.
+
+    Reads ``makefile_path`` directly (closing #1411 W-4) and derives the expected
+    allowlist tokens from the declared ``PIP_AUDIT_IGNORES :=`` assignment rather than
+    assuming it is empty (closing #1411 W-9).
+    """
+    makefile_text = makefile_path.read_text(encoding="utf-8")
+    ignores, violations = _declared_allowlist_tokens(makefile_text)
+
+    expected_resolve = ["pip-audit", "-r", LOCK, *ignores]
+    expected_declared = ["pip-audit", *DECLARED_FLAGS, "-r", LOCK, *ignores]
+    expected_osv = ["pip-audit", *OSV_FLAGS, *DECLARED_FLAGS, "-r", LOCK, *ignores]
+
+    security = _make_commands("security", makefile=makefile_path)
+    source_security = _recipe(makefile_text, "security")
+    if len(security) != 4 or len(security) != len(source_security):
+        violations.append(
+            "`make -n security` must expand to the exact 4 source recipe lines "
+            f"(source has {len(source_security)}, Make expanded {len(security)}): "
+            f"{security!r}"
+        )
+    else:
+        if security[0][0] != "bandit":
+            violations.append(
+                f"`make -n security` first command must be `bandit`, got {security[0]!r}"
+            )
+        for index, mode, expected in (
+            (1, "resolve-mode", expected_resolve),
+            (2, "declared-pin", expected_declared),
+            (3, "OSV cross-check", expected_osv),
+        ):
+            source_expanded = _expand_source_recipe_line(
+                source_security[index], ignores
+            )
+            if security[index] != source_expanded:
+                violations.append(
+                    f"`make -n security` {mode} pass disagrees with Makefile source "
+                    f"(source expands to {source_expanded!r}, Make expanded "
+                    f"{security[index]!r})"
+                )
+            if security[index] != expected:
+                violations.append(
+                    f"`make -n security` {mode} pass must equal canonical prefix plus "
+                    f"declared allowlist {expected!r}, got {security[index]!r}"
+                )
+
+    for target, expected in (
+        ("audit", expected_resolve),
+        ("audit-declared", expected_declared),
+        ("audit-osv", expected_osv),
+    ):
+        actual = _make_commands(target, makefile=makefile_path)
+        source = _recipe(makefile_text, target)
+        source_commands = [_expand_source_recipe_line(line, ignores) for line in source]
+        if actual != source_commands:
+            violations.append(
+                f"`make -n {target}` disagrees with Makefile source "
+                f"(source expands to {source_commands!r}, Make expanded {actual!r})"
+            )
+        if actual != [expected]:
+            violations.append(
+                f"`make -n {target}` must equal canonical prefix plus declared "
+                f"allowlist {[expected]!r}, got {actual!r}"
+            )
+
+    return violations
 
 
 def _workflow() -> Workflow:
@@ -811,29 +933,33 @@ def test_main_reports_its_own_audit_state() -> None:
 
 
 def test_make_expansion_agrees_with_the_makefile_source() -> None:
-    """GNU Make's effective commands, not just the source text, carry both passes."""
-    security = _make_commands("security")
-    assert len(security) == 4, security
-    assert security[0][0] == "bandit"
-    assert security[1][:3] == ["pip-audit", "-r", LOCK]
-    assert security[2][0] == "pip-audit"
-    assert set(DECLARED_FLAGS) <= set(security[2])
-    assert security[2][-2:] == ["-r", LOCK]
-    # The feed cross-check: the same declared coverage, asked of OSV rather than PyPI.
-    assert security[3][0] == "pip-audit"
-    assert set(DECLARED_FLAGS) <= set(security[3])
-    assert set(OSV_FLAGS) <= set(security[3])
-    assert security[3][-2:] == ["-r", LOCK]
-    assert set(OSV_FLAGS).isdisjoint(security[1] + security[2])
+    """GNU Make's effective commands must agree with the Makefile source and allowlist."""
+    assert audit_make_expansion(MAKEFILE) == []
 
-    # The alias stays a single unflagged command; `make -n audit` is SECDEP-01's oracle.
-    assert _make_commands("audit") == [["pip-audit", "-r", LOCK]]
-    declared = _make_commands("audit-declared")
-    assert len(declared) == 1
-    assert set(DECLARED_FLAGS) <= set(declared[0])
-    osv = _make_commands("audit-osv")
-    assert len(osv) == 1
-    assert set(OSV_FLAGS) | set(DECLARED_FLAGS) <= set(osv[0])
+
+@pytest.mark.parametrize(
+    "ignore_tokens",
+    [
+        pytest.param("--ignore-vuln PYSEC-2026-4320", id="space-separated token"),
+        pytest.param("--ignore-vuln=PYSEC-2026-4320", id="equals-separated token"),
+    ],
+)
+def test_make_expansion_accepts_a_declared_allowlist_entry(
+    tmp_path: Path, ignore_tokens: str
+) -> None:
+    """W-9: one well-formed declared allowlist entry keeps both Makefile guards green."""
+    declaration = (
+        "\n# ignore-vuln: PYSEC-2026-4320 | package: example==1.0.0 | "
+        "cap: consumer<2 | lifted-by: consumer 2.0.0 | "
+        "reason: W-9 positive control with one declared entry\n"
+        f"PIP_AUDIT_IGNORES := {ignore_tokens}\n"
+    )
+    mutated = _LIVE_MAKEFILE.replace("\nPIP_AUDIT_IGNORES :=\n", declaration, 1)
+    assert mutated != _LIVE_MAKEFILE
+    candidate = tmp_path / "Makefile"
+    candidate.write_text(mutated, encoding="utf-8")
+    assert audit_makefile(mutated) == []
+    assert audit_make_expansion(candidate) == []
 
 
 def test_the_conditional_checks_do_not_over_reject() -> None:
@@ -1200,6 +1326,69 @@ def test_the_makefile_guard_rejects_narrowed_coverage(
     assert any(expected in violation for violation in violations), violations
 
 
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        pytest.param(
+            lambda text: text + "\nsecurity:\n\t@true\n",
+            "must expand to the exact 4 source recipe lines",
+            id="duplicated security target overrides first recipe in Make",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{RESOLVE_RECIPE}\n\t{DECLARED_RECIPE}",
+                f"\t{RESOLVE_RECIPE} || true\n\t{DECLARED_RECIPE}",
+                1,
+            ),
+            "`make -n security` resolve-mode pass must equal canonical prefix",
+            id="resolve pass appended with or-true caught by expansion guard",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"audit:\n\t{RESOLVE_RECIPE}",
+                f"audit:\n\t{RESOLVE_RECIPE} --ignore-vuln GHSA-0000-0000-0000",
+                1,
+            ),
+            "`make -n audit` must equal canonical prefix plus declared allowlist",
+            id="audit target appends undeclared ignore flag",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                "\nPIP_AUDIT_IGNORES :=\n",
+                "\nPIP_AUDIT_IGNORES :=\nPIP_AUDIT_IGNORES += --ignore-vuln GHSA-0000-0000-0000\n",
+                1,
+            ),
+            "disagrees with Makefile source",
+            id="trailing += override injects tokens unseen by literal assignment",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                "\nPIP_AUDIT_IGNORES :=\n",
+                "\nPIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320\n",
+                1,
+            ).replace(
+                f"audit:\n\t{RESOLVE_RECIPE}",
+                f"audit:\n\tpip-audit -r {LOCK}",
+                1,
+            ),
+            "`make -n audit` must equal canonical prefix plus declared allowlist",
+            id="audit target drops declared allowlist when an entry is present",
+        ),
+    ],
+)
+def test_make_expansion_guard_rejects_drift(
+    tmp_path: Path, mutation: object, expected: str
+) -> None:
+    """VERIFY-01(5): negative controls for W-4 and W-9 in ``audit_make_expansion``."""
+    mutated = mutation(_LIVE_MAKEFILE)  # type: ignore[operator]
+    assert mutated != _LIVE_MAKEFILE, "the mutation did not apply"
+    candidate = tmp_path / "Makefile"
+    candidate.write_text(mutated, encoding="utf-8")
+    violations = audit_make_expansion(candidate)
+    assert violations, "the expansion guard passed a mutated Makefile"
+    assert any(expected in violation for violation in violations), violations
+
+
 def _without(key: object) -> Workflow:
     workflow = _workflow()
     triggers = dict(next(workflow[k] for k in ON_KEYS if k in workflow))
@@ -1551,6 +1740,32 @@ def _with_duplicated_gate_step() -> Workflow:
             lambda: _mutate_job(strategy={"fail-fast": False}),
             "must not set `strategy`",
             id="any strategy on the audit job",
+        ),
+        # #1411 R-2: `timeout-minutes` on the gate job or step is rejected fail-closed
+        # across both literal numbers and Actions expressions.
+        pytest.param(
+            lambda: _mutate_job(**{"timeout-minutes": 1}),
+            "job must not set `timeout-minutes`",
+            id="job timeout-minutes kills a 2-minute audit",
+        ),
+        pytest.param(
+            lambda: _mutate_job(**{"timeout-minutes": "${{ 1 }}"}),
+            "job must not set `timeout-minutes`",
+            id="job timeout-minutes written as an expression",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"timeout-minutes": 1}),
+            "step must not set `timeout-minutes`",
+            id="step timeout-minutes kills a 2-minute audit",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(
+                **{
+                    "timeout-minutes": "${{ github.event_name == 'schedule' && 1 || 30 }}"
+                }
+            ),
+            "step must not set `timeout-minutes`",
+            id="step timeout-minutes kills only the daily run",
         ),
     ],
 )

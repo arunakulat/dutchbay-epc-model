@@ -27,9 +27,13 @@ opening a PR. Its body names the scoped issue or tracker comment, base SHA and o
 disposition; the required receipts job checks their presence and tracker linkage. It cannot
 prove when editing began or decide
 whether two PRs overlap, so the reviewer still checks chronology and scope. For an
-automatically opened PR, require a non-bot tracker comment posted after creation and
-naming the exact PR and work item before follow-up changes or merge. A direct tracker
-comment work item has `Work item:` and `Done when:` lines, not placeholders.
+automatically opened PR (including weekly Dependabot PRs), the active
+delivery/merge-queue coordinator on duty — or the first non-bot session triaging the
+queue — records a non-bot `#1353` tracker comment posted after creation and before any
+follow-up modification, consolidation, or merge. That comment names each exact bot PR
+`#N`, `Work item:`, `Done when:`, `Base SHA:`, and the overlap/consolidation disposition
+(see `#1969` as a worked example); `Work item:` and `Done when:` lines must be concrete,
+not placeholders.
 
 This skill confers no merge authority. Merge when the session has been asked to deliver or
 merge the pull request. Once it has been asked, `MERGE-01` means you merge on green without

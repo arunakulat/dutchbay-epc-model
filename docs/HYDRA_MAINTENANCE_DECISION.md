@@ -1,23 +1,54 @@
 # Hydra maintenance risk: stalled upstream cadence (ADR, #609 / benchmarking §4)
 
-Status: **Accepted** (2026-07). Decision: **stay on Hydra as the canonical CLI framework**
-(GWTF CLI-01/R1 unchanged), bump the pin to **1.3.3**, declare `hydra-core` as an abstract
-runtime dependency in `pyproject.toml`, and record the **OmegaConf + thin-CLI fallback**
-below as the exit path should upstream become unmaintained.
+Status: **Accepted** (2026-07; refreshed 2026-11-27 under #1423). Decision: **stay on Hydra as
+the canonical CLI framework** (GWTF CLI-01/R1 unchanged), declare `hydra-core` as an abstract
+runtime dependency in `pyproject.toml`, keep the **OmegaConf + thin-CLI fallback** below as the
+exit path should upstream become unmaintained, and track security-floor bumps in the lock
+(originally `1.3.3` in 2026-07; subsequently `1.3.7` in #1339/#1341 and `1.3.8` in #1460).
 
 ## Context
 
-Hydra (`hydra-core`, facebookresearch/hydra) is load-bearing in this repo:
+Hydra (`hydra-core`, `hydra-ecosystem/hydra`, GitHub repository id `191632914`; transferred from
+`facebookresearch/hydra`) is load-bearing in this repo:
 
 - GWTF **CLI-01** mandates Hydra for all v14 CLIs (argparse banned repo-wide; Typer/Click
   frozen); **R1** names the two canonical entrypoints.
-- `@hydra.main` sites (the complete list): the canonical entrypoints
-  `run_full_pipeline_v14.py` and `run_scenario_analytics_v14.py` (repo root), plus the
-  **packaged** analytics CLIs `analytics/cli/cli_sensitivity_hydra.py` and
-  `analytics/cli/cli_monte_carlo_hydra.py` (both import `hydra` at module scope, and
-  `analytics*` is in the wheel's `[tool.setuptools.packages.find]` include list).
-- The Hydra-only discipline is lint-enforced by `tests/lint/test_entrypoints_hydra_only.py`
-  (R3) and `tests/lint/test_no_argparse_anywhere.py`.
+- `@hydra.main` sites (**30** non-test Python files; verified 2026-11-27):
+  - **2** canonical root entrypoints: `run_full_pipeline_v14.py` and `run_scenario_analytics_v14.py`.
+  - **3** packaged analytics CLIs (`analytics*` is in the wheel's
+    `[tool.setuptools.packages.find]` include list, and each imports `hydra` at module scope):
+    `analytics/cli/cli_sensitivity_hydra.py`, `analytics/cli/cli_monte_carlo_hydra.py`, and
+    `analytics/cli/cli_capital_structure_optimize_hydra.py`.
+  - **25** `scripts/*.py` runners: `scripts/01_github_repo_scanner.py`,
+    `scripts/analyze_dutchbay_wake_deficit_gap_1589.py`,
+    `scripts/generate_financing_questionnaire.py`,
+    `scripts/run_blue_whale_capex_solar_resource_v14.py`,
+    `scripts/run_blue_whale_met_mast_transfer_v14.py`,
+    `scripts/run_blue_whale_solar_bess_v14.py`,
+    `scripts/run_blue_whale_wind_siting_v14.py`,
+    `scripts/run_dutchbay_wake_rebaseline_v14.py`,
+    `scripts/run_equipment_parity_v14.py`,
+    `scripts/run_f5_exit_evidence_v14.py`,
+    `scripts/run_fx_tenor_screening_v14.py`,
+    `scripts/run_neighbour_wake_sensitivity_v14.py`,
+    `scripts/run_p90_recomputed_downside_v14.py`,
+    `scripts/run_pysam_energy_crosscheck.py`,
+    `scripts/run_site_analysis_v14.py`,
+    `scripts/run_solar_bess_sizing_v14.py`,
+    `scripts/run_synthetic_feeder_placeholder_v14.py`,
+    `scripts/run_synthetic_input_records_v14.py`,
+    `scripts/run_synthetic_qsts_finance_report_v14.py`,
+    `scripts/run_synthetic_qsts_output_records_v14.py`,
+    `scripts/run_wind_analysis_v14.py`,
+    `scripts/run_wind_bess_options_v14.py`,
+    `scripts/validate_audit_recovery.py`,
+    `scripts/validate_f5_02_lender_return.py`, and
+    `scripts/verify_p03_primary_sources.py`.
+- The Hydra-only discipline for the four canonical pipeline CLIs (`CANONICAL_CLIS`:
+  `run_full_pipeline_v14.py`, `run_scenario_analytics_v14.py`,
+  `analytics/cli/cli_sensitivity_hydra.py`, `analytics/cli/cli_monte_carlo_hydra.py`) is
+  lint-enforced by `tests/lint/test_entrypoints_hydra_only.py` (R3) and
+  `tests/lint/test_no_argparse_anywhere.py`.
 
 The 2026-07-01 SOTA benchmarking report (§4 register) flagged that Hydra's release cadence
 has stalled and that a user-raised maintainer-status question in the upstream tracker went
@@ -34,8 +65,18 @@ release:
 | 1.3.3 upload date | 2026-06-11 (**~3 years 4 months** after 1.3.2) |
 | 1.3.3 content | packaging-only: fixes source builds with modern setuptools by removing the `setup.py` dependency on `pkg_resources` (upstream #3207); no runtime behaviour change |
 | 1.3.3 requires | `omegaconf<2.4,>=2.2` · `antlr4-python3-runtime==4.9.*` · `packaging` — all already satisfied by the lock (omegaconf 2.3.0, antlr4 4.9.3, packaging 25.0), so the bump moves **one line** of the lock |
-| Hydra surface this repo consumes | `@hydra.main(version_base="1.3", config_path=..., config_name=...)` + the `key=value` dotlist override grammar. **No** multirun/sweeper, **no** launcher plugins, **no** `hydra.utils.instantiate`, no `hydra_plugins` (grep-verified across the four CLI modules and `conf/`) |
-| pip-audit status | the mandatory `pip-audit -r requirements.txt` CI gate passes; the accepted-advisory allowlist is empty (no known CVEs against hydra-core 1.3.x or antlr4-python3-runtime 4.9.3) |
+| Hydra surface this repo consumes | `@hydra.main(version_base="1.3", config_path=..., config_name=...)` + the `key=value` dotlist override grammar. **No** multirun/sweeper, **no** launcher plugins, **no** `hydra.utils.instantiate`, no `hydra_plugins` (re-verified 2026-11-27 across `analytics/`, root CLIs, `scripts/`, and `conf/`) |
+| pip-audit status (2026-07-02 baseline) | at the 2026-07 decision date, `pip-audit -r requirements.txt` passed with no known CVEs against `hydra-core` 1.3.3 or `antlr4-python3-runtime` 4.9.3; **superseded below** |
+
+### Refreshed evidence (verified 2026-11-27 under #1423)
+
+| fact | value |
+|---|---|
+| Upstream publisher & Trusted Publishing | Transferred from `facebookresearch/hydra` (owner id `16943930`) to `hydra-ecosystem/hydra` (owner id `296379823`, same GitHub repository id `191632914`). From `1.3.6` onward, PyPI Trusted Publishing is configured for `hydra-ecosystem/hydra` (branch `1.3_branch`, `workflow_dispatch`). |
+| Current lock & transitive pins | `hydra-core==1.3.8`, `omegaconf==2.3.1`, `antlr4-python3-runtime==4.9.3`, `packaging==26.3` (`requirements.txt`). |
+| Abstract floor in `pyproject.toml` | `hydra-core>=1.3.8,!=1.4.0.dev0,...,!=1.4.0.dev10,!=1.4.0rc1,!=1.4.0rc2` (`1.4.0rc3` is the first fixed 1.4 prerelease). |
+| Subsequent CVEs & remediations | The 2026-07 "no known CVEs" statement was invalidated in October–November 2026: `CVE-2026-106441`, `CVE-2026-106442`, and `CVE-2026-106439` (affecting `1.3.4–1.3.6` and `1.4.0.dev0–dev9`, fixed in `1.3.7` under #1339/#1341), followed by `GHSA-wf6j-7hvr-gr93` (affecting `1.3.6–1.3.7` and `1.4.0.dev9–dev10`, `rc1`, `rc2`, fixed in `1.3.8` under #1460). |
+| Current pip-audit status | `pip-audit --no-deps --disable-pip -r requirements.txt` passes with `No known vulnerabilities found` on `hydra-core==1.3.8` and an empty allowlist (`Makefile`). |
 
 Assessment: the dependency is **stale but stable**. The consumed surface is deliberately
 narrow (config-first per ARCH-01 — all behaviour lives in `conf/*.yaml` and scenario YAMLs,
@@ -74,7 +115,8 @@ Replace `@hydra.main` with a **thin OmegaConf shim** — no config migration req
   CLIs consume today. No argparse (CLI-01/R3 stay intact: the dotlist is split on `=`, as
   Hydra itself does), no output-directory management beyond what the CLIs already do
   explicitly (`export_dir` is plain config, not Hydra job magic).
-- Scope: exactly four `@hydra.main` sites (listed above) plus updating
+- Scope: all **30** `@hydra.main` sites (listed in Context above: 2 root entrypoints, 3
+  `analytics/cli/*_hydra.py` modules, and 25 `scripts/*.py` runners), plus updating
   `tests/lint/test_entrypoints_hydra_only.py` to bless the shim as the canonical decorator,
   and a GWTF CSV amendment to CLI-01/R1 (a user-gated governance change, not a code detail).
 - Not needed: multirun, sweepers, launchers, instantiate — the repo never adopted them, so
@@ -86,10 +128,12 @@ Revisit this ADR (open an issue, do not silently migrate) when **any** of:
 
 1. `pip-audit` flags a CVE against `hydra-core` or `antlr4-python3-runtime` with no fixed
    upstream release — the mandatory CI gate makes this loud.
-2. A planned interpreter bump (repo targets py311 today) or an `omegaconf` upgrade is
+2. A planned interpreter bump (repo requires Python `>=3.12` today) or an `omegaconf` upgrade is
    blocked by the frozen Hydra release.
 3. The upstream repo is archived, or a further ≥18 months pass with no release **and** an
    open incompatibility affecting this repo.
+4. A further upstream repository transfer or PyPI Trusted Publishing identity change away from
+   `hydra-ecosystem/hydra` (repository id `191632914`, owner id `296379823`).
 
 ## Consequences
 

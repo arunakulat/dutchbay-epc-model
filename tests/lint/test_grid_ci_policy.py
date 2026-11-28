@@ -144,19 +144,41 @@ def _workflow_step_run(job: str, step_name: str) -> str:
     raise AssertionError(f"step {step_name!r} not found in job {job!r}")
 
 
-def _git(repo: Path, *args: str) -> str:
-    """Run Git in a throwaway repository and return stdout."""
-    return subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True, text=True
-    ).stdout.strip()
+_STRIPPED_ENV_VARS = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE", "BASH_ENV")
 
 
 def _hermetic_env(**extra: str) -> dict[str, str]:
-    """Environment whose ``python`` is the interpreter running these tests (#1324 G-A1-06)."""
-    path = os.pathsep.join(
-        [str(Path(sys.executable).parent), os.environ.get("PATH", "")]
+    """Environment whose ``python`` is the interpreter running these tests (#1324 G-A1-06).
+
+    Isolates throwaway Git repositories and ``bash -e`` runs from host Git config and
+    shell-startup hooks (#1421 G-A2-06, G-D2-04).
+    """
+    env = {
+        key: value for key, value in os.environ.items() if key not in _STRIPPED_ENV_VARS
+    }
+    path = os.pathsep.join([str(Path(sys.executable).parent), env.get("PATH", "")])
+    env.update(
+        {
+            "PATH": path,
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            **extra,
+        }
     )
-    return {**os.environ, "PATH": path, "PYTHONDONTWRITEBYTECODE": "1", **extra}
+    return env
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run Git in a throwaway repository and return stdout."""
+    return subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        env=_hermetic_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def _run_like_ci(
@@ -194,10 +216,10 @@ def test_classify_step_records_its_base_merge_base_and_result() -> None:
         assert recorded in block
 
 
-def _render_classify_step(base_sha: str) -> str:
+def _render_classify_step(base_sha: str, *, event_name: str = "pull_request") -> str:
     """Substitute the two GitHub expressions the classify step reads."""
     run = _workflow_step_run("changes", "Classify diff against the PR base")
-    rendered = run.replace("${{ github.event_name }}", "pull_request").replace(
+    rendered = run.replace("${{ github.event_name }}", event_name).replace(
         "${{ github.event.pull_request.base.sha }}", base_sha
     )
     assert "${{" not in rendered
@@ -246,6 +268,9 @@ def _run_classify_step(
         summary_text = summary.read_text(encoding="utf-8")
         # The block reaches the log as well as the summary (#1324 G-D1-01).
         assert summary_text in completed.stdout
+        if draft != "true":
+            # Pin the direct JSON log line (#1421 G-D2-05 R8).
+            assert "grid classification: {" in completed.stdout
         results[label] = (
             output.read_text(encoding="utf-8"),
             summary_text,
@@ -454,11 +479,141 @@ def test_classify_step_fails_when_the_classifier_crashes(tmp_path: Path) -> None
     assert "qsts_execution_changed=" not in written
 
 
+@pytest.mark.parametrize("event_name", ["push", "schedule", "workflow_dispatch"])
+def test_classify_step_non_pr_events_run_full_gate_without_grid_flag(
+    tmp_path: Path, event_name: str
+) -> None:
+    """Non-PR events always run the full gate without setting PR grid flag (#1421 G-D2-07).
+
+    Kills the fail-open mutant that writes ``code_changed=false`` on non-PR triggers
+    (``schedule`` and ``workflow_dispatch``) and verifies no checkout is required.
+    """
+    output = tmp_path / f"{event_name}.output"
+    summary = tmp_path / f"{event_name}.summary"
+    env = _hermetic_env(
+        GITHUB_OUTPUT=str(output),
+        GITHUB_STEP_SUMMARY=str(summary),
+        RUNNER_TEMP=str(tmp_path),
+        PR_DRAFT="",
+    )
+    completed = _run_like_ci(
+        _render_classify_step("", event_name=event_name),
+        tmp_path,
+        env,
+        tmp_path,
+        f"classify-{event_name}",
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "non-PR event: full gate" in completed.stdout
+    assert output.read_text(encoding="utf-8").splitlines() == [
+        "code_changed=true",
+        "qsts_execution_changed=false",
+    ]
+
+
+def test_classify_step_records_undeterminable_merge_base_on_empty_base(
+    tmp_path: Path,
+) -> None:
+    """An empty PR base records ``undeterminable`` and fails closed (#1421 G-D2-05 R6)."""
+    repo, _ = _classify_repo(tmp_path)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "note.md").write_text("note\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "docs")
+
+    empty_output, empty_summary, empty_log = _run_classify_step(
+        repo, tmp_path, {"empty": ""}
+    )["empty"]
+    assert "code_changed=true" in empty_output
+    assert "qsts_execution_changed=true" in empty_output
+    assert _recorded("Merge base with the PR head", "undeterminable") in empty_summary
+    assert _recorded("Merge base with the PR head", "undeterminable") in empty_log
+
+
+def test_classify_step_fails_closed_on_unrelated_history_base(tmp_path: Path) -> None:
+    """An unrelated-history base fails the classify step without writing outputs (#1421 G-D2-05)."""
+    repo, _ = _classify_repo(tmp_path)
+    _git(repo, "checkout", "-q", "--orphan", "unrelated")
+    _git(repo, "rm", "-rfq", ".")
+    (repo / "orphan.md").write_text("orphan\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "unrelated history")
+    orphan_base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+
+    output = tmp_path / "unrelated.output"
+    env = _hermetic_env(
+        GITHUB_OUTPUT=str(output),
+        GITHUB_STEP_SUMMARY=str(tmp_path / "unrelated.summary"),
+        RUNNER_TEMP=str(tmp_path),
+        PR_DRAFT="false",
+    )
+    completed = _run_like_ci(
+        _render_classify_step(orphan_base), repo, env, tmp_path, "classify-unrelated"
+    )
+
+    assert completed.returncode != 0
+    written = output.read_text(encoding="utf-8") if output.exists() else ""
+    assert "qsts_execution_changed=" not in written
+
+
+def test_classify_step_fails_closed_when_step_summary_is_unwritable(
+    tmp_path: Path,
+) -> None:
+    """An unwritable job summary fails the step via ``tee`` (#1421 G-D2-05 R7)."""
+    repo, base = _classify_repo(tmp_path)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "note.md").write_text("note\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "docs")
+
+    unwritable_summary = tmp_path / "summary-dir"
+    unwritable_summary.mkdir()
+    env = _hermetic_env(
+        GITHUB_OUTPUT=str(tmp_path / "unwritable.output"),
+        GITHUB_STEP_SUMMARY=str(unwritable_summary),
+        RUNNER_TEMP=str(tmp_path),
+        PR_DRAFT="false",
+    )
+    completed = _run_like_ci(
+        _render_classify_step(base), repo, env, tmp_path, "classify-unwritable"
+    )
+
+    assert completed.returncode != 0
+
+
+def test_throwaway_git_and_shell_ignore_host_config_and_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Throwaway repos and shell runs ignore host Git config and hooks (#1421 G-A2-06, G-D2-04)."""
+    bad_gitconfig = tmp_path / "bad.gitconfig"
+    bad_gitconfig.write_text(
+        "[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /nonexistent/gpg-signer\n",
+        encoding="utf-8",
+    )
+    bad_bash_env = tmp_path / "bad_bash_env.sh"
+    bad_bash_env.write_text("exit 99\n", encoding="utf-8")
+
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(bad_gitconfig))
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "decoy.git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "decoy.index"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path / "decoy.worktree"))
+    monkeypatch.setenv("BASH_ENV", str(bad_bash_env))
+
+    repo, base = _classify_repo(tmp_path)
+    output, _, _ = _run_classify_step(repo, tmp_path, {"isolated": base})["isolated"]
+    assert "code_changed=true" in output
+    assert "qsts_execution_changed=true" in output
+
+
 def _run_evidence_step(
     workdir: Path,
     junit_xml: str | None,
     receipt: dict[str, object] | bytes | None,
     head_sha: str,
+    *,
+    receipt_kind: str = "file",
 ) -> subprocess.CompletedProcess[str]:
     """Execute the whole evidence step, shell guard included, in a constructed workspace."""
     run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
@@ -466,10 +621,13 @@ def _run_evidence_step(
     workspace.mkdir()
     if junit_xml is not None:
         (workspace / "grid-study-results.xml").write_text(junit_xml, encoding="utf-8")
-    if receipt is not None:
-        receipt_path = (
-            workspace / "outputs" / "grid_base_candidate_numerical_receipt.json"
-        )
+    receipt_path = workspace / "outputs" / "grid_base_candidate_numerical_receipt.json"
+    if receipt_kind == "directory":
+        receipt_path.mkdir(parents=True)
+    elif receipt_kind == "dangling_symlink":
+        receipt_path.parent.mkdir(parents=True)
+        receipt_path.symlink_to(workspace / "outputs" / "nonexistent-target.json")
+    elif receipt is not None:
         receipt_path.parent.mkdir()
         if isinstance(receipt, bytes):
             receipt_path.write_bytes(receipt)
@@ -482,6 +640,7 @@ def _run_evidence_step(
     return _run_like_ci(run, workspace, env, workdir, "evidence")
 
 
+_RECEIPT_REL = "outputs/grid_base_candidate_numerical_receipt.json"
 _RECEIPT_CLASS = "tests.grid.test_base_candidate_physical_receipt"
 _RECEIPT_NAME = "test_base_candidate_physical_numerical_receipt"
 _PASSED_RECEIPT_CASE = (
@@ -517,48 +676,89 @@ def _complete_receipt(head: str) -> dict[str, object]:
     }
 
 
-def test_evidence_step_names_a_skipped_receipt_test(tmp_path: Path) -> None:
-    """A skipped receipt test is named, with the andes cause, not a bare exit (#1323)."""
+@pytest.mark.parametrize(
+    ("skip_tag", "expected_cause"),
+    [
+        (
+            "<skipped message=\"could not import 'andes': No module named 'andes'\"/>",
+            "its test was skipped (could not import 'andes': No module named 'andes'); "
+            "it skips when andes cannot be imported, and the [grid] extra must install andes",
+        ),
+        (
+            "<skipped/>",
+            "its test was skipped; "
+            "it skips when andes cannot be imported, and the [grid] extra must install andes",
+        ),
+    ],
+    ids=["with_reason", "without_reason"],
+)
+def test_evidence_step_names_a_skipped_receipt_test(
+    tmp_path: Path, skip_tag: str, expected_cause: str
+) -> None:
+    """A skipped receipt test is named with its exact cause, not a bare exit (#1323, #1421)."""
     skipped = (
         f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}">'
-        "<skipped message=\"could not import 'andes': No module named 'andes'\"/>"
-        "</testcase>"
+        f"{skip_tag}</testcase>"
     )
     completed = _run_evidence_step(tmp_path, _junit(skipped), None, "a" * 40)
 
     assert completed.returncode != 0
-    assert "paired receipt" in completed.stderr
-    assert "its test was skipped" in completed.stderr
-    assert "could not import 'andes'" in completed.stderr
-    assert "[grid] extra must install andes" in completed.stderr
+    assert completed.stderr.strip() == (
+        f"paired receipt {_RECEIPT_REL} is missing: {expected_cause}"
+    )
 
 
 def test_evidence_step_names_an_absent_receipt_test(tmp_path: Path) -> None:
-    """A receipt test missing from the JUnit evidence is named as absent (#1323)."""
+    """A receipt test missing from the JUnit evidence is named as absent (#1323, #1421)."""
     completed = _run_evidence_step(tmp_path, _junit(""), None, "a" * 40)
 
     assert completed.returncode != 0
-    assert "is absent from the JUnit evidence" in completed.stderr
+    assert completed.stderr.strip() == (
+        f"paired receipt {_RECEIPT_REL} is missing: "
+        f"its test, {_RECEIPT_NAME}, is absent from the JUnit evidence"
+    )
 
 
 def test_evidence_step_names_a_receipt_test_that_wrote_nothing(tmp_path: Path) -> None:
-    """A receipt test that passed without writing its file is named (#1324 G-D1-02)."""
+    """A receipt test that passed without writing its file is named (#1324 G-D1-02, #1421)."""
     completed = _run_evidence_step(
         tmp_path, _junit(_PASSED_RECEIPT_CASE), None, "a" * 40
     )
 
     assert completed.returncode != 0
-    assert "its test passed without writing the receipt" in completed.stderr
+    assert completed.stderr.strip() == (
+        f"paired receipt {_RECEIPT_REL} is missing: "
+        "its test passed without writing the receipt"
+    )
 
 
-def test_evidence_step_names_an_empty_receipt_file(tmp_path: Path) -> None:
-    """An empty receipt file is not reported as never written (#1324 G-D1-05)."""
+@pytest.mark.parametrize(
+    ("receipt", "receipt_kind"),
+    [
+        (b"", "file"),
+        (None, "directory"),
+        (None, "dangling_symlink"),
+    ],
+    ids=["empty_file", "directory", "dangling_symlink"],
+)
+def test_evidence_step_names_an_empty_or_irregular_receipt_path(
+    tmp_path: Path, receipt: bytes | None, receipt_kind: str
+) -> None:
+    """Empty, directory, and dangling-symlink receipts are named as irregular (#1421 G-D1-05, G-A1-08)."""
     completed = _run_evidence_step(
-        tmp_path, _junit(_PASSED_RECEIPT_CASE), b"", "a" * 40
+        tmp_path,
+        _junit(_PASSED_RECEIPT_CASE),
+        receipt,
+        "a" * 40,
+        receipt_kind=receipt_kind,
     )
 
     assert completed.returncode != 0
-    assert "the path exists but is empty or not a regular file" in completed.stderr
+    assert completed.stderr.strip() == (
+        f"paired receipt {_RECEIPT_REL} is missing: "
+        "the path exists but is empty or not a regular file"
+    )
+    assert "passed without writing the receipt" not in completed.stderr
 
 
 def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
@@ -574,12 +774,13 @@ def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
     )
 
 
-def test_evidence_step_rejects_a_failed_grid_test(tmp_path: Path) -> None:
-    """A failure in the JUnit evidence fails the step even with a receipt (#1324 G-A1-05)."""
+@pytest.mark.parametrize("tag", ["failure", "error"])
+def test_evidence_step_rejects_a_failed_grid_test(tmp_path: Path, tag: str) -> None:
+    """A failure or error in JUnit fails the step even with a receipt (#1324 G-A1-05, #1421)."""
     head = "b" * 40
     failed = (
         '<testcase classname="tests.grid.test_other" name="test_fails">'
-        '<failure message="boom"/></testcase>'
+        f'<{tag} message="boom"/></testcase>'
         f"{_PASSED_RECEIPT_CASE}"
     )
     completed = _run_evidence_step(
@@ -587,19 +788,119 @@ def test_evidence_step_rejects_a_failed_grid_test(tmp_path: Path) -> None:
     )
 
     assert completed.returncode != 0
-    assert "contains a failure or error" in completed.stderr
+    assert completed.stderr.strip() == (
+        "Grid Study JUnit evidence contains a failure or error"
+    )
 
 
-def test_evidence_step_names_a_missing_junit_file(tmp_path: Path) -> None:
-    """A missing JUnit file fails the step with a named error, not a bare exit (#1323)."""
+@pytest.mark.parametrize("junit_xml", [None, ""], ids=["missing", "empty"])
+def test_evidence_step_names_a_missing_or_empty_junit_file(
+    tmp_path: Path, junit_xml: str | None
+) -> None:
+    """Missing or empty JUnit fails with a named error, killing ``-s``->``-e`` (#1421 G-A2-04)."""
     run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
     assert "test -s grid-study-results.xml" not in run
     assert "test -s outputs/grid_base_candidate_numerical_receipt.json" not in run
 
-    completed = _run_evidence_step(tmp_path, None, None, "a" * 40)
+    completed = _run_evidence_step(tmp_path, junit_xml, None, "a" * 40)
 
     assert completed.returncode != 0
     assert (
-        "::error::Grid Study JUnit evidence grid-study-results.xml is missing or empty"
-        in completed.stdout
+        "::error::Grid Study JUnit evidence grid-study-results.xml is missing or empty: "
+        "the grid-marked pytest run did not complete (#1323)"
+    ) in completed.stdout
+
+
+def test_evidence_step_rejects_junit_with_no_testcases(tmp_path: Path) -> None:
+    """JUnit with zero testcases is rejected by its own guard (#1421 G-A2-05 A19)."""
+    head = "b" * 40
+    empty_suite = '<testsuites><testsuite name="pytest"></testsuite></testsuites>'
+    completed = _run_evidence_step(tmp_path, empty_suite, _complete_receipt(head), head)
+
+    assert completed.returncode != 0
+    assert completed.stderr.strip() == "Grid Study JUnit evidence contains no testcases"
+
+
+def test_evidence_step_rejects_junit_with_only_skipped_testcases(
+    tmp_path: Path,
+) -> None:
+    """JUnit containing only skipped testcases is rejected even with a receipt (#1421 G-A2-05 A10)."""
+    head = "b" * 40
+    only_skipped = (
+        '<testsuites><testsuite name="pytest">'
+        '<testcase classname="tests.grid.test_other" name="test_runs">'
+        '<skipped message="skipped"/></testcase>'
+        f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}">'
+        '<skipped message="skipped"/></testcase>'
+        "</testsuite></testsuites>"
+    )
+    completed = _run_evidence_step(
+        tmp_path, only_skipped, _complete_receipt(head), head
+    )
+
+    assert completed.returncode != 0
+    assert completed.stderr.strip() == (
+        "Grid Study JUnit evidence contains only skipped testcases"
+    )
+
+
+def test_evidence_step_rejects_receipt_with_mismatched_candidate_head(
+    tmp_path: Path,
+) -> None:
+    """A receipt whose candidate_commit differs from EXPECTED_HEAD_SHA fails (#1421 G-A2-05 A11)."""
+    completed = _run_evidence_step(
+        tmp_path,
+        _junit(_PASSED_RECEIPT_CASE),
+        _complete_receipt("c" * 40),
+        "b" * 40,
+    )
+
+    assert completed.returncode != 0
+    assert completed.stderr.strip() == (
+        "paired receipt candidate commit does not match exact head"
+    )
+
+
+def test_evidence_step_rejects_receipt_with_non_protected_base_commit(
+    tmp_path: Path,
+) -> None:
+    """A receipt whose base_commit is not protected main fails (#1421 G-A2-05 A17)."""
+    head = "b" * 40
+    receipt = {**_complete_receipt(head), "base_commit": "0" * 40}
+    completed = _run_evidence_step(
+        tmp_path, _junit(_PASSED_RECEIPT_CASE), receipt, head
+    )
+
+    assert completed.returncode != 0
+    assert completed.stderr.strip() == (
+        "paired receipt base commit is not protected main"
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["wrong_count", "duplicate_case", "wrong_case_id"],
+)
+def test_evidence_step_rejects_incomplete_or_mismatched_physical_cases(
+    tmp_path: Path, mutation: str
+) -> None:
+    """Each clause of the six-case check is pinned (#1421 G-A2-05 A18)."""
+    head = "b" * 40
+    receipt = _complete_receipt(head)
+    cases = list(receipt["cases"])  # type: ignore[arg-type]
+    if mutation == "wrong_count":
+        receipt["case_count"] = 5
+    elif mutation == "duplicate_case":
+        cases.append({"id": "lvrt_mild"})
+        receipt["cases"] = cases
+    elif mutation == "wrong_case_id":
+        cases[-1] = {"id": "unexpected_case"}
+        receipt["cases"] = cases
+    completed = _run_evidence_step(
+        tmp_path, _junit(_PASSED_RECEIPT_CASE), receipt, head
+    )
+
+    assert completed.returncode != 0
+    assert completed.stderr.strip() == (
+        "paired receipt does not contain all six physical cases"
     )

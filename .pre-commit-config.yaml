@@ -44,8 +44,10 @@ repos:
       - id: no-commit-to-branch
         args: ["--branch", "main", "--branch", "master"]
 
-  # Mypy disabled for Sprint Day N – runs in CI instead.
-  # Re-enable when you want mypy on every commit:
+  # Local mypy hook disabled by owner decision #1270 (2026-10-26) — mandatory
+  # type checking runs locally under R23 and in CI (test-suite.yml,
+  # ci_v14_fastlane.yml, fx-tests.yml, regression-smoke.yml).
+  # Re-enable only if owner decision #1270 is superseded:
   # - repo: https://github.com/pre-commit/mirrors-mypy
   #   rev: "v1.18.2"
   #   hooks:

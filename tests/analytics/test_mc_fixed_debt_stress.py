@@ -54,7 +54,9 @@ def test_helper_tests_trial_cfads_on_the_covenant_fold_basis() -> None:
     # year 1: (160 - 10) / (100 + 50) = 1.0; years 2-3: (400 - 10) / 100 = 3.9
     assert _trial_fixed_debt_min_dscr(_BASE, trial) == pytest.approx(1.0)
     # Without the fold, year 1 would read (160 - 10) / 100 = 1.5 and never bind.
-    unfolded = {**_BASE, "bridge_debt_period": None}
+    orphaned = {**_BASE, "bridge_debt_period": None}
+    assert _trial_fixed_debt_min_dscr(orphaned, trial) is None
+    unfolded = {**orphaned, "debt_service_total": [0.0, 0.0, 0.0, 100.0, 100.0, 100.0]}
     assert _trial_fixed_debt_min_dscr(unfolded, trial) == pytest.approx(1.5)
 
 
@@ -117,13 +119,13 @@ def test_trial_equal_to_base_reproduces_the_covenant_minimum() -> None:
     assert _trial_fixed_debt_min_dscr(debt, debt) == covenant_min
 
 
-def _cfg(fixed_debt: bool):
+def _cfg(fixed_debt: bool) -> dict[str, Any]:
     cfg = copy.deepcopy(yaml.safe_load(_SCENARIO.read_text()))
     # The lender case turns the stress on (#962 item 4); "off" is set explicitly here.
     cfg["monte_carlo"]["fixed_debt_stress"] = fixed_debt
     if fixed_debt:
         cfg["monte_carlo"]["allow_toy_fallback"] = False
-    return cfg
+    return cast(dict[str, Any], cfg)
 
 
 class TestEngineFixedDebt:
@@ -233,7 +235,7 @@ class TestFailLoud:
         logging.disable(logging.WARNING)
         try:
             with pytest.raises(
-                RuntimeError, match="MC trial 1 published no CFADS"
+                RuntimeError, match="MC trial 1 does not provide complete covenant-year"
             ) as err:
                 mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=1).run(
                     n_trials=2
@@ -266,10 +268,10 @@ class TestFailLoud:
         finally:
             logging.disable(logging.NOTSET)
 
-    def test_permissive_run_with_one_failed_trial_keeps_the_stress(
+    def test_permissive_run_with_one_failed_trial_withholds_the_stress(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A toy-fallback trial contributes no stress observation; the others do."""
+        """A missing stress observation makes the full stress result unavailable."""
         real = mc_engine.evaluate_with_overrides
         trial_calls = {"n": 0}
 
@@ -290,8 +292,10 @@ class TestFailLoud:
             logging.disable(logging.NOTSET)
         assert result.metadata["toy_fallback_count"] == 1
         fixed = result.metadata["fixed_debt_stress"]
-        assert fixed["status"] == "ok"
+        assert fixed["status"] == "unavailable"
         assert fixed["n"] == 2
+        assert fixed["n_requested"] == 3
+        assert "breach_probability" not in fixed
 
     def test_permissive_run_records_why_the_stress_is_missing(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
@@ -305,3 +309,19 @@ class TestFailLoud:
         assert fixed["status"] == "unavailable"
         assert "base case" in fixed["reason"]
         assert any("fixed_debt_stress is on" in r.getMessage() for r in caplog.records)
+
+
+def test_strict_engine_rejects_incomplete_covenant_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = copy.deepcopy(_BASE)
+    incomplete = copy.deepcopy(_BASE)
+    del cast(list[Any], incomplete["annual_row_debt_period_map"])[1]
+    calls = iter([{"debt_result": base}, {"kpis": {}, "debt_result": incomplete}])
+    monkeypatch.setattr(
+        mc_engine, "evaluate_with_overrides", lambda *a, **k: next(calls)
+    )
+    with pytest.raises(
+        RuntimeError, match="MC trial 0 does not provide complete covenant-year"
+    ):
+        mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=1).run(n_trials=2)
