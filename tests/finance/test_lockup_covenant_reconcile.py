@@ -35,14 +35,17 @@ def test_explicit_equity_threshold_takes_precedence() -> None:
     """An explicit equity_distribution.min_dscr_threshold wins over the covenant."""
     cfg = {
         "constraints": {"min_dscr_covenant": 1.30},
-        "equity_distribution": {"min_dscr_threshold": 1.10},
+        "equity_distribution": {"min_dscr_threshold": 1.10, "min_reserve_months": 6},
     }
     assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.10)
 
 
 def test_falls_back_to_125_when_neither_declared() -> None:
     """With no equity threshold and no covenant, the 1.25 library default stands."""
-    cfg: dict = {"project": {"project_life_years": 20}}
+    cfg: dict = {
+        "project": {"project_life_years": 20},
+        "equity_distribution": {"min_reserve_months": 6},
+    }
     assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.25)
 
 

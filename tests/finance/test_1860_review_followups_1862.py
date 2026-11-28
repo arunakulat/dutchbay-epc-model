@@ -30,6 +30,10 @@ from finance.debt_v14 import (
     resolve_dsra_target_months,
     resolve_max_balloon_pct,
 )
+from finance.equity_distribution_v14_hydra import (
+    calculate_equity_distribution_from_pipeline,
+    resolve_equity_min_reserve_months,
+)
 from tests.finance.test_debt_covenant_terms_required_1429 import (
     _lender,
     _rows,
@@ -237,4 +241,101 @@ def test_the_report_lookup_is_the_engines(mapping: Mapping[str, Any], key: str) 
     """The report restates the engine's lookup (no finance import from app/); pin them."""
     assert _lookup_key_as_engine(copy.deepcopy(dict(mapping)), key) == (
         _lookup_case_insensitive(copy.deepcopy(dict(mapping)), key)
+    )
+
+
+# --- DOM-1: equity waterfall reserve months fall back to declared DSRA months --------
+
+
+@pytest.mark.parametrize("section", ["Financing_Terms", "financing", "debt", None])
+def test_dom1_waterfall_reserve_falls_back_to_declared_dsra_months(
+    section: Optional[str],
+) -> None:
+    config = _synthetic(section, dsra_months=9)
+    months, source = resolve_equity_min_reserve_months(config)
+    expected_months, expected_source = resolve_dsra_target_months(config)
+    assert months == pytest.approx(expected_months)
+    assert months == pytest.approx(9.0)
+    assert source == expected_source
+
+
+def test_dom1_explicit_equity_min_reserve_months_overrides_dsra_fallback() -> None:
+    config = _synthetic("Financing_Terms", dsra_months=9)
+    config["equity"] = {"Min_Reserve_Months": 3}
+    months, source = resolve_equity_min_reserve_months(config)
+    assert months == pytest.approx(3.0)
+    assert source == "equity.Min_Reserve_Months"
+
+
+@pytest.mark.parametrize("bad", [None, True, "six", -1, 25, float("nan"), float("inf")])
+def test_dom1_invalid_equity_min_reserve_months_is_refused_naming_key(bad: Any) -> None:
+    config = _lender()
+    config["equity"] = {"min_reserve_months": bad}
+    with pytest.raises(ValueError, match=r"^equity\.min_reserve_months"):
+        resolve_equity_min_reserve_months(config)
+    with pytest.raises(ConfigValidationError, match=r"equity\.min_reserve_months"):
+        _preflight(config)
+
+
+def test_dom1_dsra_months_above_24_is_refused_for_equity_reserve() -> None:
+    config = _lender()
+    config["Financing_Terms"]["reserves"]["dsra_months"] = 25
+    with pytest.raises(
+        ValueError, match=r"^Financing_Terms\.reserves\.dsra_months must be"
+    ):
+        resolve_equity_min_reserve_months(config)
+    with pytest.raises(
+        ConfigValidationError, match=r"Financing_Terms\.reserves\.dsra_months must be"
+    ):
+        _preflight(config)
+
+
+def test_dom1_disabled_equity_skips_reserve_months_preflight() -> None:
+    config = _lender()
+    config["equity_distribution"] = {"enabled": False, "min_reserve_months": None}
+    _preflight(config)
+
+
+@pytest.mark.parametrize("dsra_months", [0, 3, 6, 12])
+def test_dom1_counterfactual_reserve_responsiveness_against_closed_form_oracle(
+    dsra_months: int,
+) -> None:
+    """TEST-01: changing Financing_Terms.reserves.dsra_months drives the waterfall reserve
+    and matches the closed-form 2-year schedule oracle when equity.min_reserve_months is omitted.
+    """
+    cf_pre_debt = 10.0e6
+    debt_service = 4.0e6
+    cash_after_debt = cf_pre_debt - debt_service
+    config: Dict[str, Any] = {
+        "Financing_Terms": {"reserves": {"dsra_months": dsra_months}},
+        "equity_distribution": {
+            "scenario_name": "dom1-oracle",
+            "equity_investment_usd": 20.0e6,
+            "min_dscr_threshold": 0.0,
+            "discount_rate": 0.10,
+        },
+    }
+    rows = [
+        {"year": 1, "cf_pre_debt": cf_pre_debt, "debt_service_total": debt_service},
+        {"year": 2, "cf_pre_debt": cf_pre_debt, "debt_service_total": debt_service},
+    ]
+    result = calculate_equity_distribution_from_pipeline(
+        config=config, annual_rows=rows, debt_result={}
+    )
+    assert result["success"] is True
+    summary = result["equity_summary"]
+    assert summary["min_reserve_months"] == pytest.approx(float(dsra_months))
+    assert (
+        summary["min_reserve_months_source"] == "Financing_Terms.reserves.dsra_months"
+    )
+
+    expected_reserve = debt_service * (dsra_months / 12.0)
+    y1, y2 = result["annual_distributions"]
+    assert y1["reserve_funded_usd"] == pytest.approx(expected_reserve)
+    assert y1["equity_distribution_usd"] == pytest.approx(
+        cash_after_debt - expected_reserve
+    )
+    assert y2["terminal_release_usd"] == pytest.approx(expected_reserve)
+    assert y2["equity_distribution_usd"] == pytest.approx(
+        cash_after_debt + expected_reserve
     )
