@@ -244,6 +244,7 @@ def test_pipeline_empty_rows_fails() -> None:
         config={
             "capex": {"usd_total": 2.0e8},
             "constraints": {"min_dscr_covenant": 1.25},
+            "debt": {"dsra_months": 6},
         },
         annual_rows=[],
         debt_result={"debt_total": 1.2e8},
@@ -256,7 +257,10 @@ def test_pipeline_empty_rows_fails() -> None:
 def test_pipeline_undefivable_equity_fails() -> None:
     """No equity investment derivable -> failed with source metadata."""
     result = calculate_equity_distribution_from_pipeline(
-        config={"constraints": {"min_dscr_covenant": 1.25}},
+        config={
+            "constraints": {"min_dscr_covenant": 1.25},
+            "debt": {"dsra_months": 6},
+        },
         annual_rows=[{"year": 1, "cf_pre_debt": 1.0e6}],
         debt_result={},
     )
@@ -283,6 +287,7 @@ def test_pipeline_terminal_value_added_to_last_year() -> None:
             "equity_investment_usd": 30.0e6,
             "terminal_value_usd": tv,
             "min_dscr_threshold": 0.0,  # never covenant-lock
+            "min_reserve_months": 6,
             "discount_rate": 0.10,
         },
     }
@@ -322,6 +327,7 @@ def test_pipeline_waterfall_invariants_hold() -> None:
             "scenario_name": "inv-case",
             "equity_investment_usd": 30.0e6,
             "min_dscr_threshold": 0.0,
+            "min_reserve_months": 6,
             "discount_rate": 0.08,
         }
     }
@@ -364,6 +370,7 @@ def test_pipeline_covenant_lock_blocks_distribution() -> None:
             "scenario_name": "lock-case",
             "equity_investment_usd": 20.0e6,
             "min_dscr_threshold": 1.50,
+            "min_reserve_months": 6,
             "discount_rate": 0.10,
         }
     }
@@ -389,6 +396,7 @@ def test_pipeline_defaulted_status_propagates() -> None:
             "allow_default_equity_investment": True,
             "default_equity_investment_usd": 15.0e6,
             "min_dscr_threshold": 0.0,
+            "min_reserve_months": 6,
         }
     }
     rows = _simple_rows(3, cf=8.0e6, ds=3.0e6)
@@ -534,6 +542,7 @@ def test_fin12_enabled_wht_with_explicit_zero_rate_is_allowed() -> None:
     # An explicit 0.0 rate is a legitimate "no charge" choice — only an ABSENT key raises.
     cfg = {
         "constraints": {"min_dscr_covenant": 1.25},
+        "debt": {"dsra_months": 6},
         "tax": {
             "wht_on_dividends_enabled": True,
             "wht_on_dividends": 0.0,
