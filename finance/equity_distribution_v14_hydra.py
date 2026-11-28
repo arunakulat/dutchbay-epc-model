@@ -76,7 +76,7 @@ class EquityDistributionConfig(BaseModel):
     enabled: bool = Field(default=True)
     project_life_years: int = Field(default=25, ge=1, le=50)
 
-    min_dscr_threshold: float = Field(default=1.25, ge=0.0, le=5.0)
+    min_dscr_threshold: float = Field(..., ge=0.0, le=5.0)
     min_reserve_months: float = Field(default=6.0, ge=0.0, le=24.0)
     # #920 DOM-1 / #1862: the scenario key that set min_reserve_months (either
     # <equity_section>.min_reserve_months or the declared DSRA months key it fell back to).
@@ -305,6 +305,49 @@ def resolve_equity_min_reserve_months(config: Mapping[str, Any]) -> tuple[float,
     return float(months), source
 
 
+def resolve_equity_min_dscr_threshold(config: Mapping[str, Any]) -> tuple[float, str]:
+    """Resolve the distribution-lockup DSCR threshold from YAML with no code default (#1429, E01).
+
+    Precedence: ``<equity_section>.min_dscr_threshold`` -> ``constraints.min_dscr_covenant``.
+    Refuses missing, null, boolean, non-finite, or out-of-range values naming the YAML path.
+    """
+    equity_section_name, equity_section = _named_equity_section(config)
+    candidates: list[tuple[str, Any]] = []
+    if equity_section_name:
+        for key, val in equity_section.items():
+            if str(key).lower() == "min_dscr_threshold":
+                candidates.append((f"{equity_section_name}.{key}", val))
+                break
+    constraints_section = _section_case_insensitive(config, "constraints") or {}
+    for key, val in constraints_section.items():
+        if str(key).lower() == "min_dscr_covenant":
+            candidates.append((f"constraints.{key}", val))
+            break
+
+    if not candidates:
+        raise ValueError(
+            "equity_distribution.min_dscr_threshold (or constraints.min_dscr_covenant) is "
+            "required: the equity lock-up threshold has no code default (#1429, E01)."
+        )
+
+    path, raw = candidates[0]
+    if raw is None or isinstance(raw, bool):
+        raise ValueError(
+            f"{path} is required and must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        )
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{path} is required and must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        ) from exc
+    if not math.isfinite(numeric) or not (0.0 <= numeric <= 5.0):
+        raise ValueError(
+            f"{path} must be a finite number in [0.0, 5.0], got {raw!r} (#1429, E01)."
+        )
+    return numeric, path
+
+
 def _normalise_percent(value: Any, default: float) -> float:
     """Normalize percentage inputs that may arrive as decimals or percent points."""
     numeric = _as_float(value, default)
@@ -411,9 +454,9 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
             else 0.0
         )
 
-    # A2b/#33: the distribution-lockup DSCR covenant is the scenario's AUTHORED covenant,
-    # not an orphan library default. Resolve a fallback chain:
-    #   equity_distribution.min_dscr_threshold -> constraints.min_dscr_covenant -> 1.25
+    # A2b/#33 & #1429 E01: the distribution-lockup DSCR covenant is the scenario's AUTHORED
+    # covenant, with no code default:
+    #   <equity_section>.min_dscr_threshold -> constraints.min_dscr_covenant
     # so the lockup tests distributions against the value the debt sizer / covenant report
     # actually use (1.30) instead of an unauthored 1.25 that matches no stated covenant.
     # Paired with the FP-tolerant lockup comparison (_DSCR_LOCKUP_EPS), this is KPI-neutral
@@ -425,12 +468,10 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
     # 1.25-vs-1.30 gap was inert; it is real but only engages on genuine sub-covenant years —
     # and naively raising it WITHOUT the FP tolerance would have spuriously locked the sculpt
     # floor on sub-ULP rounding, a fake +27bps equity re-baseline.)
-    constraints_section = _section_case_insensitive(config, "constraints") or {}
-    lockup_threshold = equity_section.get("min_dscr_threshold")
-    if lockup_threshold is None:
-        lockup_threshold = _lookup_case_insensitive(
-            constraints_section, "min_dscr_covenant"
-        )
+    enabled = bool(equity_section.get("enabled", True))
+    lockup_threshold_value = (
+        resolve_equity_min_dscr_threshold(config)[0] if enabled else 0.0
+    )
 
     enabled = bool(equity_section.get("enabled", True))
     if enabled:
@@ -449,7 +490,7 @@ def _build_distribution_config(config: Mapping[str, Any]) -> EquityDistributionC
         scenario_name=scenario_name,
         enabled=enabled,
         project_life_years=_as_int(project_life, 25),
-        min_dscr_threshold=float(_as_float(lockup_threshold, 1.25) or 0.0),
+        min_dscr_threshold=lockup_threshold_value,
         min_reserve_months=reserve_months,
         min_reserve_months_source=reserve_months_source,
         distribution_sweep_pct=_normalise_percent(
@@ -1236,6 +1277,7 @@ __all__ = [
     "EquityDistributionConfig",
     "build_equity_distribution_schedule",
     "calculate_equity_distribution_from_pipeline",
+    "resolve_equity_min_dscr_threshold",
     "resolve_equity_min_reserve_months",
     "waterfall_sweep_cash",
 ]

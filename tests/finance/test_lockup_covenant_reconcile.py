@@ -1,11 +1,11 @@
-"""A2b/#33: the distribution-lockup DSCR resolves to the scenario's AUTHORED covenant.
+"""A2b/#33 & #1429 E01: the distribution-lockup DSCR resolves to the scenario's AUTHORED covenant.
 
 The equity waterfall traps distributions whenever a year's DSCR < the lockup
 threshold. That threshold previously fell back to an orphan library default of
-1.25 (matching no stated covenant). It now reconciles to the scenario's
-``constraints.min_dscr_covenant`` (1.30 for the canonical lender case), with the
-hardcoded 1.25 retained only when neither an explicit equity threshold nor a
-covenant is declared.
+1.25 (matching no stated covenant). It reconciles to the scenario's
+``constraints.min_dscr_covenant`` (1.30 for the canonical lender case), and
+since #1429 E01 has no code default when neither an explicit equity threshold nor
+a covenant is declared.
 """
 
 from __future__ import annotations
@@ -40,13 +40,11 @@ def test_explicit_equity_threshold_takes_precedence() -> None:
     assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.10)
 
 
-def test_falls_back_to_125_when_neither_declared() -> None:
-    """With no equity threshold and no covenant, the 1.25 library default stands."""
-    cfg: dict = {
-        "project": {"project_life_years": 20},
-        "equity_distribution": {"min_reserve_months": 6},
-    }
-    assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.25)
+def test_raises_when_neither_declared_no_code_default() -> None:
+    """With no equity threshold and no covenant, no 1.25 code default applies (#1429 E01)."""
+    cfg: dict = {"project": {"project_life_years": 20}}
+    with pytest.raises(ValueError, match="no code default"):
+        _build_distribution_config(cfg)
 
 
 def test_reconcile_locks_no_scheduled_year_on_the_sculpted_canonical() -> None:
