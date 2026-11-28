@@ -83,15 +83,25 @@ REVIEW_01_REQUIRED_CONTROLS = (
 MODULE_1_REQUIRED_CONTROLS = (
     "### 3.1 Bounded low-risk classes (`REVIEW-01`)",
     "the three bounded low-risk classes in §3.1 | One role-appropriate independent reviewer |",
-    "| `R2_LOAD_BEARING` | Any code outside §3.1's bounded classes;",
-    "Two independent reviewers: one task-domain reviewer and one separate assurance reviewer",
+    # Pinned together with its review cell, like the R1 row above, so moving the
+    # two-reviewer phrase to R3 and giving R2 one reviewer fails (#1416 domain W-1).
+    (
+        "| `R2_LOAD_BEARING` | Any code outside §3.1's bounded classes; contracts; "
+        "schemas; tests that define an oracle; governance; charters; handovers; "
+        "review records; provenance; security; data ingestion; deployment; report "
+        "controls; release/HOLD wording; or other work capable of changing later "
+        "action | Two independent reviewers: one task-domain reviewer and one "
+        "separate assurance reviewer |"
+    ),
     "**Presentation-only code.**",
     "**Test-only guard tightening.**",
+    "tightens an existing guard, or adds a negative control for one",
     "without removing, skipping or weakening an assertion",
     "**Record corrections.**",
     "a dependency bump, a CI or merge gate, governance",
     "`go_with_the_flow_rules_v3_0_clean.csv`",
     "an oracle-defining test",
+    "a change to a fence or guard whose own evidence could be vacuous",
     "a writer-authorizing handover",
     "A mixed change takes its highest class.",
     "When unsure, classify `R2`.",
@@ -120,7 +130,12 @@ STEWARD_REQUIRED_CONTROLS = (
     "The lanes bind to that draft head.",
     "both reviews restart (module 3 §6)",
     "When unsure, it is `R2`.",
-    "§3.1's bounded low-risk classes are `R2` there",
+    # Pinned with "outside" and the R1 half so inverting the boundary fails
+    # (#1416 domain W-2).
+    (
+        "any code outside module 1 §3.1's bounded low-risk classes are `R2` there; "
+        "those classes are `R1` and take one lane (`REVIEW-01`)."
+    ),
     "`Test Summary (draft: full suite deferred)`",
 )
 
@@ -159,6 +174,39 @@ def _assert_contains_all(text: str, controls: tuple[str, ...], where: str) -> No
     assert not missing, f"{where} lost controls: {missing}"
 
 
+_SECTION_3_1_HEADING = "### 3.1 Bounded low-risk classes (`REVIEW-01`)"
+_SECTION_3_1_EXPECTED_CLASSES = (
+    "**Presentation-only code.**",
+    "**Test-only guard tightening.**",
+    "**Record corrections.**",
+)
+
+
+def _extract_section_3_1(text: str) -> str:
+    """Return the Markdown body of module 1 §3.1 up to the next heading."""
+    marker = re.search(
+        rf"^{re.escape(_SECTION_3_1_HEADING)}\s*$", text, flags=re.MULTILINE
+    )
+    assert marker is not None, f"missing heading: {_SECTION_3_1_HEADING!r}"
+    rest = text[marker.end() :]
+    next_heading = re.search(r"^#{1,6}\s+", rest, flags=re.MULTILINE)
+    return rest[: next_heading.start()] if next_heading is not None else rest
+
+
+def _assert_section_3_1_defines_exactly_three_classes(text: str) -> None:
+    """Module 1 §3.1 lists exactly the three bounded low-risk classes and no fourth."""
+    section = _extract_section_3_1(text)
+    items = re.findall(r"^(?:\d+\.|[-*+])\s+(.+)$", section, flags=re.MULTILINE)
+    assert len(items) == len(_SECTION_3_1_EXPECTED_CLASSES), (
+        f"§3.1 must define exactly {len(_SECTION_3_1_EXPECTED_CLASSES)} classes, "
+        f"found {len(items)}: {items!r}"
+    )
+    for item, expected in zip(items, _SECTION_3_1_EXPECTED_CLASSES, strict=True):
+        assert item.startswith(
+            expected
+        ), f"§3.1 class mismatch: expected prefix {expected!r}, got {item!r}"
+
+
 def _assert_recruit_01_cross_reference(rule: dict[str, str]) -> None:
     """RECRUIT-01's own lane statement points at the bounded classes rather than contradicting them."""
     assert RECRUIT_01_CROSS_REFERENCE in rule["enforcement"]
@@ -174,6 +222,13 @@ def test_module_1_defines_the_bounded_classes_and_keeps_the_r2_pair() -> None:
     """Module 1 names the three classes, every exclusion, and still binds R2 for other code."""
     _assert_contains_all(
         MODULE_1.read_text(encoding="utf-8"), MODULE_1_REQUIRED_CONTROLS, "module 1"
+    )
+
+
+def test_module_1_section_3_1_defines_exactly_three_classes() -> None:
+    """Module 1 §3.1 defines exactly three bounded low-risk classes (#1416 assurance W-2)."""
+    _assert_section_3_1_defines_exactly_three_classes(
+        MODULE_1.read_text(encoding="utf-8")
     )
 
 
@@ -268,6 +323,105 @@ def test_text_guards_fail_when_a_control_is_removed(
     )
     with pytest.raises(AssertionError):
         _assert_contains_all(altered, controls, where)
+
+
+def test_module_1_guard_fails_if_r2_row_loses_two_reviewer_cell() -> None:
+    """Negative control: moving the two-reviewer phrase to R3 and giving R2 one lane fails.
+
+    This is the exact mutation that stayed green when R2's class and review cell were
+    pinned separately (#1416 domain W-1).
+    """
+    text = MODULE_1.read_text(encoding="utf-8")
+    two_reviewers = (
+        "Two independent reviewers: one task-domain reviewer and one separate "
+        "assurance reviewer"
+    )
+    mutated = text.replace(
+        f"| {two_reviewers} |",
+        "| One role-appropriate independent reviewer |",
+        1,
+    ).replace(
+        "| At least the `R2` pair",
+        f"| {two_reviewers}; plus every specialist (was At least the `R2` pair)",
+        1,
+    )
+    assert mutated != text
+    assert two_reviewers in mutated
+    with pytest.raises(AssertionError):
+        _assert_contains_all(mutated, MODULE_1_REQUIRED_CONTROLS, "module 1")
+
+
+def test_module_1_guard_fails_if_class_2_reverts_or_drops_vacuous_exclusion() -> None:
+    """Negative control: reverting class 2 or dropping the vacuous-evidence exclusion fails.
+
+    Covers #1416 domain F-1.
+    """
+    text = MODULE_1.read_text(encoding="utf-8")
+    reverted_class_2 = _normalize(text).replace(
+        "tightens an existing guard, or adds a negative control for one",
+        "adds or tightens a guard, including a negative control",
+    )
+    assert reverted_class_2 != _normalize(text)
+    with pytest.raises(AssertionError):
+        _assert_contains_all(reverted_class_2, MODULE_1_REQUIRED_CONTROLS, "module 1")
+
+    dropped_exclusion = _normalize(text).replace(
+        "a change to a fence or guard whose own evidence could be vacuous, ",
+        "",
+    )
+    assert dropped_exclusion != _normalize(text)
+    with pytest.raises(AssertionError):
+        _assert_contains_all(dropped_exclusion, MODULE_1_REQUIRED_CONTROLS, "module 1")
+
+
+def test_steward_guard_fails_if_r1_r2_boundary_is_inverted() -> None:
+    """Negative control: inverting the steward skill's R1/R2 boundary fails (#1416 domain W-2).
+
+    Reproduces the rewrite that stayed green when only "§3.1's bounded low-risk classes
+    are `R2` there" was pinned without "outside" or the R1 half.
+    """
+    flat = _normalize(STEWARD.read_text(encoding="utf-8"))
+    mutated = flat.replace(
+        "any code outside module 1 §3.1's bounded low-risk classes are `R2` there; "
+        "those classes are `R1` and take one lane (`REVIEW-01`).",
+        "module 1 §3.1's bounded low-risk classes are `R2` there; "
+        "all code takes two lanes (`REVIEW-01`).",
+    )
+    assert mutated != flat
+    assert "§3.1's bounded low-risk classes are `R2` there" in mutated
+    with pytest.raises(AssertionError):
+        _assert_contains_all(mutated, STEWARD_REQUIRED_CONTROLS, "steward skill")
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda text: text.replace(
+            "3. **Record corrections.**",
+            "3. **Record corrections.**\n4. **Fourth class.** Unapproved extra class.",
+        ),
+        lambda text: text.replace(
+            "3. **Record corrections.**",
+            "3. **Record corrections.**\n- **Fourth class.** Unapproved bulleted class.",
+        ),
+        lambda text: re.sub(
+            r"\n3\. \*\*Record corrections\.\*\*[^\n]*(?:\n   [^\n]*)*",
+            "",
+            text,
+            count=1,
+        ),
+    ],
+    ids=["fourth-numbered-class", "fourth-bulleted-class", "third-class-removed"],
+)
+def test_section_3_1_class_count_guard_fails_on_added_or_removed_class(
+    mutate: Callable[[str], str],
+) -> None:
+    """Negative control: adding a fourth §3.1 class or removing one fails (#1416 assurance W-2)."""
+    text = MODULE_1.read_text(encoding="utf-8")
+    mutated = mutate(text)
+    assert mutated != text
+    with pytest.raises(AssertionError):
+        _assert_section_3_1_defines_exactly_three_classes(mutated)
 
 
 @pytest.mark.parametrize(

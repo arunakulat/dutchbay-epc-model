@@ -388,7 +388,7 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
     if not base_rows:
         return {
             "status": "unavailable",
-            "reason": "the base case has no operating period with committed debt service",
+            "reason": "no complete base fixed-debt covenant coverage",
         }
     # The P90 case taxed on the committed debt's interest. The rebuild is first checked:
     # on the P90 case's own interest it must reproduce the engine's covenant CFADS.
@@ -404,6 +404,15 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
     ratio_rows = fixed_debt_coverage_by_row(base_debt, ratio_view)
     down_rows = fixed_debt_coverage_by_row(base_debt, down_view)
     own_rows_cov = fixed_debt_coverage_by_row(base_debt, own_view)
+    expected_rows = {row for row, _, _ in base_rows}
+    if any(
+        {row for row, _, _ in rows} != expected_rows
+        for rows in (ratio_rows, down_rows, own_rows_cov)
+    ):
+        return {
+            "status": "unavailable",
+            "reason": "incomplete fixed-debt covenant-year CFADS coverage",
+        }
     tenor = int(base_debt.get("tenor_years") or 0)
     rate = _llcr_discount_rate(config, base_debt)
     base_llcr = float(base_debt.get("llcr") or 0.0)
@@ -412,6 +421,11 @@ def recomputed_p90_downside(config: Mapping[str, Any]) -> Dict[str, Any]:
     if sizing is not None:
         sizing_view = _cfads_map(base_debt, sizing["factor"])
         sizing_rows = fixed_debt_coverage_by_row(base_debt, sizing_view)
+        if {row for row, _, _ in sizing_rows} != expected_rows:
+            return {
+                "status": "unavailable",
+                "reason": "incomplete fixed-debt sizing downside coverage",
+            }
         sizing.update(_summary(sizing_rows))
         sizing["llcr"] = _llcr(sizing_view, base_debt, base_llcr, tenor, rate)
     cases: Dict[str, Any] = {

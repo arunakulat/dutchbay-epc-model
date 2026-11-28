@@ -330,3 +330,43 @@ helper or fixture) is invisible to the reference search, and the differential ru
 it changes a test outcome. The full suite on the train head and the KPI-vector check bound that
 residual; they do not remove it. A train lifts no `HOLD`, and it confers no release, lender, Board,
 professional, evidence, deployment or publication authority.
+
+## 9. Reviewer-session lifecycle, evidence reconciliation, and safe retirement (#1954)
+
+Reviewer sessions follow an explicit, auditable lifecycle under `RECRUIT-01`, `PERSIST-01`,
+`THREAD-01`, and `CLEANUP-01`. Recruitment remains independent (§1); when supported by the
+provider, prefer headless external review with structured outputs rather than creating redundant
+imported conversations.
+
+Keep each lifecycle concern distinct so no indicator or receipt substitutes for another:
+
+- **Provider execution** (`PLANNED`, `RUNNING`, `COMPLETED`, `FAILED`, `INTERRUPTED`, `UNKNOWN`)
+  and **display state** (`api_archive_state` versus `ui_activity_state`): record API and
+  displayed UI state separately. Never assert active execution from unread or activity UI
+  indicators, and report any unsupported UI activity-dismissal limitation candidly.
+- **Terminal disposition** and **evidence custody**: record a stable `reviewer_identity`,
+  `session_id`, exact `candidate_commit`, `candidate_tree`, `base_sha`, `subject_manifest_sha256`,
+  `terminal_disposition`, and independent `receipt_sha256` / evidence digests. Preserve all original
+  evidence read-only in external custody.
+- **Coordinator receipt**, **per-finding reconciliation**, and **supersession**: reconcile every
+  finding explicitly under §5 (`BLOCKS_CURRENT_CANDIDATE`, `ACCEPTED_RESIDUAL_WITHIN_SCOPE`,
+  `DEFERRED_TO_NAMED_DOLPHIN`, `TRACKED_IN_NAMED_ISSUE`, `NOT_APPLICABLE_WITH_REASON`, or
+  `SUPERSEDED_BY_SUCCESSOR_FINDING`). Any deferred finding names an owner, destination, rationale,
+  future acceptance gate, and `HOLD` effect. Historical acceptance never qualifies a new head;
+  vetoes (`REJECT`, `CHANGES_REQUESTED`, `WITHHELD`) and `NO_EVIDENCE` remain blocking where
+  applicable.
+- **Fail-closed reconciliation**: missing or unmatched evidence, live writers or locks, ambiguous
+  ownership, unresolved scope, stale exact-head review, unique unmerged commits, or dirty paths
+  fail closed.
+- **Safe retirement and supported archival**: before retiring any reviewer worktree, branch, or
+  dedicated temporary environment, separately verify (1) merge/ancestry on protected `origin/main`,
+  (2) exact branch head, (3) clean worktree status with no dirty paths or unique commits, (4) no
+  active process usage, (5) no unresolved recovery or handover references, and (6) dedicated
+  environment ownership. Preserve the shared governed environment at
+  `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`, all original evidence, and all existing
+  cleanup restrictions. Transcript archival must use only supported, reversible application
+  operations after evidence reconciliation; database edits, forced lock removal, unsupported
+  client mutation, and transcript deletion are forbidden.
+
+Use `scripts/gwtf_reviewer_lifecycle.py` for fail-closed schema validation, evidence
+reconciliation, and safe-retirement verification.
