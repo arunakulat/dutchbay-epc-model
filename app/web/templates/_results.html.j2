@@ -106,6 +106,9 @@
       </div>
       {% endfor %}
     </div>
+    {% if surface.equity_irr_caveat %}
+    <p class="note equity-irr-caveat">{{ surface.equity_irr_caveat }}</p>
+    {% endif %}
     {% else %}
     <p class="note">No KPI cards were produced for this run.</p>
     {% endif %}
@@ -359,6 +362,9 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endif %}
+    {% if surface.equity_irr_caveat %}
+    <p class="note equity-irr-caveat-capital-risk">{{ surface.equity_irr_caveat }}</p>
     {% endif %}
     {% else %}
     <p class="note">Not computed for this run.</p>

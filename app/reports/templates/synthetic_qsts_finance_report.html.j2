@@ -211,6 +211,18 @@
       <tbody>
         <tr><td>Project IRR</td><td class="num">{{ fmt_pct(ctx.baseline.project_irr) }}</td><td class="num">{{ fmt_pct(ctx.counterfactual.project_irr) }}</td><td class="num negative">{{ fmt_pp(ctx.movement.project_irr) }}</td></tr>
         <tr><td>Equity IRR</td><td class="num">{{ fmt_pct(ctx.baseline.equity_irr) }}</td><td class="num">{{ fmt_pct(ctx.counterfactual.equity_irr) }}</td><td class="num negative">{{ fmt_pp(ctx.movement.equity_irr) }}</td></tr>
+        {% if ctx.evaluation.baseline_equity_irr_caveat or ctx.evaluation.counterfactual_equity_irr_caveat %}
+        {% if ctx.evaluation.baseline_equity_irr_caveat == ctx.evaluation.counterfactual_equity_irr_caveat %}
+        <tr class="equity-irr-caveat"><td colspan="4"><em>{{ ctx.evaluation.baseline_equity_irr_caveat }}</em></td></tr>
+        {% else %}
+        {% if ctx.evaluation.baseline_equity_irr_caveat %}
+        <tr class="equity-irr-caveat"><td colspan="4"><em>Baseline: {{ ctx.evaluation.baseline_equity_irr_caveat }}</em></td></tr>
+        {% endif %}
+        {% if ctx.evaluation.counterfactual_equity_irr_caveat %}
+        <tr class="equity-irr-caveat"><td colspan="4"><em>Counterfactual: {{ ctx.evaluation.counterfactual_equity_irr_caveat }}</em></td></tr>
+        {% endif %}
+        {% endif %}
+        {% endif %}
         <tr><td>Project NPV</td><td class="num">{{ fmt_money(ctx.baseline.project_npv_usd) }}</td><td class="num">{{ fmt_money(ctx.counterfactual.project_npv_usd) }}</td><td class="num negative">{{ fmt_money_delta(ctx.movement.project_npv_usd) }}</td></tr>
         <tr><td>Minimum DSCR</td><td class="num">{{ "%.4f"|format(ctx.baseline.minimum_dscr) }}x</td><td class="num">{{ "%.4f"|format(ctx.counterfactual.minimum_dscr) }}x</td><td class="num">{{ "%+.4f"|format(ctx.movement.minimum_dscr) }}x</td></tr>
         <tr><td>Year-1 net generation</td><td class="num">{{ fmt_mwh(ctx.baseline.year1_net_generation_mwh) }}</td><td class="num">{{ fmt_mwh(ctx.counterfactual.year1_net_generation_mwh) }}</td><td class="num negative">{{ fmt_mwh_delta(ctx.movement.year1_net_generation_mwh) }}</td></tr>

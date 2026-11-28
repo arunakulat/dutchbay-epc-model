@@ -1,0 +1,8 @@
+- Carry the #1456 equity IRR ranking caveat (`analytics.equity_irr_caveat`) to the remaining surfaces not covered by #1821 (#1829):
+  - `CaseSurface` (`app/api/surface.py`, additive optional `equity_irr_caveat`, bumping `API_CONTRACT_VERSION` from `2.6` to `2.7`) and the web wizard results fragment (`app/web/templates/_results.html.j2`, under Lender KPIs and Capital risk).
+  - `api.pipeline_api.KpiBlock` (`equity_irr_caveat: Optional[str] = None` populated from `equity_irr_caveat_from_run` in `POST /v1/run-pipeline`).
+  - The lender report's Project → Equity IRR Bridge and capital-risk sections (`app/reports/templates/report.html.j2` and `_what_if_lender_risk.html.j2`).
+  - The segregated synthetic QSTS finance counterfactual report (`analytics/synthetic_qsts_finance_counterfactual.py` and `app/reports/templates/synthetic_qsts_finance_report.html.j2`).
+  - The solar assessment's per-point tariff sweep, gearing sweep, and DSCR sizing-target tables (`app/reports/solar_assessment.py`, adding a per-row `IRR ranks?` flag column and table notes).
+  - Retarget `scripts/research/optimization.py:optimize_capital_structure` default `objective` from `"equity_irr"` to `"npv"` (#1456).
+  - External workbook consumer notice (D-5): #1821 added an `equity_irr_caveat` column at index 3 of the executive workbook's `ScenarioSummary` sheet on every run, shifting later columns right by one.

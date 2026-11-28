@@ -28,6 +28,7 @@ from analytics.contracts_v14 import (
     SyntheticInputSourceRecord,
     SyntheticQSTSOutputRecord,
 )
+from analytics.equity_irr_caveat import equity_irr_caveat_from_run
 from analytics.evaluation_v14 import (
     compose_noncanonical_project_curtailment,
     evaluate_with_overrides,
@@ -60,6 +61,8 @@ class SyntheticCounterfactualEvaluation:
     deemed_paid_finance_haircut_decimal: float
     override_items: tuple[tuple[str, float], ...]
     kpis: SyntheticFinanceKpiMovement
+    baseline_equity_irr_caveat: str | None = None
+    counterfactual_equity_irr_caveat: str | None = None
 
 
 def sha256_bytes(payload: bytes) -> str:
@@ -358,6 +361,10 @@ def evaluate_synthetic_qsts_finance_counterfactual(
         deemed_paid_finance_haircut_decimal=0.0,
         override_items=(("project.curtailment_pct", composed),),
         kpis=movement,
+        baseline_equity_irr_caveat=equity_irr_caveat_from_run(baseline_result),
+        counterfactual_equity_irr_caveat=equity_irr_caveat_from_run(
+            counterfactual_result
+        ),
     )
 
 

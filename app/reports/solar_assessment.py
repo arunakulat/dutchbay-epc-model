@@ -284,6 +284,7 @@ def _tariff_sweep(cfg: Mapping[str, Any]) -> List[Dict[str, Any]]:
                 "tariff": base * factor,
                 "projIRR": k["project_irr"],
                 "eqIRR": k["equity_irr"],
+                "equity_irr_caveat": k["equity_irr_caveat"],
                 "npv": k["project_npv"],
                 "dscr": k["min_dscr"],
             }
@@ -452,6 +453,7 @@ def _gearing(scenario_path: str, cfg: Mapping[str, Any]) -> Dict[str, Any]:
                 "obj": float(p.objective),
                 "feasible": bool(p.feasible),
                 "eqIRR": k["equity_irr"],
+                "equity_irr_caveat": k["equity_irr_caveat"],
                 "cure": float(k["equity_sponsor_cure_usd"] or 0.0),
             }
         )
@@ -497,6 +499,7 @@ def _dscr_targets(cfg: Mapping[str, Any], work_dir: Path) -> Dict[str, Any]:
                 "min_dscr": k["min_dscr"],
                 "projIRR": k["project_irr"],
                 "eqIRR": k["equity_irr"],
+                "equity_irr_caveat": k["equity_irr_caveat"],
                 "eqNPV": k["equity_npv"],
                 "locked_years": int(k["equity_covenant_locked_years"] or 0),
                 "lockup": _number(k.get("lockup_threshold")),
@@ -994,6 +997,21 @@ def dscr_target_caption(dscr: Mapping[str, Any]) -> str:
 # ── the DBPL document ──────────────────────────────────────────────────────────
 
 
+def _equity_irr_ranks_flag(row: Mapping[str, Any]) -> str:
+    """Return the per-row #1456 ranking flag for a sweep or optimisation table (#1829)."""
+    return "no (see note)" if row.get("equity_irr_caveat") else "yes"
+
+
+def _row_equity_irr_caveat_notes(rows: Sequence[Mapping[str, Any]]) -> List[str]:
+    """Collect unique #1456 equity IRR caveats from per-row results in appearance order."""
+    seen: List[str] = []
+    for row in rows:
+        caveat = row.get("equity_irr_caveat")
+        if isinstance(caveat, str) and caveat and caveat not in seen:
+            seen.append(caveat)
+    return seen
+
+
 def _figure(path: Optional[Path], alt: str) -> Any:
     from markupsafe import Markup, escape
 
@@ -1162,6 +1180,7 @@ def as_dbpl_document(
                         "x scenario",
                         "Project IRR",
                         "Equity IRR",
+                        "IRR ranks?",
                         "Project NPV",
                         "Min DSCR",
                     ],
@@ -1171,14 +1190,16 @@ def as_dbpl_document(
                             f"{s['factor']:.2f}",
                             fmt_pct(s["projIRR"]),
                             fmt_pct(s["eqIRR"]),
+                            _equity_irr_ranks_flag(s),
                             fmt_usd_m(s["npv"]),
                             fmt_x(s["dscr"]),
                         ]
                         for s in R["tariff_sweep"]
                     ],
-                    numeric_indices=[0, 1, 2, 3, 4, 5],
+                    numeric_indices=[0, 1, 2, 3, 5, 6],
                     caption="Tariff sweep",
-                    notes=notes or None,
+                    notes=(notes + _row_equity_irr_caveat_notes(R["tariff_sweep"]))
+                    or None,
                     source="Breakevens from analytics.core.parameter_solvers.solve_tariff_breakeven.",
                 ),
             }
@@ -1288,6 +1309,7 @@ def as_dbpl_document(
                         "Debt raised (% of capex)",
                         "Equity NPV",
                         "Equity IRR",
+                        "IRR ranks?",
                         "Sponsor cures",
                         "Meets covenant",
                     ],
@@ -1297,13 +1319,15 @@ def as_dbpl_document(
                             f"{p['realised']:.1%}",
                             fmt_usd_m(p["obj"]),
                             fmt_pct(p["eqIRR"]),
+                            _equity_irr_ranks_flag(p),
                             fmt_usd_m(p["cure"]),
                             "yes" if p["feasible"] else "no",
                         ]
                         for p in opt["curve"]
                     ],
-                    numeric_indices=[0, 1, 2, 3, 4],
+                    numeric_indices=[0, 1, 2, 3, 5],
                     caption="Gearing sweep",
+                    notes=_row_equity_irr_caveat_notes(opt["curve"]) or None,
                 ),
             }
         )
@@ -1325,6 +1349,7 @@ def as_dbpl_document(
                         "Min DSCR",
                         "Project IRR",
                         "Equity IRR",
+                        "IRR ranks?",
                         "Equity NPV",
                         "Lock-up years",
                     ],
@@ -1335,13 +1360,15 @@ def as_dbpl_document(
                             fmt_x(d["min_dscr"]),
                             fmt_pct(d["projIRR"]),
                             fmt_pct(d["eqIRR"]),
+                            _equity_irr_ranks_flag(d),
                             fmt_usd_m(d["eqNPV"]),
                             str(d["locked_years"]),
                         ]
                         for d in dscr["sweep"]
                     ],
-                    numeric_indices=[0, 1, 2, 3, 4, 5, 6],
+                    numeric_indices=[0, 1, 2, 3, 4, 6, 7],
                     caption="Dual-DSCR sizing at each target",
+                    notes=_row_equity_irr_caveat_notes(dscr["sweep"]) or None,
                 ),
             }
         )
