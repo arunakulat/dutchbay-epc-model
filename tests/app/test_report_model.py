@@ -1643,6 +1643,7 @@ _SCEN_3S = {
     "capex": {"usd_total": 55.0},
     "fx": {"start_lkr_per_usd": 100.0},
     "constraints": {"min_dscr_covenant": 1.25},
+    "debt": {"dsra_months": 6},
 }
 
 

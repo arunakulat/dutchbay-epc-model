@@ -148,6 +148,7 @@ def test_pipeline_flag_is_the_helper_predicate(
             config={
                 "capex": {"usd_total": 2.0e8},
                 "constraints": {"min_dscr_covenant": 1.25},
+                "debt": {"dsra_months": 6},
             },
             annual_rows=[
                 {"year": i + 1, "cf_pre_debt": v} for i, v in enumerate(operating_cf)
