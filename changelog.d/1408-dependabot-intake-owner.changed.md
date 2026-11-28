@@ -1,0 +1,1 @@
+- Documented `INTAKE-01` ownership, timing, and required `#1353` comment format for weekly Dependabot pull requests in `AGENTS.md`, `.agents/skills/steward/SKILL.md`, and `.claude/skills/steward/SKILL.md`, citing `#1969` as the worked example (#1408).

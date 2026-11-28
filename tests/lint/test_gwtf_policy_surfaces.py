@@ -192,7 +192,7 @@ CI_STEPS = (
         "test-suite.yml",
         "lint",
         "Run mypy (library + engine surface — strict, fail-loud)",
-        "mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/ run_full_pipeline_v14.py run_scenario_analytics_v14.py dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py",
+        "mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/ run_full_pipeline_v14.py run_scenario_analytics_v14.py dutchbay_bootstrap.py dutchbay_bootstrap_rules.py dutchbay_environment.py constants.py",
         False,
     ),
     (

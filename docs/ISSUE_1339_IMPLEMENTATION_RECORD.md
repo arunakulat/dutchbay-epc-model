@@ -9,21 +9,23 @@ that release. Hydra 1.3.7 is the smallest stable release reported to fix all thr
 Across all three advisories, the later 1.4.0.dev0 through 1.4.0.dev9 prereleases are affected too,
 so the abstract dependency excludes their union explicitly rather than relying on pip's default
 stable-release preference. This dolphin changes only the abstract Hydra security floor, exact lock
-pin, a regression guard, and its changelog/evidence records.
+pin, a regression guard, one `constraints.txt` compatibility comment, and its
+changelog/evidence records.
 
 No advisory is allowlisted. No other dependency is refreshed. No application, scenario, model,
 finance, report, configuration value or KPI path changes.
 
 ## Governance and authority
 
-- Issue and leases: #1339 / `L-1339-SEC-001` (initial implementation) / `L-1339-SEC-002`
-  (prerelease exclusion repair).
+- Issue and leases: #1339 / `L-1339-SEC-001` (initial implementation; amended to 1.3.7) /
+  `L-1339-SEC-002` (1.4.0.dev4-dev9 exclusion; rejected) / `L-1339-SEC-003` (full
+  1.4.0.dev0-dev9 union exclusion; final candidate).
 - Worktree: `/workspace/dutchbay-hydra-security`.
 - Branch: `fix/hydra-cves-1339`.
 - Original lease base: `3b352034f74254af8b8baeb4d8cf9181ad252cb2`.
 - Current protected base and merge base: `7dce2a67b44c36e73c877a2572fe43f159e8637a`.
-- Risk: `R2_DEPENDENCY_SECURITY`; RECRUIT-01 requires distinct dependency/package-domain and
-  assurance/security reviews after freeze.
+- Risk: `R2_LOAD_BEARING` (dependency security); RECRUIT-01 requires distinct dependency/package-domain
+  and assurance/security reviews after freeze.
 
 The audit establishes only that the governed lock has no advisory known to the audit database at
 execution time. It is not a general supply-chain, release, lender, Board or bankability assurance.
@@ -47,5 +49,6 @@ The first candidate, Hydra 1.3.6, was explicitly rejected when the mandatory aud
 CVE-2026-106439. This record retains that failed attempt so 1.3.6 cannot later be mistaken for an
 audit-clean floor. The next candidate's simple `>=1.3.7` abstract floor was superseded after an
 independent hostile constraint demonstrated that an explicit affected 1.4 prerelease could satisfy
-it; the final abstract requirement therefore excludes every affected development release named by
-the advisory.
+it. A repair that excluded only 1.4.0.dev4-dev9 was then rejected because the union of the three
+advisories also covers 1.4.0.dev0-dev3; the final abstract requirement therefore excludes every
+affected development release named by the three advisories.
