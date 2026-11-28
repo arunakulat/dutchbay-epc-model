@@ -231,8 +231,7 @@ def _trial_fixed_debt_min_dscr(
     against the BASE case's committed debt instead, on the basis the covenant is tested on
     (#1728). The per-row coverage, its basis and its stated limits are
     :func:`analytics.mc.fixed_debt_coverage.fixed_debt_coverage_by_row` (moved there
-    unchanged for #1836). Returns ``None`` when no operating row carries base service or the
-    trial publishes no CFADS for those rows.
+    unchanged for #1836). Returns ``None`` unless complete covenant-year coverage is available.
     """
     vals = [
         dscr
@@ -1107,8 +1106,8 @@ class MonteCarloEngine:
                     base_debt_result = _bdr
             if _trial_fixed_debt_min_dscr(base_debt_result, base_debt_result) is None:
                 stress_unavailable = (
-                    "the base case has no operating period with committed debt service, "
-                    "so there is no covenant to stress"
+                    "the base case has no complete covenant-year CFADS coverage against "
+                    "its committed debt schedule"
                 )
                 self._fixed_debt_stress_unavailable(stress_unavailable)
 
@@ -1171,8 +1170,8 @@ class MonteCarloEngine:
                     fixed_dscr_vals.append(mfd)
                 elif not self._allow_toy_fallback:
                     self._fixed_debt_stress_unavailable(
-                        f"MC trial {i} published no CFADS for the base case's covenant "
-                        "periods"
+                        f"MC trial {i} does not provide complete covenant-year CFADS "
+                        "coverage for the base case's committed debt schedule"
                     )
 
         # Honor the scenario's monte_carlo reporting config (previously ignored): the
@@ -1204,13 +1203,21 @@ class MonteCarloEngine:
             # consumer never silently mistakes the effective trial count for the requested one.
             meta["sobol_n_requested"] = n_requested
             meta["sobol_n_used"] = n
-        if self._fixed_debt_stress and not fixed_dscr_vals:
+        if self._fixed_debt_stress and len(fixed_dscr_vals) != n:
             # Permissive runs only (a lender-posture run raised above): record why there is
             # no stress result instead of leaving the key silently absent (#1728).
-            reason = stress_unavailable or "no trial produced a covenant observation"
+            reason = (
+                stress_unavailable
+                or "not every trial produced complete covenant-year coverage"
+            )
             logger.warning("monte_carlo.fixed_debt_stress is on but %s.", reason)
-            meta["fixed_debt_stress"] = {"status": "unavailable", "reason": reason}
-        if self._fixed_debt_stress and fixed_dscr_vals:
+            meta["fixed_debt_stress"] = {
+                "status": "unavailable",
+                "reason": reason,
+                "n": len(fixed_dscr_vals),
+                "n_requested": n,
+            }
+        if self._fixed_debt_stress and len(fixed_dscr_vals) == n and n > 0:
             arr = sorted(fixed_dscr_vals)
             cov = float(self._fixed_debt_covenant)
 

@@ -1,0 +1,1 @@
+Extracted pre-commit hook installation from `setup_venv.sh` into `scripts/install_precommit_hooks.sh` and updated `tests/lint/test_precommit_hook_installation.py` to execute the helper directly against a throwaway Git repository (`git init`) with a stubbed interpreter, proving positive hook installation and fail-closed error handling (`#1262`).

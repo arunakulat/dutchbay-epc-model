@@ -970,11 +970,6 @@ modules:
     role_description: Performs sector-wise Measure-Correlate-Predict transfer for short on-site met-mast records.
     excel_representation: engine_table_plus_rollup
 
-  - module_path: analytics.wind.pipeline_aep_v14
-    pipeline_stage: resource_yield
-    role_description: Bridges wind AEP assessment payloads into v14 financial pipeline scenario inputs.
-    excel_representation: non_model_adapter
-
   - module_path: analytics.wind.siting_metadata
     pipeline_stage: site_gis
     role_description: Builds diagnostic coastal and complex-terrain wind-siting metadata blocks without moving KPIs.
