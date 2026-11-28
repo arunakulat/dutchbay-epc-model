@@ -91,10 +91,12 @@ def test_lender_case_labels_both_month_figures(baseline: Dict[str, Any]) -> None
         funding["dsra_target_governs"]
         == "nothing_reserve_sized_by_equity_min_reserve_months"
     )
-    # The reserve the waterfall builds is sized by an engine default no scenario authors.
+    # The waterfall falls back to the declared Financing_Terms DSRA months (#1862 DOM-1).
     summary = _summary(baseline)
     assert summary["min_reserve_months"] == 6
-    assert summary["min_reserve_months_source"] == "code_default"
+    assert (
+        summary["min_reserve_months_source"] == "Financing_Terms.reserves.dsra_months"
+    )
     assert summary["min_reserve_months_basis"] == _BASIS
 
 
@@ -145,15 +147,23 @@ def test_funding_months_without_a_number_are_refused_naming_the_key(
         _run(**kwargs)
 
 
-def test_funding_months_move_nothing_while_fund_at_close_is_off(
+def test_declared_dsra_months_drive_the_waterfall_when_equity_omits_it(
     baseline: Dict[str, Any],
 ) -> None:
-    """The label and the funding figure move together; the cash flows do not."""
+    """Changing the declared DSRA months moves both the funding block and the waterfall (#1862)."""
     changed = _run(reserves={"dsra_months": 3})
     funding = changed["debt_result"]["funding"]
+    summary = _summary(changed)
     assert funding["dsra_target_months"] == pytest.approx(3.0)
     assert funding["dsra_target_source"] == "Financing_Terms.reserves.dsra_months"
-    assert _equity_figures(changed) == _equity_figures(baseline)
+    assert summary["min_reserve_months"] == pytest.approx(3.0)
+    assert (
+        summary["min_reserve_months_source"] == "Financing_Terms.reserves.dsra_months"
+    )
+    assert _equity_figures(changed) != _equity_figures(baseline)
+    assert changed["kpis"]["equity_npv"] != pytest.approx(
+        baseline["kpis"]["equity_npv"], rel=0, abs=1.0
+    )
 
 
 def test_waterfall_months_move_the_reserve_and_their_label(
@@ -173,11 +183,12 @@ def test_waterfall_months_move_the_reserve_and_their_label(
     assert changed["debt_result"]["funding"] == baseline["debt_result"]["funding"]
 
 
-@pytest.mark.parametrize("value", [None, "six"])
-def test_waterfall_fallback_is_labelled_code_default(value: Any) -> None:
-    summary = _summary(_run(equity={"min_reserve_months": value}))
-    assert summary["min_reserve_months"] == 6
-    assert summary["min_reserve_months_source"] == "code_default"
+@pytest.mark.parametrize("value", [None, "six", -1, 25, True])
+def test_waterfall_invalid_min_reserve_months_is_refused_naming_the_key(
+    value: Any,
+) -> None:
+    with pytest.raises(Exception, match=r"equity\.min_reserve_months"):
+        _run(equity={"min_reserve_months": value})
 
 
 def test_funding_months_govern_the_at_close_reserve_when_fund_at_close_is_on() -> None:

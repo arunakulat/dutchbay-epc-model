@@ -381,7 +381,9 @@ def test_waterfall_sweep_cash_adds_back_the_fee_the_rows_paid() -> None:
             {"annual_row_index": 1, "debt_period": 2},
         ],
     }
-    config = {"equity_distribution": {"min_reserve_months": 0}}
+    config = {
+        "equity_distribution": {"min_reserve_months": 0, "min_dscr_threshold": 1.25}
+    }
     cash = waterfall_sweep_cash(
         config=config, annual_rows=rows, debt_result=debt_result
     )

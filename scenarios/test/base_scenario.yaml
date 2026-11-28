@@ -57,9 +57,10 @@ Financing_Terms:
   reserves:
     dsra_months: 6
 constraints:
-  # Required since #1429: no code default for the balloon limit. 10% is the limit this
-  # scenario was always checked against.
+  # Required since #1429: no code default for the balloon limit or equity lock-up DSCR.
+  # 10% and 1.25 are the figures this scenario was always checked against.
   max_balloon_pct: 0.10
+  min_dscr_covenant: 1.25
 returns:
   # Required since #1429: the engine has no code default for the project discount
   # rate. 0.10 is the rate this scenario was always discounted at.

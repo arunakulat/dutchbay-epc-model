@@ -43,10 +43,10 @@ def test_validate_project_life_rejects_out_of_range() -> None:
     directly (its documented contract: 1..50 inclusive).
     """
     with pytest.raises(ValidationError) as exc:
-        EquityDistributionConfig(project_life_years=0)
+        EquityDistributionConfig(project_life_years=0, min_dscr_threshold=1.25)
     assert "project_life_years" in str(exc.value)
     with pytest.raises(ValidationError):
-        EquityDistributionConfig(project_life_years=51)
+        EquityDistributionConfig(project_life_years=51, min_dscr_threshold=1.25)
     # in-bound value passes the validator and is returned unchanged
     assert EquityDistributionConfig.validate_project_life(25) == 25
     with pytest.raises(ValueError, match="Project life must be 1-50"):
@@ -66,7 +66,7 @@ def test_validate_dscr_threshold_rejects_above_five() -> None:
 def test_validate_discount_rate_rejects_above_one() -> None:
     """discount_rate above 1.0 (a decimal) must be rejected."""
     with pytest.raises(ValidationError) as exc:
-        EquityDistributionConfig(discount_rate=2.0)
+        EquityDistributionConfig(discount_rate=2.0, min_dscr_threshold=1.25)
     assert "discount_rate" in str(exc.value)
     assert EquityDistributionConfig.validate_discount_rate(0.10) == 0.10
     with pytest.raises(ValueError, match="discount_rate must be"):
@@ -159,7 +159,9 @@ def test_extract_dscr_prefers_row_value() -> None:
 # ---------------------------------------------------------------------------
 def test_derive_equity_investment_explicit() -> None:
     """An explicit equity_investment_usd is returned with 'explicit' source."""
-    cfg = EquityDistributionConfig(equity_investment_usd=42.0e6)
+    cfg = EquityDistributionConfig(
+        equity_investment_usd=42.0e6, min_dscr_threshold=1.25
+    )
     amount, source = mod._derive_equity_investment_usd(
         config={}, debt_result={}, distribution_config=cfg
     )
@@ -172,6 +174,7 @@ def test_derive_equity_investment_defaulted() -> None:
     cfg = EquityDistributionConfig(
         allow_default_equity_investment=True,
         default_equity_investment_usd=7.0e6,
+        min_dscr_threshold=1.25,
     )
     amount, source = mod._derive_equity_investment_usd(
         config={}, debt_result={}, distribution_config=cfg
@@ -182,7 +185,7 @@ def test_derive_equity_investment_defaulted() -> None:
 
 def test_derive_equity_investment_failed() -> None:
     """No explicit value, no CAPEX/debt, defaults off -> (None, 'failed')."""
-    cfg = EquityDistributionConfig()
+    cfg = EquityDistributionConfig(min_dscr_threshold=1.25)
     amount, source = mod._derive_equity_investment_usd(
         config={}, debt_result={}, distribution_config=cfg
     )
@@ -192,7 +195,7 @@ def test_derive_equity_investment_failed() -> None:
 
 def test_derive_equity_investment_capex_less_debt() -> None:
     """CAPEX minus debt gives the residual equity; conservation holds."""
-    cfg = EquityDistributionConfig()
+    cfg = EquityDistributionConfig(min_dscr_threshold=1.25)
     capex, debt = 200.0e6, 120.0e6
     amount, source = mod._derive_equity_investment_usd(
         config={"capex": {"usd_total": capex}},
@@ -205,7 +208,7 @@ def test_derive_equity_investment_capex_less_debt() -> None:
 
 def test_derive_equity_investment_plus_dsra_at_close() -> None:
     """fund_at_close adds the initial DSRA as an extra equity use at t0."""
-    cfg = EquityDistributionConfig()
+    cfg = EquityDistributionConfig(min_dscr_threshold=1.25)
     capex, debt, dsra = 200.0e6, 120.0e6, 4.0e6
     amount, source = mod._derive_equity_investment_usd(
         config={"capex": {"usd_total": capex}},
@@ -238,7 +241,11 @@ def test_pipeline_disabled_short_circuits() -> None:
 def test_pipeline_empty_rows_fails() -> None:
     """Empty annual_rows is a hard failure (cannot build a schedule)."""
     result = calculate_equity_distribution_from_pipeline(
-        config={"capex": {"usd_total": 2.0e8}},
+        config={
+            "capex": {"usd_total": 2.0e8},
+            "constraints": {"min_dscr_covenant": 1.25},
+            "debt": {"dsra_months": 6},
+        },
         annual_rows=[],
         debt_result={"debt_total": 1.2e8},
     )
@@ -250,7 +257,10 @@ def test_pipeline_empty_rows_fails() -> None:
 def test_pipeline_undefivable_equity_fails() -> None:
     """No equity investment derivable -> failed with source metadata."""
     result = calculate_equity_distribution_from_pipeline(
-        config={},
+        config={
+            "constraints": {"min_dscr_covenant": 1.25},
+            "debt": {"dsra_months": 6},
+        },
         annual_rows=[{"year": 1, "cf_pre_debt": 1.0e6}],
         debt_result={},
     )
@@ -277,6 +287,7 @@ def test_pipeline_terminal_value_added_to_last_year() -> None:
             "equity_investment_usd": 30.0e6,
             "terminal_value_usd": tv,
             "min_dscr_threshold": 0.0,  # never covenant-lock
+            "min_reserve_months": 6,
             "discount_rate": 0.10,
         },
     }
@@ -316,6 +327,7 @@ def test_pipeline_waterfall_invariants_hold() -> None:
             "scenario_name": "inv-case",
             "equity_investment_usd": 30.0e6,
             "min_dscr_threshold": 0.0,
+            "min_reserve_months": 6,
             "discount_rate": 0.08,
         }
     }
@@ -358,6 +370,7 @@ def test_pipeline_covenant_lock_blocks_distribution() -> None:
             "scenario_name": "lock-case",
             "equity_investment_usd": 20.0e6,
             "min_dscr_threshold": 1.50,
+            "min_reserve_months": 6,
             "discount_rate": 0.10,
         }
     }
@@ -383,6 +396,7 @@ def test_pipeline_defaulted_status_propagates() -> None:
             "allow_default_equity_investment": True,
             "default_equity_investment_usd": 15.0e6,
             "min_dscr_threshold": 0.0,
+            "min_reserve_months": 6,
         }
     }
     rows = _simple_rows(3, cf=8.0e6, ds=3.0e6)
@@ -527,12 +541,14 @@ def test_fin12_interest_wht_enabled_without_rate_raises() -> None:
 def test_fin12_enabled_wht_with_explicit_zero_rate_is_allowed() -> None:
     # An explicit 0.0 rate is a legitimate "no charge" choice — only an ABSENT key raises.
     cfg = {
+        "constraints": {"min_dscr_covenant": 1.25},
+        "debt": {"dsra_months": 6},
         "tax": {
             "wht_on_dividends_enabled": True,
             "wht_on_dividends": 0.0,
             "wht_on_interest_enabled": True,
             "wht_on_interest_to_nonresidents": 0.0,
-        }
+        },
     }
     built = mod._build_distribution_config(cfg)
     assert built.wht_on_dividends_rate == 0.0

@@ -32,7 +32,9 @@ def test_equity_schedule_debt_outstanding_reads_mapped_period() -> None:
             {"annual_row_index": 1, "year": 2, "debt_period": 4},
         ],
     }
-    cfg = EquityDistributionConfig(initial_equity_investment_usd=100.0)
+    cfg = EquityDistributionConfig(
+        min_dscr_threshold=1.25, initial_equity_investment_usd=100.0
+    )
     sched = build_equity_distribution_schedule(
         annual_rows=annual_rows,
         debt_result=debt_result,

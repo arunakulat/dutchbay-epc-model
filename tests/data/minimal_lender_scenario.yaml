@@ -67,6 +67,7 @@ returns:
 
 constraints:
   max_balloon_pct: 0.10  # no code default since #1429; the engine used to fill in 0.10
+  min_dscr_covenant: 1.25  # no code default since #1429 (E01); the equity engine used to fill in 1.25
 
 debt:
   debt_ratio: 0.70  # no code default since #1429; the engine used to fill in 0.70

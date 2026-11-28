@@ -67,7 +67,10 @@ def _valid_config() -> dict:
         },
         "fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.02},
         "returns": {"project_discount_rate": 0.10},  # required since #1429
-        "constraints": {"max_balloon_pct": 0.10},  # no code default since #1429
+        "constraints": {
+            "max_balloon_pct": 0.10,
+            "min_dscr_covenant": 1.25,
+        },  # no code defaults since #1429
         "debt": {
             "debt_ratio": 0.70,  # no code default since #1429
             "target_dscr": 1.4,

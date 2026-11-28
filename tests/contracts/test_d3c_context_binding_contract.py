@@ -78,6 +78,9 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
+# #1429's equity-distribution E01 step (15.37.0), whose D3B fixture now declares
+# constraints.min_dscr_covenant 1.25 (the figure the equity engine used to fill in):
+# the new config key is echoed into the result and no computed value moves. Before that by
 # #1629 (native capex FX and #1696 follow-ups, 15.37.0): the digest equals main's engine with
 # only the VERSION bump, so only the engine identity moved. Before that by
 # #1917 (FX depreciation combined band, 15.36.0): the digest equals main's engine with
@@ -133,7 +136,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "0ed399df9e656128ddd89f94202aaf8f6f4ad8ef40cc03f5f3febc6d394da241"
+    "df569a1821ec994d2c9d03f346bf1f2f6366201f681d3b67104d68192b252ea1"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

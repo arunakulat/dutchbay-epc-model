@@ -478,6 +478,44 @@ def _validate_debt_covenant_terms(
             errors.append(str(exc))
 
 
+def _validate_equity_lockup_threshold(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse a scenario that omits its equity lock-up DSCR threshold (#1429, E01)."""
+    from finance.equity_distribution_v14_hydra import (
+        _named_equity_section,
+        resolve_equity_min_dscr_threshold,
+    )
+
+    _, equity_section = _named_equity_section(raw_config)
+    if equity_section and not bool(equity_section.get("enabled", True)):
+        return
+    try:
+        resolve_equity_min_dscr_threshold(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
+def _validate_equity_reserve_months(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse invalid or out-of-range equity reserve months (#1862, #1429 E01)."""
+    from finance.equity_distribution_v14_hydra import (
+        _named_equity_section,
+        resolve_equity_min_reserve_months,
+    )
+
+    _, equity_section = _named_equity_section(raw_config)
+    if equity_section and not bool(equity_section.get("enabled", True)):
+        return
+    try:
+        resolve_equity_min_reserve_months(raw_config)
+    except ValueError as exc:
+        msg = str(exc)
+        if msg not in errors:
+            errors.append(msg)
+
+
 def _validate_p90_cover(raw_config: Mapping[str, Any], errors: list[str]) -> None:
     """Refuse a bad opt-in ``Financing_Terms.p90_cover_min_dscr`` (#1895).
 
@@ -797,6 +835,8 @@ def validate_config_for_v14(
     if "debt" in module_list:
         _validate_debt_sizing_terms(raw_config, errors)
         _validate_debt_covenant_terms(raw_config, errors)
+        _validate_equity_lockup_threshold(raw_config, errors)
+        _validate_equity_reserve_months(raw_config, errors)
         _validate_p90_cover(raw_config, errors)
 
     # 3. Collect and validate registered specs for requested modules
