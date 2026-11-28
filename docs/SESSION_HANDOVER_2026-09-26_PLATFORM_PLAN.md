@@ -29,8 +29,9 @@ memorize, add to corpus and discuss" for the next sprint. This session:
 3. Recorded the owner's decisions, given in this session as replies to the recommendations:
    **D1** finding-led work with Lane A, not the rebuild ("yes"); **D2** known clients now,
    multi-tenant as the planned extension ("known clients currently - plan to extend to
-   multi-tenant"); **D4** keep the plan text public ("keep on public branch"), now the recorded
-   publication authority in the handling note; **D5** review under the repository's rules, the
+   multi-tenant"); **D4** publication authority recorded under
+   `PLATFORM-PLAN-HANDLING-2026-09-26` in
+   `docs/source_materials/platform_strategy_2026/MANIFEST.sha256`; **D5** review under the repository's rules, the
    harness and the framework principles ("follow repo rules, harness, frameworks").
 4. Changed no finance code, configuration, scenario, KPI, `VERSION` or ruleset row.
 

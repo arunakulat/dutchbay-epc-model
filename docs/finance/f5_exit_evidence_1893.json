@@ -424,7 +424,7 @@
   "source_file_sha256": {
     "analytics/finance/f5_exit_evidence.py": "4aea996062758eba8d69926c2e4b89acf5a1c751f6be594951d52912a31e59d4",
     "analytics/finance/p90_cover.py": "e548cf342199b9619ce1094f56ca6ba2c55d512abde4294738674b7f5224612b",
-    "analytics/finance/p90_recomputed_downside.py": "1059869250a282cb2ebed24593fd8548da8170ca9ea6c5154c3b47ee26f000db",
+    "analytics/finance/p90_recomputed_downside.py": "a3d5cb234890849dbb8b3363eb7b8eb0f8eb184fa3c67f20631eb8253f192d19",
     "analytics/pipeline_v14_enhanced.py": "ad874976c1500c9d4acb6f61a28d50e7245d0680ea6fcc59e0a762fc39d53961",
     "analytics/run_identity.py": "0bc2ccd6baf1425960e77a4753f1b4bfb0925cb0c10186bbaa1a962be86d25d4",
     "analytics/three_statement.py": "96b80f48dd7174ae6d3c888fde8b88516d0360684b00a506cbf1c0684d247afc",

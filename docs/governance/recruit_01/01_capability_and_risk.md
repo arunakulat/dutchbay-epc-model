@@ -62,17 +62,18 @@ reversible, and none can change a computed value, a contract, or what later acto
 
 1. **Presentation-only code.** Layout, labels, styling or widget parameters with no effect on
    any computed value, input, output file, API contract or report figure.
-2. **Test-only guard tightening.** A change confined to tests that adds or tightens a guard,
-   including a negative control, without changing any oracle's expected value, tolerance or
+2. **Test-only guard tightening.** A change confined to tests that tightens an existing guard,
+   or adds a negative control for one, without changing any oracle's expected value, tolerance or
    fixture data, and without removing, skipping or weakening an assertion.
 3. **Record corrections.** A factual correction to a dated record's receipts or citations that
    changes no disposition, authority, finding state or carried-forward instruction.
 
 A change in these classes is still `R2_LOAD_BEARING` or higher if it also touches, or is itself,
 any of the following: a dependency bump, a CI or merge gate, governance (including
-`go_with_the_flow_rules_v3_0_clean.csv`), a contract, a schema, an oracle-defining test,
-security, data ingestion, finance or KPI behavior, or a writer-authorizing handover. A mixed
-change takes its highest class.
+`go_with_the_flow_rules_v3_0_clean.csv`), a contract, a schema, an oracle-defining test, a
+change to a fence or guard whose own evidence could be vacuous, security, data ingestion,
+finance or KPI behavior, or a writer-authorizing handover. A mixed change takes its highest
+class.
 
 The coordinator records the class in the profile receipt (§5) before dispatch. When unsure,
 classify `R2`. Either lane or the coordinator may escalate to `R2` at any time, and the writer
