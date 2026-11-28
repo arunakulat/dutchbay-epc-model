@@ -1,0 +1,1 @@
+- Consolidate platform-plan handling, fidelity, and publication-authority statements onto `PLATFORM-PLAN-HANDLING-2026-09-26` in `docs/source_materials/platform_strategy_2026/MANIFEST.sha256` and replace restatements in the area README, Sprint 21 bootstrap docs, and 26 September handover with citations to that identifier (#1485).

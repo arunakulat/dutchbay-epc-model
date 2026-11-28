@@ -1,0 +1,6 @@
+- Hardened `tests/lint/test_grid_ci_policy.py` (#1421) to kill the surviving workflow mutants deferred from #1324:
+  - Pinned the empty JUnit guard (`-s` vs `-e`, G-A2-04 / R4) and all five pre-existing evidence checks (no testcases, only skipped, exact candidate head, protected base commit, and all three clauses of the six-case check; G-A2-05).
+  - Rendered and executed the non-PR classify branch for `push`, `schedule`, and `workflow_dispatch`, asserting `code_changed=true` and `qsts_execution_changed=false` (G-D2-07).
+  - Pinned empty-base `undeterminable` merge-base recording, unrelated-history fail-closed handling, unwritable summary fail-closed handling, and direct JSON classification logging (G-D2-05).
+  - Isolated throwaway Git repositories and shell executions from host Git configuration and environment variables (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, `GIT_DIR`, `GIT_INDEX_FILE`, `GIT_WORK_TREE`, `BASH_ENV`; G-A2-06, G-D2-04).
+  - Tightened named-cause evidence assertions to exact diagnostic strings and covered directory, dangling-symlink, no-reason-skip, and JUnit `<error>` cases (G-D1-05, G-A1-08).

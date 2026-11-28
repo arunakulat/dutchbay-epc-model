@@ -9,9 +9,6 @@ Modules:
                      Provides AEP loading, Monte Carlo simulation,
                      and config injection functions.
 
-    pipeline_aep_v14: AEP pipeline integration for v14 model.
-                     Orchestrates wind → AEP → revenue chain with
-                     config-driven resource loading.
 
 Public API:
     # AEP Loading
@@ -23,8 +20,6 @@ Public API:
 
     # Configuration
     integrate_aep_into_config: Inject AEP data into finance config
-    integrate_aep_pipeline: Full pipeline integration (config-driven)
-    validate_turbine_specs: Validate turbine consistency
     derive_capacity_factor_from_aep: Reverse-engineer CF from AEP
 
     # Constants
@@ -54,11 +49,6 @@ Usage:
         aep_data=aep_data
     )
 
-    # Full Pipeline (Config-Driven)
-    from analytics.wind import integrate_aep_pipeline
-
-    config = integrate_aep_pipeline(config)  # GWTF ARCH-01 compliant
-
 Framework Compliance:
     - GWTF ARCH-01: Config-driven (no hardcoded values)
     - GWTF R3: Type-safe with comprehensive docstrings
@@ -77,12 +67,6 @@ Version: 1.0.0
 """
 
 from __future__ import annotations
-
-# Public API: Pipeline Integration Functions
-from analytics.wind.pipeline_aep_v14 import (
-    integrate_aep_pipeline,
-    validate_turbine_specs,
-)
 
 # Public API: Wind Integration Functions
 from analytics.wind.wind_integration import (
@@ -105,7 +89,4 @@ __all__ = [
     # Configuration
     "integrate_aep_into_config",
     "derive_capacity_factor_from_aep",
-    # Pipeline
-    "integrate_aep_pipeline",
-    "validate_turbine_specs",
 ]

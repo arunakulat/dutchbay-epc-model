@@ -3,10 +3,13 @@
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 # HANDLING NOTE — PLATFORM-PLAN-HANDLING-2026-09-26
 #
-# This block is the ONLY statement of how this object is handled. The corpus README and the
-# Sprint 21 bootstrap README cite the identifier above rather than restating it.
-# `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a registered citation goes
-# stale or if this definition moves.
+# This block is the single authoritative statement of how this object is handled (what it is,
+# fidelity, publication authority D4, and status). Live repository documents — the corpus README,
+# the Sprint 21 bootstrap package, and the 26 September handover — cite the identifier above
+# rather than restating those terms; historical CHANGELOG.md entries from #1296/#1312 remain
+# frozen release-history text. `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly
+# if a registered citation goes stale or if this definition moves (it checks anchor definition
+# and registered citations rather than semantic restatement).
 #
 # 1. WHAT THE OBJECT IS.
 #    PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt is a proposed five-phase, twenty-week plan to
@@ -46,4 +49,4 @@
 # with: sha256sum -c MANIFEST.sha256
 #
 a1be78037cc4bc662541b8e9e6f1b167bb2451c2fe88f68d411fb6b6245bf444  PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt
-95b835508f70b0aeeee4a234985fdc463c617496f53e5c494bd931212192cd3a  README.md
+7bec9490e094ca1b741c433c402c82325a6b96e9daee793f548a8be75ac76570  README.md
